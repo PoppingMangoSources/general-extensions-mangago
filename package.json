@@ -1,7 +1,7 @@
 {
-  "name": "General Extensions (0.9)",
+  "name": "Popmango Sources",
   "private": true,
-  "description": "Paperback extensions for websites with unique, non-generic themes. Maintained by Inkdex.",
+  "description": "Paperback extensions for websites with unique, non-generic themes. Maintained by Popmango Sources.",
   "type": "module",
   "scripts": {
     "tsc": "tsc",
