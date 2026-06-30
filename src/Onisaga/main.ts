@@ -110,10 +110,12 @@ function topMangaInfoItems(item: TopMangaItem): FeaturedCarouselItem["infoItems"
 export class OnisagaExtension implements ExtensionImpl<typeof OnisagaConfig> {
   requestManager = new OnisagaInterceptor("onisaga-request");
   cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
-  // The server advertises X-Ratelimit-Limit: 300, so a brisk client cap keeps
-  // concurrent page resolution fast while staying well clear of throttling.
+  // The server advertises X-Ratelimit-Limit: 300 (per minute = 5/s) and caps the
+  // tokenized reader API at 2 concurrent requests. Hold the global request rate
+  // at that 5/s ceiling so page resolution never trips the throttle; CDN images
+  // are ignored and load freely.
   globalRateLimiter = new BasicRateLimiter("onisaga-rate-limiter", {
-    numberOfRequests: 10,
+    numberOfRequests: 5,
     bufferInterval: 1,
     ignoreImages: true,
   });
@@ -126,6 +128,12 @@ export class OnisagaExtension implements ExtensionImpl<typeof OnisagaConfig> {
   // Cached server-rendered home document, shared by the home-sourced rails.
   private homeHtmlCache?: { html: string; at: number };
   private static readonly HOME_TTL = 60_000;
+
+  // The reader page API issues a single-use token that rotates per response
+  // (X-Reader-Token-Next), so pages must resolve strictly sequentially — each
+  // request spends the token the previous one handed back. Any parallelism spends
+  // the same token twice and trips the throttle, so the pool width is fixed at 1.
+  private static readonly PAGE_CONCURRENCY = 1;
 
   async initialise(): Promise<void> {
     this.cookieStorageInterceptor.registerInterceptor();
@@ -513,15 +521,7 @@ export class OnisagaExtension implements ExtensionImpl<typeof OnisagaConfig> {
     const pageCount = countPages(body);
     if (pageCount === 0) throw new Error("No pages found in chapter");
 
-    // The reader token is per-chapter, not per-page (no rotating token), so every
-    // page resolves with the same token — fire them all at once and let the global
-    // rate limiter pace the requests. Paperback needs all page URLs up front.
-    const resolved = await Promise.all(
-      Array.from({ length: pageCount }, (_, order) =>
-        this.resolvePageUrl(cid, order, chapterUrl, token),
-      ),
-    );
-    const pages = resolved.filter((url): url is string => url.length > 0);
+    const pages = await this.resolveAllPages(cid, pageCount, chapterUrl, token);
     if (pages.length === 0) throw new Error("Could not resolve any chapter pages");
 
     return {
@@ -531,22 +531,53 @@ export class OnisagaExtension implements ExtensionImpl<typeof OnisagaConfig> {
     };
   }
 
-  // Resolve a single page's signed CDN url from the tokenized page API. The token
-  // is stable for the chapter; retry on a 429 throttle. Returns "" when a page
-  // can't be resolved (e.g. a count overshoot) so one bad page never fails the
-  // whole chapter.
+  // Resolve every page url by walking the chapter in order, threading the
+  // single-use reader token through a shared holder: each response carries the
+  // token for the next page via X-Reader-Token-Next. Bursting token'd requests
+  // (the old approach) reused a spent token and tripped 429s -> dropped pages and
+  // slow opens. PAGE_CONCURRENCY is 1 so the chain is never broken; the pool
+  // shape is kept only so the width can be revisited if the API ever allows it.
+  // Paperback needs all page urls up front, so this returns the full ordered list.
+  private async resolveAllPages(
+    cid: string,
+    pageCount: number,
+    chapterUrl: string,
+    initialToken: string,
+  ): Promise<string[]> {
+    const urls = Array.from<string>({ length: pageCount }).fill("");
+    const holder = { token: initialToken };
+    let nextOrder = 0;
+
+    const worker = async (): Promise<void> => {
+      for (;;) {
+        const order = nextOrder++;
+        if (order >= pageCount) return;
+        urls[order] = await this.resolvePageUrl(cid, order, chapterUrl, holder);
+      }
+    };
+
+    const width = Math.min(OnisagaExtension.PAGE_CONCURRENCY, pageCount);
+    await Promise.all(Array.from({ length: width }, () => worker()));
+
+    return urls.filter((url) => url.length > 0);
+  }
+
+  // Resolve a single page's signed CDN url from the tokenized page API. Retries
+  // on a 429 throttle with a short backoff, and adopts a rotated reader token
+  // when the server hands one back via X-Reader-Token-Next. Returns "" when a
+  // page can't be resolved so one bad page never fails the whole chapter.
   private async resolvePageUrl(
     cid: string,
     order: number,
     chapterUrl: string,
-    token: string,
+    holder: { token: string },
   ): Promise<string> {
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 4; attempt++) {
       const [response, buffer] = await Application.scheduleRequest({
         url: `${DOMAIN}/api/chapter/${cid}/page/${order}`,
         method: "GET",
         headers: {
-          "X-Reader-Token": token,
+          "X-Reader-Token": holder.token,
           "Sec-Fetch-Mode": "cors",
           "Sec-Fetch-Site": "same-origin",
           Referer: chapterUrl,
@@ -555,9 +586,16 @@ export class OnisagaExtension implements ExtensionImpl<typeof OnisagaConfig> {
 
       if (response.status === 429) {
         const retryAfter = Number(response.headers?.["retry-after"]);
-        await Application.sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 2);
+        await Application.sleep(
+          Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 1 + attempt,
+        );
         continue;
       }
+
+      // The site may rotate the token for subsequent requests; adopt it so the
+      // next page in the pool stays authorized.
+      const nextToken = response.headers?.["x-reader-token-next"];
+      if (nextToken) holder.token = nextToken;
 
       try {
         const dto = JSON.parse(Application.arrayBufferToUTF8String(buffer)) as PageApiResponse;
