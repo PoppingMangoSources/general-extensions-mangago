@@ -18,14 +18,12 @@ import {
 } from "@paperback/types";
 
 import {
-  DEFAULT_IMAGE_RATE_LIMIT_MS,
   DISCOVER_SECTIONS,
   DISCOVER_STATUS_KEY,
   DISCOVER_TYPE_KEY,
   EXCLUDED_GENRES_KEY,
   GENRES,
   MIN_CHAPTERS_OPTIONS,
-  RATE_LIMIT_KEY,
   SECTIONS_DELETED_KEY,
   SECTIONS_ORDER_KEY,
   SHOW_NSFW_KEY,
@@ -52,12 +50,6 @@ export function getDiscoverStatus(): string {
 
 export function getExcludedGenres(): string[] {
   return (Application.getState(EXCLUDED_GENRES_KEY) as string[] | undefined) ?? [];
-}
-
-export function getImageRateLimitMs(): number {
-  return (
-    (Application.getState(RATE_LIMIT_KEY) as number | undefined) ?? DEFAULT_IMAGE_RATE_LIMIT_MS
-  );
 }
 
 // ----- Discover section order / visibility -----
@@ -87,14 +79,6 @@ function resetSections(): void {
   Application.setState(undefined, SECTIONS_ORDER_KEY);
   Application.setState(undefined, SECTIONS_DELETED_KEY);
 }
-
-const RATE_LIMIT_OPTIONS: Option[] = [
-  { id: "1500", title: "1 image / 1.50s" },
-  { id: "1750", title: "1 image / 1.75s" },
-  { id: "2000", title: "1 image / 2.00s" },
-  { id: "2250", title: "1 image / 2.25s" },
-  { id: "2500", title: "1 image / 2.50s" },
-];
 
 const toTags = (options: Option[]): Tag[] => options.map((o) => ({ id: o.id, title: o.title }));
 
@@ -185,7 +169,6 @@ export class OnisagaSettingsForm extends Form {
   private type: string;
   private status: string;
   private excludedGenres: string[];
-  private rateLimit: string;
 
   constructor() {
     super();
@@ -193,7 +176,6 @@ export class OnisagaSettingsForm extends Form {
     this.type = getDiscoverType();
     this.status = getDiscoverStatus();
     this.excludedGenres = getExcludedGenres();
-    this.rateLimit = String(getImageRateLimitMs());
   }
 
   override getSections() {
@@ -262,23 +244,6 @@ export class OnisagaSettingsForm extends Form {
           }),
         ],
       ),
-      Section(
-        {
-          id: "rateLimit",
-          footer:
-            "Delay between page-image requests. Lowering this may cause 429 errors that last 15-30 minutes.",
-        },
-        [
-          SelectRow("rateLimit", {
-            title: "Image Requests Limit",
-            value: [this.rateLimit],
-            options: toTags(RATE_LIMIT_OPTIONS),
-            minItemCount: 1,
-            maxItemCount: 1,
-            onValueChange: Application.Selector(this as OnisagaSettingsForm, "updateRateLimit"),
-          }),
-        ],
-      ),
     ];
   }
 
@@ -306,11 +271,6 @@ export class OnisagaSettingsForm extends Form {
     this.excludedGenres = [];
     Application.setState([], EXCLUDED_GENRES_KEY);
     this.reloadForm();
-  }
-
-  async updateRateLimit(value: string[]): Promise<void> {
-    this.rateLimit = value[0] ?? String(DEFAULT_IMAGE_RATE_LIMIT_MS);
-    Application.setState(Number(this.rateLimit), RATE_LIMIT_KEY);
   }
 }
 

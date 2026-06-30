@@ -28,7 +28,6 @@ import {
   getDiscoverStatus,
   getDiscoverType,
   getExcludedGenres,
-  getImageRateLimitMs,
   getSectionsOrder,
   getShowNsfw,
   OnisagaAdvancedSearchForm,
@@ -37,6 +36,7 @@ import {
 import {
   buildBrowseRequest,
   buildLoadMoreChaptersRequest,
+  buildSectionToggleRequest,
   defaultUpdates,
   extractLivewireState,
   isDefaultUpdates,
@@ -45,6 +45,7 @@ import {
   DEFAULT_SORT,
   DOMAIN,
   GENRES,
+  SECTION_TOGGLES,
   SORT_OPTIONS,
   TYPE_OPTIONS,
   type LivewireResponse,
@@ -65,7 +66,6 @@ import {
   parseMangaCards,
   parseMangaDetails,
   parseTopManga,
-  sliceSectionHtml,
   straightenQuotes,
   topMangaSubtitle,
   type MangaCard,
@@ -78,13 +78,13 @@ import type OnisagaConfig from "./pbconfig";
 const FEATURED_LIMIT = 10;
 
 // Carousel style per discover rail id (the user can reorder/hide rails, but the
-// style is fixed by what each rail renders best as).
+// style is fixed by what each rail renders best as). Rails with an on-site toggle
+// render as chip rows (Day/Week/Month, platform, …) — MangaDot's pattern.
 function discoverSectionType(id: string): DiscoverSectionType {
+  if (SECTION_TOGGLES[id]) return DiscoverSectionType.genres;
   switch (id) {
     case "top_manga":
       return DiscoverSectionType.featured;
-    case "most_popular":
-    case "top_10_rising":
     case "highest_rated":
       return DiscoverSectionType.prominentCarousel;
     case "genres":
@@ -110,8 +110,10 @@ function topMangaInfoItems(item: TopMangaItem): FeaturedCarouselItem["infoItems"
 export class OnisagaExtension implements ExtensionImpl<typeof OnisagaConfig> {
   requestManager = new OnisagaInterceptor("onisaga-request");
   cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
+  // The server advertises X-Ratelimit-Limit: 300, so a brisk client cap keeps
+  // concurrent page resolution fast while staying well clear of throttling.
   globalRateLimiter = new BasicRateLimiter("onisaga-rate-limiter", {
-    numberOfRequests: 3,
+    numberOfRequests: 10,
     bufferInterval: 1,
     ignoreImages: true,
   });
@@ -124,9 +126,6 @@ export class OnisagaExtension implements ExtensionImpl<typeof OnisagaConfig> {
   // Cached server-rendered home document, shared by the home-sourced rails.
   private homeHtmlCache?: { html: string; at: number };
   private static readonly HOME_TTL = 60_000;
-
-  // Throttle gate for the page-image API (one method owns the rotating token).
-  private lastApiAt = 0;
 
   async initialise(): Promise<void> {
     this.cookieStorageInterceptor.registerInterceptor();
@@ -174,56 +173,30 @@ export class OnisagaExtension implements ExtensionImpl<typeof OnisagaConfig> {
     section: DiscoverSection,
     metadata: { page?: number; collectedIds?: string[] } | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
+    // Toggle rails render as chip rows; each chip carries the rail + option in its
+    // search metadata so a tap runs the ranged fetch through getSearchResults.
+    const toggle = SECTION_TOGGLES[section.id];
+    if (toggle) {
+      return {
+        items: toggle.options.map((option) => ({
+          type: "genresCarouselItem",
+          searchQuery: {
+            title: "",
+            metadata: {
+              toggleSection: section.id,
+              toggleValue: option.id,
+            } satisfies OnisagaSearchMetadata,
+          },
+          name: option.title,
+        })),
+      };
+    }
+
     switch (section.id) {
       case "top_manga":
         return this.getTopMangaFeatured();
       case "latest":
         return this.browseDiscover(DEFAULT_SORT, metadata, (card) => ({
-          type: "simpleCarouselItem",
-          mangaId: card.mangaId,
-          imageUrl: card.imageUrl,
-          title: card.title,
-          subtitle: buildStatSubtitle(card),
-          contentRating: card.contentRating,
-        }));
-      case "most_popular":
-        return this.homeSectionItems("Most Popular", (card) => ({
-          type: "prominentCarouselItem",
-          mangaId: card.mangaId,
-          imageUrl: card.imageUrl,
-          title: card.title,
-          subtitle: buildStatSubtitle(card),
-          contentRating: card.contentRating,
-        }));
-      case "top_10_rising":
-        return this.homeSectionItems("Top 10 Rising", (card) => ({
-          type: "prominentCarouselItem",
-          mangaId: card.mangaId,
-          imageUrl: card.imageUrl,
-          title: card.title,
-          subtitle: buildStatSubtitle(card),
-          contentRating: card.contentRating,
-        }));
-      case "trending_platform":
-        return this.homeSectionItems("Trending by Platform", (card) => ({
-          type: "simpleCarouselItem",
-          mangaId: card.mangaId,
-          imageUrl: card.imageUrl,
-          title: card.title,
-          subtitle: buildStatSubtitle(card),
-          contentRating: card.contentRating,
-        }));
-      case "more_trending":
-        return this.homeSectionItems("More Trending", (card) => ({
-          type: "simpleCarouselItem",
-          mangaId: card.mangaId,
-          imageUrl: card.imageUrl,
-          title: card.title,
-          subtitle: buildStatSubtitle(card),
-          contentRating: card.contentRating,
-        }));
-      case "fan_favorites":
-        return this.browseDiscover("fan_favorites", metadata, (card) => ({
           type: "simpleCarouselItem",
           mangaId: card.mangaId,
           imageUrl: card.imageUrl,
@@ -345,43 +318,64 @@ export class OnisagaExtension implements ExtensionImpl<typeof OnisagaConfig> {
     }
   }
 
-  // The home page stacks all of its curated rails (Most Popular, Top 10 Rising,
-  // Trending by Platform, More Trending, …) in one server-rendered document, so
-  // fetch it once and slice out a rail by its heading. Cached briefly because
-  // several discover sections share the same document.
+  // The /trending page server-renders every curated rail (Most Popular, Fan
+  // Favorites, Top 10 Rising, Trending by Platform, More Trending) eagerly in one
+  // document, whereas /home lazy-loads the lower rails via Livewire (so a plain
+  // fetch misses them). Pull /trending once and slice each rail out by heading.
   private async fetchHomeHtml(): Promise<string> {
     const now = Date.now();
     const cached = this.homeHtmlCache;
     if (cached && now - cached.at < OnisagaExtension.HOME_TTL) return cached.html;
 
-    const [, buffer] = await Application.scheduleRequest({ url: `${DOMAIN}/home`, method: "GET" });
+    const [, buffer] = await Application.scheduleRequest({
+      url: `${DOMAIN}/trending`,
+      method: "GET",
+    });
     const html = Application.arrayBufferToUTF8String(buffer);
     this.homeHtmlCache = { html, at: now };
     return html;
   }
 
-  // Parse one home rail into discover items. Best-effort: a missing/renamed
-  // heading yields no items rather than an error.
-  private async homeSectionItems(
-    heading: string,
-    map: (card: MangaCard) => DiscoverSectionItem,
-  ): Promise<PagedResults<DiscoverSectionItem>> {
-    let cards: MangaCard[] = [];
-    try {
-      const slice = sliceSectionHtml(await this.fetchHomeHtml(), heading);
-      if (slice) cards = parseMangaCards(cheerio.load(slice), getShowNsfw());
-    } catch {
-      cards = [];
-    }
+  // A discover toggle chip was tapped: drive the rail's Livewire method
+  // (setPeriod / setSort / setPlatform) on /trending and return the re-rendered
+  // cards. Best-effort: a missing component/HTML yields no results, not an error.
+  private async getToggledSection(
+    sectionId: string,
+    value: string,
+  ): Promise<PagedResults<SearchResultItem>> {
+    const toggle = SECTION_TOGGLES[sectionId];
+    if (!toggle) return { items: [] };
 
-    const seen = new Set<string>();
-    const items: DiscoverSectionItem[] = [];
-    for (const card of cards) {
-      if (seen.has(card.mangaId)) continue;
-      seen.add(card.mangaId);
-      items.push(map(card));
+    try {
+      const trendingUrl = `${DOMAIN}/trending`;
+      const $ = cheerio.load(await this.fetchHomeHtml());
+      const state = extractLivewireState($, toggle.component);
+      if (!state) return { items: [] };
+
+      const [, buffer] = await Application.scheduleRequest({
+        url: `${DOMAIN}/livewire/update`,
+        method: "POST",
+        headers: livewireHeaders(trendingUrl),
+        body: JSON.stringify(buildSectionToggleRequest(state, toggle.method, value)),
+      });
+      const json = parseJson<LivewireResponse>(
+        Application.arrayBufferToUTF8String(buffer),
+        "livewire toggle",
+      );
+      const html = json.components?.[0]?.effects?.html;
+      const cards = html ? parseMangaCards(cheerio.load(html), getShowNsfw()) : [];
+
+      return {
+        items: cards.map((card) => ({
+          mangaId: card.mangaId,
+          title: card.title,
+          imageUrl: card.imageUrl,
+          contentRating: card.contentRating,
+        })),
+      };
+    } catch {
+      return { items: [] };
     }
-    return { items };
   }
 
   // ================================ Search =====================================
@@ -391,6 +385,11 @@ export class OnisagaExtension implements ExtensionImpl<typeof OnisagaConfig> {
     metadata: { page?: number } | undefined,
     sortingOption?: SortingOption,
   ): Promise<PagedResults<SearchResultItem>> {
+    // A discover toggle chip routes here with no title — fetch its ranged cards.
+    if (query.metadata?.toggleSection) {
+      return this.getToggledSection(query.metadata.toggleSection, query.metadata.toggleValue ?? "");
+    }
+
     const title = straightenQuotes(query.title ?? "").trim();
 
     if (title.startsWith("http")) {
@@ -468,38 +467,28 @@ export class OnisagaExtension implements ExtensionImpl<typeof OnisagaConfig> {
 
     let chapters = parseChapters($, sourceManga);
 
+    // The chapter list is paginated client-side; one Livewire call that bumps the
+    // loaded-counts past any real series returns the whole list at once.
     const state = extractLivewireState($, "manga.chapter-list");
     if (state) {
-      let snapshot = state.snapshot;
-      // The site renders the whole list in one Livewire call; the loop is a guard
-      // for any source that still paginates, and stops as soon as it stops growing.
-      for (let i = 0; i < 50; i++) {
-        let json: LivewireResponse;
-        try {
-          const [, buffer] = await Application.scheduleRequest({
-            url: `${DOMAIN}/livewire/update`,
-            method: "POST",
-            headers: livewireHeaders(mangaUrl),
-            body: JSON.stringify(buildLoadMoreChaptersRequest({ token: state.token, snapshot })),
-          });
-          json = parseJson<LivewireResponse>(
-            Application.arrayBufferToUTF8String(buffer),
-            "livewire chapters",
-          );
-        } catch {
-          break;
-        }
-
+      try {
+        const [, buffer] = await Application.scheduleRequest({
+          url: `${DOMAIN}/livewire/update`,
+          method: "POST",
+          headers: livewireHeaders(mangaUrl),
+          body: JSON.stringify(buildLoadMoreChaptersRequest(state)),
+        });
+        const json = parseJson<LivewireResponse>(
+          Application.arrayBufferToUTF8String(buffer),
+          "livewire chapters",
+        );
         const html = json.components?.[0]?.effects?.html;
-        if (!html) break;
-
-        const next = parseChapters(cheerio.load(html), sourceManga);
-        if (next.length <= chapters.length) break;
-        chapters = next;
-
-        const newSnapshot = json.components?.[0]?.snapshot;
-        if (!newSnapshot) break;
-        snapshot = newSnapshot;
+        if (html) {
+          const full = parseChapters(cheerio.load(html), sourceManga);
+          if (full.length > chapters.length) chapters = full;
+        }
+      } catch {
+        // Keep the first server-rendered page if the bulk load fails.
       }
     }
 
@@ -518,18 +507,22 @@ export class OnisagaExtension implements ExtensionImpl<typeof OnisagaConfig> {
     const [, buffer] = await Application.scheduleRequest({ url: chapterUrl, method: "GET" });
     const body = Application.arrayBufferToUTF8String(buffer);
 
-    let token = extractReaderToken(body);
+    const token = extractReaderToken(body);
     if (!token) throw new Error("Could not find reader token on chapter page");
 
     const pageCount = countPages(body);
     if (pageCount === 0) throw new Error("No pages found in chapter");
 
-    const pages: string[] = [];
-    for (let order = 0; order < pageCount; order++) {
-      const resolved = await this.resolvePageUrl(cid, order, chapterUrl, token);
-      pages.push(resolved.url);
-      token = resolved.token;
-    }
+    // The reader token is per-chapter, not per-page (no rotating token), so every
+    // page resolves with the same token — fire them all at once and let the global
+    // rate limiter pace the requests. Paperback needs all page URLs up front.
+    const resolved = await Promise.all(
+      Array.from({ length: pageCount }, (_, order) =>
+        this.resolvePageUrl(cid, order, chapterUrl, token),
+      ),
+    );
+    const pages = resolved.filter((url): url is string => url.length > 0);
+    if (pages.length === 0) throw new Error("Could not resolve any chapter pages");
 
     return {
       id: chapter.chapterId,
@@ -538,72 +531,43 @@ export class OnisagaExtension implements ExtensionImpl<typeof OnisagaConfig> {
     };
   }
 
-  // Sequentially resolve a single page's CDN url, carrying the rotating reader
-  // token forward and refreshing it from the chapter page when it expires.
+  // Resolve a single page's signed CDN url from the tokenized page API. The token
+  // is stable for the chapter; retry on a 429 throttle. Returns "" when a page
+  // can't be resolved (e.g. a count overshoot) so one bad page never fails the
+  // whole chapter.
   private async resolvePageUrl(
     cid: string,
     order: number,
     chapterUrl: string,
     token: string,
-  ): Promise<{ url: string; token: string }> {
-    let currentToken = token;
-
+  ): Promise<string> {
     for (let attempt = 0; attempt < 3; attempt++) {
-      await this.throttleImageApi();
-
       const [response, buffer] = await Application.scheduleRequest({
         url: `${DOMAIN}/api/chapter/${cid}/page/${order}`,
         method: "GET",
         headers: {
-          "X-Reader-Token": currentToken,
+          "X-Reader-Token": token,
           "Sec-Fetch-Mode": "cors",
           "Sec-Fetch-Site": "same-origin",
           Referer: chapterUrl,
         },
       });
 
-      const nextToken = response.headers?.["x-reader-token-next"];
-      if (nextToken) currentToken = nextToken;
-
       if (response.status === 429) {
         const retryAfter = Number(response.headers?.["retry-after"]);
-        await Application.sleep(
-          Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : getImageRateLimitMs() / 1000,
-        );
+        await Application.sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 2);
         continue;
       }
 
-      const dto = parseJson<PageApiResponse>(
-        Application.arrayBufferToUTF8String(buffer),
-        `chapter page ${order}`,
-      );
-      if (dto.url) return { url: dto.url, token: currentToken };
-
-      const expired =
-        response.status >= 400 || (dto.message != null && /expired/i.test(dto.message));
-      if (expired) {
-        const [, refreshBuffer] = await Application.scheduleRequest({
-          url: chapterUrl,
-          method: "GET",
-        });
-        const fresh = extractReaderToken(Application.arrayBufferToUTF8String(refreshBuffer));
-        if (fresh) {
-          currentToken = fresh;
-          continue;
-        }
+      try {
+        const dto = JSON.parse(Application.arrayBufferToUTF8String(buffer)) as PageApiResponse;
+        return dto.url ?? "";
+      } catch {
+        return "";
       }
-
-      throw new Error(`Failed to load page ${order}: ${dto.message ?? `HTTP ${response.status}`}`);
     }
 
-    throw new Error(`Failed to load page ${order} after 3 attempts`);
-  }
-
-  private async throttleImageApi(): Promise<void> {
-    const gap = getImageRateLimitMs();
-    const elapsed = Date.now() - this.lastApiAt;
-    if (elapsed < gap) await Application.sleep((gap - elapsed) / 1000);
-    this.lastApiAt = Date.now();
+    return "";
   }
 
   // ============================== Livewire browse ==============================

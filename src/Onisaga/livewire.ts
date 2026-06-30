@@ -9,7 +9,27 @@ import {
   type ChapterLivewireRequest,
   type LivewireState,
   type PostFilterUpdates,
+  type ToggleLivewireRequest,
 } from "./models";
+
+// Invoke a single Livewire method (setPeriod / setSort / setPlatform) on a
+// rail's component to switch its time range / platform and re-render its cards.
+export function buildSectionToggleRequest(
+  state: LivewireState,
+  method: string,
+  value: string,
+): ToggleLivewireRequest {
+  return {
+    _token: state.token,
+    components: [
+      {
+        snapshot: state.snapshot,
+        updates: {},
+        calls: [{ type: "call", path: "", method, params: [value] }],
+      },
+    ],
+  };
+}
 
 export function defaultUpdates(): PostFilterUpdates {
   return {
@@ -82,14 +102,17 @@ export function buildBrowseRequest(
   };
 }
 
+// Pull the entire chapter (and volume) list in a single Livewire round-trip by
+// setting the component's loaded-counts straight to a number larger than any
+// series, instead of repeatedly calling loadMoreChapters.
 export function buildLoadMoreChaptersRequest(state: LivewireState): ChapterLivewireRequest {
   return {
     _token: state.token,
     components: [
       {
         snapshot: state.snapshot,
-        updates: {},
-        calls: [{ type: "call", path: "", method: "loadMoreChapters", params: [] }],
+        updates: { chaptersLoaded: 3000, volumesLoaded: 3000 },
+        calls: [],
       },
     ],
   };

@@ -8,6 +8,7 @@ import { type Element } from "domhandler";
 import { DOMAIN, GENRES, LANGUAGES } from "./models";
 
 const READER_TOKEN_REGEX = /readerToken["']?\s*:\s*["']([^"']+)["']/;
+const TOTAL_PAGES_REGEX = /totalPages["']?\s*:\s*(\d+)/;
 const PAGE_ORDER_REGEX = /["']?order["']?\s*:\s*(\d+)/g;
 const CHAPTER_NUMBER_REGEX = /(\d+(?:\.\d+)?)/;
 
@@ -30,10 +31,30 @@ function resolveUrl(src: string): string {
   return `${DOMAIN}/${src}`;
 }
 
+// Largest URL from a srcset ("a 150w, b 300w, c 450w" -> c).
+function lastSrcsetUrl(srcset: string): string {
+  const urls = srcset
+    .split(",")
+    .map((entry) => entry.trim().split(/\s+/)[0])
+    .filter(Boolean);
+  return urls[urls.length - 1] ?? "";
+}
+
 function resolveImageUrl($el: Cheerio<Element>): string {
-  const src = $el.attr("data-src") || $el.attr("data-lazy-src") || $el.attr("src") || "";
-  if (!src || src.startsWith("data:")) return "";
-  return resolveUrl(src);
+  const direct = $el.attr("data-src") || $el.attr("data-lazy-src") || $el.attr("src") || "";
+  if (direct && !direct.startsWith("data:")) return resolveUrl(direct);
+
+  // Lazy-loaded cards leave a data:/empty src and keep the real image in a
+  // srcset — on the <img> itself or a sibling <source> in a <picture>. Prefer
+  // the webp source (broad device support) over the first listed (often avif).
+  const srcset =
+    $el.attr("srcset") ||
+    $el.attr("data-srcset") ||
+    $el.parent().find('source[type="image/webp"]').first().attr("srcset") ||
+    $el.parent().find("source[srcset]").first().attr("srcset") ||
+    "";
+  const fromSet = lastSrcsetUrl(srcset);
+  return fromSet ? resolveUrl(fromSet) : "";
 }
 
 export function mangaIdFromHref(href: string): string {
@@ -88,6 +109,10 @@ export function parseMangaCards($: CheerioAPI, showNsfw: boolean): MangaCard[] {
     if (!title) return;
 
     const imageUrl = resolveImageUrl(card.find("img").first());
+    // Paperback throws "Invalid URL" on an empty imageUrl, so skip imageless
+    // cards rather than emit a broken discover item.
+    if (!imageUrl) return;
+
     const genres =
       card.find('[class*="text-accent/50"]').first().text().replace(/\s+/g, " ").trim() ||
       undefined;
@@ -138,7 +163,7 @@ export function parseTopManga($: CheerioAPI, showNsfw: boolean): TopMangaItem[] 
   const seen = new Set<string>();
 
   const add = (item: TopMangaItem | undefined): void => {
-    if (!item || !item.mangaId || !item.title || seen.has(item.mangaId)) return;
+    if (!item || !item.mangaId || !item.title || !item.imageUrl || seen.has(item.mangaId)) return;
     if (item.contentRating === ContentRating.ADULT && !showNsfw) return;
     seen.add(item.mangaId);
     items.push(item);
@@ -456,6 +481,13 @@ export function extractReaderToken(body: string): string {
 }
 
 export function countPages(body: string): number {
+  // The reader page embeds an authoritative `totalPages: N`; prefer it over
+  // counting `order:` occurrences (which the page may repeat for spreads).
+  const total = TOTAL_PAGES_REGEX.exec(body);
+  if (total?.[1]) {
+    const count = parseInt(total[1], 10);
+    if (count > 0) return count;
+  }
   const matches = body.match(PAGE_ORDER_REGEX);
   return matches ? matches.length : 0;
 }
