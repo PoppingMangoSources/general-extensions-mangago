@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-06-29T22:19:42.015Z",
+  "buildTime": "2026-06-30T18:53:33.605Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -248,7 +248,7 @@
       "badges": [],
       "developers": [
         {
-          "name": "PoppingMango",
+          "name": "Popmango",
           "github": "https://github.com/PoppingMangoSources"
         }
       ],
