@@ -1,41 +1,82 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-function arrayBufferToBase64(data: ArrayBuffer): string {
-  const encoded = Application.base64Encode(data);
-  return typeof encoded === "string" ? encoded : Application.arrayBufferToASCIIString(encoded);
+import { type MangagoImageContext } from "../models";
+import { base64ToArrayBuffer } from "./crypto";
+
+// Persist each image's descramble context keyed by its fragment-less URL, so a
+// retry that drops the "#desckey=...&cols=..." fragment can still descramble.
+const IMAGE_CONTEXT_STATE_PREFIX = "mangago-image-context:";
+
+function cleanUrl(url: string): string {
+  const hashIndex = url.indexOf("#");
+  return hashIndex >= 0 ? url.slice(0, hashIndex) : url;
+}
+
+function readSavedImageContext(url: string): MangagoImageContext | null {
+  const raw = Application.getState(`${IMAGE_CONTEXT_STATE_PREFIX}${cleanUrl(url)}`) as
+    | { desckey?: unknown; cols?: unknown }
+    | undefined;
+
+  const desckey = typeof raw?.desckey === "string" ? raw.desckey : undefined;
+  const cols = typeof raw?.cols === "number" ? raw.cols : undefined;
+
+  if (!desckey || !cols || cols <= 0) return null;
+
+  return { desckey, cols };
+}
+
+// Descramble context for an image: the "#desckey=...&cols=..." fragment if present
+// (also persisted), else the persisted value from an earlier fragment-carrying load.
+export function parseImageContext(url: string): MangagoImageContext | null {
+  const hashIndex = url.indexOf("#");
+  if (hashIndex < 0) return readSavedImageContext(url);
+
+  const fragment = url.slice(hashIndex + 1);
+
+  // Parse the fragment by hand (URLSearchParams isn't guaranteed on-device).
+  const fragmentParams = new Map<string, string>();
+  for (const pair of fragment.split("&")) {
+    const eq = pair.indexOf("=");
+    if (eq < 0) continue;
+    const key = pair.slice(0, eq);
+    const value = pair.slice(eq + 1);
+    try {
+      fragmentParams.set(key, decodeURIComponent(value));
+    } catch {
+      fragmentParams.set(key, value);
+    }
+  }
+
+  const desckey = fragmentParams.get("desckey");
+  const colsRaw = fragmentParams.get("cols");
+
+  if (!desckey || !colsRaw) return readSavedImageContext(url);
+
+  const cols = Number(colsRaw);
+  if (!Number.isFinite(cols) || cols <= 0) return readSavedImageContext(url);
+
+  Application.setState({ desckey, cols }, `${IMAGE_CONTEXT_STATE_PREFIX}${cleanUrl(url)}`);
+  return { desckey, cols };
 }
 
 function decodeDataUrlToArrayBuffer(dataUrl: string): ArrayBuffer {
   const comma = dataUrl.indexOf(",");
   if (comma < 0) throw new Error("Invalid data URL");
 
-  const payload = dataUrl.slice(comma + 1);
-  const decoded = Application.base64Decode(payload);
-
-  if (typeof decoded === "string") {
-    const bytes = new Uint8Array(decoded.length);
-    for (let i = 0; i < decoded.length; i++) {
-      bytes[i] = decoded.charCodeAt(i);
-    }
-    return bytes.buffer;
-  }
-
-  return decoded;
+  return base64ToArrayBuffer(dataUrl.slice(comma + 1));
 }
 
 async function loadImageFromBuffer(data: ArrayBuffer, mimeType: string): Promise<HTMLImageElement> {
-  const b64 = arrayBufferToBase64(data);
+  const encoded = Application.base64Encode(data);
+  const b64 = typeof encoded === "string" ? encoded : Application.arrayBufferToASCIIString(encoded);
   const dataUrl = `data:${mimeType};base64,${b64}`;
 
   const img = new Image();
 
-  // Settle once across all JSCore Image-polyfill behaviours (sync-complete,
-  // async onload/onerror, or neither). The timer is a settle-guard, not a fetch
-  // timeout: if the polyfill never fires a callback, this rejects so the reader
-  // doesn't spin forever. setTimeout/clearTimeout aren't guaranteed in this
-  // context, so both calls are typeof-guarded; absent a timer we rely on the
-  // sync-complete / onload paths (data URLs settle synchronously in practice).
+  // Settle once across every Image-polyfill behaviour (sync-complete, async
+  // onload/onerror, or neither). The timer is a settle-guard against a polyfill
+  // that never fires a callback; setTimeout isn't guaranteed, so it's typeof-guarded.
   return await new Promise<HTMLImageElement>((resolve, reject) => {
     let settled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -93,16 +134,9 @@ export async function descrambleMangagoImage(
 
   ctx.drawImage(src, 0, 0, width, height);
 
-  // Move tiles through the pixel buffer, not a clip-and-scale drawImage: the
-  // on-device canvas polyfill doesn't reliably honour the 9-argument
-  // (source-rect) overload, so per-tile blits silently no-op and the image comes
-  // back still scrambled. getImageData + putImageData is the working path.
-  //
-  // That polyfill also exposes getImageData/putImageData with Y-up coordinates
-  // (origin bottom-left), so the raw buffer is row-reversed relative to the
-  // image. Flip to standard Y-down, permute the tiles, then flip back. Pre-copying
-  // the buffer keeps the right/bottom remainder strip floor() leaves outside the
-  // cols×cols grid intact.
+  // Permute tiles in the pixel buffer: the polyfill's 9-arg drawImage no-ops, and
+  // its getImageData/putImageData are Y-up, so flip to Y-down, permute, flip back.
+  // Pre-copying keeps the floor() remainder strip outside the cols×cols grid intact.
   const stride = width * 4;
   const srcYup = ctx.getImageData(0, 0, width, height).data;
   const srcStd = new Uint8ClampedArray(srcYup.length);

@@ -1,21 +1,13 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
+import { DiscoverSectionType, type SearchResultItem } from "@paperback/types";
+
 export const DOMAIN = "https://www.mangago.me";
 
-// mangago needs two different User-Agents:
-//
-//   • Browsing UA (mobile iPhone) — for listing/search/discover and the
-//     manga-details page, where a mobile UA lists chapters as read-manga URLs
-//     (a desktop UA lists numeric /chapter/ URLs that www.mangago.me 404s).
-//   • Reader UA (desktop macOS Chrome) — for the reader page, with the
-//     _m_superu=1 cookie. This pair makes the reader return the complete image
-//     list in one request (_multimode = "").
-//
-// readerHeadersForUrl() picks between them per request URL.
-export const USER_AGENT =
-  "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148";
-
+// The reader page needs a desktop UA (+ _m_superu cookie) to return the full image
+// list in one request; browsing uses the app's default (mobile) UA, which lists
+// chapters as read-manga URLs. See readerHeadersForUrl().
 export const READER_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36";
 
@@ -26,6 +18,17 @@ export type MangagoSearchMetadata = {
   statuses?: string[];
   // Default browse sort (genre tiles use "view"); a sort picker overrides it.
   sortby?: string;
+};
+
+// Relative update times on /list/latest ("5 minutes", "2 hours", "3 days").
+export const RELATIVE_UNIT_MS: Record<string, number> = {
+  second: 1_000,
+  minute: 60_000,
+  hour: 3_600_000,
+  day: 86_400_000,
+  week: 604_800_000,
+  month: 2_592_000_000,
+  year: 31_536_000_000,
 };
 
 export type MangagoGenreOption = {
@@ -138,45 +141,93 @@ export type MangagoImageContext = {
   cols: number;
 };
 
-export const DISCOVER_SECTION_OPTIONS = [
-  { id: "featured_manga", title: "Featured Manga" },
-  { id: "popular_manga", title: "Popular Manga" },
-  { id: "new_chapters", title: "New Chapters" },
-  { id: "top_yaoi", title: "Yaoi Manga Top 5" },
-  { id: "top_shoujo", title: "Shoujo Manga Top 10" },
-  { id: "top_comedy", title: "Comedy Manga Top 5" },
-  { id: "top_supernatural", title: "Supernatural Manga Top 10" },
-  { id: "top_fantasy", title: "Fantasy Manga Top 5" },
-  { id: "top_mystery", title: "Mystery Manga Top 10" },
-  { id: "top_josei", title: "Josei Manga Top 5" },
-  { id: "top_shounen_ai", title: "Shounen Ai Manga Top 5" },
-  { id: "top_yuri", title: "Yuri Manga Top 5" },
-  { id: "top_school_life", title: "School Life Manga Top 5" },
-  { id: "genres", title: "Genres" },
-] as const;
-
-// Sections present in settings but hidden from the home page until the user
-// enables them — keeps the default home short without dropping the option.
-const DEFAULT_OFF_SECTION_IDS = new Set<string>(["top_shounen_ai", "top_yuri", "top_school_life"]);
-
-function discoverSectionStateKey(sectionId: string): string {
-  return `mangago_discover_section_${sectionId}`;
+// Detail-page fields that enrich the Featured hero (rating is span.rating_num, 0–10).
+export interface FeaturedDetail {
+  rating?: string;
+  status?: string;
+  author?: string;
+  summary?: string;
 }
 
-export function getDiscoverSectionEnabled(sectionId: string): boolean {
-  const stored = Application.getState(discoverSectionStateKey(sectionId)) as boolean | undefined;
-  return stored ?? !DEFAULT_OFF_SECTION_IDS.has(sectionId);
+// A search/discover tile: a SearchResultItem plus the discover-only extras.
+export interface MangagoListing extends SearchResultItem {
+  // Reader path of the tile's latest chapter, when present — lets the New
+  // Chapters section render as a tappable chapter-updates list.
+  chapterId?: string;
+  // Update time and genres, only available on the /list/latest/ update page.
+  publishDate?: Date;
+  genres?: string[];
 }
 
-export function setDiscoverSectionEnabled(sectionId: string, enabled: boolean): void {
-  Application.setState(enabled, discoverSectionStateKey(sectionId));
-}
+export type DiscoverSectionOption = {
+  id: string;
+  title: string;
+  // Carousel style; the top_* rows alternate featured / simpleCarousel for variety.
+  type: DiscoverSectionType;
+  // "Top N" rows cap items to N; omitted rows paginate uncapped.
+  limit?: number;
+};
 
-export function resetDiscoverSectionSettings(): void {
-  for (const section of DISCOVER_SECTION_OPTIONS) {
-    Application.setState(undefined, discoverSectionStateKey(section.id));
-  }
-}
+export const DISCOVER_SECTION_OPTIONS: DiscoverSectionOption[] = [
+  { id: "featured_manga", title: "Featured Manga", type: DiscoverSectionType.featured },
+  { id: "popular_manga", title: "Popular Manga", type: DiscoverSectionType.prominentCarousel },
+  { id: "new_chapters", title: "New Chapters", type: DiscoverSectionType.chapterUpdates },
+  { id: "top_yaoi", title: "Yaoi Manga Top 5", type: DiscoverSectionType.featured, limit: 5 },
+  {
+    id: "top_shoujo",
+    title: "Shoujo Manga Top 10",
+    type: DiscoverSectionType.simpleCarousel,
+    limit: 10,
+  },
+  { id: "top_comedy", title: "Comedy Manga Top 5", type: DiscoverSectionType.featured, limit: 5 },
+  {
+    id: "top_supernatural",
+    title: "Supernatural Manga Top 10",
+    type: DiscoverSectionType.simpleCarousel,
+    limit: 10,
+  },
+  { id: "top_fantasy", title: "Fantasy Manga Top 5", type: DiscoverSectionType.featured, limit: 5 },
+  {
+    id: "top_mystery",
+    title: "Mystery Manga Top 10",
+    type: DiscoverSectionType.simpleCarousel,
+    limit: 10,
+  },
+  { id: "top_josei", title: "Josei Manga Top 5", type: DiscoverSectionType.featured, limit: 5 },
+  {
+    id: "top_shounen_ai",
+    title: "Shounen Ai Manga Top 5",
+    type: DiscoverSectionType.simpleCarousel,
+    limit: 5,
+  },
+  { id: "top_yuri", title: "Yuri Manga Top 5", type: DiscoverSectionType.featured, limit: 5 },
+  {
+    id: "top_school_life",
+    title: "School Life Manga Top 5",
+    type: DiscoverSectionType.simpleCarousel,
+    limit: 5,
+  },
+  { id: "genres", title: "Genres", type: DiscoverSectionType.genres },
+];
+
+// Home sections hidden by default until the user enables them.
+export const DEFAULT_OFF_SECTION_IDS = new Set<string>([
+  "top_shounen_ai",
+  "top_yuri",
+  "top_school_life",
+]);
+
+// Genre tops that add ",Webtoons" so they list only manhwa/manhua.
+export const MANHWA_TOP_SECTION_IDS = new Set(["top_supernatural", "top_mystery"]);
+
+// Legacy discover-section ids the app may still send.
+export const DISCOVER_SECTION_ALIASES: Record<string, string> = {
+  popular: "popular_manga",
+  latest: "new_chapters",
+};
+
+// The Featured hero enriches this many titles from their detail pages (cached).
+export const FEATURED_HERO_LIMIT = 8;
 
 // mangago has no real content-type field; "Webtoons" is its only manhwa/manhua
 // signal, so the type filter just includes or excludes that one genre.
@@ -185,24 +236,3 @@ export const CONTENT_TYPE_OPTIONS = [
   { id: "webtoons", title: "Manhwa / Manhua" },
   { id: "manga", title: "Manga" },
 ] as const;
-
-export function getHiddenGenreIds(): string[] {
-  return (Application.getState("mangago_hidden_genres") as string[] | undefined) ?? [];
-}
-
-export function setHiddenGenreIds(ids: string[]): void {
-  Application.setState(ids, "mangago_hidden_genres");
-}
-
-export function getContentType(): string {
-  return (Application.getState("mangago_content_type") as string | undefined) ?? "all";
-}
-
-export function setContentType(value: string): void {
-  Application.setState(value, "mangago_content_type");
-}
-
-export function resetMangagoFilters(): void {
-  Application.setState(undefined, "mangago_hidden_genres");
-  Application.setState(undefined, "mangago_content_type");
-}
