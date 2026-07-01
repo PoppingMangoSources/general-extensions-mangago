@@ -12,8 +12,8 @@ import {
 import {
   GENRE_OPTIONS,
   genreIdFromTitle,
-  type MangagoSearchMetadata,
   STATUS_OPTIONS,
+  type MangagoSearchMetadata,
 } from "../models";
 
 function normalizeGenreSelections(
@@ -33,6 +33,7 @@ function normalizeGenreSelections(
 export class MangagoAdvancedSearchForm extends AdvancedSearchForm {
   private genres: Record<string, "included" | "excluded">;
   private statuses: string[];
+  private sortby?: string;
 
   constructor(searchQuery?: SearchQuery<MangagoSearchMetadata>) {
     super();
@@ -43,6 +44,7 @@ export class MangagoAdvancedSearchForm extends AdvancedSearchForm {
       if (GENRE_OPTIONS.some((genre) => genre.id === genreId)) this.genres[genreId] = "included";
     }
     this.statuses = searchQuery?.metadata?.statuses ?? STATUS_OPTIONS.map((status) => status.id);
+    this.sortby = searchQuery?.metadata?.sortby;
   }
 
   override getSections() {
@@ -90,6 +92,7 @@ export class MangagoAdvancedSearchForm extends AdvancedSearchForm {
     const metadata: MangagoSearchMetadata = {};
     if (Object.keys(this.genres).length > 0) metadata.genres = this.genres;
     if (this.statuses.length !== STATUS_OPTIONS.length) metadata.statuses = this.statuses;
+    if (this.sortby) metadata.sortby = this.sortby;
     return metadata;
   }
 }

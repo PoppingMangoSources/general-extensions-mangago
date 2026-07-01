@@ -5,17 +5,49 @@ import { ButtonRow, Form, Section, SelectRow, ToggleRow } from "@paperback/types
 
 import {
   CONTENT_TYPE_OPTIONS,
+  DEFAULT_OFF_SECTION_IDS,
   DISCOVER_SECTION_OPTIONS,
   GENRE_OPTIONS,
-  getContentType,
-  getDiscoverSectionEnabled,
-  getHiddenGenreIds,
-  resetDiscoverSectionSettings,
-  resetMangagoFilters,
-  setContentType,
-  setDiscoverSectionEnabled,
-  setHiddenGenreIds,
 } from "../models";
+
+const discoverSectionStateKey = (sectionId: string): string =>
+  `mangago_discover_section_${sectionId}`;
+
+export function getDiscoverSectionEnabled(sectionId: string): boolean {
+  const stored = Application.getState(discoverSectionStateKey(sectionId)) as boolean | undefined;
+  return stored ?? !DEFAULT_OFF_SECTION_IDS.has(sectionId);
+}
+
+function setDiscoverSectionEnabled(sectionId: string, enabled: boolean): void {
+  Application.setState(enabled, discoverSectionStateKey(sectionId));
+}
+
+function resetDiscoverSectionSettings(): void {
+  for (const section of DISCOVER_SECTION_OPTIONS) {
+    Application.setState(undefined, discoverSectionStateKey(section.id));
+  }
+}
+
+export function getHiddenGenreIds(): string[] {
+  return (Application.getState("mangago_hidden_genres") as string[] | undefined) ?? [];
+}
+
+function setHiddenGenreIds(ids: string[]): void {
+  Application.setState(ids, "mangago_hidden_genres");
+}
+
+export function getContentType(): string {
+  return (Application.getState("mangago_content_type") as string | undefined) ?? "all";
+}
+
+function setContentType(value: string): void {
+  Application.setState(value, "mangago_content_type");
+}
+
+function resetMangagoFilters(): void {
+  Application.setState(undefined, "mangago_hidden_genres");
+  Application.setState(undefined, "mangago_content_type");
+}
 
 export class MangagoSettingsForm extends Form {
   override getSections() {

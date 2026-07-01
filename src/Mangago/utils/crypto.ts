@@ -46,13 +46,10 @@ export async function aesCbcDecrypt(
   keyBytes: ArrayBuffer,
   ivBytes: ArrayBuffer,
 ): Promise<ArrayBuffer> {
-  // Use `crypto.subtle`, the form the on-device polyfill exposes;
-  // `new SubtleCrypto()` is an illegal constructor in JSCore.
+  // `crypto.subtle` is the form the polyfill exposes (`new SubtleCrypto()` throws).
   const subtle = crypto.subtle;
 
-  // AES-CBC ciphertext must be a whole number of 16-byte blocks. Bail early with
-  // a clear message rather than letting WebCrypto throw an opaque
-  // InvalidAccessError on a truncated/corrupt blob.
+  // Bail early on a non-block-aligned blob rather than an opaque WebCrypto throw.
   if (encrypted.byteLength === 0 || encrypted.byteLength % 16 !== 0) {
     throw new Error(`Invalid ciphertext length ${encrypted.byteLength} (not a multiple of 16)`);
   }
@@ -176,7 +173,7 @@ export function unscrambleImageList(imageList: string, js: string): string {
   return chars.join("");
 }
 
-export function findCols(input: string): number {
+export function extractDescrambleCols(input: string): number {
   const match = /var\s+widthnum\s*=\s*heightnum\s*=\s*(\d+)/.exec(input);
   return match ? Number(match[1]) : 0;
 }
