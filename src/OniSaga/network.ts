@@ -2,7 +2,6 @@
 /* Copyright © 2026 Inkdex */
 
 import {
-  BasicRateLimiter,
   CloudflareError,
   PaperbackInterceptor,
   type Request,
@@ -21,10 +20,10 @@ const PAGE_API_REGEX = /\/api\/chapter\/([^/]+)\/page\/\d+/;
 const PAGE_RETRY_HEADER = "x-pb-page-retry";
 const PAGE_RETRY_LIMIT = 2;
 // Backoff when the page API 429s without a Retry-After.
-const RATE_LIMIT_FALLBACK_SECONDS = 3;
+const RATE_LIMIT_FALLBACK_MS = 2500;
 
 // Response headers can arrive in any casing; read them case-insensitively.
-function headerValue(
+function getHeaderValue(
   headers: Record<string, string> | undefined,
   name: string,
 ): string | undefined {
@@ -33,6 +32,12 @@ function headerValue(
     if (key.toLowerCase() === wanted) return value;
   }
   return undefined;
+}
+
+// Delay before retrying a rate-limited request, honouring Retry-After.
+function getRetryDelayMs(headers: Record<string, string> | undefined): number {
+  const retryAfter = Number(getHeaderValue(headers, "retry-after"));
+  return Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : RATE_LIMIT_FALLBACK_MS;
 }
 
 export class OniSagaInterceptor extends PaperbackInterceptor {
@@ -79,7 +84,7 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
     response: Response,
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
-    const cfMitigated = headerValue(response.headers, "cf-mitigated");
+    const cfMitigated = getHeaderValue(response.headers, "cf-mitigated");
     if (cfMitigated === "challenge") {
       throw new CloudflareError({
         url: `${DOMAIN}/`,
@@ -95,7 +100,7 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
 
     // The reader can rotate the chapter token; adopt the replacement so later
     // page requests stay authorized (the site's own reader does the same).
-    const nextToken = headerValue(response.headers, "x-reader-token-next");
+    const nextToken = getHeaderValue(response.headers, "x-reader-token-next");
     if (session && nextToken) session.token = nextToken;
 
     // Reader tokens expire after ~10 minutes, and the app requests pages long
@@ -128,10 +133,7 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
     if (PAGE_API_REGEX.test(request.url) && response.status === 429) {
       const attempt = Number(request.headers?.[PAGE_RETRY_HEADER] ?? "0");
       if (attempt < PAGE_RETRY_LIMIT) {
-        const retryAfter = Number(headerValue(response.headers, "retry-after"));
-        const seconds =
-          Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : RATE_LIMIT_FALLBACK_SECONDS;
-        await Application.sleep(seconds);
+        await Application.sleep(getRetryDelayMs(response.headers) / 1000);
         const [, buffer] = await Application.scheduleRequest({
           url: request.url,
           method: "GET",
@@ -165,17 +167,64 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
   }
 }
 
-// The reader's prefetcher fires a whole window of page-API requests at once,
-// which bursts past the site's per-IP throttle and 429s every page. Give the
-// page API its own strict, serialized budget (the base limiter already
-// serializes via a lock) so it drains one-at-a-time; everything else keeps the
-// generous global limiter. This mirrors Webtoon's per-endpoint limiters.
-export class OniSagaPageRateLimiter extends BasicRateLimiter {
+// Reader page-API pacing. The site's throttle behaves like a token bucket: it
+// tolerates a fast burst (~80 requests observed before 429s start) but clamps
+// sustained fast cadences. Spend a conservative burst allowance quickly so the
+// first screenfuls appear at once, then fall back to the user's Image Requests
+// Limit; the allowance refills at that same sustained rate while reading.
+// Everything except the page API passes through untouched (Webtoon-style
+// per-endpoint scoping), and requests are serialized so the reader's parallel
+// prefetch window drains in order instead of bursting.
+const BURST_CAPACITY = 40;
+const BURST_SPACING_SECONDS = 0.25;
+
+export class OniSagaPageRateLimiter extends PaperbackInterceptor {
+  private tokens = BURST_CAPACITY;
+  private lastRefill = 0;
+  private chain: Promise<unknown> = Promise.resolve();
+
   override async interceptRequest(request: Request): Promise<Request> {
     if (!PAGE_API_REGEX.test(request.url)) return request;
-    // The spacing is the user's Image Requests Limit setting; read it per
-    // request so a change applies immediately.
-    this.options.bufferInterval = getPageDelaySeconds();
-    return super.interceptRequest(request);
+    const wait = this.chain.then(() => this.pace());
+    // Keep the chain alive even if one wait rejects.
+    this.chain = wait.catch(() => undefined);
+    await wait;
+    return request;
+  }
+
+  override async interceptResponse(
+    _request: Request,
+    _response: Response,
+    data: ArrayBuffer,
+  ): Promise<ArrayBuffer> {
+    return data;
+  }
+
+  private async pace(): Promise<void> {
+    // Read the setting per request so a change applies immediately.
+    const sustainedMs = getPageDelaySeconds() * 1000;
+    const now = Date.now();
+    if (this.lastRefill === 0 || this.tokens >= BURST_CAPACITY) {
+      this.lastRefill = now;
+    } else {
+      const earned = Math.floor((now - this.lastRefill) / sustainedMs);
+      if (earned > 0) {
+        this.tokens = Math.min(BURST_CAPACITY, this.tokens + earned);
+        this.lastRefill =
+          this.tokens >= BURST_CAPACITY ? now : this.lastRefill + earned * sustainedMs;
+      }
+    }
+
+    if (this.tokens > 0) {
+      this.tokens -= 1;
+      await Application.sleep(BURST_SPACING_SECONDS);
+      return;
+    }
+
+    // Allowance spent: wait out the remainder of the current accrual interval
+    // and consume the token it grants, so the sustained rate holds exactly.
+    const waitMs = sustainedMs - (Date.now() - this.lastRefill);
+    if (waitMs > 0) await Application.sleep(waitMs / 1000);
+    this.lastRefill += sustainedMs;
   }
 }

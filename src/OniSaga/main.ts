@@ -130,14 +130,9 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     ignoreImages: true,
   });
 
-  // The reader's page API gets its own strict, serialized budget so the
-  // prefetcher can't burst past the site's per-IP throttle (see network.ts).
-  // The interval tracks the Image Requests Limit setting on every request.
-  pageRateLimiter = new OniSagaPageRateLimiter("onisaga-page-rate-limiter", {
-    numberOfRequests: 1,
-    bufferInterval: 2,
-    ignoreImages: false,
-  });
+  // The reader's page API gets its own paced budget: a quick initial burst,
+  // then the Image Requests Limit spacing (see network.ts).
+  pageRateLimiter = new OniSagaPageRateLimiter("onisaga-page-rate-limiter");
 
   // Cached `post-filter` state (token + snapshot) for the active browse URL.
   private browseStateCache?: { url: string; state: LivewireState; at: number };
