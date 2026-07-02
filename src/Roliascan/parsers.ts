@@ -3,7 +3,6 @@
 
 import {
   ContentRating,
-  DiscoverSectionType,
   type Chapter,
   type ChapterDetails,
   type DiscoverSectionItem,
@@ -15,27 +14,23 @@ import {
 } from "@paperback/types";
 import * as cheerio from "cheerio";
 
-import type {
-  BrowseEntry,
-  ChapterContentResponse,
-  ChapterEntry,
-  FilterOptions,
-  LatestChapterEntry,
-  PopularItem,
+import {
+  DOMAIN,
+  type BrowseEntry,
+  type ChapterContentResponse,
+  type ChapterEntry,
+  type FilterOptions,
+  type LatestChapterEntry,
+  type PopularItem,
+  type SearchResultEntry,
 } from "./models";
-import { fixImageUrl } from "./utils";
 
-export function parsePopularItems(
+export function parseCarouselItems(
   jsonStr: string,
-  sectionType: DiscoverSectionType,
+  itemType: "featuredCarouselItem" | "simpleCarouselItem",
 ): PagedResults<DiscoverSectionItem> {
   const data = JSON.parse(jsonStr) as PopularItem[];
   const items: DiscoverSectionItem[] = [];
-
-  const itemType: "prominentCarouselItem" | "simpleCarouselItem" =
-    sectionType === DiscoverSectionType.prominentCarousel
-      ? "prominentCarouselItem"
-      : "simpleCarouselItem";
 
   for (const manga of data) {
     const mangaId = extractMangaSlug(manga.permalink);
@@ -66,8 +61,7 @@ export function parseLatestUpdates(
 
   for (const entry of response.data) {
     const mangaId = extractMangaSlug(entry.manga_permalink);
-    const latestChapter = entry.last_3_chapters[0];
-    const chapterId = latestChapter ? extractChapterId(latestChapter.link) : "";
+    const chapterId = extractChapterId(entry.last_3_chapters?.[0]?.link ?? "");
 
     if (mangaId && entry.title && chapterId) {
       items.push({
@@ -87,29 +81,31 @@ export function parseLatestUpdates(
   };
 }
 
-export function parseHighscoreItems(jsonStr: string): PagedResults<DiscoverSectionItem> {
-  const data = JSON.parse(jsonStr) as PopularItem[];
-  const items: DiscoverSectionItem[] = [];
+export function parseSearchResults(jsonStr: string): SearchResultItem[] {
+  const data = JSON.parse(jsonStr) as SearchResultEntry[];
+  if (!Array.isArray(data)) return [];
 
-  for (const manga of data) {
-    const mangaId = extractMangaSlug(manga.permalink);
-    if (mangaId && manga.title) {
+  const items: SearchResultItem[] = [];
+  for (const entry of data) {
+    const mangaId = entry.slug || extractMangaSlug(entry.permalink);
+    if (mangaId && entry.title) {
       items.push({
         mangaId,
-        title: manga.title,
-        imageUrl: fixImageUrl(manga.cover),
-        type: "simpleCarouselItem",
+        title: entry.title,
+        subtitle: entry.type || undefined,
+        imageUrl: fixImageUrl(entry.thumbnail),
       });
     }
   }
 
-  return { items, metadata: undefined };
+  return items;
 }
 
 export function parseBrowseResults(jsonStr: string): SearchResultItem[] {
   const data = JSON.parse(jsonStr) as BrowseEntry[];
-  const items: SearchResultItem[] = [];
+  if (!Array.isArray(data)) return []; // WP error envelope on failure
 
+  const items: SearchResultItem[] = [];
   for (const entry of data) {
     const mangaId = extractMangaSlug(entry.url);
     if (mangaId && entry.title) {
@@ -147,15 +143,19 @@ export function parseFilterOptions(html: string): FilterOptions {
   };
 }
 
+const ADULT_TAGS = ["adult", "erotica", "smut", "hentai", "pornographic"];
+const MATURE_TAGS = ["mature", "ecchi"];
+
 export function parseMangaDetails(html: string, mangaId: string): SourceManga {
   const $ = cheerio.load(html);
 
   const title = $("h1").first().text().trim() || mangaId;
 
-  // Extract cover image, author and status from JSON-LD
+  // Cover, author, status and content type come from JSON-LD ("Book" = novel)
   let imageUrl = "";
   let author = "";
   let status: "ONGOING" | "COMPLETED" | "UNKNOWN" = "UNKNOWN";
+  let contentType: "comic" | "novel" = "comic";
   $('script[type="application/ld+json"]').each((_i, el) => {
     try {
       const ld = JSON.parse($(el).html() ?? "") as {
@@ -164,7 +164,8 @@ export function parseMangaDetails(html: string, mangaId: string): SourceManga {
         author?: { name?: string };
         status?: string;
       };
-      if (ld["@type"] !== "ComicSeries") return;
+      if (ld["@type"] !== "ComicSeries" && ld["@type"] !== "Book") return;
+      if (ld["@type"] === "Book") contentType = "novel";
       if (ld.image) imageUrl = ld.image;
       if (ld.author?.name) author = ld.author.name;
       if (ld.status) {
@@ -180,39 +181,35 @@ export function parseMangaDetails(html: string, mangaId: string): SourceManga {
     imageUrl = $('img[alt^="Cover for"]').first().attr("src") ?? "";
   }
 
-  // Extract description
-  let description = "No description available.";
   const descEl = $("#description-content-tab");
-  if (descEl.length > 0) {
-    const paragraphs: string[] = [];
-    descEl.find("p").each((_i, p) => {
-      const text = $(p).text().trim();
-      if (text.length > 0) paragraphs.push(text);
-    });
-    if (paragraphs.length > 0) {
-      description = paragraphs.join("\n");
-    } else {
-      const text = descEl.text().trim();
-      if (text.length > 0) description = text;
-    }
-  }
+  const paragraphs = descEl
+    .find("p")
+    .toArray()
+    .map((p) => $(p).text().trim())
+    .filter(Boolean);
+  const description = paragraphs.join("\n") || descEl.text().trim() || "No description available.";
 
-  // Extract tags
-  const tags: Tag[] = [];
+  // genre anchors appear twice (desktop + mobile blocks); dedupe on the href slug
+  const tagMap = new Map<string, Tag>();
   $('a[href*="/tag/"]').each((_i, el) => {
-    const tagText = $(el).text().trim();
-    if (tagText && tagText.length < 30) {
-      tags.push({
-        id: tagText.toLowerCase().replace(/\s+/g, "-"),
-        title: tagText,
-      });
-    }
+    const id = $(el)
+      .attr("href")
+      ?.match(/\/tag\/([^/]+)/)?.[1];
+    const tagTitle = $(el).text().trim();
+    if (id && tagTitle) tagMap.set(id, { id, title: tagTitle });
   });
+  const tags = [...tagMap.values()];
 
   const tagSections: TagSection[] = [];
   if (tags.length > 0) {
     tagSections.push({ id: "genres", title: "Genres", tags });
   }
+
+  const contentRating = tags.some((t) => ADULT_TAGS.includes(t.id))
+    ? ContentRating.ADULT
+    : tags.some((t) => MATURE_TAGS.includes(t.id))
+      ? ContentRating.MATURE
+      : ContentRating.EVERYONE;
 
   return {
     mangaId,
@@ -222,7 +219,8 @@ export function parseMangaDetails(html: string, mangaId: string): SourceManga {
       thumbnailUrl: fixImageUrl(imageUrl),
       synopsis: description,
       author: author || undefined,
-      contentRating: ContentRating.EVERYONE,
+      contentRating,
+      contentType,
       status,
       tagGroups: tagSections,
     },
@@ -230,31 +228,35 @@ export function parseMangaDetails(html: string, mangaId: string): SourceManga {
 }
 
 export function extractMangaNumericId(html: string): string {
-  const $ = cheerio.load(html);
-  return $(".chapter-list[data-manga-id]").attr("data-manga-id") ?? "";
+  return /data-manga-id="(\d+)"/.exec(html)?.[1] ?? "";
 }
 
-export function parseChapters(jsonStr: string, sourceManga: SourceManga): Chapter[] {
+export function parseChapters(
+  jsonStr: string,
+  sourceManga: SourceManga,
+): { chapters: Chapter[]; hasMore: boolean } {
   const response = JSON.parse(jsonStr) as {
     success: boolean;
     chapters: ChapterEntry[];
-    total: number;
     has_more: boolean;
   };
 
   if (!response.success || !response.chapters) {
-    return [];
+    return { chapters: [], hasMore: false };
   }
 
-  return response.chapters.map((entry) => ({
-    chapterId: entry.id,
-    sourceManga,
-    langCode: entry.language || "en",
-    chapNum: parseFloat(entry.chapter) || 0,
-    title: entry.title && entry.title !== "N/A" ? entry.title.trim() : undefined,
-    volume: 0, // Source does not provide volume information
-    publishDate: parseRelativeDate(entry.date),
-  }));
+  return {
+    chapters: response.chapters.map((entry) => ({
+      chapterId: entry.id,
+      sourceManga,
+      langCode: entry.language || "en",
+      chapNum: parseFloat(entry.chapter) || 0,
+      title: entry.title && entry.title !== "N/A" ? entry.title.trim() : undefined,
+      volume: 0, // Source does not provide volume information
+      publishDate: parseRelativeDate(entry.date),
+    })),
+    hasMore: response.has_more === true,
+  };
 }
 
 export function parseChapterDetails(
@@ -264,8 +266,12 @@ export function parseChapterDetails(
 ): ChapterDetails {
   const response = JSON.parse(jsonStr) as ChapterContentResponse;
 
+  if (response.success && response.chapter_type === "text" && response.content) {
+    return { id: chapterId, mangaId, type: "html", html: toXhtml(response.content) };
+  }
+
   if (!response.success || !response.images || response.images.length === 0) {
-    throw new Error(`No images found for chapter ${chapterId}.`);
+    throw new Error(`No content found for chapter ${chapterId}.`);
   }
 
   return {
@@ -275,7 +281,38 @@ export function parseChapterDetails(
   };
 }
 
-function parseRelativeDate(dateText: string): Date {
+// Readium renders novel chapters as XHTML; a lenient HTML parse re-serialized
+// as XML fixes void tags, entities and stray "<" in prose (e.g. "<1, ...>")
+function toXhtml(fragment: string): string {
+  const body = cheerio.load(fragment, null, false).html({ xml: true });
+  return `<html xmlns="http://www.w3.org/1999/xhtml"><head></head><body>${body}</body></html>`;
+}
+
+const RELATIVE_UNITS: [RegExp, number][] = [
+  [/(\d+)\s*min/, 60 * 1000],
+  [/(\d+)\s*hour/, 60 * 60 * 1000],
+  [/(\d+)\s*day/, 24 * 60 * 60 * 1000],
+  [/(\d+)\s*week/, 7 * 24 * 60 * 60 * 1000],
+  [/(\d+)\s*month/, 30 * 24 * 60 * 60 * 1000],
+  [/(\d+)\s*year/, 365 * 24 * 60 * 60 * 1000],
+];
+
+const MONTH_NAMES = [
+  "jan",
+  "feb",
+  "mar",
+  "apr",
+  "may",
+  "jun",
+  "jul",
+  "aug",
+  "sep",
+  "oct",
+  "nov",
+  "dec",
+];
+
+function parseRelativeDate(dateText: string): Date | undefined {
   const now = new Date();
   const text = dateText.toLowerCase();
 
@@ -283,44 +320,31 @@ function parseRelativeDate(dateText: string): Date {
     return now;
   }
 
-  const patterns: [RegExp, number][] = [
-    [/(\d+)\s*min/, 60 * 1000],
-    [/(\d+)\s*hour/, 60 * 60 * 1000],
-    [/(\d+)\s*day/, 24 * 60 * 60 * 1000],
-    [/(\d+)\s*week/, 7 * 24 * 60 * 60 * 1000],
-    [/(\d+)\s*month/, 30 * 24 * 60 * 60 * 1000],
-  ];
-
-  for (const [regex, multiplier] of patterns) {
+  for (const [regex, multiplier] of RELATIVE_UNITS) {
     const match = text.match(regex);
     if (match?.[1]) {
       return new Date(now.getTime() - parseInt(match[1]) * multiplier);
     }
   }
 
-  const monthNames = [
-    "jan",
-    "feb",
-    "mar",
-    "apr",
-    "may",
-    "jun",
-    "jul",
-    "aug",
-    "sep",
-    "oct",
-    "nov",
-    "dec",
-  ];
   const dateMatch = text.match(/(\w+)\s+(\d+),\s+(\d+)/);
   if (dateMatch?.[1] && dateMatch[2] && dateMatch[3]) {
-    const month = monthNames.findIndex((m) => dateMatch[1]!.startsWith(m));
+    const month = MONTH_NAMES.findIndex((m) => dateMatch[1]!.startsWith(m));
     if (month !== -1) {
       return new Date(parseInt(dateMatch[3]), month, parseInt(dateMatch[2]));
     }
   }
 
-  return now;
+  return undefined; // no date beats a fake "just published"
+}
+
+function fixImageUrl(url: string): string {
+  const trimmed = url?.trim() ?? "";
+  if (!trimmed) return "";
+  if (trimmed.startsWith("//")) return "https:" + trimmed;
+  if (trimmed.startsWith("http://")) return "https://" + trimmed.slice(7);
+  if (trimmed.startsWith("/")) return DOMAIN + trimmed;
+  return trimmed;
 }
 
 function extractMangaSlug(url: string): string {

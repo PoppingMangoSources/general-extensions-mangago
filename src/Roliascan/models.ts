@@ -9,39 +9,29 @@ export interface PopularItem {
   cover: string;
   title: string;
   permalink: string;
-  manga_type: string;
 }
 
 export interface LatestChapterEntry {
-  manga_id: string;
   title: string;
-  permalink: string;
   manga_permalink: string;
   cover: string;
   chapter: string;
-  time: string;
-  manga_type: string;
-  manga_status: string;
-  last_3_chapters: {
-    title: string;
-    chapter: string;
-    link: string;
-    time: string;
-    is_new: boolean;
-  }[];
+  last_3_chapters: { link: string }[] | null;
 }
 
 export interface BrowseEntry {
-  id: string;
   title: string;
   url: string;
   cover: string;
-  score: string;
-  votes: number;
-  status: string;
-  year: string;
   type: string;
-  description: string;
+}
+
+export interface SearchResultEntry {
+  title: string;
+  slug: string;
+  permalink: string;
+  thumbnail: string;
+  type: string;
 }
 
 export interface FilterOptions {
@@ -64,18 +54,12 @@ export interface ChapterEntry {
   chapter: string;
   title: string;
   date: string;
-  chapter_type: string;
-  group_id: string | null;
   language: string;
-  group_name: string | null;
-  likes: string;
-  url: string;
 }
 
 export interface ChapterContentResponse {
   success: boolean;
-  chapter_id: number;
   chapter_type: string;
-  images: string[];
-  total: number;
+  images?: string[];
+  content?: string;
 }

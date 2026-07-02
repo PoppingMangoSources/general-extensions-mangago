@@ -26,16 +26,18 @@ import { RoliascanInterceptor } from "./network";
 import {
   extractMangaNumericId,
   parseBrowseResults,
+  parseCarouselItems,
   parseChapterDetails,
   parseChapters,
   parseFilterOptions,
-  parseHighscoreItems,
   parseLatestUpdates,
   parseMangaDetails,
-  parsePopularItems,
+  parseSearchResults,
 } from "./parsers";
 import type RoliascanConfig from "./pbconfig";
 import { generateChapterToken } from "./utils";
+
+const CHAPTER_PAGE_SIZE = 500;
 
 class RoliascanExtension implements ExtensionImpl<typeof RoliascanConfig> {
   globalRateLimiter = new BasicRateLimiter("rateLimiter", {
@@ -87,7 +89,7 @@ class RoliascanExtension implements ExtensionImpl<typeof RoliascanConfig> {
           url: `${DOMAIN}/wp-json/manga/v1/popular?number=15`,
           method: "GET",
         });
-        return parsePopularItems(json, section.type);
+        return parseCarouselItems(json, "featuredCarouselItem");
       }
       case "latest": {
         const json = await this.fetchText({
@@ -103,7 +105,7 @@ class RoliascanExtension implements ExtensionImpl<typeof RoliascanConfig> {
           url: `${DOMAIN}/wp-json/manga/v1/highscore?number=15`,
           method: "GET",
         });
-        return parseHighscoreItems(json);
+        return parseCarouselItems(json, "simpleCarouselItem");
       }
       default:
         return { items: [], metadata: undefined };
@@ -134,6 +136,20 @@ class RoliascanExtension implements ExtensionImpl<typeof RoliascanConfig> {
   ): Promise<PagedResults<SearchResultItem>> {
     const page = metadata?.page ?? 1;
     const filters = query.metadata ?? {};
+    const title = query.title?.trim() ?? "";
+    const sort = sortingOption?.id ?? "post_desc";
+
+    // /search ranks by relevance; /load orders by date and also matches
+    // descriptions, so only use it when filters or an explicit sort require it
+    if (title && Object.keys(filters).length === 0 && sort === "post_desc") {
+      const json = await this.fetchText({
+        url: `${DOMAIN}/wp-json/manga/v1/search`,
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ query: title }),
+      });
+      return { items: parseSearchResults(json) };
+    }
 
     const json = await this.fetchText({
       url: `${DOMAIN}/wp-json/manga/v1/load`,
@@ -141,12 +157,12 @@ class RoliascanExtension implements ExtensionImpl<typeof RoliascanConfig> {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         page,
-        search: query.title?.trim() ?? "",
+        search: title,
         years: JSON.stringify(filters.year ? [filters.year] : []),
         genres: JSON.stringify(filters.genres ?? []),
         types: JSON.stringify(filters.type ? [filters.type] : []),
         statuses: JSON.stringify(filters.status ? [filters.status] : []),
-        sort: sortingOption?.id ?? "post_desc",
+        sort,
         genreMatchMode: filters.matchAllGenres ? "all" : "any",
       }),
     });
@@ -174,12 +190,18 @@ class RoliascanExtension implements ExtensionImpl<typeof RoliascanConfig> {
       throw new Error(`Could not find numeric manga ID for ${sourceManga.mangaId}`);
     }
 
-    const { token, timestamp } = generateChapterToken();
-    const json = await this.fetchText({
-      url: `${DOMAIN}/auth/manga-chapters?manga_id=${numericId}&offset=0&limit=500&order=DESC&_t=${token}&_ts=${timestamp}`,
-      method: "GET",
-    });
-    return parseChapters(json, sourceManga);
+    const chapters: Chapter[] = [];
+    for (let offset = 0; ; offset += CHAPTER_PAGE_SIZE) {
+      const { token, timestamp } = generateChapterToken();
+      const json = await this.fetchText({
+        url: `${DOMAIN}/auth/manga-chapters?manga_id=${numericId}&offset=${offset}&limit=${CHAPTER_PAGE_SIZE}&order=DESC&_t=${token}&_ts=${timestamp}`,
+        method: "GET",
+      });
+      const result = parseChapters(json, sourceManga);
+      chapters.push(...result.chapters);
+      if (!result.hasMore || result.chapters.length === 0) break;
+    }
+    return chapters;
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
@@ -200,17 +222,6 @@ class RoliascanExtension implements ExtensionImpl<typeof RoliascanConfig> {
         this.cookieStorageInterceptor.setCookie(cookie);
       }
     }
-  }
-
-  async getCloudflareBypassRequest(): Promise<Request> {
-    return {
-      url: DOMAIN,
-      method: "GET",
-      headers: {
-        referer: DOMAIN,
-        origin: DOMAIN,
-      },
-    };
   }
 
   private async fetchText(request: Request): Promise<string> {

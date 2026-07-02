@@ -7,6 +7,7 @@ import {
   SelectRow,
   ToggleRow,
   type SearchQuery,
+  type Tag,
 } from "@paperback/types";
 
 import type { FilterOptions, SearchMetadata } from "./models";
@@ -56,49 +57,36 @@ export class RoliascanAdvancedSearchForm extends AdvancedSearchForm {
           ),
         }),
       ]),
-      Section("type", [
-        SelectRow("type", {
-          title: "Type",
-          layout: "list",
-          value: this.type ? [this.type] : [],
-          items: this.options.types,
-          minItemCount: 0,
-          maxItemCount: 1,
-          onValueChange: Application.Selector(
-            this as RoliascanAdvancedSearchForm,
-            "handleTypeChange",
-          ),
-        }),
-      ]),
-      Section("status", [
-        SelectRow("status", {
-          title: "Status",
-          layout: "list",
-          value: this.status ? [this.status] : [],
-          items: this.options.statuses,
-          minItemCount: 0,
-          maxItemCount: 1,
-          onValueChange: Application.Selector(
-            this as RoliascanAdvancedSearchForm,
-            "handleStatusChange",
-          ),
-        }),
-      ]),
-      Section("year", [
-        SelectRow("year", {
-          title: "Year",
-          layout: "list",
-          value: this.year ? [this.year] : [],
-          items: this.options.years,
-          minItemCount: 0,
-          maxItemCount: 1,
-          onValueChange: Application.Selector(
-            this as RoliascanAdvancedSearchForm,
-            "handleYearChange",
-          ),
-        }),
-      ]),
+      this.singleSelect("type", "Type", this.type, this.options.types, "handleTypeChange"),
+      this.singleSelect(
+        "status",
+        "Status",
+        this.status,
+        this.options.statuses,
+        "handleStatusChange",
+      ),
+      this.singleSelect("year", "Year", this.year, this.options.years, "handleYearChange"),
     ];
+  }
+
+  private singleSelect(
+    id: string,
+    title: string,
+    value: string,
+    items: Tag[],
+    handler: "handleTypeChange" | "handleStatusChange" | "handleYearChange",
+  ) {
+    return Section(id, [
+      SelectRow(id, {
+        title,
+        layout: "list",
+        value: value ? [value] : [],
+        items,
+        minItemCount: 0,
+        maxItemCount: 1,
+        onValueChange: Application.Selector(this as RoliascanAdvancedSearchForm, handler),
+      }),
+    ]);
   }
 
   async handleGenresChange(value: string[]): Promise<void> {
