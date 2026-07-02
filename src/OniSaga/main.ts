@@ -132,9 +132,10 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
 
   // The reader's page API gets its own strict, serialized budget so the
   // prefetcher can't burst past the site's per-IP throttle (see network.ts).
+  // The interval tracks the Image Requests Limit setting on every request.
   pageRateLimiter = new OniSagaPageRateLimiter("onisaga-page-rate-limiter", {
     numberOfRequests: 1,
-    bufferInterval: 1,
+    bufferInterval: 2,
     ignoreImages: false,
   });
 

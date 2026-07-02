@@ -26,6 +26,9 @@ import {
   LANGUAGES,
   LANGUAGES_KEY,
   MIN_CHAPTERS_OPTIONS,
+  PAGE_DELAY_DEFAULT,
+  PAGE_DELAY_KEY,
+  PAGE_DELAY_OPTIONS,
   SECTIONS_DELETED_KEY,
   SECTIONS_ORDER_KEY,
   SHOW_NSFW_KEY,
@@ -35,7 +38,7 @@ import {
   type Option,
   type OniSagaSearchMetadata,
 } from "./models";
-import { getGenres } from "./utils/helpers";
+import { getGenres, getPageDelayId } from "./utils/helpers";
 
 // ----- Settings state accessors -----
 
@@ -178,6 +181,7 @@ export class OniSagaSettingsForm extends Form {
   private status: string;
   private excludedGenres: string[];
   private languages: string[];
+  private pageDelay: string;
 
   constructor() {
     super();
@@ -186,6 +190,7 @@ export class OniSagaSettingsForm extends Form {
     this.status = getDiscoverStatus();
     this.excludedGenres = getExcludedGenres();
     this.languages = getLanguages();
+    this.pageDelay = getPageDelayId();
   }
 
   override getSections() {
@@ -241,6 +246,23 @@ export class OniSagaSettingsForm extends Form {
             minItemCount: 1,
             maxItemCount: LANGUAGES.length,
             onValueChange: Application.Selector(this as OniSagaSettingsForm, "updateLanguages"),
+          }),
+        ],
+      ),
+      Section(
+        {
+          id: "reader",
+          footer:
+            "Spacing between page requests while reading. Slower is safer: the site rejects faster cadences with 429 errors.",
+        },
+        [
+          SelectRow("pageDelay", {
+            title: "Image Requests Limit",
+            value: [this.pageDelay],
+            options: toTags(PAGE_DELAY_OPTIONS),
+            minItemCount: 1,
+            maxItemCount: 1,
+            onValueChange: Application.Selector(this as OniSagaSettingsForm, "updatePageDelay"),
           }),
         ],
       ),
@@ -301,6 +323,11 @@ export class OniSagaSettingsForm extends Form {
   async updateLanguages(value: string[]): Promise<void> {
     this.languages = value;
     Application.setState(value, LANGUAGES_KEY);
+  }
+
+  async updatePageDelay(value: string[]): Promise<void> {
+    this.pageDelay = value[0] ?? PAGE_DELAY_DEFAULT;
+    Application.setState(this.pageDelay, PAGE_DELAY_KEY);
   }
 
   async resetFilters(): Promise<void> {

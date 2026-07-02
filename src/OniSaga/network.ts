@@ -11,6 +11,7 @@ import {
 
 import { DOMAIN, type PageApiResponse } from "./models";
 import { extractReaderToken } from "./parsers";
+import { getPageDelaySeconds } from "./utils/helpers";
 
 // Matches a reader page-API url and captures the chapter id, e.g.
 // https://onisaga.com/api/chapter/3718181/page/0
@@ -172,6 +173,9 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
 export class OniSagaPageRateLimiter extends BasicRateLimiter {
   override async interceptRequest(request: Request): Promise<Request> {
     if (!PAGE_API_REGEX.test(request.url)) return request;
+    // The spacing is the user's Image Requests Limit setting; read it per
+    // request so a change applies immediately.
+    this.options.bufferInterval = getPageDelaySeconds();
     return super.interceptRequest(request);
   }
 }

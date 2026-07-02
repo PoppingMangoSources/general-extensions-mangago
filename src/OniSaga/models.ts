@@ -9,6 +9,7 @@ export const DISCOVER_TYPE_KEY = "discover_type";
 export const DISCOVER_STATUS_KEY = "discover_status";
 export const EXCLUDED_GENRES_KEY = "excluded_genres";
 export const LANGUAGES_KEY = "languages";
+export const PAGE_DELAY_KEY = "page_delay";
 export const READER_TOKEN_KEY_PREFIX = "reader_token_";
 export const SECTIONS_ORDER_KEY = "sections_order";
 export const SECTIONS_DELETED_KEY = "sections_deleted";
@@ -95,6 +96,17 @@ export const MIN_CHAPTERS_OPTIONS: Option[] = [
   { id: "50", title: "50+" },
   { id: "100", title: "100+" },
   { id: "200", title: "200+" },
+];
+
+// Seconds between reader page requests; faster cadences trip the site's
+// per-IP throttle (429). The id doubles as the numeric value.
+export const PAGE_DELAY_DEFAULT = "2";
+export const PAGE_DELAY_OPTIONS: Option[] = [
+  { id: "1.5", title: "1 image per 1.50 seconds" },
+  { id: "1.75", title: "1 image per 1.75 seconds" },
+  { id: "2", title: "1 image per 2.00 seconds" },
+  { id: "2.25", title: "1 image per 2.25 seconds" },
+  { id: "2.5", title: "1 image per 2.50 seconds" },
 ];
 
 // Livewire `sort` field.

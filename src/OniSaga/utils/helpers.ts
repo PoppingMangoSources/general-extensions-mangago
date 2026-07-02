@@ -1,7 +1,15 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import { GENRES, GENRES_FETCHED_KEY, GENRES_KEY, GENRES_TTL, type Option } from "../models";
+import {
+  GENRES,
+  GENRES_FETCHED_KEY,
+  GENRES_KEY,
+  GENRES_TTL,
+  PAGE_DELAY_DEFAULT,
+  PAGE_DELAY_KEY,
+  type Option,
+} from "../models";
 
 // iOS swaps straight quotes for curly ones; the site only matches the straight
 // forms, so normalize before searching.
@@ -58,4 +66,17 @@ export function cacheGenres(genres: Option[], now: number): void {
 export function genresAreStale(now: number): boolean {
   const at = (Application.getState(GENRES_FETCHED_KEY) as number | undefined) ?? 0;
   return now - at > GENRES_TTL;
+}
+
+// ----- Reader pacing -----
+
+// Stored option id for the reader's request spacing (see PAGE_DELAY_OPTIONS).
+export function getPageDelayId(): string {
+  return (Application.getState(PAGE_DELAY_KEY) as string | undefined) ?? PAGE_DELAY_DEFAULT;
+}
+
+// Seconds between reader page-API requests, from the user's setting.
+export function getPageDelaySeconds(): number {
+  const seconds = Number(getPageDelayId());
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : Number(PAGE_DELAY_DEFAULT);
 }
