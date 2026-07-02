@@ -16,11 +16,12 @@ import {
 import * as cheerio from "cheerio";
 
 import type {
+  BrowseEntry,
   ChapterContentResponse,
   ChapterEntry,
+  FilterOptions,
   LatestChapterEntry,
   PopularItem,
-  SearchResultEntry,
 } from "./models";
 import { fixImageUrl } from "./utils";
 
@@ -105,23 +106,45 @@ export function parseHighscoreItems(jsonStr: string): PagedResults<DiscoverSecti
   return { items, metadata: undefined };
 }
 
-export function parseSearchResults(jsonStr: string): PagedResults<SearchResultItem> {
-  const data = JSON.parse(jsonStr) as SearchResultEntry[];
+export function parseBrowseResults(jsonStr: string): SearchResultItem[] {
+  const data = JSON.parse(jsonStr) as BrowseEntry[];
   const items: SearchResultItem[] = [];
 
   for (const entry of data) {
-    const mangaId = entry.slug || extractMangaSlug(entry.permalink);
+    const mangaId = extractMangaSlug(entry.url);
     if (mangaId && entry.title) {
       items.push({
         mangaId,
         title: entry.title,
         subtitle: entry.type || undefined,
-        imageUrl: fixImageUrl(entry.thumbnail),
+        imageUrl: fixImageUrl(entry.cover),
       });
     }
   }
 
-  return { items };
+  return items;
+}
+
+export function parseFilterOptions(html: string): FilterOptions {
+  const $ = cheerio.load(html);
+
+  const grab = (selector: string): Tag[] =>
+    $(selector)
+      .toArray()
+      .flatMap((el) => {
+        const id = $(el).attr("data-value");
+        if (!id) return []; // skip the "All ..." option
+        // strip the trailing result count, e.g. "Action 830"
+        const title = $(el).text().replace(/\s+/g, " ").trim().replace(/ \d+$/, "");
+        return { id, title };
+      });
+
+  return {
+    types: grab(".type-btn"),
+    statuses: grab(".status-btn"),
+    years: grab(".year-btn"),
+    genres: grab(".genre-btn"),
+  };
 }
 
 export function parseMangaDetails(html: string, mangaId: string): SourceManga {

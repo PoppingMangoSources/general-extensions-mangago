@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
+import type { Tag } from "@paperback/types";
+
 export const DOMAIN = "https://roliascan.com";
 
 export interface PopularItem {
@@ -29,18 +31,33 @@ export interface LatestChapterEntry {
   }[];
 }
 
-export interface SearchResultEntry {
+export interface BrowseEntry {
   id: string;
   title: string;
-  slug: string;
-  alt_titles: string[];
-  authors: string[];
-  permalink: string;
-  thumbnail: string;
-  description: string;
-  type: string;
+  url: string;
+  cover: string;
+  score: string;
+  votes: number;
   status: string;
+  year: string;
+  type: string;
+  description: string;
 }
+
+export interface FilterOptions {
+  types: Tag[];
+  statuses: Tag[];
+  years: Tag[];
+  genres: Tag[];
+}
+
+export type SearchMetadata = {
+  genres?: string[];
+  matchAllGenres?: boolean;
+  type?: string;
+  status?: string;
+  year?: string;
+};
 
 export interface ChapterEntry {
   id: string;

@@ -5,47 +5,39 @@ import {
   BasicRateLimiter,
   CookieStorageInterceptor,
   DiscoverSectionType,
+  type AdvancedSearchForm,
   type Chapter,
   type ChapterDetails,
-  type ChapterProviding,
-  type CloudflareBypassRequestProviding,
   type Cookie,
   type DiscoverSection,
   type DiscoverSectionItem,
-  type DiscoverSectionProviding,
-  type Extension,
-  type MangaProviding,
+  type ExtensionImpl,
   type PagedResults,
-  type Metadata,
   type Request,
   type SearchQuery,
   type SearchResultItem,
-  type SearchResultsProviding,
+  type SortingOption,
   type SourceManga,
 } from "@paperback/types";
 
-import { DOMAIN } from "./models";
+import { RoliascanAdvancedSearchForm } from "./forms";
+import { DOMAIN, type SearchMetadata } from "./models";
 import { RoliascanInterceptor } from "./network";
 import {
   extractMangaNumericId,
+  parseBrowseResults,
   parseChapterDetails,
   parseChapters,
+  parseFilterOptions,
   parseHighscoreItems,
   parseLatestUpdates,
   parseMangaDetails,
   parsePopularItems,
-  parseSearchResults,
 } from "./parsers";
+import type RoliascanConfig from "./pbconfig";
 import { generateChapterToken } from "./utils";
 
-type RoliascanImplementation = Extension &
-  DiscoverSectionProviding &
-  SearchResultsProviding &
-  MangaProviding &
-  ChapterProviding &
-  CloudflareBypassRequestProviding;
-
-class RoliascanExtension implements RoliascanImplementation {
+class RoliascanExtension implements ExtensionImpl<typeof RoliascanConfig> {
   globalRateLimiter = new BasicRateLimiter("rateLimiter", {
     numberOfRequests: 4,
     bufferInterval: 1,
@@ -118,18 +110,49 @@ class RoliascanExtension implements RoliascanImplementation {
     }
   }
 
-  async getSearchResults(query: SearchQuery<Metadata>): Promise<PagedResults<SearchResultItem>> {
-    if (!query.title || query.title.trim() === "") {
-      return { items: [] };
-    }
+  async getSortingOptions(): Promise<SortingOption[]> {
+    return [
+      { id: "post_desc", label: "Latest Updates" },
+      { id: "release_desc", label: "Release Date" },
+      { id: "title_asc", label: "Title (A-Z)" },
+      { id: "popular_desc", label: "Popular" },
+    ];
+  }
+
+  async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
+    const html = await this.fetchText({
+      url: `${DOMAIN}/browse/`,
+      method: "GET",
+    });
+    return new RoliascanAdvancedSearchForm(query, parseFilterOptions(html));
+  }
+
+  async getSearchResults(
+    query: SearchQuery<SearchMetadata>,
+    metadata: { page?: number } | undefined,
+    sortingOption?: SortingOption,
+  ): Promise<PagedResults<SearchResultItem>> {
+    const page = metadata?.page ?? 1;
+    const filters = query.metadata ?? {};
 
     const json = await this.fetchText({
-      url: `${DOMAIN}/wp-json/manga/v1/search`,
+      url: `${DOMAIN}/wp-json/manga/v1/load`,
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ query: query.title.trim() }),
+      body: JSON.stringify({
+        page,
+        search: query.title?.trim() ?? "",
+        years: JSON.stringify(filters.year ? [filters.year] : []),
+        genres: JSON.stringify(filters.genres ?? []),
+        types: JSON.stringify(filters.type ? [filters.type] : []),
+        statuses: JSON.stringify(filters.status ? [filters.status] : []),
+        sort: sortingOption?.id ?? "post_desc",
+        genreMatchMode: filters.matchAllGenres ? "all" : "any",
+      }),
     });
-    return parseSearchResults(json);
+
+    const items = parseBrowseResults(json);
+    return { items, metadata: items.length > 0 ? { page: page + 1 } : undefined };
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
@@ -167,7 +190,7 @@ class RoliascanExtension implements RoliascanImplementation {
     return parseChapterDetails(json, chapter.chapterId, chapter.sourceManga.mangaId);
   }
 
-  async saveCloudflareBypassCookies(cookies: Cookie[]): Promise<void> {
+  async cloudflareBypassCompleted(_request: Request, cookies: Cookie[]): Promise<void> {
     for (const cookie of cookies) {
       if (
         cookie.name.startsWith("cf") ||
