@@ -8,9 +8,14 @@ export const SHOW_NSFW_KEY = "show_nsfw";
 export const DISCOVER_TYPE_KEY = "discover_type";
 export const DISCOVER_STATUS_KEY = "discover_status";
 export const EXCLUDED_GENRES_KEY = "excluded_genres";
+export const LANGUAGES_KEY = "languages";
 export const READER_TOKEN_KEY_PREFIX = "reader_token_";
 export const SECTIONS_ORDER_KEY = "sections_order";
 export const SECTIONS_DELETED_KEY = "sections_deleted";
+export const GENRES_KEY = "genres_cache";
+export const GENRES_FETCHED_KEY = "genres_fetched_at";
+// Refetch the genre list from the site at most once every 48h.
+export const GENRES_TTL = 172_800_000;
 
 // Discover rail catalog. The array order is the default display order; the
 // section settings form lets the user reorder or hide individual rails.
@@ -24,6 +29,7 @@ export const DISCOVER_SECTIONS: DiscoverSectionDef[] = [
   { id: "latest", title: "Latest" },
   { id: "top_10_rising", title: "Top 10 Rising" },
   { id: "highest_rated", title: "Highest Rated" },
+  { id: "fan_favorites", title: "Fan Favorites" },
   { id: "genres", title: "Genres" },
   { id: "types", title: "Types" },
 ];
@@ -41,9 +47,7 @@ export interface LanguageOption {
   title: string;
 }
 
-// Chapter-language badges → Paperback langCodes. The site has no language filter,
-// so this only tags each chapter with its detected language; badges that never
-// appear simply go unused.
+// Chapter-language badges → Paperback langCodes (used only to tag each chapter).
 export const LANGUAGES: LanguageOption[] = [
   { badge: "EN", langCode: "en", title: "🇬🇧 English" },
   { badge: "JA", langCode: "ja", title: "🇯🇵 日本語" },
@@ -106,10 +110,8 @@ export const SORT_OPTIONS: Option[] = [
 
 export const DEFAULT_SORT = "created_at";
 
-// Discover rails that carry an in-section toggle on the site. Each maps to its
-// Livewire component + the method that switches the view; the option ids are the
-// method's parameter. Following MangaDot, these rails render as chip rows and a
-// chip tap runs a ranged fetch through getSearchResults.
+// Discover rails with an in-section toggle: each maps to its Livewire component
+// + the method that switches the view (the option ids are the method's param).
 export interface SectionToggle {
   component: string;
   method: string;
@@ -128,7 +130,9 @@ export const SECTION_TOGGLES: Record<string, SectionToggle> = {
   },
 };
 
-// id = the genre id the Livewire filter expects.
+// Fallback genre list, used until the live list is fetched from the browse
+// filter and cached (see parseGenres / getGenres). id = the Livewire filter's
+// genre id; kept current so a fresh install or a failed fetch still filters.
 export const GENRES: Option[] = [
   { id: "1", title: "Action" },
   { id: "61", title: "Adaptation" },
@@ -228,13 +232,16 @@ export const GENRES: Option[] = [
 
 // Search/discover metadata threaded through SearchQuery. Declared as a type alias
 // (not an interface) so it carries the implicit index signature JSONObject needs.
-export type OnisagaSearchMetadata = {
+export type OniSagaSearchMetadata = {
   page?: number;
   collectedIds?: string[];
   type?: string;
   status?: string;
   sort?: string;
   minChapters?: string;
+  group?: string;
+  releaseStart?: string;
+  releaseEnd?: string;
   genres?: Record<string, "included" | "excluded">;
   // A discover chip tap: which toggle rail and which option were chosen.
   toggleSection?: string;

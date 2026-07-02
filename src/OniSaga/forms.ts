@@ -7,6 +7,7 @@ import {
   EditSection,
   Form,
   type FormSectionElement,
+  InputRow,
   LabelRow,
   NavigationRow,
   Section,
@@ -22,7 +23,8 @@ import {
   DISCOVER_STATUS_KEY,
   DISCOVER_TYPE_KEY,
   EXCLUDED_GENRES_KEY,
-  GENRES,
+  LANGUAGES,
+  LANGUAGES_KEY,
   MIN_CHAPTERS_OPTIONS,
   SECTIONS_DELETED_KEY,
   SECTIONS_ORDER_KEY,
@@ -31,8 +33,9 @@ import {
   TYPE_OPTIONS,
   type DiscoverSectionDef,
   type Option,
-  type OnisagaSearchMetadata,
+  type OniSagaSearchMetadata,
 } from "./models";
+import { getGenres } from "./utils/helpers";
 
 // ----- Settings state accessors -----
 
@@ -50,6 +53,11 @@ export function getDiscoverStatus(): string {
 
 export function getExcludedGenres(): string[] {
   return (Application.getState(EXCLUDED_GENRES_KEY) as string[] | undefined) ?? [];
+}
+
+// Chapter languages to show (langCodes); defaults to English.
+export function getLanguages(): string[] {
+  return (Application.getState(LANGUAGES_KEY) as string[] | undefined) ?? ["en"];
 }
 
 // ----- Discover section order / visibility -----
@@ -84,7 +92,7 @@ const toTags = (options: Option[]): Tag[] => options.map((o) => ({ id: o.id, tit
 
 // ----- Discover sections order/visibility form -----
 
-export class OnisagaSectionsForm extends Form {
+export class OniSagaSectionsForm extends Form {
   override getSections() {
     const deleted = getDeletedSections();
 
@@ -100,8 +108,8 @@ export class OnisagaSectionsForm extends Form {
         }),
         allowReorder: true,
         allowDeletion: true,
-        onReorder: Application.Selector(this as OnisagaSectionsForm, "rowDidReorder"),
-        onDeletion: Application.Selector(this as OnisagaSectionsForm, "rowDidDelete"),
+        onReorder: Application.Selector(this as OniSagaSectionsForm, "rowDidReorder"),
+        onDeletion: Application.Selector(this as OniSagaSectionsForm, "rowDidDelete"),
       } as unknown as FormSectionElement<unknown>,
       ...(deleted.length > 0
         ? [
@@ -112,7 +120,7 @@ export class OnisagaSectionsForm extends Form {
                 options: deleted.map((section) => ({ id: section.id, title: section.title })),
                 minItemCount: 0,
                 maxItemCount: deleted.length,
-                onValueChange: Application.Selector(this as OnisagaSectionsForm, "handleRestore"),
+                onValueChange: Application.Selector(this as OniSagaSectionsForm, "handleRestore"),
               }),
             ]),
           ]
@@ -120,7 +128,7 @@ export class OnisagaSectionsForm extends Form {
       Section("reset", [
         ButtonRow("resetSections", {
           title: "Reset Sections",
-          onSelect: Application.Selector(this as OnisagaSectionsForm, "handleReset"),
+          onSelect: Application.Selector(this as OniSagaSectionsForm, "handleReset"),
         }),
       ]),
     ];
@@ -164,11 +172,12 @@ export class OnisagaSectionsForm extends Form {
 
 // ----- Settings form -----
 
-export class OnisagaSettingsForm extends Form {
+export class OniSagaSettingsForm extends Form {
   private showNsfw: boolean;
   private type: string;
   private status: string;
   private excludedGenres: string[];
+  private languages: string[];
 
   constructor() {
     super();
@@ -176,6 +185,7 @@ export class OnisagaSettingsForm extends Form {
     this.type = getDiscoverType();
     this.status = getDiscoverStatus();
     this.excludedGenres = getExcludedGenres();
+    this.languages = getLanguages();
   }
 
   override getSections() {
@@ -189,14 +199,15 @@ export class OnisagaSettingsForm extends Form {
           ToggleRow("showNsfw", {
             title: "Show NSFW / 18+ Content",
             value: this.showNsfw,
-            onValueChange: Application.Selector(this as OnisagaSettingsForm, "updateShowNsfw"),
+            onValueChange: Application.Selector(this as OniSagaSettingsForm, "updateShowNsfw"),
           }),
         ],
       ),
       Section(
         {
           id: "discoverFilters",
-          footer: "Applies to the Popular, Latest, Top Rated and Fan Favorites sections.",
+          footer:
+            "Applies to the Latest section and search. The ranked rails follow the site's own lists.",
         },
         [
           SelectRow("type", {
@@ -205,7 +216,7 @@ export class OnisagaSettingsForm extends Form {
             options: toTags(TYPE_OPTIONS),
             minItemCount: 0,
             maxItemCount: 1,
-            onValueChange: Application.Selector(this as OnisagaSettingsForm, "updateType"),
+            onValueChange: Application.Selector(this as OniSagaSettingsForm, "updateType"),
           }),
           SelectRow("status", {
             title: "Status",
@@ -213,7 +224,23 @@ export class OnisagaSettingsForm extends Form {
             options: toTags(STATUS_OPTIONS),
             minItemCount: 0,
             maxItemCount: 1,
-            onValueChange: Application.Selector(this as OnisagaSettingsForm, "updateStatus"),
+            onValueChange: Application.Selector(this as OniSagaSettingsForm, "updateStatus"),
+          }),
+        ],
+      ),
+      Section(
+        {
+          id: "languages",
+          footer: "Only show chapters in these languages. Defaults to English.",
+        },
+        [
+          SelectRow("languages", {
+            title: "Chapter Languages",
+            value: this.languages,
+            options: LANGUAGES.map((lang) => ({ id: lang.langCode, title: lang.title })),
+            minItemCount: 1,
+            maxItemCount: LANGUAGES.length,
+            onValueChange: Application.Selector(this as OniSagaSettingsForm, "updateLanguages"),
           }),
         ],
       ),
@@ -221,7 +248,7 @@ export class OnisagaSettingsForm extends Form {
         NavigationRow("discoverSections", {
           title: "Discover Sections",
           subtitle: "Order & visibility",
-          form: new OnisagaSectionsForm(),
+          form: new OniSagaSectionsForm(),
         }),
       ]),
       Section(
@@ -230,17 +257,17 @@ export class OnisagaSettingsForm extends Form {
           SelectRow("excludedGenres", {
             title: "Genre Blacklist",
             value: this.excludedGenres,
-            options: toTags(GENRES),
+            options: toTags(getGenres()),
             minItemCount: 0,
-            maxItemCount: GENRES.length,
+            maxItemCount: getGenres().length,
             onValueChange: Application.Selector(
-              this as OnisagaSettingsForm,
+              this as OniSagaSettingsForm,
               "updateExcludedGenres",
             ),
           }),
           ButtonRow("resetFilters", {
             title: "Reset Content Filters",
-            onSelect: Application.Selector(this as OnisagaSettingsForm, "resetFilters"),
+            onSelect: Application.Selector(this as OniSagaSettingsForm, "resetFilters"),
           }),
         ],
       ),
@@ -250,48 +277,64 @@ export class OnisagaSettingsForm extends Form {
   async updateShowNsfw(value: boolean): Promise<void> {
     this.showNsfw = value;
     Application.setState(value, SHOW_NSFW_KEY);
+    Application.invalidateDiscoverSections();
   }
 
   async updateType(value: string[]): Promise<void> {
     this.type = value[0] ?? "";
     Application.setState(this.type, DISCOVER_TYPE_KEY);
+    Application.invalidateDiscoverSections();
   }
 
   async updateStatus(value: string[]): Promise<void> {
     this.status = value[0] ?? "";
     Application.setState(this.status, DISCOVER_STATUS_KEY);
+    Application.invalidateDiscoverSections();
   }
 
   async updateExcludedGenres(value: string[]): Promise<void> {
     this.excludedGenres = value;
     Application.setState(value, EXCLUDED_GENRES_KEY);
+    Application.invalidateDiscoverSections();
+  }
+
+  async updateLanguages(value: string[]): Promise<void> {
+    this.languages = value;
+    Application.setState(value, LANGUAGES_KEY);
   }
 
   async resetFilters(): Promise<void> {
     this.excludedGenres = [];
     Application.setState([], EXCLUDED_GENRES_KEY);
+    Application.invalidateDiscoverSections();
     this.reloadForm();
   }
 }
 
 // ----- Advanced search form -----
 
-export class OnisagaAdvancedSearchForm extends AdvancedSearchForm {
+export class OniSagaAdvancedSearchForm extends AdvancedSearchForm {
   private type: string;
   private status: string;
   private minChapters: string;
+  private group: string;
+  private releaseStart: string;
+  private releaseEnd: string;
   private genres: Record<string, "included" | "excluded">;
 
   private readonly genreOptions: Tag[];
 
-  constructor(searchQuery: SearchQuery<OnisagaSearchMetadata>) {
+  constructor(searchQuery: SearchQuery<OniSagaSearchMetadata>) {
     super();
     const meta = searchQuery.metadata ?? {};
     this.type = meta.type ?? "";
     this.status = meta.status ?? "";
     this.minChapters = meta.minChapters ?? "";
+    this.group = meta.group ?? "";
+    this.releaseStart = meta.releaseStart ?? "";
+    this.releaseEnd = meta.releaseEnd ?? "";
     this.genres = { ...meta.genres };
-    this.genreOptions = toTags(GENRES);
+    this.genreOptions = toTags(getGenres());
   }
 
   override getSections() {
@@ -304,7 +347,7 @@ export class OnisagaAdvancedSearchForm extends AdvancedSearchForm {
           items: this.genreOptions,
           allowExclusion: true,
           allowEmptySelection: true,
-          onValueChange: Application.Selector(this as OnisagaAdvancedSearchForm, "handleGenres"),
+          onValueChange: Application.Selector(this as OniSagaAdvancedSearchForm, "handleGenres"),
         }),
       ]),
       Section("type", [
@@ -314,7 +357,7 @@ export class OnisagaAdvancedSearchForm extends AdvancedSearchForm {
           options: toTags(TYPE_OPTIONS),
           minItemCount: 0,
           maxItemCount: 1,
-          onValueChange: Application.Selector(this as OnisagaAdvancedSearchForm, "handleType"),
+          onValueChange: Application.Selector(this as OniSagaAdvancedSearchForm, "handleType"),
         }),
       ]),
       Section("status", [
@@ -324,7 +367,7 @@ export class OnisagaAdvancedSearchForm extends AdvancedSearchForm {
           options: toTags(STATUS_OPTIONS),
           minItemCount: 0,
           maxItemCount: 1,
-          onValueChange: Application.Selector(this as OnisagaAdvancedSearchForm, "handleStatus"),
+          onValueChange: Application.Selector(this as OniSagaAdvancedSearchForm, "handleStatus"),
         }),
       ]),
       Section("minChapters", [
@@ -335,8 +378,33 @@ export class OnisagaAdvancedSearchForm extends AdvancedSearchForm {
           minItemCount: 0,
           maxItemCount: 1,
           onValueChange: Application.Selector(
-            this as OnisagaAdvancedSearchForm,
+            this as OniSagaAdvancedSearchForm,
             "handleMinChapters",
+          ),
+        }),
+      ]),
+      Section({ id: "group", footer: "Filter by scanlation group name." }, [
+        InputRow("group", {
+          title: "Group",
+          value: this.group,
+          onValueChange: Application.Selector(this as OniSagaAdvancedSearchForm, "handleGroup"),
+        }),
+      ]),
+      Section({ id: "release", footer: "Release date range: a year (2023) or YYYY-MM-DD." }, [
+        InputRow("releaseStart", {
+          title: "Released After",
+          value: this.releaseStart,
+          onValueChange: Application.Selector(
+            this as OniSagaAdvancedSearchForm,
+            "handleReleaseStart",
+          ),
+        }),
+        InputRow("releaseEnd", {
+          title: "Released Before",
+          value: this.releaseEnd,
+          onValueChange: Application.Selector(
+            this as OniSagaAdvancedSearchForm,
+            "handleReleaseEnd",
           ),
         }),
       ]),
@@ -359,12 +427,27 @@ export class OnisagaAdvancedSearchForm extends AdvancedSearchForm {
     this.minChapters = value[0] ?? "";
   }
 
-  override getSearchQueryMetadata(): OnisagaSearchMetadata {
-    const result: OnisagaSearchMetadata = {};
+  async handleGroup(value: string): Promise<void> {
+    this.group = value;
+  }
+
+  async handleReleaseStart(value: string): Promise<void> {
+    this.releaseStart = value;
+  }
+
+  async handleReleaseEnd(value: string): Promise<void> {
+    this.releaseEnd = value;
+  }
+
+  override getSearchQueryMetadata(): OniSagaSearchMetadata {
+    const result: OniSagaSearchMetadata = {};
     if (Object.keys(this.genres).length > 0) result.genres = this.genres;
     if (this.type) result.type = this.type;
     if (this.status) result.status = this.status;
     if (this.minChapters) result.minChapters = this.minChapters;
+    if (this.group.trim()) result.group = this.group.trim();
+    if (this.releaseStart.trim()) result.releaseStart = this.releaseStart.trim();
+    if (this.releaseEnd.trim()) result.releaseEnd = this.releaseEnd.trim();
     return result;
   }
 }

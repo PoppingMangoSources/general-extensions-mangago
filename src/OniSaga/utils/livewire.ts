@@ -5,12 +5,26 @@ import { type CheerioAPI } from "cheerio";
 
 import {
   DEFAULT_SORT,
+  DOMAIN,
   type BrowseLivewireRequest,
   type ChapterLivewireRequest,
+  type LivewireCall,
   type LivewireState,
   type PostFilterUpdates,
   type ToggleLivewireRequest,
-} from "./models";
+} from "../models";
+
+// Headers a Livewire `POST /livewire/update` expects (JSON body, XHR marker).
+export function livewireHeaders(referer: string): Record<string, string> {
+  return {
+    "X-Livewire": "",
+    Accept: "application/json",
+    "X-Requested-With": "XMLHttpRequest",
+    "Content-Type": "application/json",
+    Origin: DOMAIN,
+    Referer: referer,
+  };
+}
 
 // Invoke a single Livewire method (setPeriod / setSort / setPlatform) on a
 // rail's component to switch its time range / platform and re-render its cards.
@@ -59,10 +73,8 @@ export function isDefaultUpdates(updates: PostFilterUpdates): boolean {
   );
 }
 
-// The Livewire snapshot lives in a `wire:snapshot` attribute on the component
-// root; the CSRF token is a `<meta name="csrf-token">` (or an `_token` input).
-// Match the component by name appearing inside the snapshot JSON, mirroring the
-// reference implementation.
+// The snapshot lives in a `wire:snapshot` attribute; the CSRF token in a
+// `<meta name="csrf-token">` (or `_token` input). Match the component by name.
 export function extractLivewireState(
   $: CheerioAPI,
   componentName: string,
@@ -90,15 +102,20 @@ export function buildBrowseRequest(
   updates: PostFilterUpdates,
   page: number,
 ): BrowseLivewireRequest {
+  // Sort and platform are switched through component methods on the site
+  // (property writes alone don't re-sort), so mirror its UI before paginating.
+  const calls: LivewireCall[] = [];
+  if (updates.sort !== DEFAULT_SORT) {
+    calls.push({ type: "call", path: "", method: "updateSort", params: [updates.sort] });
+  }
+  if (updates.platform) {
+    calls.push({ type: "call", path: "", method: "updatePlatform", params: [updates.platform] });
+  }
+  calls.push({ type: "call", path: "", method: "gotoPage", params: [page] });
+
   return {
     _token: state.token,
-    components: [
-      {
-        snapshot: state.snapshot,
-        updates,
-        calls: [{ type: "call", path: "", method: "gotoPage", params: [page] }],
-      },
-    ],
+    components: [{ snapshot: state.snapshot, updates, calls }],
   };
 }
 

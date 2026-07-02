@@ -5,7 +5,8 @@ import { ContentRating, type Chapter, type SourceManga, type TagSection } from "
 import { type Cheerio, type CheerioAPI } from "cheerio";
 import { type Element } from "domhandler";
 
-import { DOMAIN, GENRES, LANGUAGES } from "./models";
+import { DOMAIN, GENRES, LANGUAGES, type Option } from "./models";
+import { chapterIdFromHref, mangaIdFromHref } from "./utils/helpers";
 
 const READER_TOKEN_REGEX = /readerToken["']?\s*:\s*["']([^"']+)["']/;
 const TOTAL_PAGES_REGEX = /totalPages["']?\s*:\s*(\d+)/;
@@ -16,12 +17,6 @@ const TYPE_BADGES = new Set(["manga", "manhwa", "manhua", "shounen", "seinen", "
 
 const GENRE_ID_BY_TITLE = new Map(GENRES.map((g) => [g.title.toLowerCase(), g.id]));
 const LANG_CODE_BY_BADGE = new Map(LANGUAGES.map((l) => [l.badge.toUpperCase(), l.langCode]));
-
-// iOS swaps straight quotes for curly ones; the site only matches the straight
-// forms, so normalize before searching.
-export function straightenQuotes(value: string): string {
-  return value.replace(/[‘’‛]/g, "'").replace(/[“”]/g, '"');
-}
 
 function resolveUrl(src: string): string {
   if (!src) return "";
@@ -44,9 +39,8 @@ function resolveImageUrl($el: Cheerio<Element>): string {
   const direct = $el.attr("data-src") || $el.attr("data-lazy-src") || $el.attr("src") || "";
   if (direct && !direct.startsWith("data:")) return resolveUrl(direct);
 
-  // Lazy-loaded cards leave a data:/empty src and keep the real image in a
-  // srcset — on the <img> itself or a sibling <source> in a <picture>. Prefer
-  // the webp source (broad device support) over the first listed (often avif).
+  // Lazy cards keep the real image in a srcset (on the <img> or a <picture>
+  // <source>); prefer the webp source.
   const srcset =
     $el.attr("srcset") ||
     $el.attr("data-srcset") ||
@@ -55,17 +49,6 @@ function resolveImageUrl($el: Cheerio<Element>): string {
     "";
   const fromSet = lastSrcsetUrl(srcset);
   return fromSet ? resolveUrl(fromSet) : "";
-}
-
-export function mangaIdFromHref(href: string): string {
-  const path = href.startsWith("http") ? href.replace(/^https?:\/\/[^/]+/, "") : href;
-  const after = path.split("/manga/")[1] ?? "";
-  return after.replace(/^\/+|\/+$/g, "");
-}
-
-export function chapterIdFromHref(href: string): string {
-  const path = href.startsWith("http") ? href.replace(/^https?:\/\/[^/]+/, "") : href;
-  return path.startsWith("/") ? path : `/${path}`;
 }
 
 export interface MangaCard {
@@ -77,9 +60,7 @@ export interface MangaCard {
   views?: string;
 }
 
-// View counts appear on the trending rows ("20,558 views"); the genre line is on
-// every card. Star ratings are NOT rendered in browse/home card markup (they only
-// live on the dedicated top-manga page), so cards fall back to genres.
+// Card view count ("20,558 views"); ratings only live on the top-manga page.
 function extractCardViews(text: string): string | undefined {
   const match = text.match(/(\d[\d.,]*\s*[KMB]?)\s*(?:views|reads)\b/i);
   return match ? match[1].trim() : undefined;
@@ -132,9 +113,7 @@ export function parseMangaCards($: CheerioAPI, showNsfw: boolean): MangaCard[] {
 }
 
 // ============================= Top-manga ranking =============================
-// The /top-manga page ranks every title by total reads (?sort=reads) or by
-// rating (?sort=rated). Unlike /browse, its rows carry BOTH the read count and
-// the ★ rating, so the featured hero and the Highest Rated carousel source here.
+// /top-manga rows carry both the read count and ★ rating that /browse lacks.
 export interface TopMangaItem {
   mangaId: string;
   title: string;
@@ -158,6 +137,11 @@ function ratingValue(text: string): string | undefined {
   return text.match(/\d+(?:\.\d+)?/)?.[0];
 }
 
+// The 18+ overlay/badge the site stamps on adult posters.
+function hasAdultMarker(el: Cheerio<Element>): boolean {
+  return el.find("span:contains('18+')").length > 0;
+}
+
 export function parseTopManga($: CheerioAPI, showNsfw: boolean): TopMangaItem[] {
   const items: TopMangaItem[] = [];
   const seen = new Set<string>();
@@ -169,9 +153,8 @@ export function parseTopManga($: CheerioAPI, showNsfw: boolean): TopMangaItem[] 
     items.push(item);
   };
 
-  // Podium (ranks 1-3): poster anchors in the lead section. Title comes from the
-  // image alt ("<title> cover"); the read count sits in a "N reads" line. These
-  // cards carry no rating or genre.
+  // Podium (ranks 1-3): poster anchors; title from the image alt, reads from a
+  // "N reads" line. No rating/genre.
   $("section a[href*='/manga/']").each((_, el) => {
     const a = $(el);
     const img = a.find("img").first();
@@ -183,13 +166,13 @@ export function parseTopManga($: CheerioAPI, showNsfw: boolean): TopMangaItem[] 
       mangaId: mangaIdFromHref(a.attr("href") ?? ""),
       title: (img.attr("alt") ?? "").replace(/\s*cover\s*$/i, "").trim(),
       imageUrl: resolveImageUrl(img),
-      contentRating: ContentRating.EVERYONE,
+      contentRating: hasAdultMarker(a) ? ContentRating.ADULT : ContentRating.EVERYONE,
       reads: readsMatch[1],
     });
   });
 
-  // Ranked list (rank 4+): each <li> wraps a grid anchor with rank, poster,
-  // title, status, genres, and a right-aligned stat block (reads then ★ rating).
+  // Ranked list (rank 4+): each <li> anchor has title, genres, and a stat block
+  // (reads then ★ rating).
   $("ol li a[href*='/manga/']").each((_, el) => {
     const a = $(el);
     const genres = cleanGenreLine(a.find('[class*="text-accent/45"]').first().text()) || undefined;
@@ -199,13 +182,13 @@ export function parseTopManga($: CheerioAPI, showNsfw: boolean): TopMangaItem[] 
       .children("span")
       .map((_, s) => $(s).text().trim())
       .get();
+    const adult = hasAdultMarker(a) || (genres !== undefined && ADULT_GENRE_REGEX.test(genres));
 
     add({
       mangaId: mangaIdFromHref(a.attr("href") ?? ""),
       title: a.find('[class*="line-clamp-1"]').first().text().trim(),
       imageUrl: resolveImageUrl(a.find("img").first()),
-      contentRating:
-        genres && ADULT_GENRE_REGEX.test(genres) ? ContentRating.ADULT : ContentRating.EVERYONE,
+      contentRating: adult ? ContentRating.ADULT : ContentRating.EVERYONE,
       genres,
       reads: stats[0] || undefined,
       rating: stats.length > 1 ? ratingValue(stats[stats.length - 1]) : undefined,
@@ -215,8 +198,7 @@ export function parseTopManga($: CheerioAPI, showNsfw: boolean): TopMangaItem[] 
   return items;
 }
 
-// Carousel subtitle for a ranked item: "★ 8.9 · 18,972 reads", falling back to
-// whichever stat is present, then the genre line.
+// Carousel subtitle: "★ 8.9 · 18,972 reads", or whichever stat/genre is present.
 export function topMangaSubtitle(item: TopMangaItem): string | undefined {
   const parts: string[] = [];
   if (item.rating) parts.push(`★ ${item.rating}`);
@@ -226,24 +208,34 @@ export function topMangaSubtitle(item: TopMangaItem): string | undefined {
 }
 
 // =============================== Home sections ===============================
-// The home page stacks every curated rail (Most Popular, Top 10 Rising,
-// Trending by Platform, More Trending, Latest, Fan Favorites …) in a single
-// document, each introduced by an <h2 data-flux-heading> with no enclosing
-// <section> wrapper. Slice the markup between one heading and the next so each
-// rail can be parsed independently with parseMangaCards.
-const SECTION_HEADING_REGEX = /data-flux-heading>\s*([^<]+?)\s*<\/h2>/gi;
-
-export function sliceSectionHtml(html: string, heading: string): string | undefined {
-  const wanted = heading.toLowerCase();
-  const headings = [...html.matchAll(SECTION_HEADING_REGEX)];
-  for (let i = 0; i < headings.length; i++) {
-    if (headings[i][1].trim().toLowerCase() === wanted) {
-      const start = headings[i].index ?? 0;
-      const end = headings[i + 1]?.index ?? html.length;
-      return html.slice(start, end);
+// Outer HTML of the Livewire component whose wire:snapshot names it, so its
+// cards can be parsed. Empty when the page lacks the component.
+export function componentHtmlByName($: CheerioAPI, componentName: string): string {
+  let html = "";
+  $("[wire\\:snapshot]").each((_, el) => {
+    if (html) return;
+    if (($(el).attr("wire:snapshot") ?? "").includes(componentName)) {
+      html = $.html(el);
     }
-  }
-  return undefined;
+  });
+  return html;
+}
+
+// Genre id → title from the browse filter checkboxes
+// (`<input name="genre[]" value="67">` + `<label for="genre67">`). [] if absent.
+export function parseGenres($: CheerioAPI): Option[] {
+  const genres: Option[] = [];
+  const seen = new Set<string>();
+  $('input[name="genre[]"]').each((_, el) => {
+    const id = $(el).attr("value")?.trim();
+    if (!id || seen.has(id)) return;
+    const title = $(`label[for="genre${id}"]`).first().text().trim();
+    if (!title) return;
+    seen.add(id);
+    genres.push({ id, title });
+  });
+  genres.sort((a, b) => a.title.localeCompare(b.title));
+  return genres;
 }
 
 export function hasNextPage($: CheerioAPI): boolean {
@@ -297,19 +289,24 @@ export function parseMangaDetails($: CheerioAPI, mangaId: string): SourceManga {
     if (name) genres.push(name);
   });
 
+  // Normalize by the displayed denominator ("8.6/10", "4.3/5"); default /10.
   let rating = 0;
   $("span.text-xs").each((_, el) => {
     if (rating) return;
     const match = $(el)
       .text()
       .trim()
-      .match(/^(\d+\.\d+)/);
-    if (match) rating = parseFloat(match[1]) / 10;
+      .match(/^(\d+\.\d+)(?:\s*\/\s*(\d+))?/);
+    if (!match) return;
+    const scale = match[2] ? parseInt(match[2], 10) : 10;
+    if (scale > 0) rating = Math.min(parseFloat(match[1]) / scale, 1);
   });
 
   const synopsis = $("p.leading-relaxed").first().text().trim();
 
-  const isAdult = $("span:contains('18+')").length > 0;
+  // Scope to the details header (info block + poster) so an 18+ card in a
+  // recommendations rail further down the page can't mislabel this title.
+  const isAdult = hasAdultMarker(infoSection) || hasAdultMarker($(".w-32").first());
 
   const tagGroups: TagSection[] = [];
   if (genres.length > 0) {
@@ -409,8 +406,7 @@ function makeChapter(
 
   const numMatch = numberText.match(CHAPTER_NUMBER_REGEX);
   const parsedNum = numMatch ? parseFloat(numMatch[1]) : 0;
-  // Coerce unparseable numbers to 0 (matching the reference's toFloatOrNull ?: 0f)
-  // so a stray heading can't poison the chapNum sort comparator with NaN.
+  // Coerce unparseable numbers to 0 so a stray heading can't NaN the sort.
   const chapNum = Number.isFinite(parsedNum) ? parsedNum : 0;
   const langCode = LANG_CODE_BY_BADGE.get(badge.toUpperCase()) ?? "en";
 
@@ -418,15 +414,15 @@ function makeChapter(
     chapterId: url,
     sourceManga,
     chapNum,
+    volume: 0,
     langCode,
     title: `Chapter ${numberText}`,
     publishDate: parseChapterDate(dateStr),
   };
 }
 
-// The site is English-first but some series carry multi-language chapter
-// variants and there is no site-side language filter, so surface every chapter
-// and tag each with its own detected language for the app to group on.
+// Surface every chapter, tagging each with its detected language (some series
+// have multi-language variants and the site has no language filter).
 export function parseChapters($: CheerioAPI, sourceManga: SourceManga): Chapter[] {
   const chapters: Chapter[] = [];
   const seen = new Set<string>();
@@ -490,12 +486,4 @@ export function countPages(body: string): number {
   }
   const matches = body.match(PAGE_ORDER_REGEX);
   return matches ? matches.length : 0;
-}
-
-export function parseJson<T>(raw: string, context: string): T {
-  try {
-    return JSON.parse(raw) as T;
-  } catch (error) {
-    throw new Error(`Failed to parse ${context}`, { cause: error });
-  }
 }

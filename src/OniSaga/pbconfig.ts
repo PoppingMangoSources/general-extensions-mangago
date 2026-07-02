@@ -20,8 +20,8 @@ export default {
   badges: [],
   developers: [
     {
-      name: "Popmango",
-      github: "https://github.com/PoppingMangoSources",
+      name: "PoppingMango",
+      github: "https://github.com/PoppingMango",
     },
   ],
 } satisfies ExtensionInfo;
