@@ -2,6 +2,7 @@
 /* Copyright © 2026 Inkdex */
 
 import {
+  BasicRateLimiter,
   CloudflareError,
   PaperbackInterceptor,
   type Request,
@@ -18,6 +19,20 @@ const PAGE_API_REGEX = /\/api\/chapter\/([^/]+)\/page\/\d+/;
 // Bounds re-entrant page retries (the retry re-runs both interceptors).
 const PAGE_RETRY_HEADER = "x-pb-page-retry";
 const PAGE_RETRY_LIMIT = 2;
+// Backoff when the page API 429s without a Retry-After.
+const RATE_LIMIT_FALLBACK_SECONDS = 3;
+
+// Response headers can arrive in any casing; read them case-insensitively.
+function headerValue(
+  headers: Record<string, string> | undefined,
+  name: string,
+): string | undefined {
+  const wanted = name.toLowerCase();
+  for (const [key, value] of Object.entries(headers ?? {})) {
+    if (key.toLowerCase() === wanted) return value;
+  }
+  return undefined;
+}
 
 export class OniSagaInterceptor extends PaperbackInterceptor {
   // Per-chapter reader sessions (chapterId -> token + reader-page referer) set
@@ -63,7 +78,7 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
     response: Response,
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
-    const cfMitigated = response.headers?.["cf-mitigated"];
+    const cfMitigated = headerValue(response.headers, "cf-mitigated");
     if (cfMitigated === "challenge") {
       throw new CloudflareError({
         url: `${DOMAIN}/`,
@@ -79,7 +94,7 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
 
     // The reader can rotate the chapter token; adopt the replacement so later
     // page requests stay authorized (the site's own reader does the same).
-    const nextToken = response.headers?.["x-reader-token-next"];
+    const nextToken = headerValue(response.headers, "x-reader-token-next");
     if (session && nextToken) session.token = nextToken;
 
     // Reader tokens expire after ~10 minutes, and the app requests pages long
@@ -106,6 +121,25 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
       }
     }
 
+    // A 429 body is a tiny JSON error, not an image; left alone it would render
+    // as a broken page. Honour Retry-After (falling back to a fixed gap) and
+    // retry once or twice, bounded by the same retry-count header.
+    if (PAGE_API_REGEX.test(request.url) && response.status === 429) {
+      const attempt = Number(request.headers?.[PAGE_RETRY_HEADER] ?? "0");
+      if (attempt < PAGE_RETRY_LIMIT) {
+        const retryAfter = Number(headerValue(response.headers, "retry-after"));
+        const seconds =
+          Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : RATE_LIMIT_FALLBACK_SECONDS;
+        await Application.sleep(seconds);
+        const [, buffer] = await Application.scheduleRequest({
+          url: request.url,
+          method: "GET",
+          headers: { ...request.headers, [PAGE_RETRY_HEADER]: String(attempt + 1) },
+        });
+        return buffer;
+      }
+    }
+
     // Lazy page resolution: a page-API url returns JSON pointing at the real
     // signed image; fetch that and return its bytes. The image path (/_img/...)
     // differs, so this sub-request doesn't re-enter this branch.
@@ -127,5 +161,17 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
     }
 
     return data;
+  }
+}
+
+// The reader's prefetcher fires a whole window of page-API requests at once,
+// which bursts past the site's per-IP throttle and 429s every page. Give the
+// page API its own strict, serialized budget (the base limiter already
+// serializes via a lock) so it drains one-at-a-time; everything else keeps the
+// generous global limiter. This mirrors Webtoon's per-endpoint limiters.
+export class OniSagaPageRateLimiter extends BasicRateLimiter {
+  override async interceptRequest(request: Request): Promise<Request> {
+    if (!PAGE_API_REGEX.test(request.url)) return request;
+    return super.interceptRequest(request);
   }
 }

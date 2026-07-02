@@ -46,7 +46,7 @@ import {
   type OniSagaSearchMetadata,
   type PostFilterUpdates,
 } from "./models";
-import { OniSagaInterceptor } from "./network";
+import { OniSagaInterceptor, OniSagaPageRateLimiter } from "./network";
 import {
   buildStatSubtitle,
   componentHtmlByName,
@@ -123,12 +123,19 @@ function topMangaInfoItems(item: TopMangaItem): FeaturedCarouselItem["infoItems"
 export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   requestManager = new OniSagaInterceptor("onisaga-request");
   cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
-  // Stay under the site's per-IP throttle (a burst 429s the reader's page API);
-  // images are ignored and load freely.
+  // Browse/search/discover share this generous limiter; images load freely.
   globalRateLimiter = new BasicRateLimiter("onisaga-rate-limiter", {
-    numberOfRequests: 3,
+    numberOfRequests: 5,
     bufferInterval: 1,
     ignoreImages: true,
+  });
+
+  // The reader's page API gets its own strict, serialized budget so the
+  // prefetcher can't burst past the site's per-IP throttle (see network.ts).
+  pageRateLimiter = new OniSagaPageRateLimiter("onisaga-page-rate-limiter", {
+    numberOfRequests: 1,
+    bufferInterval: 1,
+    ignoreImages: false,
   });
 
   // Cached `post-filter` state (token + snapshot) for the active browse URL.
@@ -143,6 +150,7 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     this.cookieStorageInterceptor.registerInterceptor();
     this.requestManager.registerInterceptor();
     this.globalRateLimiter.registerInterceptor();
+    this.pageRateLimiter.registerInterceptor();
   }
 
   async saveCloudflareBypassCookies(cookies: Cookie[]): Promise<void> {
