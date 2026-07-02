@@ -21,13 +21,24 @@ const PAGE_RETRY_HEADER = "x-pb-page-retry";
 const PAGE_RETRY_LIMIT = 2;
 // Backoff when the page API 429s without a Retry-After.
 const RATE_LIMIT_FALLBACK_MS = 2500;
+// Ceiling on how long a 429 can park the pipeline, so a pathological
+// Retry-After can't freeze the reader (onisaga's real penalty is ~60s).
+const MAX_COOLDOWN_MS = 90_000;
 
-// Shared page-API cooldown. A 429 carries Retry-After (~60s) and does NOT
-// decrement the advertised 300/min counter, so it's a separate burst/penalty
-// limit: once tripped, every page request is rejected for the whole window.
-// The rate limiter parks all page requests until this passes, so the reader's
-// queued prefetch can't keep hammering the penalty open. Epoch ms.
-const pageCooldown = { until: 0 };
+// After a 429, hold at least this spacing (the proven-safe rate) until the
+// strike decays, so an aggressive Image Requests Limit setting can't keep
+// re-tripping the penalty. Self-tuning, adapted from the mangabox/kakarot
+// adaptive-pacing pattern to onisaga's fixed-penalty model.
+const STRIKE_FLOOR_SECONDS = 2;
+const STRIKE_DECAY_MS = 120_000;
+
+// Shared page-API throttle state. A 429 carries Retry-After (~60s) and does
+// NOT decrement the advertised 300/min counter, so it's a separate
+// burst/penalty limit: once tripped, every page request is rejected for the
+// whole window. `until` parks all page requests through the penalty so the
+// queued prefetch can't hammer it open; `strikeUntil` then holds the safe
+// floor for a while so we don't immediately re-trip. Epoch ms.
+const pageCooldown = { until: 0, strikeUntil: 0 };
 
 // Response headers can arrive in any casing; read them case-insensitively.
 function getHeaderValue(
@@ -139,10 +150,11 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
     // backs off for the penalty window, then retry: the retry re-enters the
     // rate limiter and waits out that cooldown before firing.
     if (PAGE_API_REGEX.test(request.url) && response.status === 429) {
-      pageCooldown.until = Math.max(
-        pageCooldown.until,
-        Date.now() + getRetryDelayMs(response.headers),
-      );
+      const backoffMs = Math.min(getRetryDelayMs(response.headers), MAX_COOLDOWN_MS);
+      const now = Date.now();
+      pageCooldown.until = Math.max(pageCooldown.until, now + backoffMs);
+      // Hold the safe floor for a while so we don't re-trip right after.
+      pageCooldown.strikeUntil = now + STRIKE_DECAY_MS;
       const attempt = Number(request.headers?.[PAGE_RETRY_HEADER] ?? "0");
       if (attempt < PAGE_RETRY_LIMIT) {
         const [, buffer] = await Application.scheduleRequest({
@@ -185,7 +197,7 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
 // keeps the first screen snappy while staying well under the penalty
 // threshold. Everything except the page API passes through untouched
 // (Webtoon-style per-endpoint scoping).
-const BURST_CAPACITY = 5;
+const BURST_CAPACITY = 10;
 const BURST_SPACING_SECONDS = 0.3;
 
 export class OniSagaPageRateLimiter extends PaperbackInterceptor {
@@ -222,6 +234,9 @@ export class OniSagaPageRateLimiter extends PaperbackInterceptor {
       await Application.sleep(BURST_SPACING_SECONDS);
       return;
     }
-    await Application.sleep(getPageDelaySeconds());
+    // Honour the user's spacing, but hold the safe floor while a strike is active.
+    let seconds = getPageDelaySeconds();
+    if (Date.now() < pageCooldown.strikeUntil) seconds = Math.max(seconds, STRIKE_FLOOR_SECONDS);
+    await Application.sleep(seconds);
   }
 }

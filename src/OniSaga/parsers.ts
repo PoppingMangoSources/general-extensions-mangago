@@ -267,9 +267,14 @@ function parseStatus($: CheerioAPI): string {
 export function parseMangaDetails($: CheerioAPI, mangaId: string): SourceManga {
   const title = ($("h1").first().text() || $("[data-flux-heading]").first().text()).trim();
 
-  const thumbnailUrl = resolveImageUrl(
-    $(".w-32 > picture:nth-child(1) > img:nth-child(3)").first(),
-  );
+  // The poster markup varies between titles, so try the poster block loosely
+  // then fall back to the page's og:image/twitter:image. An empty thumbnailUrl
+  // makes Paperback throw "Invalid URL", so this must always resolve something.
+  const thumbnailUrl =
+    resolveImageUrl($(".w-32 picture img").first()) ||
+    resolveImageUrl($(".w-32 img").first()) ||
+    resolveUrl($('meta[property="og:image"]').attr("content")?.trim() ?? "") ||
+    resolveUrl($('meta[name="twitter:image"]').attr("content")?.trim() ?? "");
 
   const infoSection = $("div.flex.flex-col.md\\:flex-row").first();
 
