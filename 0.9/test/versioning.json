@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-02T02:07:24.215Z",
+  "buildTime": "2026-07-02T02:11:52.012Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -49,11 +49,11 @@
       "badges": [],
       "developers": [
         {
-          "name": "Popmango",
-          "github": "https://github.com/PoppingMangoSources"
+          "name": "PoppingMango",
+          "github": "https://github.com/PoppingMango"
         }
       ],
-      "id": "Onisaga"
+      "id": "OniSaga"
     }
   ]
 }
