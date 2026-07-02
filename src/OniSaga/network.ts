@@ -22,6 +22,13 @@ const PAGE_RETRY_LIMIT = 2;
 // Backoff when the page API 429s without a Retry-After.
 const RATE_LIMIT_FALLBACK_MS = 2500;
 
+// Shared page-API cooldown. A 429 carries Retry-After (~60s) and does NOT
+// decrement the advertised 300/min counter, so it's a separate burst/penalty
+// limit: once tripped, every page request is rejected for the whole window.
+// The rate limiter parks all page requests until this passes, so the reader's
+// queued prefetch can't keep hammering the penalty open. Epoch ms.
+const pageCooldown = { until: 0 };
+
 // Response headers can arrive in any casing; read them case-insensitively.
 function getHeaderValue(
   headers: Record<string, string> | undefined,
@@ -128,12 +135,16 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
     }
 
     // A 429 body is a tiny JSON error, not an image; left alone it would render
-    // as a broken page. Honour Retry-After (falling back to a fixed gap) and
-    // retry once or twice, bounded by the same retry-count header.
+    // as a broken page. Open the shared cooldown so the whole page pipeline
+    // backs off for the penalty window, then retry: the retry re-enters the
+    // rate limiter and waits out that cooldown before firing.
     if (PAGE_API_REGEX.test(request.url) && response.status === 429) {
+      pageCooldown.until = Math.max(
+        pageCooldown.until,
+        Date.now() + getRetryDelayMs(response.headers),
+      );
       const attempt = Number(request.headers?.[PAGE_RETRY_HEADER] ?? "0");
       if (attempt < PAGE_RETRY_LIMIT) {
-        await Application.sleep(getRetryDelayMs(response.headers) / 1000);
         const [, buffer] = await Application.scheduleRequest({
           url: request.url,
           method: "GET",
@@ -167,20 +178,18 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
   }
 }
 
-// Reader page-API pacing. The site's throttle behaves like a token bucket: it
-// tolerates a fast burst (~80 requests observed before 429s start) but clamps
-// sustained fast cadences. Spend a conservative burst allowance quickly so the
-// first screenfuls appear at once, then fall back to the user's Image Requests
-// Limit; the allowance refills at that same sustained rate while reading.
-// Everything except the page API passes through untouched (Webtoon-style
-// per-endpoint scoping), and requests are serialized so the reader's parallel
-// prefetch window drains in order instead of bursting.
-const BURST_CAPACITY = 40;
-const BURST_SPACING_SECONDS = 0.25;
+// Reader page-API pacing. The site rejects a fast burst with a 60s penalty
+// (the hidden limit above, ~1 req/s sustained), so page requests are
+// serialized and spaced at the user's Image Requests Limit — the same steady,
+// one-at-a-time cadence the site's own reader uses. A small initial burst
+// keeps the first screen snappy while staying well under the penalty
+// threshold. Everything except the page API passes through untouched
+// (Webtoon-style per-endpoint scoping).
+const BURST_CAPACITY = 5;
+const BURST_SPACING_SECONDS = 0.3;
 
 export class OniSagaPageRateLimiter extends PaperbackInterceptor {
-  private tokens = BURST_CAPACITY;
-  private lastRefill = 0;
+  private burst = BURST_CAPACITY;
   private chain: Promise<unknown> = Promise.resolve();
 
   override async interceptRequest(request: Request): Promise<Request> {
@@ -201,30 +210,18 @@ export class OniSagaPageRateLimiter extends PaperbackInterceptor {
   }
 
   private async pace(): Promise<void> {
-    // Read the setting per request so a change applies immediately.
-    const sustainedMs = getPageDelaySeconds() * 1000;
-    const now = Date.now();
-    if (this.lastRefill === 0 || this.tokens >= BURST_CAPACITY) {
-      this.lastRefill = now;
-    } else {
-      const earned = Math.floor((now - this.lastRefill) / sustainedMs);
-      if (earned > 0) {
-        this.tokens = Math.min(BURST_CAPACITY, this.tokens + earned);
-        this.lastRefill =
-          this.tokens >= BURST_CAPACITY ? now : this.lastRefill + earned * sustainedMs;
-      }
+    // Park behind an open penalty cooldown before doing anything else.
+    const cooldownMs = pageCooldown.until - Date.now();
+    if (cooldownMs > 0) {
+      await Application.sleep(cooldownMs / 1000);
+      this.burst = 0; // after a penalty, hold the steady rate — don't burst again
     }
-
-    if (this.tokens > 0) {
-      this.tokens -= 1;
+    // A few quick pages for a snappy first screen, then the steady spacing.
+    if (this.burst > 0) {
+      this.burst -= 1;
       await Application.sleep(BURST_SPACING_SECONDS);
       return;
     }
-
-    // Allowance spent: wait out the remainder of the current accrual interval
-    // and consume the token it grants, so the sustained rate holds exactly.
-    const waitMs = sustainedMs - (Date.now() - this.lastRefill);
-    if (waitMs > 0) await Application.sleep(waitMs / 1000);
-    this.lastRefill += sustainedMs;
+    await Application.sleep(getPageDelaySeconds());
   }
 }
