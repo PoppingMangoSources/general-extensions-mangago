@@ -6,6 +6,7 @@ import {
   type Chapter,
   type ChapterDetails,
   type DiscoverSectionItem,
+  type FeaturedCarouselItem,
   type PagedResults,
   type SearchResultItem,
   type SourceManga,
@@ -25,10 +26,7 @@ import {
   type SearchResultEntry,
 } from "./models";
 
-export function parseCarouselItems(
-  jsonStr: string,
-  itemType: "featuredCarouselItem" | "simpleCarouselItem",
-): PagedResults<DiscoverSectionItem> {
+export function parseCarouselItems(jsonStr: string): PagedResults<DiscoverSectionItem> {
   const data = JSON.parse(jsonStr) as PopularItem[];
   const items: DiscoverSectionItem[] = [];
 
@@ -38,14 +36,50 @@ export function parseCarouselItems(
       items.push({
         mangaId,
         title: manga.title,
+        subtitle: manga.manga_type || undefined,
         imageUrl: fixImageUrl(manga.cover),
-        type: itemType,
+        type: "simpleCarouselItem",
       });
     }
   }
 
   return { items, metadata: undefined };
 }
+
+export function parseFeaturedItems(
+  jsonStr: string,
+  limit: number,
+): PagedResults<DiscoverSectionItem> {
+  const data = JSON.parse(jsonStr) as BrowseEntry[];
+  if (!Array.isArray(data)) return { items: [] };
+
+  const items: DiscoverSectionItem[] = [];
+  for (const entry of data.slice(0, limit)) {
+    const mangaId = extractMangaSlug(entry.url);
+    if (!mangaId || !entry.title) continue;
+
+    const infoItems: { symbol: string; text: string }[] = [];
+    if (parseFloat(entry.score) > 0) infoItems.push({ symbol: "star.fill", text: entry.score });
+    if (entry.votes > 0)
+      infoItems.push({ symbol: "person.2.fill", text: formatCount(entry.votes) });
+
+    items.push({
+      type: "featuredCarouselItem",
+      mangaId,
+      title: entry.title,
+      imageUrl: fixImageUrl(entry.cover),
+      supertitle: entry.type || undefined,
+      // descriptions arrive with HTML entities (&#039; etc.)
+      summary: entry.description ? cheerio.load(entry.description).text() : undefined,
+      infoItems: infoItems.length ? (infoItems as FeaturedCarouselItem["infoItems"]) : undefined,
+    });
+  }
+
+  return { items, metadata: undefined };
+}
+
+const formatCount = (n: number): string =>
+  n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, "")}K` : String(n);
 
 export function parseLatestUpdates(
   jsonStr: string,
@@ -316,7 +350,7 @@ function parseRelativeDate(dateText: string): Date | undefined {
   const now = new Date();
   const text = dateText.toLowerCase();
 
-  if (text.includes("just now") || text.includes("now") || text.includes("second")) {
+  if (text.includes("now") || text.includes("second")) {
     return now;
   }
 

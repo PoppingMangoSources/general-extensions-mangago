@@ -9,6 +9,7 @@ export interface PopularItem {
   cover: string;
   title: string;
   permalink: string;
+  manga_type: string;
 }
 
 export interface LatestChapterEntry {
@@ -24,6 +25,9 @@ export interface BrowseEntry {
   url: string;
   cover: string;
   type: string;
+  score: string;
+  votes: number;
+  description: string;
 }
 
 export interface SearchResultEntry {

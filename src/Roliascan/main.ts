@@ -29,6 +29,7 @@ import {
   parseCarouselItems,
   parseChapterDetails,
   parseChapters,
+  parseFeaturedItems,
   parseFilterOptions,
   parseLatestUpdates,
   parseMangaDetails,
@@ -85,11 +86,15 @@ class RoliascanExtension implements ExtensionImpl<typeof RoliascanConfig> {
 
     switch (section.id) {
       case "popular": {
+        // /popular only returns cover+title; /load with the same popular sort
+        // adds score, votes, type and description for the featured carousel
         const json = await this.fetchText({
-          url: `${DOMAIN}/wp-json/manga/v1/popular?number=15`,
-          method: "GET",
+          url: `${DOMAIN}/wp-json/manga/v1/load`,
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ page: 1, sort: "popular_desc" }),
         });
-        return parseCarouselItems(json, "featuredCarouselItem");
+        return parseFeaturedItems(json, 15);
       }
       case "latest": {
         const json = await this.fetchText({
@@ -105,7 +110,7 @@ class RoliascanExtension implements ExtensionImpl<typeof RoliascanConfig> {
           url: `${DOMAIN}/wp-json/manga/v1/highscore?number=15`,
           method: "GET",
         });
-        return parseCarouselItems(json, "simpleCarouselItem");
+        return parseCarouselItems(json);
       }
       default:
         return { items: [], metadata: undefined };
