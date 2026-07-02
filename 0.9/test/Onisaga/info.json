@@ -1,0 +1,1 @@
+{"name":"OniSaga","description":"Extension that pulls content from onisaga.com.","version":"1.0.0-alpha.1","icon":"icon.png","language":"multi","contentRating":"MATURE","capabilities":[1,16,4,64,32],"badges":[],"developers":[{"name":"Popmango","github":"https://github.com/PoppingMangoSources"}],"id":"Onisaga"}
