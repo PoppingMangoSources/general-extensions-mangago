@@ -67,6 +67,8 @@ import type AllMangaConfig from "./pbconfig";
 import { pageListViaWebView } from "./utils/webView";
 
 const SECTION_POPULAR = "popular";
+const SECTION_POPULAR_WEEK = "popular_week";
+const SECTION_POPULAR_MONTH = "popular_month";
 const SECTION_LATEST = "latest";
 const SECTION_RECOMMENDED = "recommended";
 const SECTION_GENRES = "genres";
@@ -118,10 +120,44 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
       { id: SECTION_POPULAR, title: "Popular", type: DiscoverSectionType.featured },
-      { id: SECTION_LATEST, title: "Latest Updates", type: DiscoverSectionType.simpleCarousel },
+      {
+        id: SECTION_POPULAR_WEEK,
+        title: "Popular This Week",
+        type: DiscoverSectionType.prominentCarousel,
+      },
+      {
+        id: SECTION_POPULAR_MONTH,
+        title: "Popular This Month",
+        type: DiscoverSectionType.simpleCarousel,
+      },
+      { id: SECTION_LATEST, title: "Latest Updates", type: DiscoverSectionType.chapterUpdates },
       { id: SECTION_RECOMMENDED, title: "Recommended", type: DiscoverSectionType.simpleCarousel },
       { id: SECTION_GENRES, title: "Genres", type: DiscoverSectionType.genres },
     ];
+  }
+
+  // Popular sections all hit queryPopular with a different dateRange window
+  // (0 all-time, 7 week, 30 month) and map each card to the section's item type.
+  private async popularSection(
+    page: number,
+    dateRange: number,
+    toItem: (card: MangaCard, views: string | null | undefined) => DiscoverSectionItem,
+  ): Promise<PagedResults<DiscoverSectionItem>> {
+    const data = await postGraphQL<PopularData>(POPULAR_QUERY, {
+      type: "manga",
+      size: LIMIT,
+      dateRange,
+      page,
+      allowAdult: getShowAdult(),
+      allowUnknown: false,
+    });
+    const recommendations = data.queryPopular.recommendations;
+    const items = recommendations
+      .filter((rec) => rec.anyCard != null)
+      .map((rec) => toItem(rec.anyCard!, rec.pageStatus?.views));
+    // Base pagination on the raw page size, not the filtered item count.
+    const hasNext = recommendations.length === LIMIT;
+    return { items, metadata: hasNext ? { page: page + 1 } : undefined };
   }
 
   async getDiscoverSectionItems(
@@ -166,41 +202,49 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
 
     const page = metadata?.page ?? 1;
 
+    // Popular ranges share one query; dateRange 0/7/30 = all-time/week/month.
     if (section.id === SECTION_POPULAR) {
-      const data = await postGraphQL<PopularData>(POPULAR_QUERY, {
-        type: "manga",
-        size: LIMIT,
-        dateRange: 0,
-        page,
-        allowAdult: getShowAdult(),
-        allowUnknown: false,
+      return this.popularSection(page, 0, (card, views) => {
+        const infoItems: NonNullable<FeaturedCarouselItem["infoItems"]> = [];
+        if (card.score != null) {
+          infoItems.push({ symbol: "star.fill", text: card.score.toFixed(1) });
+        }
+        if (views) {
+          infoItems.push({ symbol: "flame.fill", text: formatCount(views) });
+        }
+        const chapters = card.availableChapters?.sub;
+        return {
+          type: "featuredCarouselItem",
+          mangaId: card._id,
+          title: Application.decodeHTMLEntities(card.englishName || card.name),
+          imageUrl: parseThumbnailUrl(card.thumbnail),
+          supertitle: chapters != null ? `${chapters} Chapters` : undefined,
+          infoItems,
+          contentRating,
+        };
       });
-      const recommendations = data.queryPopular.recommendations;
-      const items: DiscoverSectionItem[] = recommendations
-        .filter((rec) => rec.anyCard != null)
-        .map((rec) => {
-          const card = rec.anyCard!;
-          const infoItems: NonNullable<FeaturedCarouselItem["infoItems"]> = [];
-          if (card.score != null) {
-            infoItems.push({ symbol: "star.fill", text: card.score.toFixed(1) });
-          }
-          if (rec.pageStatus?.views) {
-            infoItems.push({ symbol: "flame.fill", text: formatCount(rec.pageStatus.views) });
-          }
-          const chapters = card.availableChapters?.sub;
-          return {
-            type: "featuredCarouselItem",
-            mangaId: card._id,
-            title: Application.decodeHTMLEntities(card.englishName || card.name),
-            imageUrl: parseThumbnailUrl(card.thumbnail),
-            supertitle: chapters != null ? `${chapters} Chapters` : undefined,
-            infoItems,
-            contentRating,
-          };
-        });
-      // Base pagination on the raw page size, not the filtered item count.
-      const hasNext = recommendations.length === LIMIT;
-      return { items, metadata: hasNext ? { page: page + 1 } : undefined };
+    }
+
+    if (section.id === SECTION_POPULAR_WEEK) {
+      return this.popularSection(page, 7, (card) => ({
+        type: "prominentCarouselItem",
+        mangaId: card._id,
+        title: Application.decodeHTMLEntities(card.englishName || card.name),
+        imageUrl: parseThumbnailUrl(card.thumbnail),
+        subtitle: card.score != null ? `★ ${card.score.toFixed(1)}` : undefined,
+        contentRating,
+      }));
+    }
+
+    if (section.id === SECTION_POPULAR_MONTH) {
+      return this.popularSection(page, 30, (card) => ({
+        type: "simpleCarouselItem",
+        mangaId: card._id,
+        title: Application.decodeHTMLEntities(card.englishName || card.name),
+        imageUrl: parseThumbnailUrl(card.thumbnail),
+        subtitle: card.score != null ? `★ ${card.score.toFixed(1)}` : undefined,
+        contentRating,
+      }));
     }
 
     // Latest updates — newest chapters first, rendered as chapter-update cards.
@@ -237,15 +281,17 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
       const hasNext = latest.mangas.edges.length === LIMIT;
       return { items, metadata: hasNext ? { page: page + 1 } : undefined };
     } catch {
-      // Fall through to the simple carousel below.
+      // Fall through to the minimal query below (same card shape, no chapter).
     }
 
     const data = await this.runSearch("", undefined, undefined, page);
     const items: DiscoverSectionItem[] = data.mangas.edges.map((card) => ({
-      type: "simpleCarouselItem",
+      type: "chapterUpdatesCarouselItem",
       mangaId: card._id,
+      chapterId: "",
       title: Application.decodeHTMLEntities(card.englishName || card.name),
       imageUrl: parseThumbnailUrl(card.thumbnail),
+      subtitle: "",
       contentRating,
     }));
     const hasNext = data.mangas.edges.length === LIMIT;
