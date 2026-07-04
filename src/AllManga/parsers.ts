@@ -15,6 +15,7 @@ import {
   IMAGE_CDN,
   THUMBNAIL_CDN,
   type ChaptersData,
+  type DateParts,
   type EpisodeInfo,
   type MangaCard,
   type MangaDetail,
@@ -69,6 +70,29 @@ function extractTextFromHtml(html: string): string {
       .replace(/<[^>]+>/g, "")
       .trim(),
   );
+}
+
+// Abbreviate large counts for the featured card badges (e.g. 32500 -> "32.5K").
+export function formatCount(value: string | number): string {
+  const n = typeof value === "number" ? value : parseInt(value, 10);
+  if (!Number.isFinite(n)) return String(value);
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+
+// The API returns dates as split parts with a 0-indexed month (matching JS).
+export function dateFromParts(parts?: DateParts | null): Date | undefined {
+  if (!parts || parts.year == null) return undefined;
+  const date = new Date(
+    parts.year,
+    parts.month ?? 0,
+    parts.date ?? 1,
+    parts.hour ?? 0,
+    parts.minute ?? 0,
+    parts.second ?? 0,
+  );
+  return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
 // Reroute a resolved image URL through the resizing proxy at a fixed width.
