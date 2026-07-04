@@ -16,12 +16,12 @@ import {
 import {
   COUNTRY_OPTIONS,
   genreId,
+  GENRE_OPTIONS,
   IMAGE_QUALITY_DEFAULT,
   IMAGE_QUALITY_KEY,
   SHOW_ADULT_KEY,
   type SearchMetadata,
 } from "./models";
-import { getGenres } from "./utils/genres";
 
 // --- persisted settings ---
 
@@ -90,11 +90,10 @@ export class AllMangaSettingsForm extends Form {
 
 // --- advanced search ---
 
-// Built from the cached genre catalog (see genres.ts). The advanced-search form
-// is opened after checkGenres() has warmed the cache, so this reads a fresh list.
-function genreTags(): Tag[] {
-  return getGenres().map((name) => ({ id: genreId(name), title: name }));
-}
+const GENRE_TAGS: Tag[] = GENRE_OPTIONS.map((name) => ({
+  id: genreId(name),
+  title: name,
+}));
 
 const COUNTRY_TAGS: Tag[] = COUNTRY_OPTIONS.map((option) => ({
   id: option.id,
@@ -133,7 +132,7 @@ export class AllMangaAdvancedSearchForm extends AdvancedSearchForm {
           title: "Genres",
           layout: "flow",
           value: this.genres,
-          items: genreTags(),
+          items: GENRE_TAGS,
           allowExclusion: true,
           allowEmptySelection: true,
           onValueChange: Application.Selector(
