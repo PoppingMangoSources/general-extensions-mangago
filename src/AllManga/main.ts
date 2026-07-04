@@ -50,14 +50,14 @@ import {
 } from "./models";
 import { AllMangaInterceptor, getGraphQL, postGraphQL } from "./network";
 import {
-  buildChapters,
-  cardToSearchResult,
-  detailToSourceManga,
+  parseChapters,
+  parseMangaDetails,
+  parsePageUrls,
   parseThumbnailUrl,
-  resolvePageUrls,
+  toSearchResultItem,
 } from "./parsers";
 import type AllMangaConfig from "./pbconfig";
-import { pageListViaWebView } from "./webView";
+import { pageListViaWebView } from "./utils/webView";
 
 const SECTION_POPULAR = "popular";
 const SECTION_LATEST = "latest";
@@ -202,7 +202,7 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
     const data = await this.runSearch(title, query.metadata, sortingOption?.id, page);
 
     const contentRating = contentRatingForAdult();
-    const items = data.mangas.edges.map((card) => cardToSearchResult(card, contentRating));
+    const items = data.mangas.edges.map((card) => toSearchResultItem(card, contentRating));
     const hasNext = data.mangas.edges.length === LIMIT;
 
     return { items, metadata: hasNext ? { page: page + 1 } : undefined };
@@ -276,7 +276,7 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
     const data = await postGraphQL<DetailsData>(DETAILS_QUERY, { id: mangaId });
-    return detailToSourceManga(mangaId, data.manga, contentRatingForAdult());
+    return parseMangaDetails(mangaId, data.manga);
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
@@ -285,7 +285,7 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
       id: mangaId,
       showId: `manga@${mangaId}`,
     });
-    return buildChapters(sourceManga, data);
+    return parseChapters(sourceManga, data);
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
@@ -302,7 +302,7 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
     // (e.g. a transient 502) falls through to the WebView below.
     let pages: string[] = [];
     try {
-      pages = resolvePageUrls(await getGraphQL<PagesData>(PAGES_QUERY, variables), quality);
+      pages = parsePageUrls(await getGraphQL<PagesData>(PAGES_QUERY, variables), quality);
     } catch (error) {
       if (error instanceof CloudflareError) throw error;
     }
@@ -317,7 +317,7 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
           chapter.chapterId,
           this.cookieStorageInterceptor,
         );
-        if (data) pages = resolvePageUrls(data, quality);
+        if (data) pages = parsePageUrls(data, quality);
       } catch {
         // Fall through to the error below.
       }
