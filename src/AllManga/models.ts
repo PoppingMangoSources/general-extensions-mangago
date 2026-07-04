@@ -4,7 +4,7 @@
 // AllManga (allmanga.to) is backed by the allanime.day GraphQL API. Listings,
 // details and chapters are fetched with full query strings (persisted-query
 // hashes go stale); pages come from the direct `chapterPages` query so the
-// source works on iOS without an Android WebView.
+// source works on iOS.
 
 export const DOMAIN = "https://allmanga.to";
 export const API_URL = "https://api.allanime.day/api";
