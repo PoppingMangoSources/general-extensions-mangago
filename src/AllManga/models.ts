@@ -4,7 +4,7 @@
 // AllManga (allmanga.to) is backed by the allanime.day GraphQL API. Listings,
 // details and chapters are fetched with full query strings (persisted-query
 // hashes go stale); pages come from the direct `chapterPages` query so the
-// source works on iOS.
+// source works on iOS without an Android WebView.
 
 export const DOMAIN = "https://allmanga.to";
 export const API_URL = "https://api.allanime.day/api";
@@ -19,6 +19,11 @@ export const LIMIT = 20;
 export const IMAGE_QUALITY_KEY = "allmanga-image-quality";
 export const SHOW_ADULT_KEY = "allmanga-show-adult";
 export const IMAGE_QUALITY_DEFAULT = "original";
+
+export const GENRES_KEY = "allmanga-genres";
+export const GENRES_FETCH_KEY = "allmanga-genres-fetch";
+// Re-fetch the genre catalog at most once every 48 hours (value in seconds).
+export const GENRE_TTL_SECONDS = 172800;
 
 export type PageMetadata = {
   page?: number;
@@ -39,6 +44,14 @@ export type OptionItem = {
 export const POPULAR_QUERY = `query($type: VaildPopularTypeEnumType!, $size: Int!, $page: Int, $dateRange: Int, $allowAdult: Boolean, $allowUnknown: Boolean) {
   queryPopular(type: $type, size: $size, dateRange: $dateRange, page: $page, allowAdult: $allowAdult, allowUnknown: $allowUnknown) {
     recommendations { anyCard { _id name thumbnail englishName } }
+  }
+}`;
+
+// Random per-load recommendations. Returns a bare card array (no pagination),
+// so the section is refreshed rather than scrolled.
+export const RANDOM_QUERY = `query($format: String, $allowAdult: Boolean, $allowUnknown: Boolean) {
+  queryRandomRecommendation(format: $format, allowAdult: $allowAdult, allowUnknown: $allowUnknown) {
+    _id name thumbnail englishName
   }
 }`;
 
@@ -65,6 +78,10 @@ export const PAGES_QUERY = `query($mangaId: String!, $translationType: VaildTran
   }
 }`;
 
+// Tag catalog used to populate the genre filter dynamically. `queryTags` takes
+// no required arguments; the static GENRE_OPTIONS list is the offline fallback.
+export const TAGS_QUERY = `query { queryTags { edges { name mangaCount } } }`;
+
 // --- API response DTOs (subset of the fields this extension uses) ---
 
 export interface GraphQLResponse<T> {
@@ -87,6 +104,10 @@ export interface PopularData {
 
 export interface SearchData {
   mangas: { edges: MangaCard[] };
+}
+
+export interface RandomData {
+  queryRandomRecommendation?: MangaCard[] | null;
 }
 
 export interface MangaDetail {
@@ -138,6 +159,15 @@ export interface PagesData {
   chapterPages?: { edges: ChapterPageEdge[] } | null;
 }
 
+export interface TagEdge {
+  name: string;
+  mangaCount?: number | null;
+}
+
+export interface TagsData {
+  queryTags?: { edges: TagEdge[] } | null;
+}
+
 // --- Static filter option sets ---
 
 export const SORT_OPTIONS: OptionItem[] = [
@@ -153,6 +183,9 @@ export const COUNTRY_OPTIONS: OptionItem[] = [
   { id: "KR", value: "Korea" },
 ];
 
+// Offline fallback genre list. At runtime this is superseded by the site's live
+// tag catalog (see genres.ts); kept here so search and discover still work
+// before the first successful fetch or if the tag endpoint is unavailable.
 export const GENRE_OPTIONS: string[] = [
   "4 Koma",
   "Action",
@@ -225,11 +258,7 @@ export const GENRE_OPTIONS: string[] = [
 ];
 
 // Paperback tag IDs may not contain spaces, but the API filters on the genre's
-// display name (e.g. "4 Koma"). Map a safe id back to the API name.
+// display name (e.g. "4 Koma"); genres.genreNameFromId maps a safe id back.
 export function genreId(name: string): string {
   return name.replace(/[^A-Za-z0-9]+/g, "_");
 }
-
-export const GENRE_NAME_BY_ID: Record<string, string> = Object.fromEntries(
-  GENRE_OPTIONS.map((name) => [genreId(name), name]),
-);
