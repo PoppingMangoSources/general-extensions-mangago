@@ -20,7 +20,6 @@ import {
   CARD_LINK_SELECTOR,
   CARD_TITLE_SELECTOR,
   CHAPTER_DATE_SELECTOR,
-  CHAPTER_NAME_SELECTOR,
   CHAPTER_SELECTOR,
   DESC_SELECTOR,
   GENRE_CHECKBOX_SELECTOR,
@@ -285,7 +284,9 @@ export function parseChapters($: CheerioAPI, sourceManga: SourceManga): Chapter[
     if (!chapterId) continue;
 
     const title = Application.decodeHTMLEntities(
-      el.find(CHAPTER_NAME_SELECTOR).first().text().trim() || el.text().trim(),
+      el.find("span").first().text().trim() ||
+        el.find("p:not(.small)").first().text().trim() ||
+        el.text().trim(),
     );
     const chapNum = parseChapterNumber(title);
     const dateText = el.find(CHAPTER_DATE_SELECTOR).first().text().trim();
