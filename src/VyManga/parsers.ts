@@ -318,11 +318,17 @@ function parseChapterNumber(name: string): number {
 
 export function parseChapterPages($: CheerioAPI, base: string): string[] {
   const pages: string[] = [];
+  const seen = new Set<string>();
   for (const element of $(PAGE_SELECTOR).toArray()) {
     const image = imgAttr(base, $(element));
-    if (image) pages.push(image);
+    // Skip the reader's non-page images (loading placeholder, logos, avatars).
+    if (!image || seen.has(image) || /loading\.gif|\/(logo|icon|avatar|banner)/i.test(image)) {
+      continue;
+    }
+    seen.add(image);
+    pages.push(image);
   }
-  return [...new Set(pages)];
+  return pages;
 }
 
 // ---------------------------------------------------------------------------

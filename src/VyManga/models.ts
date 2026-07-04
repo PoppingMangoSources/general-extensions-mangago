@@ -1,17 +1,17 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-// VyManga (vyvymanga.net) is a custom manga aggregator scraped from its HTML.
+// VyManga (vymanga.com) is a custom manga aggregator scraped from its HTML.
 // Browse/search all run through `/search` with rich query parameters.
 
-export const DEFAULT_DOMAIN = "https://vyvymanga.net";
+export const DEFAULT_DOMAIN = "https://vymanga.com";
 export const SEARCH_PATH = "search";
 
 // Listing/discover cards (browse, search and the homepage widgets share these).
 export const CARD_SELECTOR = ".comic-item";
 export const CARD_LINK_SELECTOR = "a";
 export const CARD_TITLE_SELECTOR = ".comic-title";
-export const CARD_IMAGE_SELECTOR = ".comic-image img";
+export const CARD_IMAGE_SELECTOR = ".comic-image img, img.image, img.lozad";
 export const CARD_LATEST_SELECTOR = ".comic-image > span, .comic-image span";
 export const NEXT_PAGE_SELECTOR = "[rel=next]";
 
@@ -30,7 +30,9 @@ export const RATING_SELECTOR = ".pre-title:contains(Rating), div.col-md-7 p:cont
 export const CHAPTER_SELECTOR = ".list-group > a, div.list div.list-group a";
 export const CHAPTER_NAME_SELECTOR = "span";
 export const CHAPTER_DATE_SELECTOR = "> p, p";
-export const PAGE_SELECTOR = "img.d-block";
+// The reader lazy-loads pages as img.lozad (inside div.carousel-item[data-page]);
+// img.d-block is the older layout, kept as a fallback.
+export const PAGE_SELECTOR = "div.carousel-item[data-page] img.lozad, img.lozad, img.d-block";
 
 // Genre checkboxes on the `/search` advanced form.
 export const GENRE_FILTER_SELECTOR = ".check-genre div div:has(.checkbox-genre)";

@@ -5,7 +5,7 @@ import { ButtonRow, Form, InputRow, LabelRow, Section } from "@paperback/types";
 
 const BASE_URL_KEY = "vymanga.baseUrlOverride";
 
-// This site rotates domains (vyvymanga.net / vymanga.net); let readers point at
+// This site rotates domains (vymanga.com / vyvymanga.net); let readers point at
 // the current one without waiting for an extension update.
 export function getBaseUrlOverride(): string | undefined {
   const value = Application.getState(BASE_URL_KEY);
