@@ -33,18 +33,19 @@ import {
   CHAPTERS_QUERY,
   DETAILS_QUERY,
   genreId,
-  GENRE_NAME_BY_ID,
-  GENRE_OPTIONS,
   LIMIT,
   PAGES_QUERY,
   POPULAR_QUERY,
+  RANDOM_QUERY,
   SEARCH_QUERY,
   SORT_OPTIONS,
   type ChaptersData,
   type DetailsData,
+  type MangaCard,
   type PageMetadata,
   type PagesData,
   type PopularData,
+  type RandomData,
   type SearchData,
   type SearchMetadata,
 } from "./models";
@@ -57,10 +58,12 @@ import {
   toSearchResultItem,
 } from "./parsers";
 import type AllMangaConfig from "./pbconfig";
+import { checkGenres, genreNameFromId, getGenres } from "./utils/genres";
 import { pageListViaWebView } from "./utils/webView";
 
 const SECTION_POPULAR = "popular";
 const SECTION_LATEST = "latest";
+const SECTION_RECOMMENDED = "recommended";
 const SECTION_GENRES = "genres";
 
 const SORTING_OPTIONS: SortingOption[] = SORT_OPTIONS.map((option) => ({
@@ -111,6 +114,7 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
     return [
       { id: SECTION_POPULAR, title: "Popular", type: DiscoverSectionType.featured },
       { id: SECTION_LATEST, title: "Latest Updates", type: DiscoverSectionType.simpleCarousel },
+      { id: SECTION_RECOMMENDED, title: "Recommended", type: DiscoverSectionType.simpleCarousel },
       { id: SECTION_GENRES, title: "Genres", type: DiscoverSectionType.genres },
     ];
   }
@@ -122,7 +126,8 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
     const contentRating = contentRatingForAdult();
 
     if (section.id === SECTION_GENRES) {
-      const items: DiscoverSectionItem[] = GENRE_OPTIONS.map((genre) => ({
+      await checkGenres();
+      const items: DiscoverSectionItem[] = getGenres().map((genre) => ({
         type: "genresCarouselItem",
         name: genre,
         searchQuery: {
@@ -130,6 +135,28 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
           metadata: { genres: { [genreId(genre)]: "included" } } satisfies SearchMetadata,
         },
         metadata: undefined,
+      }));
+      return { items, metadata: undefined };
+    }
+
+    if (section.id === SECTION_RECOMMENDED) {
+      let cards: MangaCard[] = [];
+      try {
+        const data = await postGraphQL<RandomData>(RANDOM_QUERY, {
+          format: "manga",
+          allowAdult: getShowAdult(),
+          allowUnknown: false,
+        });
+        cards = data.queryRandomRecommendation ?? [];
+      } catch {
+        // Recommendations are best-effort; render nothing rather than error.
+      }
+      const items: DiscoverSectionItem[] = cards.map((card) => ({
+        type: "simpleCarouselItem",
+        mangaId: card._id,
+        title: Application.decodeHTMLEntities(card.englishName || card.name),
+        imageUrl: parseThumbnailUrl(card.thumbnail),
+        contentRating,
       }));
       return { items, metadata: undefined };
     }
@@ -183,6 +210,7 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
   }
 
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
+    await checkGenres();
     return new AllMangaAdvancedSearchForm(query);
   }
 
@@ -198,6 +226,7 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
     const pasted = await this.resolveDirectQuery(title);
     if (pasted) return pasted;
 
+    await checkGenres();
     const page = metadata?.page ?? 1;
     const data = await this.runSearch(title, query.metadata, sortingOption?.id, page);
 
@@ -248,10 +277,10 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
     // name ("4 Koma"), so map ids back before sending.
     const included = Object.entries(meta?.genres ?? {})
       .filter(([, state]) => state === "included")
-      .map(([id]) => GENRE_NAME_BY_ID[id] ?? id);
+      .map(([id]) => genreNameFromId(id));
     const excluded = Object.entries(meta?.genres ?? {})
       .filter(([, state]) => state === "excluded")
-      .map(([id]) => GENRE_NAME_BY_ID[id] ?? id);
+      .map(([id]) => genreNameFromId(id));
 
     return postGraphQL<SearchData>(SEARCH_QUERY, {
       search: {
