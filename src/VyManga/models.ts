@@ -26,10 +26,10 @@ export const STATUS_SELECTOR =
   ".pre-title:contains(Status) ~ span:not(.space), div.col-md-7 p:contains(Status) span";
 export const RATING_SELECTOR = ".pre-title:contains(Rating), div.col-md-7 p:contains(Rating)";
 
-// Chapter list + reader.
-export const CHAPTER_SELECTOR = ".list-group > a, div.list div.list-group a";
-export const CHAPTER_NAME_SELECTOR = "span";
-export const CHAPTER_DATE_SELECTOR = "> p, p";
+// Chapter list + reader. Multi-chapter rows are a.list-chapter; single-chapter
+// titles fall back to an anchor with an id like "chapter-123".
+export const CHAPTER_SELECTOR = 'a.list-chapter, a[id^="chapter-"]';
+export const CHAPTER_DATE_SELECTOR = "p.small, p";
 // The reader lazy-loads pages as img.lozad (inside div.carousel-item[data-page]);
 // img.d-block is the older layout, kept as a fallback.
 export const PAGE_SELECTOR = "div.carousel-item[data-page] img.lozad, img.lozad, img.d-block";
