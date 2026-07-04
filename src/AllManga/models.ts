@@ -39,7 +39,7 @@ export type OptionItem = {
 export const POPULAR_QUERY = `query($type: VaildPopularTypeEnumType!, $size: Int!, $page: Int, $dateRange: Int, $allowAdult: Boolean, $allowUnknown: Boolean) {
   queryPopular(type: $type, size: $size, dateRange: $dateRange, page: $page, allowAdult: $allowAdult, allowUnknown: $allowUnknown) {
     recommendations {
-      anyCard { _id name thumbnail englishName nativeName score availableChapters { sub } }
+      anyCard { _id name thumbnail englishName nativeName score availableChapters }
       pageStatus { views }
     }
   }
@@ -63,7 +63,7 @@ export const SEARCH_QUERY = `query($search: SearchInput, $size: Int, $page: Int,
 // pull the newest chapter number and its date for the chapter-update cards.
 export const LATEST_QUERY = `query($search: SearchInput, $size: Int, $page: Int, $translationType: VaildTranslationTypeMangaEnumType, $countryOrigin: VaildCountryOriginEnumType) {
   mangas(search: $search, limit: $size, page: $page, translationType: $translationType, countryOrigin: $countryOrigin) {
-    edges { _id name thumbnail englishName availableChapters { sub } lastChapterDate { sub { year month date hour minute second } } }
+    edges { _id name thumbnail englishName availableChapters lastChapterDate }
   }
 }`;
 
