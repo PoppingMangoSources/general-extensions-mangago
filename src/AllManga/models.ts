@@ -20,11 +20,6 @@ export const IMAGE_QUALITY_KEY = "allmanga-image-quality";
 export const SHOW_ADULT_KEY = "allmanga-show-adult";
 export const IMAGE_QUALITY_DEFAULT = "original";
 
-export const GENRES_KEY = "allmanga-genres";
-export const GENRES_FETCH_KEY = "allmanga-genres-fetch";
-// Re-fetch the genre catalog at most once every 48 hours (value in seconds).
-export const GENRE_TTL_SECONDS = 172800;
-
 export type PageMetadata = {
   page?: number;
 };
@@ -43,14 +38,17 @@ export type OptionItem = {
 
 export const POPULAR_QUERY = `query($type: VaildPopularTypeEnumType!, $size: Int!, $page: Int, $dateRange: Int, $allowAdult: Boolean, $allowUnknown: Boolean) {
   queryPopular(type: $type, size: $size, dateRange: $dateRange, page: $page, allowAdult: $allowAdult, allowUnknown: $allowUnknown) {
-    recommendations { anyCard { _id name thumbnail englishName } }
+    recommendations {
+      anyCard { _id name thumbnail englishName nativeName score availableChapters { sub } }
+      pageStatus { views }
+    }
   }
 }`;
 
 // Random per-load recommendations. Returns a bare card array (no pagination),
 // so the section is refreshed rather than scrolled.
-export const RANDOM_QUERY = `query($format: String, $allowAdult: Boolean, $allowUnknown: Boolean) {
-  queryRandomRecommendation(format: $format, allowAdult: $allowAdult, allowUnknown: $allowUnknown) {
+export const RANDOM_QUERY = `query($format: String!, $allowAdult: Boolean) {
+  queryRandomRecommendation(format: $format, allowAdult: $allowAdult) {
     _id name thumbnail englishName
   }
 }`;
@@ -58,6 +56,14 @@ export const RANDOM_QUERY = `query($format: String, $allowAdult: Boolean, $allow
 export const SEARCH_QUERY = `query($search: SearchInput, $size: Int, $page: Int, $translationType: VaildTranslationTypeMangaEnumType, $countryOrigin: VaildCountryOriginEnumType) {
   mangas(search: $search, limit: $size, page: $page, translationType: $translationType, countryOrigin: $countryOrigin) {
     edges { _id name thumbnail englishName }
+  }
+}`;
+
+// Latest updates use the same `mangas` search (default update order) but also
+// pull the newest chapter number and its date for the chapter-update cards.
+export const LATEST_QUERY = `query($search: SearchInput, $size: Int, $page: Int, $translationType: VaildTranslationTypeMangaEnumType, $countryOrigin: VaildCountryOriginEnumType) {
+  mangas(search: $search, limit: $size, page: $page, translationType: $translationType, countryOrigin: $countryOrigin) {
+    edges { _id name thumbnail englishName availableChapters { sub } lastChapterDate { sub { year month date hour minute second } } }
   }
 }`;
 
@@ -78,10 +84,6 @@ export const PAGES_QUERY = `query($mangaId: String!, $translationType: VaildTran
   }
 }`;
 
-// Tag catalog used to populate the genre filter dynamically. `queryTags` takes
-// no required arguments; the static GENRE_OPTIONS list is the offline fallback.
-export const TAGS_QUERY = `query { queryTags { edges { name mangaCount } } }`;
-
 // --- API response DTOs (subset of the fields this extension uses) ---
 
 export interface GraphQLResponse<T> {
@@ -89,16 +91,32 @@ export interface GraphQLResponse<T> {
   errors?: { message: string }[];
 }
 
+export interface DateParts {
+  year?: number | null;
+  month?: number | null;
+  date?: number | null;
+  hour?: number | null;
+  minute?: number | null;
+  second?: number | null;
+}
+
 export interface MangaCard {
   _id: string;
   name: string;
   thumbnail?: string | null;
   englishName?: string | null;
+  nativeName?: string | null;
+  score?: number | null;
+  availableChapters?: { sub?: number | null } | null;
+  lastChapterDate?: { sub?: DateParts | null } | null;
 }
 
 export interface PopularData {
   queryPopular: {
-    recommendations: { anyCard?: MangaCard | null }[];
+    recommendations: {
+      anyCard?: MangaCard | null;
+      pageStatus?: { views?: string | null } | null;
+    }[];
   };
 }
 
@@ -159,15 +177,6 @@ export interface PagesData {
   chapterPages?: { edges: ChapterPageEdge[] } | null;
 }
 
-export interface TagEdge {
-  name: string;
-  mangaCount?: number | null;
-}
-
-export interface TagsData {
-  queryTags?: { edges: TagEdge[] } | null;
-}
-
 // --- Static filter option sets ---
 
 export const SORT_OPTIONS: OptionItem[] = [
@@ -183,9 +192,6 @@ export const COUNTRY_OPTIONS: OptionItem[] = [
   { id: "KR", value: "Korea" },
 ];
 
-// Offline fallback genre list. At runtime this is superseded by the site's live
-// tag catalog (see genres.ts); kept here so search and discover still work
-// before the first successful fetch or if the tag endpoint is unavailable.
 export const GENRE_OPTIONS: string[] = [
   "4 Koma",
   "Action",
@@ -258,7 +264,11 @@ export const GENRE_OPTIONS: string[] = [
 ];
 
 // Paperback tag IDs may not contain spaces, but the API filters on the genre's
-// display name (e.g. "4 Koma"); genres.genreNameFromId maps a safe id back.
+// display name (e.g. "4 Koma"). Map a safe id back to the API name.
 export function genreId(name: string): string {
   return name.replace(/[^A-Za-z0-9]+/g, "_");
 }
+
+export const GENRE_NAME_BY_ID: Record<string, string> = Object.fromEntries(
+  GENRE_OPTIONS.map((name) => [genreId(name), name]),
+);
