@@ -2,8 +2,8 @@
 /* Copyright © 2026 Inkdex */
 
 import {
+  ContentRating,
   type Chapter,
-  type ContentRating,
   type SearchResultItem,
   type SourceManga,
   type Tag,
@@ -11,6 +11,7 @@ import {
 
 import {
   DEFAULT_IMAGE_SERVER,
+  genreId,
   IMAGE_CDN,
   THUMBNAIL_CDN,
   type ChaptersData,
@@ -39,7 +40,18 @@ export function parseThumbnailUrl(thumb?: string | null): string {
   return `${THUMBNAIL_CDN}${trimmed.replace(/^\//, "")}?w=250`;
 }
 
-export function parseStatus(status?: string | null): string {
+// Derive a per-title rating from its genres instead of a blanket label; the API
+// exposes no explicit rating field, but the genre names are a reliable signal.
+function contentRatingForGenres(genres: string[]): ContentRating {
+  const lower = genres.map((g) => g.trim().toLowerCase());
+  if (lower.some((g) => g === "adult" || g === "hentai" || g === "smut" || g === "yaoi")) {
+    return ContentRating.ADULT;
+  }
+  if (lower.some((g) => g === "ecchi" || g === "mature")) return ContentRating.MATURE;
+  return ContentRating.EVERYONE;
+}
+
+function parseStatus(status?: string | null): string {
   const s = (status ?? "").toLowerCase();
   if (s.includes("releasing") || s.includes("ongoing")) return "Ongoing";
   if (s.includes("finished") || s.includes("completed")) return "Completed";
@@ -48,7 +60,7 @@ export function parseStatus(status?: string | null): string {
   return "Unknown";
 }
 
-function stripHtml(html: string): string {
+function extractTextFromHtml(html: string): string {
   if (!html) return "";
   return Application.decodeHTMLEntities(
     html
@@ -60,7 +72,7 @@ function stripHtml(html: string): string {
 }
 
 // Reroute a resolved image URL through the resizing proxy at a fixed width.
-export function applyImageQuality(url: string, quality: string): string {
+function applyImageQuality(url: string, quality: string): string {
   if (quality === "original") return url;
   const match = url.match(/^https?:\/\/([^#]+)/);
   if (!match) return url;
@@ -71,7 +83,7 @@ export function applyImageQuality(url: string, quality: string): string {
 // listing parsers
 // ---------------------------------------------------------------------------
 
-export function cardToSearchResult(
+export function toSearchResultItem(
   card: MangaCard,
   contentRating: ContentRating,
 ): SearchResultItem {
@@ -87,11 +99,7 @@ export function cardToSearchResult(
 // details
 // ---------------------------------------------------------------------------
 
-export function detailToSourceManga(
-  mangaId: string,
-  detail: MangaDetail,
-  contentRating: ContentRating,
-): SourceManga {
+export function parseMangaDetails(mangaId: string, detail: MangaDetail): SourceManga {
   const primaryTitle = Application.decodeHTMLEntities(detail.englishName || detail.name);
 
   const secondaryTitles = new Set<string>();
@@ -106,16 +114,19 @@ export function detailToSourceManga(
   const genreNames = [...(detail.genres ?? []), ...(detail.tags ?? [])]
     .map((g) => g.trim())
     .filter((g) => g.length > 0);
+  // Share the id builder with the advanced-search filter (models.genreId) so a
+  // tag tapped on the detail page resolves to the same genre in search.
   const seen = new Set<string>();
   const tags: Tag[] = [];
   for (const name of genreNames) {
-    const id = name.toLowerCase().replace(/\s+/g, "-");
+    const id = genreId(name);
     if (seen.has(id)) continue;
     seen.add(id);
     tags.push({ id, title: name });
   }
 
   const author = detail.authors?.[0]?.trim() || undefined;
+  const contentRating = contentRatingForGenres(genreNames);
 
   return {
     mangaId,
@@ -123,7 +134,7 @@ export function detailToSourceManga(
       primaryTitle,
       secondaryTitles: [...secondaryTitles],
       thumbnailUrl: parseThumbnailUrl(detail.thumbnail),
-      synopsis: stripHtml(detail.description ?? ""),
+      synopsis: extractTextFromHtml(detail.description ?? ""),
       author,
       artist: author,
       status: parseStatus(detail.status),
@@ -140,7 +151,7 @@ export function detailToSourceManga(
 
 const CONTAINS_DIGIT = /\d/;
 
-export function buildChapters(sourceManga: SourceManga, data: ChaptersData): Chapter[] {
+export function parseChapters(sourceManga: SourceManga, data: ChaptersData): Chapter[] {
   const sub = data.manga.availableChaptersDetail?.sub ?? [];
 
   const infoByNum = new Map<string, EpisodeInfo>();
@@ -180,7 +191,7 @@ function pictureUrlOf(entry: PictureUrl): string | undefined {
   return typeof entry === "string" ? entry : (entry?.url ?? undefined);
 }
 
-export function resolvePageUrls(data: PagesData, quality: string): string[] {
+export function parsePageUrls(data: PagesData, quality: string): string[] {
   const edges = data.chapterPages?.edges ?? [];
   if (edges.length === 0) return [];
 
