@@ -37,12 +37,12 @@ import {
 } from "./models";
 import { fetchCheerio, VyMangaInterceptor } from "./network";
 import {
+  extractMangaId,
   parseCards,
   parseChapterPages,
   parseChapters,
   parseGenreFilter,
   parseMangaDetails,
-  parsePath,
   safeDecode,
 } from "./parsers";
 import type VyMangaConfig from "./pbconfig";
@@ -254,10 +254,11 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
     query: string,
   ): Promise<PagedResults<SearchResultItem> | undefined> {
     if (!/^https?:\/\//i.test(query)) return undefined;
-    if (!/\/manga(?:-detail)?\//i.test(query)) return undefined;
+    const mangaId = extractMangaId(query);
+    if (!mangaId) return undefined;
 
     try {
-      const manga = await this.getMangaDetails(parsePath(query));
+      const manga = await this.getMangaDetails(mangaId);
       return {
         items: [
           {
@@ -306,7 +307,7 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
   // ----------------------------------------------------------------
 
   private mangaUrl(mangaId: string): string {
-    return new URL(this.baseUrl).addPathComponent(mangaId).toString();
+    return `${this.baseUrl}/manga/${mangaId}`;
   }
 
   // Enriches the Popular hero with author + description + rating by fetching
