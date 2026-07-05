@@ -275,13 +275,15 @@ function parseStatus(status: string): string {
 
 export function parseChapters($: CheerioAPI, sourceManga: SourceManga): Chapter[] {
   const chapters: Chapter[] = [];
+  const seen = new Set<string>();
   for (const element of $(CHAPTER_SELECTOR).toArray()) {
     const el = $(element);
     const href = (el.attr("href") || el.find("a").first().attr("href") || "").trim();
     if (!href) continue;
 
     const chapterId = parsePath(href);
-    if (!chapterId) continue;
+    if (!chapterId || seen.has(chapterId)) continue;
+    seen.add(chapterId);
 
     const title = Application.decodeHTMLEntities(
       el.find("span").first().text().trim() ||
