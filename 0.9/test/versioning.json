@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-05T06:07:51.090Z",
+  "buildTime": "2026-07-05T06:08:16.663Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -150,7 +150,7 @@
     {
       "name": "VyManga",
       "description": "Extension that pulls content from vymanga.com.",
-      "version": "1.0.0-alpha.3",
+      "version": "1.0.0-alpha.4",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
