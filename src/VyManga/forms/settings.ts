@@ -52,7 +52,8 @@ export class VyMangaSettingsForm extends Form {
           id: "base_url",
           footer:
             "Override the site address if this source has moved to a new domain. " +
-            `Leave empty to use the default. Include the scheme, e.g. ${this.defaultBaseUrl}`,
+            `Leave empty to use the default (${this.defaultBaseUrl}). Include the scheme — ` +
+            "the mirror https://vymanga.net also works.",
         },
         [
           InputRow("base_url_input", {
