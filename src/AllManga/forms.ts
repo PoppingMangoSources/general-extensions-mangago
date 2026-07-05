@@ -23,8 +23,6 @@ import {
   type SearchMetadata,
 } from "./models";
 
-// --- persisted settings ---
-
 export function getImageQuality(): string {
   return (Application.getState(IMAGE_QUALITY_KEY) as string | undefined) ?? IMAGE_QUALITY_DEFAULT;
 }
@@ -87,8 +85,6 @@ export class AllMangaSettingsForm extends Form {
     Application.setState(value, SHOW_ADULT_KEY);
   }
 }
-
-// --- advanced search ---
 
 const GENRE_TAGS: Tag[] = GENRE_OPTIONS.map((name) => ({
   id: genreId(name),
