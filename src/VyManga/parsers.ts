@@ -81,14 +81,26 @@ export function safeDecode(id: string): string {
   }
 }
 
-// Both manga and chapter ids are the domain-relative path, so they survive a
-// base-URL override and can be re-requested verbatim.
+// Chapter ids are the domain-relative path, so they survive a base-URL
+// override and can be re-requested verbatim.
 export function parsePath(href: string): string {
   const cleaned = (href || "")
     .replace(/^https?:\/\/[^/]+/i, "")
     .replace(/[?#].*$/, "")
     .replace(/^\/+|\/+$/g, "");
   return toSafeId(cleaned);
+}
+
+// The manga id is just the `/manga/<slug>` slug, so the details/chapters URL is
+// rebuilt as `${base}/manga/<slug>`. Storing the bare slug (rather than the full
+// "manga/<slug>" path) keeps it out of a URL path-component encoder that would
+// escape the slash and break the route.
+export function extractMangaId(href: string): string | undefined {
+  const match = href.match(/\/manga\/([a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])(?:\/|\?|#|$)/);
+  if (match?.[1]) return match[1];
+  const simple = href.match(/\/manga\/([a-zA-Z0-9-]+)/);
+  if (simple?.[1] && simple[1].replace(/-/g, "").length >= 1) return simple[1];
+  return undefined;
 }
 
 function absoluteUrl(base: string, src: string): string {
@@ -120,7 +132,7 @@ export function parseCard($: CheerioAPI, base: string, element: AnyNode): MangaC
   const href = (link.attr("href") || "").trim();
   if (!href) return undefined;
 
-  const mangaId = parsePath(href);
+  const mangaId = extractMangaId(href);
   if (!mangaId) return undefined;
 
   const title = Application.decodeHTMLEntities(
