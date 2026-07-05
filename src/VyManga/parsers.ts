@@ -20,6 +20,7 @@ import {
   CARD_LINK_SELECTOR,
   CARD_TITLE_SELECTOR,
   CHAPTER_DATE_SELECTOR,
+  CHAPTER_FALLBACK_SELECTOR,
   CHAPTER_SELECTOR,
   DESC_SELECTOR,
   GENRE_CHECKBOX_SELECTOR,
@@ -64,31 +65,12 @@ const MONTHS: Record<string, number> = {
 // id / url / image helpers
 // ---------------------------------------------------------------------------
 
-// Paperback only permits IDs matching alphanumerics + `._-@()[]%?#+=/&:`.
-export function toSafeId(value: string): string {
-  return value.replace(/[^A-Za-z0-9._\-@()[\]%?#+=/&:]/g, (c) => {
-    const enc = encodeURIComponent(c);
-    if (enc !== c) return enc;
-    return "%" + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
-  });
-}
-
 export function safeDecode(id: string): string {
   try {
     return decodeURIComponent(id);
   } catch {
     return id;
   }
-}
-
-// Chapter ids are the domain-relative path, so they survive a base-URL
-// override and can be re-requested verbatim.
-export function parsePath(href: string): string {
-  const cleaned = (href || "")
-    .replace(/^https?:\/\/[^/]+/i, "")
-    .replace(/[?#].*$/, "")
-    .replace(/^\/+|\/+$/g, "");
-  return toSafeId(cleaned);
 }
 
 // The manga id is just the `/manga/<slug>` slug, so the details/chapters URL is
@@ -285,15 +267,23 @@ function parseStatus(status: string): string {
 // chapters
 // ---------------------------------------------------------------------------
 
-export function parseChapters($: CheerioAPI, sourceManga: SourceManga): Chapter[] {
+export function parseChapters($: CheerioAPI, base: string, sourceManga: SourceManga): Chapter[] {
+  // Multi-chapter titles use a.list-chapter; single-chapter titles only have the
+  // id-anchored button, so fall back to it when the list is empty.
+  let elements = $(CHAPTER_SELECTOR).toArray();
+  if (elements.length === 0) elements = $(CHAPTER_FALLBACK_SELECTOR).toArray();
+
   const chapters: Chapter[] = [];
   const seen = new Set<string>();
-  for (const element of $(CHAPTER_SELECTOR).toArray()) {
+  for (const element of elements) {
     const el = $(element);
     const href = (el.attr("href") || el.find("a").first().attr("href") || "").trim();
     if (!href) continue;
 
-    const chapterId = parsePath(href);
+    // Chapters redirect through an external reader whose per-chapter token lives
+    // in the query string, so keep the full absolute URL as the id — stripping
+    // the query would collapse every chapter to the same path.
+    const chapterId = absoluteUrl(base, href);
     if (!chapterId || seen.has(chapterId)) continue;
     seen.add(chapterId);
 
