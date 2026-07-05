@@ -25,24 +25,13 @@ import {
 
 const ABSOLUTE_URL_REGEX = /^https?:\/\//;
 
-// A valid stand-in for entries the API returns without a cover. Carousel and
-// search items reject an empty imageUrl, so we always hand back a real URL and
-// let the app fall back to its own placeholder when it fails to load.
-const THUMBNAIL_FALLBACK = `${THUMBNAIL_CDN}?w=250`;
-
-// ---------------------------------------------------------------------------
-// image / field helpers
-// ---------------------------------------------------------------------------
-
 export function parseThumbnailUrl(thumb?: string | null): string {
   const trimmed = thumb?.trim();
-  if (!trimmed) return THUMBNAIL_FALLBACK;
+  if (!trimmed) return `${THUMBNAIL_CDN}?w=250`;
   if (ABSOLUTE_URL_REGEX.test(trimmed)) return trimmed;
   return `${THUMBNAIL_CDN}${trimmed.replace(/^\//, "")}?w=250`;
 }
 
-// Derive a per-title rating from its genres instead of a blanket label; the API
-// exposes no explicit rating field, but the genre names are a reliable signal.
 function contentRatingForGenres(genres: string[]): ContentRating {
   const lower = genres.map((g) => g.trim().toLowerCase());
   if (lower.some((g) => g === "adult" || g === "hentai" || g === "smut" || g === "yaoi")) {
@@ -72,7 +61,6 @@ function extractTextFromHtml(html: string): string {
   );
 }
 
-// Abbreviate large counts for the featured card badges (e.g. 32500 -> "32.5K").
 export function formatCount(value: string | number): string {
   const n = typeof value === "number" ? value : parseInt(value, 10);
   if (!Number.isFinite(n)) return String(value);
@@ -81,7 +69,6 @@ export function formatCount(value: string | number): string {
   return String(n);
 }
 
-// The API returns dates as split parts with a 0-indexed month (matching JS).
 export function dateFromParts(parts?: DateParts | null): Date | undefined {
   if (!parts || parts.year == null) return undefined;
   const date = new Date(
@@ -95,17 +82,12 @@ export function dateFromParts(parts?: DateParts | null): Date | undefined {
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
-// Reroute a resolved image URL through the resizing proxy at a fixed width.
 function applyImageQuality(url: string, quality: string): string {
   if (quality === "original") return url;
   const match = url.match(/^https?:\/\/([^#]+)/);
   if (!match) return url;
   return `${IMAGE_CDN}/${match[1]}?w=${quality}`;
 }
-
-// ---------------------------------------------------------------------------
-// listing parsers
-// ---------------------------------------------------------------------------
 
 export function toSearchResultItem(
   card: MangaCard,
@@ -118,10 +100,6 @@ export function toSearchResultItem(
     contentRating,
   };
 }
-
-// ---------------------------------------------------------------------------
-// details
-// ---------------------------------------------------------------------------
 
 export function parseMangaDetails(mangaId: string, detail: MangaDetail): SourceManga {
   const primaryTitle = Application.decodeHTMLEntities(detail.englishName || detail.name);
@@ -138,8 +116,6 @@ export function parseMangaDetails(mangaId: string, detail: MangaDetail): SourceM
   const genreNames = [...(detail.genres ?? []), ...(detail.tags ?? [])]
     .map((g) => g.trim())
     .filter((g) => g.length > 0);
-  // Share the id builder with the advanced-search filter (models.genreId) so a
-  // tag tapped on the detail page resolves to the same genre in search.
   const seen = new Set<string>();
   const tags: Tag[] = [];
   for (const name of genreNames) {
@@ -169,12 +145,6 @@ export function parseMangaDetails(mangaId: string, detail: MangaDetail): SourceM
   };
 }
 
-// ---------------------------------------------------------------------------
-// chapters
-// ---------------------------------------------------------------------------
-
-const CONTAINS_DIGIT = /\d/;
-
 export function parseChapters(sourceManga: SourceManga, data: ChaptersData): Chapter[] {
   const sub = data.manga.availableChaptersDetail?.sub ?? [];
 
@@ -186,9 +156,7 @@ export function parseChapters(sourceManga: SourceManga, data: ChaptersData): Cha
   const chapters = sub.map((num) => {
     const info = infoByNum.get(num);
     const notes = info?.notes?.trim() ?? "";
-    // The API sometimes stores the chapter number itself in `notes`; only use
-    // it as a title when it's actually a descriptive name.
-    const title = notes && !CONTAINS_DIGIT.test(notes) ? Application.decodeHTMLEntities(notes) : "";
+    const title = notes && !/\d/.test(notes) ? Application.decodeHTMLEntities(notes) : "";
     const rawDate = info?.uploadDates?.sub;
     const publishDate = rawDate ? new Date(rawDate) : undefined;
 
@@ -207,10 +175,6 @@ export function parseChapters(sourceManga: SourceManga, data: ChaptersData): Cha
   return chapters.map((chapter, index) => ({ ...chapter, sortingIndex: index }));
 }
 
-// ---------------------------------------------------------------------------
-// pages
-// ---------------------------------------------------------------------------
-
 function pictureUrlOf(entry: PictureUrl): string | undefined {
   return typeof entry === "string" ? entry : (entry?.url ?? undefined);
 }
@@ -219,7 +183,6 @@ export function parsePageUrls(data: PagesData, quality: string): string[] {
   const edges = data.chapterPages?.edges ?? [];
   if (edges.length === 0) return [];
 
-  // Prefer an edge that either serves absolute image URLs or names its server.
   const edge =
     edges.find((e) => {
       const hasAbsolute = (e.pictureUrls ?? []).some((p) => {
