@@ -26,10 +26,13 @@ export const STATUS_SELECTOR =
   ".pre-title:contains(Status) ~ span:not(.space), div.col-md-7 p:contains(Status) span";
 export const RATING_SELECTOR = ".pre-title:contains(Rating), div.col-md-7 p:contains(Rating)";
 
-// Chapter list + reader. On the desktop layout each chapter is an a.list-chapter
-// (single-chapter titles use an anchor with an id like "chapter-123").
-export const CHAPTER_SELECTOR = 'a.list-chapter, a[id^="chapter-"]';
-export const CHAPTER_DATE_SELECTOR = "p.small, p.text-right, p";
+// Chapter list + reader. Multi-chapter titles list each chapter as an
+// a.list-chapter; single-chapter titles only expose an anchor with an id like
+// "chapter-123", used as a fallback so the "First/New Chapter" shortcut buttons
+// (which share those ids) don't duplicate the list on multi-chapter pages.
+export const CHAPTER_SELECTOR = "a.list-chapter";
+export const CHAPTER_FALLBACK_SELECTOR = 'a[id^="chapter-"]';
+export const CHAPTER_DATE_SELECTOR = "p.small";
 // The reader renders pages inside div.carousel-item[data-page]; img.lozad /
 // img.d-block are older layouts kept as fallbacks.
 export const PAGE_SELECTOR = "div.carousel-item[data-page] img, img.lozad, img.d-block";
