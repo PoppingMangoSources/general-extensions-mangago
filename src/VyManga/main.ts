@@ -43,7 +43,6 @@ import {
   parseChapters,
   parseGenreFilter,
   parseMangaDetails,
-  safeDecode,
 } from "./parsers";
 import type VyMangaConfig from "./pbconfig";
 
@@ -287,13 +286,13 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
     const $ = await fetchCheerio({ url: this.mangaUrl(sourceManga.mangaId), method: "GET" });
-    return parseChapters($, sourceManga);
+    return parseChapters($, this.baseUrl, sourceManga);
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    // The reader needs ?view=0 to render every page at once instead of paging.
-    const base = `${this.baseUrl}/${safeDecode(chapter.chapterId)}`;
-    const url = `${base}${base.includes("?") ? "&" : "?"}view=0`;
+    // chapterId is the full external reader URL; ?view=0 renders every page at
+    // once instead of paging.
+    const url = `${chapter.chapterId}${chapter.chapterId.includes("?") ? "&" : "?"}view=0`;
     const $ = await fetchCheerio({ url, method: "GET" });
     const pages = parseChapterPages($, this.baseUrl);
     if (pages.length === 0) {
