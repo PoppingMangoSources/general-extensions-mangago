@@ -3,7 +3,6 @@
 
 import {
   BasicRateLimiter,
-  CloudflareError,
   CookieStorageInterceptor,
   DiscoverSectionType,
   type AdvancedSearchForm,
@@ -13,7 +12,6 @@ import {
   type DiscoverSection,
   type DiscoverSectionItem,
   type ExtensionImpl,
-  type FeaturedCarouselItem,
   type Form,
   type PagedResults,
   type Request,
@@ -42,7 +40,13 @@ import {
   POPULAR_QUERY,
   RANDOM_QUERY,
   SEARCH_QUERY,
-  SORT_OPTIONS,
+  SECTION_GENRES,
+  SECTION_LATEST,
+  SECTION_POPULAR,
+  SECTION_POPULAR_MONTH,
+  SECTION_POPULAR_WEEK,
+  SECTION_RECOMMENDED,
+  SORTING_OPTIONS,
   type ChaptersData,
   type DetailsData,
   type MangaCard,
@@ -53,7 +57,7 @@ import {
   type SearchData,
   type SearchMetadata,
 } from "./models";
-import { AllMangaInterceptor, getGraphQL, postGraphQL } from "./network";
+import makeRequest, { AllMangaInterceptor } from "./network";
 import {
   dateFromParts,
   formatCount,
@@ -65,18 +69,6 @@ import {
 } from "./parsers";
 import type AllMangaConfig from "./pbconfig";
 import { pageListViaWebView } from "./utils/webView";
-
-const SECTION_POPULAR = "popular";
-const SECTION_POPULAR_WEEK = "popular_week";
-const SECTION_POPULAR_MONTH = "popular_month";
-const SECTION_LATEST = "latest";
-const SECTION_RECOMMENDED = "recommended";
-const SECTION_GENRES = "genres";
-
-const SORTING_OPTIONS: SortingOption[] = SORT_OPTIONS.map((option) => ({
-  id: option.id,
-  label: option.value,
-}));
 
 export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
   globalRateLimiter = new BasicRateLimiter("rateLimiter", {
@@ -113,10 +105,6 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
     }
   }
 
-  // ----------------------------------------------------------------
-  // Discover
-  // ----------------------------------------------------------------
-
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
       { id: SECTION_POPULAR, title: "Popular", type: DiscoverSectionType.featured },
@@ -136,14 +124,12 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
     ];
   }
 
-  // Popular sections all hit queryPopular with a different dateRange window
-  // (0 all-time, 7 week, 30 month) and map each card to the section's item type.
   private async popularSection(
     page: number,
     dateRange: number,
     toItem: (card: MangaCard, views: string | null | undefined) => DiscoverSectionItem,
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    const data = await postGraphQL<PopularData>(POPULAR_QUERY, {
+    const data = await makeRequest<PopularData>(POPULAR_QUERY, {
       type: "manga",
       size: LIMIT,
       dateRange,
@@ -155,7 +141,6 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
     const items = recommendations
       .filter((rec) => rec.anyCard != null)
       .map((rec) => toItem(rec.anyCard!, rec.pageStatus?.views));
-    // Base pagination on the raw page size, not the filtered item count.
     const hasNext = recommendations.length === LIMIT;
     return { items, metadata: hasNext ? { page: page + 1 } : undefined };
   }
@@ -180,17 +165,11 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
     }
 
     if (section.id === SECTION_RECOMMENDED) {
-      let cards: MangaCard[] = [];
-      try {
-        const data = await postGraphQL<RandomData>(RANDOM_QUERY, {
-          format: "manga",
-          allowAdult: getShowAdult(),
-        });
-        cards = data.queryRandomRecommendation ?? [];
-      } catch {
-        // Recommendations are best-effort; render nothing rather than error.
-      }
-      const items: DiscoverSectionItem[] = cards.map((card) => ({
+      const data = await makeRequest<RandomData>(RANDOM_QUERY, {
+        format: "manga",
+        allowAdult: getShowAdult(),
+      });
+      const items: DiscoverSectionItem[] = (data.queryRandomRecommendation ?? []).map((card) => ({
         type: "simpleCarouselItem",
         mangaId: card._id,
         title: Application.decodeHTMLEntities(card.englishName || card.name),
@@ -202,16 +181,15 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
 
     const page = metadata?.page ?? 1;
 
-    // Popular ranges share one query; dateRange 0/7/30 = all-time/week/month.
     if (section.id === SECTION_POPULAR) {
       return this.popularSection(page, 0, (card, views) => {
-        const infoItems: NonNullable<FeaturedCarouselItem["infoItems"]> = [];
-        if (card.score != null) {
-          infoItems.push({ symbol: "star.fill", text: card.score.toFixed(1) });
-        }
-        if (views) {
-          infoItems.push({ symbol: "flame.fill", text: formatCount(views) });
-        }
+        const rating =
+          card.score != null
+            ? { symbol: "star.fill" as const, text: card.score.toFixed(1) }
+            : undefined;
+        const viewInfo = views
+          ? { symbol: "flame.fill" as const, text: formatCount(views) }
+          : undefined;
         const chapters = card.availableChapters?.sub;
         return {
           type: "featuredCarouselItem",
@@ -219,7 +197,14 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
           title: Application.decodeHTMLEntities(card.englishName || card.name),
           imageUrl: parseThumbnailUrl(card.thumbnail),
           supertitle: chapters != null ? `${chapters} Chapters` : undefined,
-          infoItems,
+          infoItems:
+            rating && viewInfo
+              ? [rating, viewInfo]
+              : rating
+                ? [rating]
+                : viewInfo
+                  ? [viewInfo]
+                  : undefined,
           contentRating,
         };
       });
@@ -247,60 +232,37 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
       }));
     }
 
-    // Latest updates — newest chapters first, rendered as chapter-update cards.
-    // Fall back to a plain carousel if the richer query shape is ever rejected.
-    try {
-      const latest = await postGraphQL<SearchData>(LATEST_QUERY, {
-        search: {
-          query: null,
-          sortBy: null,
-          genres: null,
-          excludeGenres: null,
-          isManga: true,
-          allowAdult: getShowAdult(),
-          allowUnknown: false,
-        },
-        size: LIMIT,
-        page,
-        translationType: "sub",
-        countryOrigin: "ALL",
-      });
-      const items: DiscoverSectionItem[] = latest.mangas.edges.map((card) => {
-        const chapters = card.availableChapters?.sub;
-        return {
-          type: "chapterUpdatesCarouselItem",
-          mangaId: card._id,
-          chapterId: chapters != null ? String(chapters) : "",
-          title: Application.decodeHTMLEntities(card.englishName || card.name),
-          imageUrl: parseThumbnailUrl(card.thumbnail),
-          subtitle: chapters != null ? `Chapter ${chapters}` : "",
-          publishDate: dateFromParts(card.lastChapterDate?.sub),
-          contentRating,
-        };
-      });
-      const hasNext = latest.mangas.edges.length === LIMIT;
-      return { items, metadata: hasNext ? { page: page + 1 } : undefined };
-    } catch {
-      // Fall through to the minimal query below (same card shape, no chapter).
-    }
-
-    const data = await this.runSearch("", undefined, undefined, page);
-    const items: DiscoverSectionItem[] = data.mangas.edges.map((card) => ({
-      type: "chapterUpdatesCarouselItem",
-      mangaId: card._id,
-      chapterId: "",
-      title: Application.decodeHTMLEntities(card.englishName || card.name),
-      imageUrl: parseThumbnailUrl(card.thumbnail),
-      subtitle: "",
-      contentRating,
-    }));
+    const data = await makeRequest<SearchData>(LATEST_QUERY, {
+      search: {
+        query: null,
+        sortBy: null,
+        genres: null,
+        excludeGenres: null,
+        isManga: true,
+        allowAdult: getShowAdult(),
+        allowUnknown: false,
+      },
+      size: LIMIT,
+      page,
+      translationType: "sub",
+      countryOrigin: "ALL",
+    });
+    const items: DiscoverSectionItem[] = data.mangas.edges.map((card) => {
+      const chapters = card.availableChapters?.sub;
+      return {
+        type: "chapterUpdatesCarouselItem",
+        mangaId: card._id,
+        chapterId: chapters != null ? String(chapters) : "",
+        title: Application.decodeHTMLEntities(card.englishName || card.name),
+        imageUrl: parseThumbnailUrl(card.thumbnail),
+        subtitle: chapters != null ? `Chapter ${chapters}` : "",
+        publishDate: dateFromParts(card.lastChapterDate?.sub),
+        contentRating,
+      };
+    });
     const hasNext = data.mangas.edges.length === LIMIT;
     return { items, metadata: hasNext ? { page: page + 1 } : undefined };
   }
-
-  // ----------------------------------------------------------------
-  // Search
-  // ----------------------------------------------------------------
 
   async getSortingOptions(_query: SearchQuery<SearchMetadata>): Promise<SortingOption[]> {
     return SORTING_OPTIONS;
@@ -317,8 +279,6 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
   ): Promise<PagedResults<SearchResultItem>> {
     const title = (query.title ?? "").trim();
 
-    // Let users paste a manga link (allmanga.to or the mkissa.to mirror) or an
-    // `id:<id>` reference into search to open it directly.
     const pasted = await this.resolveDirectQuery(title);
     if (pasted) return pasted;
 
@@ -368,8 +328,6 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
     sortId: string | undefined,
     page: number,
   ): Promise<SearchData> {
-    // Tag ids are space-free (e.g. "4_Koma"); the API filters on the display
-    // name ("4 Koma"), so map ids back before sending.
     const included = Object.entries(meta?.genres ?? {})
       .filter(([, state]) => state === "included")
       .map(([id]) => GENRE_NAME_BY_ID[id] ?? id);
@@ -377,7 +335,7 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
       .filter(([, state]) => state === "excluded")
       .map(([id]) => GENRE_NAME_BY_ID[id] ?? id);
 
-    return postGraphQL<SearchData>(SEARCH_QUERY, {
+    return makeRequest<SearchData>(SEARCH_QUERY, {
       search: {
         query: title.length > 0 ? title : null,
         sortBy: sortId ? sortId : null,
@@ -394,18 +352,14 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
     });
   }
 
-  // ----------------------------------------------------------------
-  // Details & chapters
-  // ----------------------------------------------------------------
-
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
-    const data = await postGraphQL<DetailsData>(DETAILS_QUERY, { id: mangaId });
+    const data = await makeRequest<DetailsData>(DETAILS_QUERY, { id: mangaId });
     return parseMangaDetails(mangaId, data.manga);
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
     const mangaId = sourceManga.mangaId;
-    const data = await postGraphQL<ChaptersData>(CHAPTERS_QUERY, {
+    const data = await makeRequest<ChaptersData>(CHAPTERS_QUERY, {
       id: mangaId,
       showId: `manga@${mangaId}`,
     });
@@ -421,30 +375,15 @@ export class AllMangaExtension implements ExtensionImpl<typeof AllMangaConfig> {
       chapterString: chapter.chapterId,
     };
 
-    // Fast path: the direct `chapterPages` query served over GET. A Cloudflare
-    // challenge must bubble up so the app can run the bypass; any other failure
-    // (e.g. a transient 502) falls through to the WebView below.
-    let pages: string[] = [];
-    try {
-      pages = parsePageUrls(await getGraphQL<PagesData>(PAGES_QUERY, variables), quality);
-    } catch (error) {
-      if (error instanceof CloudflareError) throw error;
-    }
+    let pages = parsePageUrls(await makeRequest<PagesData>(PAGES_QUERY, variables, "GET"), quality);
 
-    // Fallback: load the reader in a WebView and capture the pages payload the
-    // site parses itself. This mirrors the reader's own flow, so it keeps
-    // working if the direct query is ever gated.
     if (pages.length === 0) {
-      try {
-        const data = await pageListViaWebView(
-          mangaId,
-          chapter.chapterId,
-          this.cookieStorageInterceptor,
-        );
-        if (data) pages = parsePageUrls(data, quality);
-      } catch {
-        // Fall through to the error below.
-      }
+      const data = await pageListViaWebView(
+        mangaId,
+        chapter.chapterId,
+        this.cookieStorageInterceptor,
+      );
+      if (data) pages = parsePageUrls(data, quality);
     }
 
     if (pages.length === 0) {
