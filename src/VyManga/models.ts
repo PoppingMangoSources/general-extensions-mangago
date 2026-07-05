@@ -26,11 +26,9 @@ export const STATUS_SELECTOR =
   ".pre-title:contains(Status) ~ span:not(.space), div.col-md-7 p:contains(Status) span";
 export const RATING_SELECTOR = ".pre-title:contains(Rating), div.col-md-7 p:contains(Rating)";
 
-// Chapter list + reader. The page has several `.list-group` blocks, so the
-// chapter list must be scoped to its own container (div.div-chapter / div.list)
-// — an unscoped `.list-group a` grabs unrelated nav links.
-export const CHAPTER_SELECTOR =
-  "div.div-chapter div.list-group a, div.list a.list-group-item, a.list-chapter";
+// Chapter list + reader. On the desktop layout each chapter is an a.list-chapter
+// (single-chapter titles use an anchor with an id like "chapter-123").
+export const CHAPTER_SELECTOR = 'a.list-chapter, a[id^="chapter-"]';
 export const CHAPTER_DATE_SELECTOR = "p.small, p.text-right, p";
 // The reader renders pages inside div.carousel-item[data-page]; img.lozad /
 // img.d-block are older layouts kept as fallbacks.
