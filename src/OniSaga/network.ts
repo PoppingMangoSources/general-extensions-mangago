@@ -18,7 +18,7 @@ const PAGE_API_REGEX = /\/api\/chapter\/([^/]+)\/page\/\d+/;
 
 // Bounds re-entrant page retries (the retry re-runs both interceptors).
 const PAGE_RETRY_HEADER = "x-pb-page-retry";
-const PAGE_RETRY_LIMIT = 2;
+const PAGE_RETRY_LIMIT = 3;
 // Backoff when the page API 429s without a Retry-After.
 const RATE_LIMIT_FALLBACK_MS = 2500;
 // Ceiling on how long a 429 can park the pipeline, so a pathological
@@ -63,8 +63,40 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
   // by getChapterDetails; the page API wants both, like the site's own reader.
   private readerSessions = new Map<string, { token: string; referer: string }>();
 
+  // De-duped reader-session refreshes: a prefetch burst can 429 many pages at
+  // once, so the first refresh re-fetches the reader page (minting a token with
+  // a fresh session key = fresh page budget) and the rest await that one result.
+  private refreshInFlight = new Map<string, Promise<boolean>>();
+
   setReaderToken(chapterId: string, token: string, referer: string): void {
     this.readerSessions.set(chapterId, { token, referer });
+  }
+
+  // Mint a brand-new reader session by reloading the reader page. Adopting the
+  // rotating `x-reader-token-next` keeps the same session key, so its page
+  // budget never resets; a full reader-page load is what the site's own reader
+  // does to carry a long chapter past the "Session page limit".
+  private async refreshSession(cid: string): Promise<boolean> {
+    const existing = this.refreshInFlight.get(cid);
+    if (existing) return existing;
+
+    const session = this.readerSessions.get(cid);
+    if (!session) return false;
+
+    const task = (async () => {
+      const [, page] = await Application.scheduleRequest({ url: session.referer, method: "GET" });
+      const token = extractReaderToken(Application.arrayBufferToUTF8String(page));
+      if (!token) return false;
+      session.token = token;
+      return true;
+    })().catch(() => false);
+
+    this.refreshInFlight.set(cid, task);
+    try {
+      return await task;
+    } finally {
+      this.refreshInFlight.delete(cid);
+    }
   }
 
   override async interceptRequest(request: Request): Promise<Request> {
@@ -122,41 +154,39 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
     if (session && nextToken) session.token = nextToken;
 
     // Reader tokens expire after ~10 minutes, and the app requests pages long
-    // after the chapter was opened. On an auth failure, re-mint a token from
-    // the reader page and retry; the retry re-enters this interceptor with the
-    // fresh token, bounded by a retry-count header.
-    if (session && (response.status === 403 || response.status === 401)) {
+    // after the chapter was opened. On an auth failure, mint a fresh session and
+    // retry; the retry re-enters this interceptor with the new token, bounded by
+    // a retry-count header.
+    if (session && cid && (response.status === 403 || response.status === 401)) {
       const attempt = Number(request.headers?.[PAGE_RETRY_HEADER] ?? "0");
-      if (attempt < PAGE_RETRY_LIMIT) {
-        const [, page] = await Application.scheduleRequest({
-          url: session.referer,
+      if (attempt < PAGE_RETRY_LIMIT && (await this.refreshSession(cid))) {
+        const [, buffer] = await Application.scheduleRequest({
+          url: request.url,
           method: "GET",
+          headers: { ...request.headers, [PAGE_RETRY_HEADER]: String(attempt + 1) },
         });
-        const token = extractReaderToken(Application.arrayBufferToUTF8String(page));
-        if (token) {
-          session.token = token;
-          const [, buffer] = await Application.scheduleRequest({
-            url: request.url,
-            method: "GET",
-            headers: { ...request.headers, [PAGE_RETRY_HEADER]: String(attempt + 1) },
-          });
-          return buffer;
-        }
+        return buffer;
       }
     }
 
-    // A 429 body is a tiny JSON error, not an image; left alone it would render
-    // as a broken page. Open the shared cooldown so the whole page pipeline
-    // backs off for the penalty window, then retry: the retry re-enters the
-    // rate limiter and waits out that cooldown before firing.
+    // A page-API 429 is "Session page limit exceeded": the reader session's page
+    // budget is spent (the advertised 300/min counter is untouched — remaining
+    // stays high). Rotating the token keeps the same session key, so the only
+    // reset is a fresh session. On the first hit, mint one and retry straight
+    // away; if that still 429s (a genuine rate penalty, not the page cap), fall
+    // back to parking the whole pipeline for the Retry-After window. The tiny
+    // JSON error body would otherwise render as a broken page.
     if (PAGE_API_REGEX.test(request.url) && response.status === 429) {
-      const backoffMs = Math.min(getRetryDelayMs(response.headers), MAX_COOLDOWN_MS);
-      const now = Date.now();
-      pageCooldown.until = Math.max(pageCooldown.until, now + backoffMs);
-      // Hold the safe floor for a while so we don't re-trip right after.
-      pageCooldown.strikeUntil = now + STRIKE_DECAY_MS;
       const attempt = Number(request.headers?.[PAGE_RETRY_HEADER] ?? "0");
       if (attempt < PAGE_RETRY_LIMIT) {
+        const refreshed = session && cid && attempt === 0 ? await this.refreshSession(cid) : false;
+        if (!refreshed) {
+          const backoffMs = Math.min(getRetryDelayMs(response.headers), MAX_COOLDOWN_MS);
+          const now = Date.now();
+          pageCooldown.until = Math.max(pageCooldown.until, now + backoffMs);
+          // Hold the safe floor for a while so we don't re-trip right after.
+          pageCooldown.strikeUntil = now + STRIKE_DECAY_MS;
+        }
         const [, buffer] = await Application.scheduleRequest({
           url: request.url,
           method: "GET",
@@ -179,6 +209,20 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
             headers: { referer: session?.referer ?? `${DOMAIN}/` },
           });
           return imageBuffer;
+        }
+        // A 200 with no url is a JSON error payload (e.g. an expired token
+        // reported with a `message`), which would otherwise render as broken
+        // image bytes. Mint a fresh session and retry, like the 401/403 path.
+        if (session && cid && dto.message) {
+          const attempt = Number(request.headers?.[PAGE_RETRY_HEADER] ?? "0");
+          if (attempt < PAGE_RETRY_LIMIT && (await this.refreshSession(cid))) {
+            const [, buffer] = await Application.scheduleRequest({
+              url: request.url,
+              method: "GET",
+              headers: { ...request.headers, [PAGE_RETRY_HEADER]: String(attempt + 1) },
+            });
+            return buffer;
+          }
         }
       } catch {
         // Fall through and return the original body; the reader shows a broken
