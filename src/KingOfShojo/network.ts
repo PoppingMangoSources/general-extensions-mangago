@@ -19,9 +19,6 @@ export class KingOfShojoInterceptor extends PaperbackInterceptor {
   constructor(
     id: string,
     private readonly getBaseUrl: () => string,
-    // The reader's images are hotlink-checked by Cloudflare, so mirror the
-    // browser and send the chapter page (not the site root) as their referer.
-    private readonly getImageReferer: () => string,
   ) {
     super(id);
   }
@@ -37,19 +34,13 @@ export class KingOfShojoInterceptor extends PaperbackInterceptor {
     const baseUrl = this.getBaseUrl();
     const userAgent = await this.userAgent();
 
-    // Image GETs only need referer + user agent; dropping origin and
-    // accept-language keeps the per-page request overhead minimal.
-    if (IMAGE_EXTENSION_REGEX.test(request.url)) {
-      return {
-        ...request,
-        headers: {
-          ...request.headers,
-          referer: this.getImageReferer() || `${baseUrl}/`,
-          "user-agent": userAgent,
-          accept: "image/avif,image/webp,image/png,image/jpeg,*/*",
-        },
-      };
-    }
+    // The image CDN sits behind its own Cloudflare challenge; a non-browser-like
+    // image request (missing origin/accept-language, or an HTML accept) is a
+    // bot-like signal that trips the challenge and makes every page crawl. Send
+    // full browser-like headers for images too, with only the accept differing.
+    const accept = IMAGE_EXTENSION_REGEX.test(request.url)
+      ? "image/avif,image/webp,image/apng,image/png,image/svg+xml,*/*;q=0.8"
+      : "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8";
 
     return {
       ...request,
@@ -58,8 +49,7 @@ export class KingOfShojoInterceptor extends PaperbackInterceptor {
         referer: `${baseUrl}/`,
         origin: baseUrl,
         "user-agent": userAgent,
-        accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        accept,
         "accept-language": "en-US,en;q=0.5",
       },
     };
