@@ -17,6 +17,15 @@ const TYPE_BADGES = new Set(["manga", "manhwa", "manhua", "shounen", "seinen", "
 
 const LANG_CODE_BY_BADGE = new Map(LANGUAGES.map((l) => [l.badge.toUpperCase(), l.langCode]));
 
+// First recognized language badge inside a free-text label (e.g. the "FR" in
+// "FR Unknown group 10p"); returns the original text when none is found.
+function firstKnownBadge(text: string): string {
+  for (const token of text.split(/\s+/)) {
+    if (LANG_CODE_BY_BADGE.has(token.toUpperCase())) return token;
+  }
+  return text;
+}
+
 // Paperback rejects tag ids with characters outside its allowed set
 // (alphanumeric plus ._-@()[]%?#+=/&:). Genre titles can carry spaces
 // ("Inexperienced in Love"), so collapse any disallowed run to a single hyphen
@@ -144,7 +153,11 @@ export function parseAnchorCards($: CheerioAPI, showNsfw: boolean): MangaCard[] 
     const imageUrl = resolveImageUrl(img);
     if (!title || !imageUrl) return;
 
-    const isAdult = hasAdultMarker(a);
+    // In the ranked-list layout the 18+ marker sits beside the anchor in the
+    // row, not inside it, so check the containing row too before trusting it.
+    const row = a.closest("li");
+    const scope = (row.length > 0 ? row : a.parent()) as Cheerio<Element>;
+    const isAdult = hasAdultMarker(a) || hasAdultMarker(scope);
     if (isAdult && !showNsfw) return;
 
     seen.add(mangaId);
@@ -311,14 +324,17 @@ function parseStatus($: CheerioAPI): string {
   const text = (
     $("span:has(> span.size-1\\.5)").first().text() ||
     $("span.inline-flex")
-      .filter((_, el) => /Completed|Ongoing|Hiatus|Cancelled/i.test($(el).text()))
+      .filter((_, el) => /Completed|Ongoing|Releasing|Hiatus|Cancelled/i.test($(el).text()))
       .first()
       .text()
   )
     .toLowerCase()
     .trim();
 
-  if (text.includes("ongoing") || text.includes("releasing")) return "Ongoing";
+  // Releasing is a distinct site status (it has its own Status filter), so keep
+  // it separate from Ongoing rather than collapsing the two.
+  if (text.includes("releasing")) return "Releasing";
+  if (text.includes("ongoing")) return "Ongoing";
   if (text.includes("completed")) return "Completed";
   if (text.includes("hiatus")) return "Hiatus";
   if (text.includes("cancelled") || text.includes("dropped")) return "Cancelled";
@@ -536,9 +552,12 @@ export function parseChapters($: CheerioAPI, sourceManga: SourceManga): Chapter[
     dropdown.find("ui-menu a[data-flux-menu-item]").each((_, link) => {
       const menuItem = $(link);
       const href = menuItem.attr("href") ?? "";
-      const badge = (
-        menuItem.find("div[data-flux-badge]").first().text() || menuItem.text()
-      ).trim();
+      // Variants like "FR Unknown group 10p" don't always wrap the badge in its
+      // own element; when the badge div is absent, pick the first recognized
+      // language token out of the label so non-English variants aren't read as EN.
+      const badge =
+        menuItem.find("div[data-flux-badge]").first().text().trim() ||
+        firstKnownBadge(menuItem.text().trim());
 
       push(makeChapter(sourceManga, href, number, badge, dateStr));
     });
