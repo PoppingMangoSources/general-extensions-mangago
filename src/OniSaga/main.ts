@@ -51,6 +51,7 @@ import {
   buildStatSubtitle,
   componentHtmlByName,
   countPages,
+  extractPageOrders,
   extractReaderToken,
   hasNextPage,
   parseChapters,
@@ -627,19 +628,66 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     const token = extractReaderToken(body);
     if (!token) throw new Error("Could not find reader token on chapter page");
 
-    const pageCount = countPages(body);
-    if (pageCount === 0) throw new Error("No pages found in chapter");
+    // Request pages by their embedded `order` values — the site's own reader
+    // does the same, and orders can have gaps after re-imports, where a
+    // sequential 0..N-1 range would miss pages. Fall back to the count.
+    let orders = extractPageOrders(body);
+    if (orders.length === 0) {
+      const pageCount = countPages(body);
+      if (pageCount === 0) throw new Error("No pages found in chapter");
+      orders = Array.from({ length: pageCount }, (_, order) => order);
+    }
 
     this.requestManager.setReaderToken(cid, token, chapterUrl);
+
+    // A chapter still being imported embeds only a partial page list; the site's
+    // reader grows it by polling /pages. Paperback gets a static list, so ask
+    // that endpoint once for the authoritative set before answering.
+    if (body.includes("importInProgress: true")) {
+      const backfilled = await this.fetchImportingPageOrders(cid, token, chapterUrl);
+      if (backfilled.length > orders.length) orders = backfilled;
+    }
 
     return {
       id: chapter.chapterId,
       mangaId: chapter.sourceManga.mangaId,
-      pages: Array.from(
-        { length: pageCount },
-        (_, order) => `${DOMAIN}/api/chapter/${cid}/page/${order}`,
-      ),
+      pages: orders.map((order) => `${DOMAIN}/api/chapter/${cid}/page/${order}`),
     };
+  }
+
+  // The token-gated page-listing endpoint the site's reader polls while a
+  // chapter imports: GET /api/chapter/{cid}/pages?from=0 returns the current
+  // authoritative { pages: [{order}], total_pages }. One call, only for
+  // mid-import chapters; any failure just keeps the embedded (partial) list.
+  private async fetchImportingPageOrders(
+    cid: string,
+    token: string,
+    referer: string,
+  ): Promise<number[]> {
+    try {
+      const [response, buffer] = await Application.scheduleRequest({
+        url: `${DOMAIN}/api/chapter/${cid}/pages?from=0`,
+        method: "GET",
+        headers: { "x-reader-token": token, referer },
+      });
+      // Adopt a rotated token so the reader session stays current.
+      for (const [key, value] of Object.entries(response.headers ?? {})) {
+        if (key.toLowerCase() === "x-reader-token-next" && value) {
+          this.requestManager.setReaderToken(cid, value, referer);
+        }
+      }
+      const dto = parseJson<{ pages?: { order?: number }[] }>(
+        Application.arrayBufferToUTF8String(buffer),
+        "chapter pages listing",
+      );
+      const orders = new Set<number>();
+      for (const page of dto?.pages ?? []) {
+        if (typeof page.order === "number") orders.add(page.order);
+      }
+      return [...orders].sort((a, b) => a - b);
+    } catch {
+      return [];
+    }
   }
 
   // ============================== Livewire browse ==============================
