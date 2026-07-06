@@ -102,7 +102,7 @@ export const MIN_CHAPTERS_OPTIONS: Option[] = [
 // per-IP burst penalty (429). The id doubles as the numeric value. Faster
 // options are available for good connections/IPs — if a chapter starts
 // 429ing, pick a slower one.
-export const PAGE_DELAY_DEFAULT = "1.5";
+export const PAGE_DELAY_DEFAULT = "2";
 export const PAGE_DELAY_OPTIONS: Option[] = [
   { id: "0.75", title: "1 image per 0.75 seconds" },
   { id: "1", title: "1 image per 1.00 seconds" },
