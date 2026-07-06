@@ -19,6 +19,9 @@ export class KingOfShojoInterceptor extends PaperbackInterceptor {
   constructor(
     id: string,
     private readonly getBaseUrl: () => string,
+    // The reader's images are hotlink-checked by Cloudflare, so mirror the
+    // browser and send the chapter page (not the site root) as their referer.
+    private readonly getImageReferer: () => string,
   ) {
     super(id);
   }
@@ -41,9 +44,9 @@ export class KingOfShojoInterceptor extends PaperbackInterceptor {
         ...request,
         headers: {
           ...request.headers,
-          referer: `${baseUrl}/`,
+          referer: this.getImageReferer() || `${baseUrl}/`,
           "user-agent": userAgent,
-          accept: "image/avif,image/webp,image/apng,image/png,image/svg+xml,*/*;q=0.8",
+          accept: "image/avif,image/webp,image/png,image/jpeg,*/*",
         },
       };
     }
