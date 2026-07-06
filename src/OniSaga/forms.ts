@@ -354,8 +354,10 @@ export class OniSagaAdvancedSearchForm extends AdvancedSearchForm {
   constructor(searchQuery: SearchQuery<OniSagaSearchMetadata>) {
     super();
     const meta = searchQuery.metadata ?? {};
-    this.type = meta.type ?? "";
-    this.status = meta.status ?? "";
+    // Default to the saved discover Type/Status so the form opens reflecting the
+    // filter that's actually applied; the user can then switch either to All.
+    this.type = meta.type ?? getDiscoverType();
+    this.status = meta.status ?? getDiscoverStatus();
     this.minChapters = meta.minChapters ?? "";
     this.group = meta.group ?? "";
     this.releaseStart = meta.releaseStart ?? "";
@@ -469,8 +471,11 @@ export class OniSagaAdvancedSearchForm extends AdvancedSearchForm {
   override getSearchQueryMetadata(): OniSagaSearchMetadata {
     const result: OniSagaSearchMetadata = {};
     if (Object.keys(this.genres).length > 0) result.genres = this.genres;
-    if (this.type) result.type = this.type;
-    if (this.status) result.status = this.status;
+    // Always emit Type/Status (even when All → "") so searchUpdates uses the
+    // advanced selection verbatim. A plain title search omits them entirely and
+    // still falls back to the saved discover filters.
+    result.type = this.type;
+    result.status = this.status;
     if (this.minChapters) result.minChapters = this.minChapters;
     if (this.group.trim()) result.group = this.group.trim();
     if (this.releaseStart.trim()) result.releaseStart = this.releaseStart.trim();
