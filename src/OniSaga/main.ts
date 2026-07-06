@@ -418,7 +418,7 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
       }
 
       return {
-        items: cards.map((card) => ({
+        items: this.dropBlacklisted(cards).map((card) => ({
           type: "simpleCarouselItem",
           mangaId: card.mangaId,
           imageUrl: card.imageUrl,
@@ -431,6 +431,24 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
       if (error instanceof CloudflareError) throw error;
       return { items: [] };
     }
+  }
+
+  // Client-side genre blacklist for home rails the site renders without a filter
+  // (Fan Favorites). Its cards carry genre titles, not the ids browseDiscover
+  // sends server-side, so match the excluded ids' titles against the card's.
+  private dropBlacklisted(cards: MangaCard[]): MangaCard[] {
+    const excludedIds = new Set(getExcludedGenres());
+    if (excludedIds.size === 0) return cards;
+    const excludedTitles = new Set(
+      getGenres()
+        .filter((genre) => excludedIds.has(genre.id))
+        .map((genre) => genre.title.toLowerCase()),
+    );
+    if (excludedTitles.size === 0) return cards;
+    return cards.filter((card) => {
+      const titles = (card.genres ?? "").split("·").map((t) => t.trim().toLowerCase());
+      return !titles.some((title) => excludedTitles.has(title));
+    });
   }
 
   // A toggle chip was tapped: drive the rail's Livewire method on /trending and
