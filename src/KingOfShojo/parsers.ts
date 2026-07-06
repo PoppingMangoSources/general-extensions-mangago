@@ -296,10 +296,6 @@ function dedupeCards(cards: (MangaCard | undefined)[]): MangaCard[] {
   return out;
 }
 
-export function hasNextPage($: CheerioAPI, selector: string): boolean {
-  return $(selector).length > 0;
-}
-
 // ---------------------------------------------------------------------------
 // genres (browse-page filter checkboxes)
 // ---------------------------------------------------------------------------
@@ -493,6 +489,20 @@ export function parseChapterPages($: CheerioAPI, base: string): string[] {
   }
 
   return [...new Set(pages)];
+}
+
+// Route a reader image through the site's own Jetpack Photon CDN (i0.wp.com),
+// which resizes + WebP-compresses on the fly. The output keeps the original
+// image extension before the query, so it still reads as an image request
+// (bypasses the rate limiter). "original" (or anything unexpected) is a no-op.
+export function photonImage(url: string, mode: string): string {
+  if (mode === "original") return url;
+  const match = url.match(/^https?:\/\/(.+)$/i);
+  // Skip non-http urls, already-Photon urls, and anything already carrying a query.
+  if (!match || /(^|\.)wp\.com\//i.test(url) || url.includes("?")) return url;
+  const width = mode === "saver" ? 720 : 1080;
+  const quality = mode === "saver" ? 65 : 80;
+  return `https://i0.wp.com/${match[1]}?w=${width}&quality=${quality}&strip=all&ssl=1`;
 }
 
 // ---------------------------------------------------------------------------
