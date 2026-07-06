@@ -97,21 +97,51 @@ export function extractLivewireState(
   return { token, snapshot };
 }
 
+// wire:snapshot values are HTML-entity-encoded JSON.
+function decodeEntities(value: string): string {
+  return value
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
+// Same extraction straight off the raw document text. The /browse page can be
+// well over 10 MB, which cheerio takes ages to parse on-device; two regexes
+// over the string find the CSRF token and the component snapshot instantly.
+export function extractLivewireStateFromHtml(
+  html: string,
+  componentName: string,
+): LivewireState | undefined {
+  const token =
+    html.match(/<meta name="csrf-token" content="([^"]+)"/)?.[1] ??
+    html.match(/name="_token"\s+value="([^"]+)"/)?.[1];
+  if (!token) return undefined;
+
+  const snapshotRegex = /wire:snapshot="([^"]+)"/g;
+  for (const match of html.matchAll(snapshotRegex)) {
+    if (match[1].includes(componentName)) {
+      return { token, snapshot: decodeEntities(match[1]) };
+    }
+  }
+  return undefined;
+}
+
 export function buildBrowseRequest(
   state: LivewireState,
   updates: PostFilterUpdates,
   page: number,
 ): BrowseLivewireRequest {
   // Sort and platform are switched through component methods on the site
-  // (property writes alone don't re-sort), so mirror its UI before paginating.
-  const calls: LivewireCall[] = [];
-  if (updates.sort !== DEFAULT_SORT) {
-    calls.push({ type: "call", path: "", method: "updateSort", params: [updates.sort] });
-  }
-  if (updates.platform) {
-    calls.push({ type: "call", path: "", method: "updatePlatform", params: [updates.platform] });
-  }
-  calls.push({ type: "call", path: "", method: "gotoPage", params: [page] });
+  // (property writes alone don't re-sort). Always send them — a cached
+  // snapshot may carry a previous request's sort/platform, so switching back
+  // to the defaults must reset the component too, not just the properties.
+  const calls: LivewireCall[] = [
+    { type: "call", path: "", method: "updateSort", params: [updates.sort || DEFAULT_SORT] },
+    { type: "call", path: "", method: "updatePlatform", params: [updates.platform] },
+    { type: "call", path: "", method: "gotoPage", params: [page] },
+  ];
 
   return {
     _token: state.token,
