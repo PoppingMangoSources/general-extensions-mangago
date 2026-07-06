@@ -41,7 +41,6 @@ import {
 } from "./models";
 import { fetchCheerio, KingOfShojoInterceptor } from "./network";
 import {
-  hasNextPage,
   parseCards,
   parseChapterPages,
   parseChapters,
@@ -82,8 +81,14 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
     ignoreImages: true,
   });
   cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
-  mainInterceptor = new KingOfShojoInterceptor("main", () => this.baseUrl);
+  mainInterceptor = new KingOfShojoInterceptor(
+    "main",
+    () => this.baseUrl,
+    () => this.lastChapterUrl,
+  );
 
+  // Referer for reader image requests: the chapter page the images came from.
+  private lastChapterUrl = "";
   private homepageCache: { $: CheerioAPI; timestamp: number } | null = null;
   private genresCache: { options: OptionItem[]; timestamp: number } | null = null;
   private featuredCache: {
@@ -293,7 +298,7 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
       contentRating: this.contentRating,
     }));
 
-    const nextPage = hasNextPage($, NEXT_PAGE_SELECTOR) && page < MAX_SEARCH_PAGES;
+    const nextPage = $(NEXT_PAGE_SELECTOR).length > 0 && page < MAX_SEARCH_PAGES;
     return { items, metadata: nextPage ? { page: page + 1 } : undefined };
   }
 
@@ -339,6 +344,8 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
     const url = new URL(this.baseUrl).addPathComponent(chapter.chapterId).toString();
+    // Reader images are fetched with this page as their referer.
+    this.lastChapterUrl = url;
     const $ = await fetchCheerio({ url, method: "GET" });
     const pages = parseChapterPages($, this.baseUrl);
     if (pages.length === 0) {
