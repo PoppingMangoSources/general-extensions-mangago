@@ -202,10 +202,18 @@ const BURST_SPACING_SECONDS = 0.3;
 
 export class OniSagaPageRateLimiter extends PaperbackInterceptor {
   private burst = BURST_CAPACITY;
+  private lastChapterId = "";
   private chain: Promise<unknown> = Promise.resolve();
 
   override async interceptRequest(request: Request): Promise<Request> {
-    if (!PAGE_API_REGEX.test(request.url)) return request;
+    const cid = PAGE_API_REGEX.exec(request.url)?.[1];
+    if (!cid) return request;
+    // A fresh chapter gets a fresh burst so its first screen opens fast too —
+    // chapters are minutes apart in practice, so this stays under the ceiling.
+    if (cid !== this.lastChapterId) {
+      this.lastChapterId = cid;
+      if (Date.now() >= pageCooldown.strikeUntil) this.burst = BURST_CAPACITY;
+    }
     const wait = this.chain.then(() => this.pace());
     // Keep the chain alive even if one wait rejects.
     this.chain = wait.catch(() => undefined);
