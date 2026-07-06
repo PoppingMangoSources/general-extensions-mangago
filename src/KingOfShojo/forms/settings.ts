@@ -15,12 +15,12 @@ const BASE_URL_KEY = "kingofshojo.baseUrlOverride";
 const SHOW_ADULT_KEY = "kingofshojo.showAdultContent";
 const IMAGE_MODE_KEY = "kingofshojo.imageMode";
 
-// Reader images are served full-resolution from the site's CDN, which is slow on
-// mobile data. "fast"/"saver" route them through the site's own image CDN
-// (Jetpack Photon) resized + WebP-compressed; "original" leaves them untouched.
+// "original" loads images directly (full quality). "fast"/"saver" route them
+// through an image proxy (wsrv.nl) resized + WebP-compressed to save mobile data,
+// at the cost of relying on that proxy.
 export function getImageMode(): string {
   const value = Application.getState(IMAGE_MODE_KEY);
-  return typeof value === "string" ? value : "fast";
+  return typeof value === "string" ? value : "original";
 }
 
 // Off by default: adult-tagged titles are hidden from search/browse and the
@@ -113,9 +113,9 @@ export class KingOfShojoSettingsForm extends Form {
         {
           id: "images",
           footer:
-            "Reader pages are served full-size and can be slow to load. Faster / " +
-            "Data saver resize and compress them through the site's image CDN. If " +
-            "pages fail to load, switch back to Original.",
+            "Original loads images directly at full quality (recommended). To save " +
+            "mobile data, Faster / Data saver resize and compress them through an " +
+            "image proxy (wsrv.nl) — smaller, but reliant on that proxy.",
         },
         [
           SelectRow("image_mode", {
@@ -125,9 +125,9 @@ export class KingOfShojoSettingsForm extends Form {
             minItemCount: 1,
             maxItemCount: 1,
             items: [
-              { id: "fast", title: "Faster (recommended)" },
-              { id: "saver", title: "Data saver (smallest)" },
               { id: "original", title: "Original (full quality)" },
+              { id: "fast", title: "Compressed (save data)" },
+              { id: "saver", title: "Data saver (smallest)" },
             ],
             onValueChange: Application.Selector(
               this as KingOfShojoSettingsForm,
@@ -146,7 +146,7 @@ export class KingOfShojoSettingsForm extends Form {
   }
 
   async handleImageModeChange(value: string[]): Promise<void> {
-    Application.setState(value[0] ?? "fast", IMAGE_MODE_KEY);
+    Application.setState(value[0] ?? "original", IMAGE_MODE_KEY);
     this.reloadForm();
   }
 }
