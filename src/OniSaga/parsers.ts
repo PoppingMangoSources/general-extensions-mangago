@@ -5,8 +5,8 @@ import { ContentRating, type Chapter, type SourceManga, type TagSection } from "
 import { type Cheerio, type CheerioAPI } from "cheerio";
 import { type Element } from "domhandler";
 
-import { DOMAIN, GENRES, LANGUAGES, type Option } from "./models";
-import { chapterIdFromHref, mangaIdFromHref } from "./utils/helpers";
+import { DOMAIN, LANGUAGES, type Option } from "./models";
+import { chapterIdFromHref, getGenres, mangaIdFromHref } from "./utils/helpers";
 
 const READER_TOKEN_REGEX = /readerToken["']?\s*:\s*["']([^"']+)["']/;
 const TOTAL_PAGES_REGEX = /totalPages["']?\s*:\s*(\d+)/;
@@ -15,8 +15,20 @@ const CHAPTER_NUMBER_REGEX = /(\d+(?:\.\d+)?)/;
 
 const TYPE_BADGES = new Set(["manga", "manhwa", "manhua", "shounen", "seinen", "shoujo", "josei"]);
 
-const GENRE_ID_BY_TITLE = new Map(GENRES.map((g) => [g.title.toLowerCase(), g.id]));
 const LANG_CODE_BY_BADGE = new Map(LANGUAGES.map((l) => [l.badge.toUpperCase(), l.langCode]));
+
+// Paperback rejects tag ids with characters outside its allowed set
+// (alphanumeric plus ._-@()[]%?#+=/&:). Genre titles can carry spaces
+// ("Inexperienced in Love"), so collapse any disallowed run to a single hyphen
+// — a valid, stable id — for genres missing from the numeric filter list.
+function slugifyTagId(value: string): string {
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "unknown"
+  );
+}
 
 function resolveUrl(src: string): string {
   if (!src) return "";
@@ -112,6 +124,41 @@ export function parseMangaCards($: CheerioAPI, showNsfw: boolean): MangaCard[] {
   return cards;
 }
 
+// Fallback for component markup that doesn't use the browse card layout (the
+// /trending Top 10 re-renders as a compact ranked list, not poster cards):
+// any manga anchor wrapping a poster image becomes a card.
+export function parseAnchorCards($: CheerioAPI, showNsfw: boolean): MangaCard[] {
+  const cards: MangaCard[] = [];
+  const seen = new Set<string>();
+
+  $("a[href*='/manga/']").each((_, el) => {
+    const a = $(el);
+    const img = a.find("img").first();
+    if (img.length === 0) return;
+    const mangaId = mangaIdFromHref(a.attr("href") ?? "");
+    if (!mangaId || seen.has(mangaId)) return;
+
+    const title = (a.attr("title") || a.attr("aria-label") || img.attr("alt") || a.text())
+      .replace(/\s*(?:manga\s*)?cover\s*$/i, "")
+      .trim();
+    const imageUrl = resolveImageUrl(img);
+    if (!title || !imageUrl) return;
+
+    const isAdult = hasAdultMarker(a);
+    if (isAdult && !showNsfw) return;
+
+    seen.add(mangaId);
+    cards.push({
+      mangaId,
+      title,
+      imageUrl,
+      contentRating: isAdult ? ContentRating.ADULT : ContentRating.EVERYONE,
+    });
+  });
+
+  return cards;
+}
+
 // ============================= Top-manga ranking =============================
 // /top-manga rows carry both the read count and ★ rating that /browse lacks.
 export interface TopMangaItem {
@@ -154,22 +201,30 @@ export function parseTopManga($: CheerioAPI, showNsfw: boolean): TopMangaItem[] 
   };
 
   // Podium (ranks 1-3): poster anchors; title from the image alt, reads from a
-  // "N reads" line. No rating/genre.
+  // "N reads" line. The rank-4+ rows live in an <ol> inside the same section,
+  // so skip those here, and order by the displayed rank — the page renders the
+  // podium visually as 2-1-3 with the winner centred.
+  const podium: { rank: number; item: TopMangaItem }[] = [];
   $("section a[href*='/manga/']").each((_, el) => {
     const a = $(el);
+    if (a.closest("ol").length > 0) return;
     const img = a.find("img").first();
     if (img.length === 0) return;
     const readsMatch = a.text().match(/([\d,]+)\s*reads/i);
     if (!readsMatch) return;
 
-    add({
-      mangaId: mangaIdFromHref(a.attr("href") ?? ""),
-      title: (img.attr("alt") ?? "").replace(/\s*cover\s*$/i, "").trim(),
-      imageUrl: resolveImageUrl(img),
-      contentRating: hasAdultMarker(a) ? ContentRating.ADULT : ContentRating.EVERYONE,
-      reads: readsMatch[1],
+    podium.push({
+      rank: parseInt(a.text().match(/\b0?(\d)\b/)?.[1] ?? "9", 10),
+      item: {
+        mangaId: mangaIdFromHref(a.attr("href") ?? ""),
+        title: (img.attr("alt") ?? "").replace(/\s*cover\s*$/i, "").trim(),
+        imageUrl: resolveImageUrl(img),
+        contentRating: hasAdultMarker(a) ? ContentRating.ADULT : ContentRating.EVERYONE,
+        reads: readsMatch[1],
+      },
     });
   });
+  podium.sort((a, b) => a.rank - b.rank).forEach((entry) => add(entry.item));
 
   // Ranked list (rank 4+): each <li> anchor has title, genres, and a stat block
   // (reads then ★ rating).
@@ -221,19 +276,25 @@ export function componentHtmlByName($: CheerioAPI, componentName: string): strin
   return html;
 }
 
-// Genre id → title from the browse filter checkboxes
-// (`<input name="genre[]" value="67">` + `<label for="genre67">`). [] if absent.
-export function parseGenres($: CheerioAPI): Option[] {
+// Genre id → title from the browse filter checkboxes, straight off the raw
+// document text: the /browse page can exceed 10 MB, which is far too large to
+// cheerio-parse on-device. Each genre renders `<label for="genre67">Title</label>`
+// beside its `<input name="genre[]" value="67">`, so the labels alone carry both
+// the id and the title. [] if absent.
+export function parseGenresFromHtml(html: string): Option[] {
   const genres: Option[] = [];
   const seen = new Set<string>();
-  $('input[name="genre[]"]').each((_, el) => {
-    const id = $(el).attr("value")?.trim();
-    if (!id || seen.has(id)) return;
-    const title = $(`label[for="genre${id}"]`).first().text().trim();
-    if (!title) return;
+  const regex = /<label[^>]*\bfor="genre(\d+)"[^>]*>([\s\S]*?)<\/label>/g;
+  for (const match of html.matchAll(regex)) {
+    const id = match[1];
+    const title = match[2]
+      .replace(/<[^>]*>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!title || seen.has(id)) continue;
     seen.add(id);
     genres.push({ id, title });
-  });
+  }
   genres.sort((a, b) => a.title.localeCompare(b.title));
   return genres;
 }
@@ -295,8 +356,10 @@ export function parseMangaDetails($: CheerioAPI, mangaId: string): SourceManga {
   });
 
   // Normalize by the displayed denominator ("8.6/10", "4.3/5"); default /10.
+  // Scoped to the details header: an unrated title must not inherit a score
+  // from a rated card in the Recommended rail further down the page.
   let rating = 0;
-  $("span.text-xs").each((_, el) => {
+  infoSection.find("span.text-xs").each((_, el) => {
     if (rating) return;
     const match = $(el)
       .text()
@@ -315,10 +378,17 @@ export function parseMangaDetails($: CheerioAPI, mangaId: string): SourceManga {
 
   const tagGroups: TagSection[] = [];
   if (genres.length > 0) {
+    // Prefer the site's numeric filter id (so tapping the tag searches that
+    // genre); fall back to a slugified id for anything not in the list, so an
+    // unknown genre renders instead of crashing the details page.
+    const idByTitle = new Map(getGenres().map((g) => [g.title.toLowerCase(), g.id]));
     tagGroups.push({
       id: "genres",
       title: "Genres",
-      tags: genres.map((g) => ({ id: GENRE_ID_BY_TITLE.get(g.toLowerCase()) ?? g, title: g })),
+      tags: genres.map((g) => ({
+        id: idByTitle.get(g.toLowerCase()) ?? slugifyTagId(g),
+        title: g,
+      })),
     });
   }
 
