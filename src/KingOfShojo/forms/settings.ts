@@ -1,10 +1,27 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import { ButtonRow, Form, InputRow, LabelRow, Section, ToggleRow } from "@paperback/types";
+import {
+  ButtonRow,
+  Form,
+  InputRow,
+  LabelRow,
+  Section,
+  SelectRow,
+  ToggleRow,
+} from "@paperback/types";
 
 const BASE_URL_KEY = "kingofshojo.baseUrlOverride";
 const SHOW_ADULT_KEY = "kingofshojo.showAdultContent";
+const IMAGE_MODE_KEY = "kingofshojo.imageMode";
+
+// Reader images are served full-resolution from the site's CDN, which is slow on
+// mobile data. "fast"/"saver" route them through the site's own image CDN
+// (Jetpack Photon) resized + WebP-compressed; "original" leaves them untouched.
+export function getImageMode(): string {
+  const value = Application.getState(IMAGE_MODE_KEY);
+  return typeof value === "string" ? value : "fast";
+}
 
 // Off by default: adult-tagged titles are hidden from search/browse and the
 // featured hero until the reader opts in.
@@ -92,12 +109,44 @@ export class KingOfShojoSettingsForm extends Form {
           }),
         ],
       ),
+      Section(
+        {
+          id: "images",
+          footer:
+            "Reader pages are served full-size and can be slow to load. Faster / " +
+            "Data saver resize and compress them through the site's image CDN. If " +
+            "pages fail to load, switch back to Original.",
+        },
+        [
+          SelectRow("image_mode", {
+            title: "Image loading",
+            layout: "list",
+            value: [getImageMode()],
+            minItemCount: 1,
+            maxItemCount: 1,
+            items: [
+              { id: "fast", title: "Faster (recommended)" },
+              { id: "saver", title: "Data saver (smallest)" },
+              { id: "original", title: "Original (full quality)" },
+            ],
+            onValueChange: Application.Selector(
+              this as KingOfShojoSettingsForm,
+              "handleImageModeChange",
+            ),
+          }),
+        ],
+      ),
     ];
   }
 
   async handleShowAdultChange(value: boolean): Promise<void> {
     Application.setState(value, SHOW_ADULT_KEY);
     Application.invalidateDiscoverSections();
+    this.reloadForm();
+  }
+
+  async handleImageModeChange(value: string[]): Promise<void> {
+    Application.setState(value[0] ?? "fast", IMAGE_MODE_KEY);
     this.reloadForm();
   }
 }
