@@ -55,7 +55,7 @@ import {
   parsePopularSeries,
   parsePopularToday,
   parseRecommendation,
-  photonImage,
+  proxyImage,
 } from "./parsers";
 import type KingOfShojoConfig from "./pbconfig";
 
@@ -87,14 +87,8 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
     ignoreImages: true,
   });
   cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
-  mainInterceptor = new KingOfShojoInterceptor(
-    "main",
-    () => this.baseUrl,
-    () => this.lastChapterUrl,
-  );
+  mainInterceptor = new KingOfShojoInterceptor("main", () => this.baseUrl);
 
-  // Referer for reader image requests: the chapter page the images came from.
-  private lastChapterUrl = "";
   private homepageCache: { $: CheerioAPI; timestamp: number } | null = null;
   private genresCache: { options: OptionItem[]; timestamp: number } | null = null;
   private featuredCache: {
@@ -349,12 +343,13 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    const url = new URL(this.baseUrl).addPathComponent(chapter.chapterId).toString();
-    // Reader images are fetched with this page as their referer.
-    this.lastChapterUrl = url;
+    // WordPress canonicalises to a trailing slash, so request it directly to
+    // avoid a 301 round-trip on every chapter open.
+    const base = new URL(this.baseUrl).addPathComponent(chapter.chapterId).toString();
+    const url = base.endsWith("/") ? base : `${base}/`;
     const $ = await fetchCheerio({ url, method: "GET" });
     const mode = getImageMode();
-    const pages = parseChapterPages($, this.baseUrl).map((page) => photonImage(page, mode));
+    const pages = parseChapterPages($, this.baseUrl).map((page) => proxyImage(page, mode));
     if (pages.length === 0) {
       throw new Error(`No pages found for chapter ${chapter.chapterId}`);
     }
