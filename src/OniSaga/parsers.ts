@@ -581,3 +581,15 @@ export function countPages(body: string): number {
   const matches = body.match(PAGE_ORDER_REGEX);
   return matches ? matches.length : 0;
 }
+
+// The reader page embeds the page list as `[{"order":0,...},...]`, and the
+// site's own reader requests pages by their `order` field — orders are
+// authoritative and can have gaps (re-imports), so sequential 0..N-1 URLs
+// would miss or 404 on such chapters. Sorted, de-duplicated; [] if absent.
+export function extractPageOrders(body: string): number[] {
+  const orders = new Set<number>();
+  for (const match of body.matchAll(PAGE_ORDER_REGEX)) {
+    orders.add(parseInt(match[1], 10));
+  }
+  return [...orders].sort((a, b) => a - b);
+}
