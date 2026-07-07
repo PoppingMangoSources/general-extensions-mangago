@@ -30,10 +30,12 @@ export class KingOfShojoInterceptor extends PaperbackInterceptor {
     const baseUrl = this.getBaseUrl();
     const userAgent = USER_AGENT;
 
-    // Reader images mirror a real <img> load: a browser image accept + referer +
-    // UA, and crucially NO origin (a browser never sends Origin for an image, and
-    // that non-standard header makes cdn.kingofshojo.com reset the connection).
-    // The reference MangaThemesia implementations all fetch images this way.
+    // Reader images mirror a real <img> load: browser image accept + referer +
+    // UA, NO origin, and the Sec-Fetch metadata a browser attaches to image
+    // sub-resource requests. The image CDN's Cloudflare holds/resets requests
+    // that lack these browser signals, so send them to look like a real image
+    // fetch. (The reference MangaThemesia implementations rely on their HTTP
+    // clients to add these automatically; Paperback does not, so we set them.)
     if (IMAGE_EXTENSION_REGEX.test(request.url)) {
       const headers = { ...request.headers };
       delete headers.origin;
@@ -46,6 +48,9 @@ export class KingOfShojoInterceptor extends PaperbackInterceptor {
           "user-agent": userAgent,
           accept: "image/avif,image/webp,image/png,image/jpeg,*/*",
           "accept-language": "en-US,en;q=0.5",
+          "sec-fetch-dest": "image",
+          "sec-fetch-mode": "no-cors",
+          "sec-fetch-site": "cross-site",
         },
       };
     }
