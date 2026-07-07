@@ -34,14 +34,28 @@ export class KingOfShojoInterceptor extends PaperbackInterceptor {
     const baseUrl = this.getBaseUrl();
     const userAgent = await this.userAgent();
 
-    // The image CDN sits behind its own Cloudflare challenge; a non-browser-like
-    // image request (missing origin/accept-language, or an HTML accept) is a
-    // bot-like signal that trips the challenge and makes every page crawl. Send
-    // full browser-like headers for images too, with only the accept differing.
-    const accept = IMAGE_EXTENSION_REGEX.test(request.url)
-      ? "image/avif,image/webp,image/apng,image/png,image/svg+xml,*/*;q=0.8"
-      : "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8";
+    // Reader images mirror a real <img> load: a browser image accept + referer +
+    // UA, and crucially NO origin (a browser never sends Origin for an image, and
+    // that non-standard header makes cdn.kingofshojo.com reset the connection).
+    // The reference MangaThemesia implementations all fetch images this way.
+    if (IMAGE_EXTENSION_REGEX.test(request.url)) {
+      const headers = { ...request.headers };
+      delete headers.origin;
+      delete headers.Origin;
+      return {
+        ...request,
+        headers: {
+          ...headers,
+          referer: `${baseUrl}/`,
+          "user-agent": userAgent,
+          accept: "image/avif,image/webp,image/png,image/jpeg,*/*",
+          "accept-language": "en-US,en;q=0.5",
+        },
+      };
+    }
 
+    // Page/API requests keep full browser-like headers so the HTML fetch doesn't
+    // trip the site's Cloudflare challenge.
     return {
       ...request,
       headers: {
@@ -49,7 +63,8 @@ export class KingOfShojoInterceptor extends PaperbackInterceptor {
         referer: `${baseUrl}/`,
         origin: baseUrl,
         "user-agent": userAgent,
-        accept,
+        accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "accept-language": "en-US,en;q=0.5",
       },
     };
