@@ -26,7 +26,12 @@ import {
 import type { CheerioAPI } from "cheerio";
 
 import { KingOfShojoSearchForm } from "./forms/search";
-import { getBaseUrlOverride, getShowAdultContent, KingOfShojoSettingsForm } from "./forms/settings";
+import {
+  getBaseUrlOverride,
+  getImageMode,
+  getShowAdultContent,
+  KingOfShojoSettingsForm,
+} from "./forms/settings";
 import {
   ADULT_GENRE_NAMES,
   CARD_SELECTOR,
@@ -50,6 +55,7 @@ import {
   parsePopularSeries,
   parsePopularToday,
   parseRecommendation,
+  proxyImage,
 } from "./parsers";
 import type KingOfShojoConfig from "./pbconfig";
 
@@ -342,7 +348,8 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
     const base = new URL(this.baseUrl).addPathComponent(chapter.chapterId).toString();
     const url = base.endsWith("/") ? base : `${base}/`;
     const $ = await fetchCheerio({ url, method: "GET" });
-    const pages = parseChapterPages($, this.baseUrl);
+    const mode = getImageMode();
+    const pages = parseChapterPages($, this.baseUrl).map((page) => proxyImage(page, mode));
     if (pages.length === 0) {
       throw new Error(`No pages found for chapter ${chapter.chapterId}`);
     }
