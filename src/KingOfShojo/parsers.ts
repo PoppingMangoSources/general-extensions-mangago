@@ -509,7 +509,10 @@ export function proxyImage(url: string, mode: string): string {
   // No output= override: keep each image's own format. Forcing webp 400s on
   // ultra-tall strips (WebP caps at 16383px per side; these JPEG strips exceed
   // it even at reduced width, while JPEG allows up to 65535px).
-  return `https://wsrv.nl/?w=${width}&q=${quality}&we&url=ssl:${match[1]}`;
+  // default= makes the proxy redirect to the original image whenever it can't
+  // fetch or process it (origin DNS hiccups, timeouts, oversized images), so a
+  // proxy failure degrades to a full-size page instead of a blank one.
+  return `https://wsrv.nl/?w=${width}&q=${quality}&we&default=ssl:${match[1]}&url=ssl:${match[1]}`;
 }
 
 // ---------------------------------------------------------------------------
