@@ -6,7 +6,7 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "KingOfShojo",
   description: "Extension that pulls content from kingofshojo.com.",
-  version: "1.0.0-alpha.9",
+  version: "1.0.0-alpha.10",
   icon: "icons.png",
   language: "en",
   contentRating: ContentRating.MATURE,
