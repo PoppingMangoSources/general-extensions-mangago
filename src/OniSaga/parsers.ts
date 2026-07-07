@@ -135,7 +135,7 @@ export function parseMangaCards($: CheerioAPI, showNsfw: boolean): MangaCard[] {
 
 // One browse/search page of cards; a filtered browse Livewire response can be
 // 15 MB (the whole catalog), so we never parse more than this many.
-const CARD_PARSE_CAP = 100;
+export const CARD_PARSE_CAP = 100;
 
 // Parse browse/search cards straight off the Livewire HTML string. A filtered
 // browse response can render the entire catalog (tens of MB); `cheerio.load`-ing
@@ -350,16 +350,32 @@ export function hasNextPage($: CheerioAPI): boolean {
   return found;
 }
 
-// The /home page server-renders a "Latest Mangas" grid inline — no Livewire,
-// no 10MB+ /browse document. It sits between the Most Popular and Fan Favorites
-// Livewire islands, so slice from its heading to the next wire:snapshot and
-// parse the cards out of that one cheap (already-fetched) document.
-export function parseLatestFromHome(html: string, showNsfw: boolean): MangaCard[] {
-  const start = html.indexOf("Latest Mangas");
+// The /home page server-renders every discover rail inline — no 10MB+ /browse
+// document. Slice one rail out by its section heading, stopping at the next
+// rail's heading, a Livewire island (`wire:snapshot`) or a flux section heading,
+// then parse the cards from that region of the already-fetched document. Not
+// every rail heading is a `data-flux-heading` (the SSR "Latest Mangas" grid is
+// plain), so the sibling headings are explicit boundaries too — otherwise the
+// "Most Popular" carousel would swallow the "Latest Mangas" grid that follows it.
+const HOME_RAIL_HEADINGS = ["Most Popular", "Latest Mangas", "Fan Favorites", "Top Rated"];
+
+export function parseHomeRail(html: string, heading: string, showNsfw: boolean): MangaCard[] {
+  const start = html.indexOf(heading);
   if (start < 0) return [];
-  const after = html.slice(start);
-  const end = after.indexOf("wire:snapshot");
-  return parseMangaCardsFromHtml(end > 0 ? after.slice(0, end) : after, showNsfw);
+  const after = html.slice(start + heading.length);
+
+  let end = after.length;
+  const boundaries = [
+    ...HOME_RAIL_HEADINGS.filter((h) => h !== heading),
+    "wire:snapshot",
+    "data-flux-heading",
+  ];
+  for (const marker of boundaries) {
+    const at = after.indexOf(marker);
+    if (at >= 0 && at < end) end = at;
+  }
+
+  return parseMangaCardsFromHtml(after.slice(0, end), showNsfw);
 }
 
 // String twin of hasNextPage for the multi-MB browse response we never fully
