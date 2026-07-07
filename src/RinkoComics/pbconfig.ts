@@ -7,7 +7,7 @@ export default {
   name: "RinkoComics",
   description: "Extension that pulls content from rinkocomics.com.",
   version: "1.0.0-alpha.4",
-  icon: "icon.png",
+  icon: "icons.png",
   language: "en",
   contentRating: ContentRating.EVERYONE,
   capabilities: [
