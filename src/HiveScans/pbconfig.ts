@@ -7,7 +7,7 @@ export default {
   name: "HiveScans",
   description: "Extension that pulls content from hivetoons.org.",
   version: "1.0.0-alpha.5",
-  icon: "icon.png",
+  icon: "icons.png",
   language: "en",
   contentRating: ContentRating.EVERYONE,
   capabilities: [
