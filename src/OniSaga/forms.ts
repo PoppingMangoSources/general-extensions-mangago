@@ -24,6 +24,7 @@ import {
   DISCOVER_TYPE_KEY,
   EXCLUDED_GENRES_KEY,
   LANGUAGES,
+  DEDUPE_CHAPTERS_KEY,
   LANGUAGES_KEY,
   MIN_CHAPTERS_OPTIONS,
   PAGE_DELAY_DEFAULT,
@@ -61,6 +62,13 @@ export function getExcludedGenres(): string[] {
 // Chapter languages to show (langCodes); defaults to English.
 export function getLanguages(): string[] {
   return (Application.getState(LANGUAGES_KEY) as string[] | undefined) ?? ["en"];
+}
+
+// Drop duplicate uploads of the same chapter in the same language, keeping the
+// newest. onisaga often carries several uploads of one chapter; on by default,
+// matching the site's own reader and the MangaDex source's "Skip Same Chapter".
+export function getDedupeChapters(): boolean {
+  return (Application.getState(DEDUPE_CHAPTERS_KEY) as boolean | undefined) ?? true;
 }
 
 // ----- Discover section order / visibility -----
@@ -181,6 +189,7 @@ export class OniSagaSettingsForm extends Form {
   private status: string;
   private excludedGenres: string[];
   private languages: string[];
+  private dedupeChapters: boolean;
   private pageDelay: string;
 
   constructor() {
@@ -190,6 +199,7 @@ export class OniSagaSettingsForm extends Form {
     this.status = getDiscoverStatus();
     this.excludedGenres = getExcludedGenres();
     this.languages = getLanguages();
+    this.dedupeChapters = getDedupeChapters();
     this.pageDelay = getPageDelayId();
   }
 
@@ -236,7 +246,8 @@ export class OniSagaSettingsForm extends Form {
       Section(
         {
           id: "languages",
-          footer: "Only show chapters in these languages. Defaults to English.",
+          footer:
+            "Only show chapters in these languages (defaults to English). onisaga often has more than one upload of a chapter in the same language; Skip Duplicate Uploads keeps just the newest.",
         },
         [
           SelectRow("languages", {
@@ -246,6 +257,14 @@ export class OniSagaSettingsForm extends Form {
             minItemCount: 1,
             maxItemCount: LANGUAGES.length,
             onValueChange: Application.Selector(this as OniSagaSettingsForm, "updateLanguages"),
+          }),
+          ToggleRow("dedupeChapters", {
+            title: "Skip Duplicate Uploads",
+            value: this.dedupeChapters,
+            onValueChange: Application.Selector(
+              this as OniSagaSettingsForm,
+              "updateDedupeChapters",
+            ),
           }),
         ],
       ),
@@ -323,6 +342,11 @@ export class OniSagaSettingsForm extends Form {
   async updateLanguages(value: string[]): Promise<void> {
     this.languages = value;
     Application.setState(value, LANGUAGES_KEY);
+  }
+
+  async updateDedupeChapters(value: boolean): Promise<void> {
+    this.dedupeChapters = value;
+    Application.setState(value, DEDUPE_CHAPTERS_KEY);
   }
 
   async updatePageDelay(value: string[]): Promise<void> {
