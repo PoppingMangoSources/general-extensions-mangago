@@ -1,10 +1,28 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import { ButtonRow, Form, InputRow, LabelRow, Section, ToggleRow } from "@paperback/types";
+import {
+  ButtonRow,
+  Form,
+  InputRow,
+  LabelRow,
+  Section,
+  SelectRow,
+  ToggleRow,
+} from "@paperback/types";
 
 const BASE_URL_KEY = "kingofshojo.baseUrlOverride";
 const SHOW_ADULT_KEY = "kingofshojo.showAdultContent";
+const IMAGE_MODE_KEY = "kingofshojo.imageMode";
+
+// The CDN serves each reader page as a ~1.3 MB full-resolution JPEG, which is
+// slow and heavy on mobile data. Default to routing pages through an image proxy
+// (wsrv.nl) resized + WebP-compressed; "original" opts out to direct full-size
+// loading.
+export function getImageMode(): string {
+  const value = Application.getState(IMAGE_MODE_KEY);
+  return typeof value === "string" ? value : "saver";
+}
 
 // Off by default: adult-tagged titles are hidden from search/browse and the
 // featured hero until the reader opts in.
@@ -92,12 +110,45 @@ export class KingOfShojoSettingsForm extends Form {
           }),
         ],
       ),
+      Section(
+        {
+          id: "images",
+          footer:
+            "Reader pages are served as very large full-size images (~1.3 MB each). " +
+            "Data saver and Higher quality compress them through an image proxy " +
+            "(wsrv.nl) so chapters load fast; Original loads the full-size images " +
+            "directly, which can be slow or fail to load.",
+        },
+        [
+          SelectRow("image_mode", {
+            title: "Image loading",
+            layout: "list",
+            value: [getImageMode()],
+            minItemCount: 1,
+            maxItemCount: 1,
+            items: [
+              { id: "saver", title: "Data saver (recommended)" },
+              { id: "fast", title: "Higher quality (compressed)" },
+              { id: "original", title: "Original (full size, slow)" },
+            ],
+            onValueChange: Application.Selector(
+              this as KingOfShojoSettingsForm,
+              "handleImageModeChange",
+            ),
+          }),
+        ],
+      ),
     ];
   }
 
   async handleShowAdultChange(value: boolean): Promise<void> {
     Application.setState(value, SHOW_ADULT_KEY);
     Application.invalidateDiscoverSections();
+    this.reloadForm();
+  }
+
+  async handleImageModeChange(value: string[]): Promise<void> {
+    Application.setState(value[0] ?? "saver", IMAGE_MODE_KEY);
     this.reloadForm();
   }
 }
