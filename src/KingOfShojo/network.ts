@@ -11,11 +11,14 @@ import * as cheerio from "cheerio";
 
 const IMAGE_EXTENSION_REGEX = /\.(jpe?g|png|webp|gif|avif|bmp|svg)(\?|#|$)/i;
 
-export class KingOfShojoInterceptor extends PaperbackInterceptor {
-  // A reader page fires 40+ image requests; resolving the default user agent is
-  // a native-bridge call, so cache it instead of paying that cost per image.
-  private cachedUserAgent?: string;
+// Paperback's default UA is a bare WebView string (no "Version/.. Safari/.."),
+// which Cloudflare on the image CDN flags as bot-like and resets the connection
+// (iOS -1005). Send a complete mobile Safari UA — the same one the Tachiyomi
+// client uses against this site — so requests read as a real browser.
+const USER_AGENT =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1";
 
+export class KingOfShojoInterceptor extends PaperbackInterceptor {
   constructor(
     id: string,
     private readonly getBaseUrl: () => string,
@@ -23,16 +26,9 @@ export class KingOfShojoInterceptor extends PaperbackInterceptor {
     super(id);
   }
 
-  private async userAgent(): Promise<string> {
-    if (this.cachedUserAgent === undefined) {
-      this.cachedUserAgent = await Application.getDefaultUserAgent();
-    }
-    return this.cachedUserAgent;
-  }
-
   override async interceptRequest(request: Request): Promise<Request> {
     const baseUrl = this.getBaseUrl();
-    const userAgent = await this.userAgent();
+    const userAgent = USER_AGENT;
 
     // Reader images mirror a real <img> load: a browser image accept + referer +
     // UA, and crucially NO origin (a browser never sends Origin for an image, and
@@ -79,7 +75,7 @@ export class KingOfShojoInterceptor extends PaperbackInterceptor {
       throw new CloudflareError({
         url: request.url,
         method: request.method ?? "GET",
-        headers: { "user-agent": await this.userAgent() },
+        headers: { "user-agent": USER_AGENT },
       });
     }
     return data;
