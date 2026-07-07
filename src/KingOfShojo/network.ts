@@ -9,7 +9,9 @@ import {
 } from "@paperback/types";
 import * as cheerio from "cheerio";
 
-const IMAGE_EXTENSION_REGEX = /\.(jpe?g|png|webp|gif|avif|bmp|svg)(\?|#|$)/i;
+// Mirrors BasicRateLimiter's internal image regex so header shaping and
+// rate-limit exemption always agree on what counts as an image.
+const IMAGE_EXTENSION_REGEX = /\.(avif|gif|jpe?g|jxl|png|webp)(\?|$)/i;
 
 // Paperback's default UA is a bare WebView string (no "Version/.. Safari/.."),
 // which Cloudflare on the image CDN flags as bot-like and resets the connection
@@ -17,6 +19,23 @@ const IMAGE_EXTENSION_REGEX = /\.(jpe?g|png|webp|gif|avif|bmp|svg)(\?|#|$)/i;
 // client uses against this site — so requests read as a real browser.
 const USER_AGENT =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1";
+
+// Replace a header regardless of the casing the incoming request used, so an
+// existing "Referer"/"Accept-Language" can't shadow our lowercase override.
+function withHeaders(
+  headers: Record<string, string> | undefined,
+  overrides: Record<string, string | undefined>,
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  const overridden = new Set(Object.keys(overrides).map((k) => k.toLowerCase()));
+  for (const [key, value] of Object.entries(headers ?? {})) {
+    if (!overridden.has(key.toLowerCase())) result[key] = value;
+  }
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value !== undefined) result[key] = value;
+  }
+  return result;
+}
 
 export class KingOfShojoInterceptor extends PaperbackInterceptor {
   constructor(
@@ -28,7 +47,6 @@ export class KingOfShojoInterceptor extends PaperbackInterceptor {
 
   override async interceptRequest(request: Request): Promise<Request> {
     const baseUrl = this.getBaseUrl();
-    const userAgent = USER_AGENT;
 
     // Reader images mirror a real <img> load: browser image accept + referer +
     // UA, NO origin, and the Sec-Fetch metadata a browser attaches to image
@@ -37,37 +55,34 @@ export class KingOfShojoInterceptor extends PaperbackInterceptor {
     // fetch. (The reference MangaThemesia implementations rely on their HTTP
     // clients to add these automatically; Paperback does not, so we set them.)
     if (IMAGE_EXTENSION_REGEX.test(request.url)) {
-      const headers = { ...request.headers };
-      delete headers.origin;
-      delete headers.Origin;
       return {
         ...request,
-        headers: {
-          ...headers,
+        headers: withHeaders(request.headers, {
+          origin: undefined,
           referer: `${baseUrl}/`,
-          "user-agent": userAgent,
+          "user-agent": USER_AGENT,
           accept: "image/avif,image/webp,image/png,image/jpeg,*/*",
           "accept-language": "en-US,en;q=0.5",
           "sec-fetch-dest": "image",
           "sec-fetch-mode": "no-cors",
           "sec-fetch-site": "cross-site",
-        },
+        }),
       };
     }
 
-    // Page/API requests keep full browser-like headers so the HTML fetch doesn't
-    // trip the site's Cloudflare challenge.
+    // Page/API requests keep browser-like headers so the HTML fetch doesn't
+    // trip the site's Cloudflare challenge. No origin: browsers don't send it
+    // on plain navigations, and the reference implementations don't either.
     return {
       ...request,
-      headers: {
-        ...request.headers,
+      headers: withHeaders(request.headers, {
+        origin: undefined,
         referer: `${baseUrl}/`,
-        origin: baseUrl,
-        "user-agent": userAgent,
+        "user-agent": USER_AGENT,
         accept:
           "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "accept-language": "en-US,en;q=0.5",
-      },
+      }),
     };
   }
 
