@@ -136,9 +136,17 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   // then the Image Requests Limit spacing (see network.ts).
   pageRateLimiter = new OniSagaPageRateLimiter("onisaga-page-rate-limiter");
 
-  // Cached `post-filter` state (token + snapshot) for the active browse URL.
-  private browseStateCache?: { url: string; state: LivewireState; at: number };
-  private static readonly BROWSE_STATE_TTL = 60_000;
+  // Cached `post-filter` states (token + snapshot) per listing URL — /browse
+  // plus each active /search/{term}. A single shared slot would let every new
+  // search evict the /browse state (and vice versa), re-downloading the 10MB+
+  // /browse document on each swap. Snapshots refresh themselves on every
+  // successful Livewire response, so the TTL only bounds how often the big
+  // documents are re-fetched; in-flight fetches are de-duped so parallel rails
+  // share one download.
+  private browseStates = new Map<string, { state: LivewireState; at: number }>();
+  private browseStateFetches = new Map<string, Promise<LivewireState | undefined>>();
+  private static readonly BROWSE_STATE_TTL = 1_800_000;
+  private static readonly BROWSE_STATE_CACHE_MAX = 8;
 
   // Cached server-rendered home document, shared by the home-sourced rails.
   private homeHtmlCache?: { html: string; at: number };
@@ -195,19 +203,14 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     }));
   }
 
-  // Refetch the genre list from the browse filter once per TTL and cache it.
+  // Refetch the genre list from the browse filter once per TTL. Routed through
+  // resolveBrowseState so one /browse download (10 MB+) both harvests the
+  // genres and warms the Livewire state the listing rails and search need —
+  // instead of two rails racing separate copies of the same huge document.
   private async refreshGenres(): Promise<void> {
-    const now = Date.now();
-    if (!genresAreStale(now)) return;
+    if (!genresAreStale(Date.now())) return;
     try {
-      // Regex extraction on the raw text — the /browse document can exceed
-      // 10 MB, so never cheerio-parse it just to read the genre checkboxes.
-      const [, data] = await Application.scheduleRequest({
-        url: `${DOMAIN}/browse`,
-        method: "GET",
-      });
-      const genres = parseGenresFromHtml(Application.arrayBufferToUTF8String(data));
-      if (genres.length > 0) cacheGenres(genres, now);
+      await this.resolveBrowseState(`${DOMAIN}/browse`);
     } catch {
       // Keep the current cache / fallback.
     }
@@ -711,37 +714,68 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
       "livewire browse",
     );
     if (!html) {
-      this.browseStateCache = undefined;
+      this.browseStates.delete(baseUrl);
       return { cards: [], hasNext: false };
     }
 
     if (snapshot) {
-      this.browseStateCache = {
-        url: baseUrl,
-        state: { token: state.token, snapshot },
-        at: Date.now(),
-      };
+      this.storeBrowseState(baseUrl, { token: state.token, snapshot });
     }
 
     const $ = cheerio.load(html);
     return { cards: parseMangaCards($, showNsfw), hasNext: hasNextPage($) };
   }
 
+  private storeBrowseState(baseUrl: string, state: LivewireState): void {
+    this.browseStates.delete(baseUrl);
+    this.browseStates.set(baseUrl, { state, at: Date.now() });
+    // Bound the cache: drop the stalest entry (search terms come and go).
+    if (this.browseStates.size > OniSagaExtension.BROWSE_STATE_CACHE_MAX) {
+      let oldestKey = "";
+      let oldestAt = Infinity;
+      for (const [key, entry] of this.browseStates) {
+        if (entry.at < oldestAt) {
+          oldestAt = entry.at;
+          oldestKey = key;
+        }
+      }
+      this.browseStates.delete(oldestKey);
+    }
+  }
+
   private async resolveBrowseState(baseUrl: string): Promise<LivewireState | undefined> {
-    const now = Date.now();
-    const cached = this.browseStateCache;
-    if (cached && cached.url === baseUrl && now - cached.at < OniSagaExtension.BROWSE_STATE_TTL) {
+    const cached = this.browseStates.get(baseUrl);
+    if (cached && Date.now() - cached.at < OniSagaExtension.BROWSE_STATE_TTL) {
       return cached.state;
     }
 
-    // Regex extraction on the raw text — never cheerio-parse the huge document.
-    const [, data] = await Application.scheduleRequest({ url: baseUrl, method: "GET" });
-    const state = extractLivewireStateFromHtml(
-      Application.arrayBufferToUTF8String(data),
-      "post-filter",
-    );
-    if (state) this.browseStateCache = { url: baseUrl, state, at: now };
-    return state;
+    // De-dupe concurrent misses: parallel discover rails and a search can all
+    // want the same state at once, and each miss costs a full document
+    // download (the /browse page alone can exceed 10 MB).
+    const inFlight = this.browseStateFetches.get(baseUrl);
+    if (inFlight) return inFlight;
+
+    const task = (async () => {
+      // Regex extraction on the raw text — never cheerio-parse the huge document.
+      const [, data] = await Application.scheduleRequest({ url: baseUrl, method: "GET" });
+      const html = Application.arrayBufferToUTF8String(data);
+      const state = extractLivewireStateFromHtml(html, "post-filter");
+      if (state) this.storeBrowseState(baseUrl, state);
+      // Harvest the genre list from the same document rather than paying for
+      // another multi-megabyte /browse download just to read the checkboxes.
+      if (genresAreStale(Date.now())) {
+        const genres = parseGenresFromHtml(html);
+        if (genres.length > 0) cacheGenres(genres, Date.now());
+      }
+      return state;
+    })();
+
+    this.browseStateFetches.set(baseUrl, task);
+    try {
+      return await task;
+    } finally {
+      this.browseStateFetches.delete(baseUrl);
+    }
   }
 
   async fetchCheerio(request: Request): Promise<cheerio.CheerioAPI> {
