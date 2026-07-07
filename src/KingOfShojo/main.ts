@@ -361,7 +361,13 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
   // ----------------------------------------------------------------
 
   private mangaUrl(mangaId: string): string {
-    return new URL(this.baseUrl).addPathComponent(MANGA_DIR).addPathComponent(mangaId).toString();
+    // WordPress canonicalises to a trailing slash; requesting it directly skips
+    // a 301 round-trip (which this origin sometimes hangs on entirely).
+    const url = new URL(this.baseUrl)
+      .addPathComponent(MANGA_DIR)
+      .addPathComponent(mangaId)
+      .toString();
+    return url.endsWith("/") ? url : `${url}/`;
   }
 
   private async getHomepage(): Promise<CheerioAPI> {
