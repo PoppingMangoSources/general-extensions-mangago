@@ -7,7 +7,7 @@ export default {
   name: "VyManga",
   description: "Extension that pulls content from vymanga.com.",
   version: "1.0.0-alpha.6",
-  icon: "icon.png",
+  icon: "icons.png",
   language: "en",
   contentRating: ContentRating.MATURE,
   capabilities: [
