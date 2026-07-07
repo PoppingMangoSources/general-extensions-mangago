@@ -56,7 +56,6 @@ import {
   extractReaderToken,
   hasNextPageFromHtml,
   parseChapters,
-  parseGenresFromHtml,
   parseAnchorCards,
   parseHomeRail,
   parseMangaCards,
@@ -69,8 +68,6 @@ import {
 } from "./parsers";
 import type OniSagaConfig from "./pbconfig";
 import {
-  cacheGenres,
-  genresAreStale,
   getGenres,
   mangaIdFromHref,
   normalizeReleaseDate,
@@ -207,25 +204,11 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   // =============================== Discover ====================================
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
-    void this.refreshGenres();
     return getSectionsOrder().map((section) => ({
       id: section.id,
       title: section.title,
       type: discoverSectionType(section.id),
     }));
-  }
-
-  // Refetch the genre list from the browse filter once per TTL. Routed through
-  // resolveBrowseState so one /browse download (10 MB+) both harvests the
-  // genres and warms the Livewire state the listing rails and search need —
-  // instead of two rails racing separate copies of the same huge document.
-  private async refreshGenres(): Promise<void> {
-    if (!genresAreStale(Date.now())) return;
-    try {
-      await this.resolveBrowseState(`${DOMAIN}/browse`);
-    } catch {
-      // Keep the current cache / fallback.
-    }
   }
 
   async getDiscoverSectionItems(
@@ -831,12 +814,6 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
       const html = Application.arrayBufferToUTF8String(data);
       const state = extractLivewireStateFromHtml(html, "post-filter");
       if (state) this.storeBrowseState(baseUrl, state);
-      // Harvest the genre list from the same document rather than paying for
-      // another multi-megabyte /browse download just to read the checkboxes.
-      if (genresAreStale(Date.now())) {
-        const genres = parseGenresFromHtml(html);
-        if (genres.length > 0) cacheGenres(genres, Date.now());
-      }
       return state;
     })();
 
