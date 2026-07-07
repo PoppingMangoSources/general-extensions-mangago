@@ -28,11 +28,8 @@ export interface DiscoverSectionDef {
 export const DISCOVER_SECTIONS: DiscoverSectionDef[] = [
   { id: "top_manga", title: "Top Manga" },
   { id: "latest", title: "Latest" },
-  { id: "top_10_rising", title: "Top 10 Rising" },
   { id: "highest_rated", title: "Highest Rated" },
   { id: "fan_favorites", title: "Fan Favorites" },
-  { id: "genres", title: "Genres" },
-  { id: "types", title: "Types" },
 ];
 
 export interface Option {
