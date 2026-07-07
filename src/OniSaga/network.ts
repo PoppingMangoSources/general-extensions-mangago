@@ -303,11 +303,15 @@ const BURST_SPACING_SECONDS = 0.3;
 // Hard ceiling on page requests per rolling minute. The per-page delay sets the
 // cadence, but only this caps the *average* — so neither the initial burst nor a
 // fast Image Requests Limit setting can push the sustained rate past onisaga's
-// hidden frequency limiter (the "Rate limit exceeded" 429, seen tripping around
-// ~35/min). The burst still fires fast for a snappy first screen; it just counts
-// against the window like every other request.
+// hidden frequency limiter (the "Rate limit exceeded" 429). Two independent
+// live estimates put that threshold near ~60/min (an ~88/min run tripped it at
+// page 62); 45 keeps a 25% margin while reading roughly twice as fast as the
+// earlier 25/min setting, which crawled on very long strip chapters. The burst
+// still fires fast for a snappy first screen; it just counts against the window
+// like every other request, and a trip self-heals via the Retry-After cooldown
+// plus the strike floor.
 const RATE_WINDOW_MS = 60_000;
-const RATE_WINDOW_MAX = 25;
+const RATE_WINDOW_MAX = 45;
 
 export class OniSagaPageRateLimiter extends PaperbackInterceptor {
   private burst = BURST_CAPACITY;
