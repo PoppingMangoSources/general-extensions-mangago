@@ -1,27 +1,10 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import {
-  ButtonRow,
-  Form,
-  InputRow,
-  LabelRow,
-  Section,
-  SelectRow,
-  ToggleRow,
-} from "@paperback/types";
+import { ButtonRow, Form, InputRow, LabelRow, Section, ToggleRow } from "@paperback/types";
 
 const BASE_URL_KEY = "kingofshojo.baseUrlOverride";
 const SHOW_ADULT_KEY = "kingofshojo.showAdultContent";
-const IMAGE_MODE_KEY = "kingofshojo.imageMode";
-
-// "original" loads images directly (full quality). "fast"/"saver" route them
-// through an image proxy (wsrv.nl) resized + WebP-compressed to save mobile data,
-// at the cost of relying on that proxy.
-export function getImageMode(): string {
-  const value = Application.getState(IMAGE_MODE_KEY);
-  return typeof value === "string" ? value : "original";
-}
 
 // Off by default: adult-tagged titles are hidden from search/browse and the
 // featured hero until the reader opts in.
@@ -109,44 +92,12 @@ export class KingOfShojoSettingsForm extends Form {
           }),
         ],
       ),
-      Section(
-        {
-          id: "images",
-          footer:
-            "Original loads images directly at full quality (recommended). To save " +
-            "mobile data, Faster / Data saver resize and compress them through an " +
-            "image proxy (wsrv.nl) — smaller, but reliant on that proxy.",
-        },
-        [
-          SelectRow("image_mode", {
-            title: "Image loading",
-            layout: "list",
-            value: [getImageMode()],
-            minItemCount: 1,
-            maxItemCount: 1,
-            items: [
-              { id: "original", title: "Original (full quality)" },
-              { id: "fast", title: "Compressed (save data)" },
-              { id: "saver", title: "Data saver (smallest)" },
-            ],
-            onValueChange: Application.Selector(
-              this as KingOfShojoSettingsForm,
-              "handleImageModeChange",
-            ),
-          }),
-        ],
-      ),
     ];
   }
 
   async handleShowAdultChange(value: boolean): Promise<void> {
     Application.setState(value, SHOW_ADULT_KEY);
     Application.invalidateDiscoverSections();
-    this.reloadForm();
-  }
-
-  async handleImageModeChange(value: string[]): Promise<void> {
-    Application.setState(value[0] ?? "original", IMAGE_MODE_KEY);
     this.reloadForm();
   }
 }

@@ -37,9 +37,10 @@ export const CHAPTER_DATE_SELECTOR = "p.small";
 // img.d-block are older layouts kept as fallbacks.
 export const PAGE_SELECTOR = "div.carousel-item[data-page] img, img.lozad, img.d-block";
 
-// Genre checkboxes on the `/search` advanced form.
-export const GENRE_FILTER_SELECTOR = ".check-genre div div:has(.checkbox-genre)";
-export const GENRE_CHECKBOX_SELECTOR = ".checkbox-genre";
+// Genre links live in the site-wide navigation (`/genre/<slug>`), so they can be
+// scraped from any page and stay consistent with the slug ids used by the
+// details-page tags and the `genre[]` search parameter.
+export const GENRE_LINK_SELECTOR = 'a[href*="/genre/"]';
 
 export type PageMetadata = {
   page?: number;

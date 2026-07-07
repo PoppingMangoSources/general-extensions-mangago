@@ -41,7 +41,7 @@ import {
   parseCards,
   parseChapterPages,
   parseChapters,
-  parseGenreFilter,
+  parseGenres,
   parseMangaDetails,
 } from "./parsers";
 import type VyMangaConfig from "./pbconfig";
@@ -59,7 +59,23 @@ const BROWSE_SORT: Record<string, string> = {
   newest: "created_at",
 };
 
-const GENRES_TTL = 60 * 60 * 1000;
+// Genres are scraped from the site nav rather than hardcoded, then persisted as
+// a JSON string so they survive an app restart. `last_genres_fetch` records the
+// fetch time (seconds) so the list is only refetched once the TTL lapses.
+const GENRES_KEY = "vymanga_genres";
+const LAST_GENRES_FETCH_KEY = "last_genres_fetch";
+const GENRES_TTL_SECONDS = 172800; // 2 days
+
+function getStoredGenres(): OptionItem[] {
+  const raw = Application.getState(GENRES_KEY) as string | undefined;
+  if (raw === undefined) return [];
+  try {
+    return JSON.parse(raw) as OptionItem[];
+  } catch {
+    return [];
+  }
+}
+
 // The featured hero fetches per-title details (author/description), so cap the
 // count and cache the result to keep discover snappy.
 const FEATURED_LIMIT = 8;
@@ -74,7 +90,6 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
   cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
   mainInterceptor = new VyMangaInterceptor("main", () => this.baseUrl);
 
-  private genresCache: { options: OptionItem[]; timestamp: number } | null = null;
   private featuredCache: { items: DiscoverSectionItem[]; timestamp: number } | null = null;
 
   get baseUrl(): string {
@@ -290,8 +305,12 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    // chapterId is the full external reader URL; ?view=0 renders every page at
-    // once instead of paging.
+    // chapterId is the full external reader URL. Chapters cached by an older
+    // version stored a relative id that can't be opened — ask for a refresh.
+    if (!/^https?:\/\//i.test(chapter.chapterId)) {
+      throw new Error("Refresh the chapter list to reload chapters.");
+    }
+    // ?view=0 renders every page at once instead of paging.
     const url = `${chapter.chapterId}${chapter.chapterId.includes("?") ? "&" : "?"}view=0`;
     const $ = await fetchCheerio({ url, method: "GET" });
     const pages = parseChapterPages($, this.baseUrl);
@@ -353,17 +372,31 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
   }
 
   private async getGenres(): Promise<OptionItem[]> {
-    if (this.genresCache && Date.now() - this.genresCache.timestamp < GENRES_TTL) {
-      return this.genresCache.options;
+    // Force a refetch only when nothing has been stored yet.
+    await this.updateGenres(getStoredGenres().length === 0);
+    return getStoredGenres();
+  }
+
+  private async updateGenres(force: boolean): Promise<void> {
+    const lastFetch = Number(Application.getState(LAST_GENRES_FETCH_KEY) ?? 0);
+    const cached = lastFetch + GENRES_TTL_SECONDS > Date.now() / 1000;
+    if (cached && !force) {
+      // The cache is still valid; only refetch if the persisted value went missing.
+      if (Application.getState(GENRES_KEY) === undefined) {
+        await this.updateGenres(true);
+      }
+      return;
     }
+
     try {
-      const url = new URL(this.baseUrl).addPathComponent(SEARCH_PATH).toString();
-      const $ = await fetchCheerio({ url, method: "GET" });
-      const options = parseGenreFilter($);
-      if (options.length > 0) this.genresCache = { options, timestamp: Date.now() };
-      return options;
+      const $ = await fetchCheerio({ url: this.baseUrl, method: "GET" });
+      const genres = parseGenres($);
+      if (genres.length > 0) {
+        Application.setState(JSON.stringify(genres), GENRES_KEY);
+        Application.setState(String(Date.now() / 1000), LAST_GENRES_FETCH_KEY);
+      }
     } catch {
-      return this.genresCache?.options ?? [];
+      // Keep whatever is stored (possibly nothing) until the next attempt.
     }
   }
 }
