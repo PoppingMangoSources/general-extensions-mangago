@@ -7,7 +7,7 @@ export default {
   name: "KingOfShojo",
   description: "Extension that pulls content from kingofshojo.com.",
   version: "1.0.0-alpha.7",
-  icon: "icon.png",
+  icon: "icons.png",
   language: "en",
   contentRating: ContentRating.MATURE,
   capabilities: [
