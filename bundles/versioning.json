@@ -104,7 +104,7 @@
     {
       "name": "OniSaga",
       "description": "Extension that pulls content from onisaga.com.",
-      "version": "1.0.0-alpha.1",
+      "version": "1.0.0-alpha.4",
       "icon": "icon.png",
       "language": "multi",
       "contentRating": "MATURE",
