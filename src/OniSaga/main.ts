@@ -53,11 +53,13 @@ import {
   countPages,
   extractPageOrders,
   extractReaderToken,
-  hasNextPage,
+  hasNextPageFromHtml,
   parseChapters,
   parseGenresFromHtml,
   parseAnchorCards,
+  parseLatestFromHome,
   parseMangaCards,
+  parseMangaCardsFromHtml,
   parseMangaDetails,
   parseTopManga,
   topMangaSubtitle,
@@ -148,9 +150,15 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   private static readonly BROWSE_STATE_TTL = 1_800_000;
   private static readonly BROWSE_STATE_CACHE_MAX = 8;
 
-  // Cached server-rendered home document, shared by the home-sourced rails.
+  // Cached server-rendered /trending document (the toggle rails live here).
   private homeHtmlCache?: { html: string; at: number };
   private static readonly HOME_TTL = 60_000;
+
+  // Cached /home document. It server-renders the Latest, Fan Favorites and Top
+  // Rated rails inline, so one fetch serves several rails instead of a separate
+  // (10MB+) /browse or /top-manga request each.
+  private homeDocCache?: { html: string; at: number };
+  private homeDocFetch?: Promise<string>;
 
   // Cached /top-manga rankings by sort. The featured + highest-rated rails both
   // pull from this slow (~3s) ranking page, and the discover screen re-requests
@@ -242,14 +250,7 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
       case "top_manga":
         return this.getTopMangaFeatured();
       case "latest":
-        return this.browseDiscover(DEFAULT_SORT, metadata, (card) => ({
-          type: "simpleCarouselItem",
-          mangaId: card.mangaId,
-          imageUrl: card.imageUrl,
-          title: card.title,
-          subtitle: buildStatSubtitle(card),
-          contentRating: card.contentRating,
-        }));
+        return this.fetchLatest(metadata);
       case "highest_rated": {
         const items = await this.fetchTopManga("rated");
         return {
@@ -397,14 +398,67 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     };
   }
 
+  // One cached /home fetch, de-duped so the rails that read it (Latest, Fan
+  // Favorites) share a single request instead of each downloading it.
+  private async getHomeDoc(): Promise<string> {
+    const now = Date.now();
+    if (this.homeDocCache && now - this.homeDocCache.at < OniSagaExtension.HOME_TTL) {
+      return this.homeDocCache.html;
+    }
+    if (this.homeDocFetch) return this.homeDocFetch;
+
+    this.homeDocFetch = (async () => {
+      const [, buffer] = await Application.scheduleRequest({
+        url: `${DOMAIN}/home`,
+        method: "GET",
+      });
+      const html = Application.arrayBufferToUTF8String(buffer);
+      this.homeDocCache = { html, at: Date.now() };
+      return html;
+    })();
+    try {
+      return await this.homeDocFetch;
+    } finally {
+      this.homeDocFetch = undefined;
+    }
+  }
+
+  // The Latest rail: page 1 comes free from the cached /home doc's "Latest
+  // Mangas" grid (no 10MB+ /browse download); deeper pages fall back to the
+  // Livewire browse path.
+  private async fetchLatest(
+    metadata: { page?: number; collectedIds?: string[] } | undefined,
+  ): Promise<PagedResults<DiscoverSectionItem>> {
+    const map = (card: MangaCard): DiscoverSectionItem => ({
+      type: "simpleCarouselItem",
+      mangaId: card.mangaId,
+      imageUrl: card.imageUrl,
+      title: card.title,
+      subtitle: buildStatSubtitle(card),
+      contentRating: card.contentRating,
+    });
+
+    if ((metadata?.page ?? 1) === 1) {
+      try {
+        const cards = parseLatestFromHome(await this.getHomeDoc(), getShowNsfw());
+        if (cards.length > 0) {
+          return { items: cards.map(map), metadata: { page: 2, collectedIds: [] } };
+        }
+      } catch (error) {
+        if (error instanceof CloudflareError) throw error;
+        // Fall through to the Livewire browse path.
+      }
+    }
+    return this.browseDiscover(DEFAULT_SORT, metadata, map);
+  }
+
   // Fan Favorites is a Livewire component on /home. Parse its server-rendered
   // cards; if the page ships an un-hydrated placeholder, drive its render.
   private async fetchFanFavorites(): Promise<PagedResults<DiscoverSectionItem>> {
     const showNsfw = getShowNsfw();
     try {
       const homeUrl = `${DOMAIN}/home`;
-      const [, buffer] = await Application.scheduleRequest({ url: homeUrl, method: "GET" });
-      const $ = cheerio.load(Application.arrayBufferToUTF8String(buffer));
+      const $ = cheerio.load(await this.getHomeDoc());
 
       const component = componentHtmlByName($, "fan-favorites");
       let cards = component ? parseMangaCards(cheerio.load(component), showNsfw) : [];
@@ -722,8 +776,12 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
       this.storeBrowseState(baseUrl, { token: state.token, snapshot });
     }
 
-    const $ = cheerio.load(html);
-    return { cards: parseMangaCards($, showNsfw), hasNext: hasNextPage($) };
+    // Never cheerio-load the whole response: a filtered browse render can be
+    // 15 MB, which freezes the device. Slice cards off the raw string instead.
+    return {
+      cards: parseMangaCardsFromHtml(html, showNsfw),
+      hasNext: hasNextPageFromHtml(html),
+    };
   }
 
   private storeBrowseState(baseUrl: string, state: LivewireState): void {
