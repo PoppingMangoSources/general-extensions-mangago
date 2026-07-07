@@ -12,7 +12,9 @@ export function straightenQuotes(value: string): string {
 // Slug from a /manga/<slug> href (absolute or relative).
 export function mangaIdFromHref(href: string): string {
   const path = href.startsWith("http") ? href.replace(/^https?:\/\/[^/]+/, "") : href;
-  const after = path.split("/manga/")[1] ?? "";
+  // Drop any query/fragment a pasted share link carries ("/manga/foo?utm=..",
+  // "/manga/foo#comments") so the id stays the canonical slug.
+  const after = (path.split("/manga/")[1] ?? "").split(/[?#]/)[0];
   return after.replace(/^\/+|\/+$/g, "");
 }
 
