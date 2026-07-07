@@ -491,6 +491,24 @@ export function parseChapterPages($: CheerioAPI, base: string): string[] {
   return [...new Set(pages)];
 }
 
+// The CDN serves each page as a full-resolution ~1.3 MB JPEG; a chapter is
+// ~20 MB, and downloading that many large files in parallel stalls until the
+// app cancels them. Route pages through wsrv.nl, which resizes + WebP-compresses
+// arbitrary image URLs on the fly (~150 KB per page). The source is placed last
+// with wsrv's `ssl:` https shorthand so the proxied URL still ends in the
+// original image extension — that keeps it classified as an image request and
+// out of the rate limiter. "original" (or anything unexpected) is a no-op.
+export function proxyImage(url: string, mode: string): string {
+  if (mode === "original") return url;
+  const match = url.match(/^https?:\/\/(.+)$/i);
+  // Skip non-http urls, already-proxied urls, and anything with a query/hash that
+  // would break the unencoded trailing url parameter.
+  if (!match || /\/\/wsrv\.nl\//i.test(url) || /[?#]/.test(url)) return url;
+  const width = mode === "fast" ? 1080 : 720;
+  const quality = mode === "fast" ? 80 : 65;
+  return `https://wsrv.nl/?w=${width}&q=${quality}&output=webp&we&url=ssl:${match[1]}`;
+}
+
 // ---------------------------------------------------------------------------
 // dates
 // ---------------------------------------------------------------------------
