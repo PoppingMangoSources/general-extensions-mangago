@@ -3,6 +3,7 @@
 
 import {
   BasicRateLimiter,
+  CloudflareError,
   ContentRating,
   CookieStorageInterceptor,
   DiscoverSectionType,
@@ -18,6 +19,7 @@ import {
   type Form,
   type PagedResults,
   type Request,
+  type Response,
   type SearchQuery,
   type SearchResultItem,
   type SortingOption,
@@ -25,7 +27,7 @@ import {
 } from "@paperback/types";
 import type { CheerioAPI } from "cheerio";
 
-import { KingOfShojoSearchForm } from "./forms/search";
+import { KingOfShojoAdvancedSearchForm } from "./forms/search";
 import {
   getBaseUrlOverride,
   getImageMode,
@@ -52,6 +54,7 @@ import {
   parseGenreFilter,
   parseLatestUpdate,
   parseMangaDetails,
+  parseMangaId,
   parsePopularSeries,
   parsePopularToday,
   parseRecommendation,
@@ -64,7 +67,6 @@ const SORTING_OPTIONS: SortingOption[] = ORDER_OPTIONS.map((option) => ({
   label: option.value,
 }));
 
-const MAX_SEARCH_PAGES = 5;
 const HOMEPAGE_TTL = 60 * 1000;
 const GENRES_TTL = 60 * 60 * 1000;
 // The featured hero fetches per-title details (author/description), so cap the
@@ -89,12 +91,16 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
   cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
   mainInterceptor = new KingOfShojoInterceptor("main", () => this.baseUrl);
 
-  private homepageCache: { $: CheerioAPI; timestamp: number } | null = null;
-  private genresCache: { options: OptionItem[]; timestamp: number } | null = null;
+  // Every cache is keyed on the baseUrl it was fetched from, so a base-URL
+  // override change is a cache miss instead of serving the old domain.
+  private homepageCache: { $: CheerioAPI; timestamp: number; baseUrl: string } | null = null;
+  private homepagePromise: { promise: Promise<CheerioAPI>; baseUrl: string } | null = null;
+  private genresCache: { options: OptionItem[]; timestamp: number; baseUrl: string } | null = null;
   private featuredCache: {
     items: DiscoverSectionItem[];
     timestamp: number;
     adult: boolean;
+    baseUrl: string;
   } | null = null;
 
   get baseUrl(): string {
@@ -109,6 +115,18 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
     this.globalRateLimiter.registerInterceptor();
     this.cookieStorageInterceptor.registerInterceptor();
     this.mainInterceptor.registerInterceptor();
+
+    // The app only runs interceptRequest on the initial request; a redirect
+    // follow-up would otherwise drop our headers (UA, referer, sec-fetch), and
+    // this origin's Cloudflare punishes header-less fetches. Re-apply them to
+    // every redirect target.
+    Application.setRedirectHandler(
+      Application.Selector(this as KingOfShojoExtension, "handleRedirect"),
+    );
+  }
+
+  async handleRedirect(request: Request, _response: Response): Promise<Request> {
+    return this.mainInterceptor.interceptRequest(request);
   }
 
   async getSettingsForm(): Promise<Form> {
@@ -230,7 +248,7 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
   }
 
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
-    return new KingOfShojoSearchForm(query, await this.getGenres());
+    return new KingOfShojoAdvancedSearchForm(query, await this.getGenres());
   }
 
   async getSearchResults(
@@ -242,7 +260,9 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
     const meta = query.metadata;
 
     // Popular Series range chip tapped — return that ranking from the homepage.
-    if (meta?.popularRange) {
+    // Only when no title was typed: otherwise the user is searching from within
+    // the chip's results and expects a normal title search.
+    if (meta?.popularRange && !title) {
       const $ = await this.getHomepage();
       const items: SearchResultItem[] = parsePopularSeries(
         $,
@@ -264,10 +284,12 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
     if (pasted) return pasted;
 
     const page = metadata?.page ?? 1;
-    const order = sortingOption?.id || meta?.orderBy?.[0] || "";
+    const order = sortingOption?.id || "";
 
+    // Trailing slash: WordPress canonicalises /manga → /manga/ with a 301 the
+    // origin sometimes hangs on, so request the canonical form directly.
     const builder = new URL(this.baseUrl)
-      .addPathComponent(MANGA_DIR)
+      .addPathComponent(`${MANGA_DIR}/`)
       .setQueryItem("title", title)
       .setQueryItem("page", page.toString());
     if (order) builder.setQueryItem("order", order);
@@ -298,7 +320,7 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
       contentRating: this.contentRating,
     }));
 
-    const nextPage = $(NEXT_PAGE_SELECTOR).length > 0 && page < MAX_SEARCH_PAGES;
+    const nextPage = $(NEXT_PAGE_SELECTOR).length > 0;
     return { items, metadata: nextPage ? { page: page + 1 } : undefined };
   }
 
@@ -306,11 +328,20 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
     query: string,
   ): Promise<PagedResults<SearchResultItem> | undefined> {
     if (!/^https?:\/\//i.test(query)) return undefined;
-    const match = query.match(new RegExp(`/${MANGA_DIR}/([^/?#]+)`, "i"));
-    if (!match) return undefined;
+    // Only resolve links that point at this source's own host (any /manga/
+    // WordPress URL would otherwise match).
+    const host = query.match(/^https?:\/\/([^/]+)/i)?.[1]?.toLowerCase();
+    const baseHost = this.baseUrl
+      .replace(/^https?:\/\//i, "")
+      .split("/")[0]
+      .toLowerCase();
+    if (!host || host !== baseHost) return undefined;
+    if (!new RegExp(`/${MANGA_DIR}/[^/?#]+`, "i").test(query)) return undefined;
 
     try {
-      const manga = await this.getMangaDetails(decodeURIComponent(match[1]));
+      // Derive the ID exactly like every parser path does, so pasted links and
+      // browsed cards agree on the same manga ID.
+      const manga = await this.getMangaDetails(parseMangaId(query));
       return {
         items: [
           {
@@ -371,21 +402,40 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
   }
 
   private async getHomepage(): Promise<CheerioAPI> {
-    if (this.homepageCache && Date.now() - this.homepageCache.timestamp < HOMEPAGE_TTL) {
+    const baseUrl = this.baseUrl;
+    if (
+      this.homepageCache &&
+      this.homepageCache.baseUrl === baseUrl &&
+      Date.now() - this.homepageCache.timestamp < HOMEPAGE_TTL
+    ) {
       return this.homepageCache.$;
     }
-    const $ = await fetchCheerio({ url: `${this.baseUrl}/`, method: "GET" });
-    this.homepageCache = { $, timestamp: Date.now() };
-    return $;
+    // Share one in-flight fetch between the discover sections that race it on a
+    // cold load instead of firing three identical homepage requests.
+    if (this.homepagePromise && this.homepagePromise.baseUrl === baseUrl) {
+      return this.homepagePromise.promise;
+    }
+    const promise = fetchCheerio({ url: `${baseUrl}/`, method: "GET" })
+      .then(($) => {
+        this.homepageCache = { $, timestamp: Date.now(), baseUrl };
+        return $;
+      })
+      .finally(() => {
+        this.homepagePromise = null;
+      });
+    this.homepagePromise = { promise, baseUrl };
+    return promise;
   }
 
   // Enriches the "Popular Today" hero cards with author + description + status
   // by fetching each title's details (capped and cached).
   private async buildFeaturedItems(): Promise<DiscoverSectionItem[]> {
     const showAdult = getShowAdultContent();
+    const baseUrl = this.baseUrl;
     if (
       this.featuredCache &&
       this.featuredCache.adult === showAdult &&
+      this.featuredCache.baseUrl === baseUrl &&
       Date.now() - this.featuredCache.timestamp < FEATURED_TTL
     ) {
       return this.featuredCache.items;
@@ -426,7 +476,10 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
     );
     const items = built.filter((item): item is DiscoverSectionItem => item !== null);
 
-    this.featuredCache = { items, timestamp: Date.now(), adult: showAdult };
+    // Never pin an empty hero: a transient bad parse should retry next load.
+    if (items.length > 0) {
+      this.featuredCache = { items, timestamp: Date.now(), adult: showAdult, baseUrl };
+    }
     return items;
   }
 
@@ -440,16 +493,24 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
   }
 
   private async getGenres(): Promise<OptionItem[]> {
-    if (this.genresCache && Date.now() - this.genresCache.timestamp < GENRES_TTL) {
+    const baseUrl = this.baseUrl;
+    if (
+      this.genresCache &&
+      this.genresCache.baseUrl === baseUrl &&
+      Date.now() - this.genresCache.timestamp < GENRES_TTL
+    ) {
       return this.genresCache.options;
     }
     try {
-      const url = new URL(this.baseUrl).addPathComponent(MANGA_DIR).toString();
+      const url = new URL(baseUrl).addPathComponent(`${MANGA_DIR}/`).toString();
       const $ = await fetchCheerio({ url, method: "GET" });
       const options = parseGenreFilter($);
-      if (options.length > 0) this.genresCache = { options, timestamp: Date.now() };
+      if (options.length > 0) this.genresCache = { options, timestamp: Date.now(), baseUrl };
       return options;
-    } catch {
+    } catch (error) {
+      // Surface the Cloudflare-bypass prompt instead of silently returning [] —
+      // an empty genre list would make the adult filter fail open in search.
+      if (error instanceof CloudflareError) throw error;
       return this.genresCache?.options ?? [];
     }
   }
