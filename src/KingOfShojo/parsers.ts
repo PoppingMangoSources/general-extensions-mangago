@@ -66,15 +66,17 @@ const MONTHS: Record<string, number> = {
 // ---------------------------------------------------------------------------
 
 // Paperback only permits IDs matching alphanumerics + `._-@()[]%?#+=/&:`.
-export function toSafeId(slug: string): string {
-  return slug.replace(/[^A-Za-z0-9._\-@()[\]%?#+=/&:]/g, (c) => {
+// The `u` flag makes the replacer see whole code points, so astral characters
+// (e.g. emoji in a slug) don't reach encodeURIComponent as lone surrogates.
+function toSafeId(slug: string): string {
+  return slug.replace(/[^A-Za-z0-9._\-@()[\]%?#+=/&:]/gu, (c) => {
     const enc = encodeURIComponent(c);
     if (enc !== c) return enc;
     return "%" + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
   });
 }
 
-export function safeDecode(id: string): string {
+function safeDecode(id: string): string {
   try {
     return decodeURIComponent(id);
   } catch {
@@ -96,9 +98,9 @@ export function parseMangaId(href: string): string {
 
 // Chapters keep the full domain-relative path so they can be requested verbatim
 // (chapter URLs are flat: `{baseUrl}/{chapter-slug}/`).
-export function parseChapterId(href: string): string {
+function parseChapterId(href: string): string {
   const cleaned = href
-    .replace(/^https?:\/\/[^/]+/i, "")
+    .replace(/^(?:https?:)?\/\/[^/]+/i, "")
     .replace(/[?#].*$/, "")
     .replace(/^\/+|\/+$/g, "");
   return toSafeId(cleaned);
@@ -144,7 +146,7 @@ function cardTitle($: CheerioAPI, unit: Cheerio<AnyNode>, link: Cheerio<AnyNode>
   return Application.decodeHTMLEntities((raw || "").trim());
 }
 
-export function parseCard($: CheerioAPI, base: string, element: AnyNode): MangaCard | undefined {
+function parseCard($: CheerioAPI, base: string, element: AnyNode): MangaCard | undefined {
   const unit = $(element);
   const link = unit.is("a") ? unit : unit.find("a").first();
   const href = (link.attr("href") || "").trim();
@@ -432,7 +434,7 @@ export function parseChapters($: CheerioAPI, sourceManga: SourceManga): Chapter[
     if (!chapterId) continue;
 
     const title = Application.decodeHTMLEntities(
-      el.find(CHAPTER_NAME_SELECTOR).text().trim() || link.text().trim(),
+      el.find(CHAPTER_NAME_SELECTOR).first().text().trim() || link.text().trim(),
     );
     const chapNum = parseChapterNumber(title);
     const dateText = el.find(CHAPTER_DATE_SELECTOR).first().text().trim();
@@ -441,7 +443,6 @@ export function parseChapters($: CheerioAPI, sourceManga: SourceManga): Chapter[
       chapterId,
       sourceManga,
       title,
-      volume: 0,
       chapNum,
       publishDate: dateText ? parseDate(dateText) : undefined,
       langCode: "en",
@@ -497,22 +498,36 @@ export function parseChapterPages($: CheerioAPI, base: string): string[] {
 // arbitrary image URLs on the fly (~150 KB per page). The source is placed last
 // with wsrv's `ssl:` https shorthand so the proxied URL still ends in the
 // original image extension — that keeps it classified as an image request and
-// out of the rate limiter. "original" (or anything unexpected) is a no-op.
+// out of the rate limiter. "original" is a no-op; unrecognised modes get the
+// data-saver profile (matching the setting's default).
 export function proxyImage(url: string, mode: string): string {
   if (mode === "original") return url;
   const match = url.match(/^https?:\/\/(.+)$/i);
-  // Skip non-http urls, already-proxied urls, and anything with a query/hash that
-  // would break the unencoded trailing url parameter.
-  if (!match || /\/\/wsrv\.nl\//i.test(url) || /[?#]/.test(url)) return url;
-  const width = mode === "fast" ? 1080 : 720;
-  const quality = mode === "fast" ? 80 : 65;
+  // Skip non-http urls, already-proxied urls, anything with a query/hash that
+  // would break the unencoded trailing url parameter, and extensionless urls
+  // (their proxied form would escape both image classifications). The extension
+  // set mirrors BasicRateLimiter's image regex.
+  if (
+    !match ||
+    /\/\/wsrv\.nl\//i.test(url) ||
+    /[?#]/.test(url) ||
+    !/\.(avif|gif|jpe?g|jxl|png|webp)$/i.test(url)
+  ) {
+    return url;
+  }
+  // A literal `&` in the source path would truncate the wsrv parameters.
+  const source = match[1].replace(/&/g, "%26");
+  // "fast" is the legacy persisted id for the higher-quality profile.
+  const hq = mode === "quality" || mode === "fast";
+  const width = hq ? 1080 : 720;
+  const quality = hq ? 80 : 65;
   // No output= override: keep each image's own format. Forcing webp 400s on
   // ultra-tall strips (WebP caps at 16383px per side; these JPEG strips exceed
   // it even at reduced width, while JPEG allows up to 65535px).
   // default= makes the proxy redirect to the original image whenever it can't
   // fetch or process it (origin DNS hiccups, timeouts, oversized images), so a
   // proxy failure degrades to a full-size page instead of a blank one.
-  return `https://wsrv.nl/?w=${width}&q=${quality}&we&default=ssl:${match[1]}&url=ssl:${match[1]}`;
+  return `https://wsrv.nl/?w=${width}&q=${quality}&we&default=ssl:${source}&url=ssl:${source}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -522,7 +537,7 @@ export function proxyImage(url: string, mode: string): string {
 // Handles both the chapter-list format ("January 5, 2024") and the homepage
 // relative times ("10 minutes", "5 days ago"), deterministically across
 // engines (JavaScriptCore on iOS is stricter than V8 about date strings).
-export function parseDate(text: string): Date {
+function parseDate(text: string): Date {
   const trimmed = (text || "").trim();
   if (!trimmed) return new Date();
 
