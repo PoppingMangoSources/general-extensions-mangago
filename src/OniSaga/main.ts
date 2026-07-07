@@ -48,6 +48,7 @@ import {
 } from "./models";
 import { OniSagaInterceptor, OniSagaPageRateLimiter } from "./network";
 import {
+  CARD_PARSE_CAP,
   buildStatSubtitle,
   componentHtmlByName,
   countPages,
@@ -57,7 +58,7 @@ import {
   parseChapters,
   parseGenresFromHtml,
   parseAnchorCards,
-  parseLatestFromHome,
+  parseHomeRail,
   parseMangaCards,
   parseMangaCardsFromHtml,
   parseMangaDetails,
@@ -87,6 +88,9 @@ import {
 } from "./utils/livewire";
 
 const FEATURED_LIMIT = 10;
+
+// The browse/search Livewire component renders this many cards per page.
+const BROWSE_PAGE_SIZE = 24;
 
 // Carousel style per rail; toggle rails render as chip rows.
 function discoverSectionType(id: string): DiscoverSectionType {
@@ -440,7 +444,7 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
 
     if ((metadata?.page ?? 1) === 1) {
       try {
-        const cards = parseLatestFromHome(await this.getHomeDoc(), getShowNsfw());
+        const cards = parseHomeRail(await this.getHomeDoc(), "Latest Mangas", getShowNsfw());
         if (cards.length > 0) {
           return { items: cards.map(map), metadata: { page: 2, collectedIds: [] } };
         }
@@ -778,9 +782,17 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
 
     // Never cheerio-load the whole response: a filtered browse render can be
     // 15 MB, which freezes the device. Slice cards off the raw string instead.
+    const cards = parseMangaCardsFromHtml(html, showNsfw);
+    // The browse component paginates server-side (~24 cards/page), and its
+    // "next" control markup varies, so the button regex alone would often miss
+    // it — leaving search stuck on the first page. Treat a full page as "there's
+    // more" (an empty next page terminates the loop); only skip the heuristic
+    // when we truncated a whole-catalog render (cards == cap), where paging the
+    // client-side list would just repeat the same items.
+    const fullPage = cards.length >= BROWSE_PAGE_SIZE && cards.length < CARD_PARSE_CAP;
     return {
-      cards: parseMangaCardsFromHtml(html, showNsfw),
-      hasNext: hasNextPageFromHtml(html),
+      cards,
+      hasNext: fullPage || hasNextPageFromHtml(html),
     };
   }
 
