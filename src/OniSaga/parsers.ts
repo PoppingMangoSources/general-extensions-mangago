@@ -5,7 +5,7 @@ import { ContentRating, type Chapter, type SourceManga, type TagSection } from "
 import { load, type Cheerio, type CheerioAPI } from "cheerio";
 import { type Element } from "domhandler";
 
-import { DOMAIN, LANGUAGES, type Option } from "./models";
+import { DOMAIN, LANGUAGES } from "./models";
 import { chapterIdFromHref, getGenres, mangaIdFromHref } from "./utils/helpers";
 
 const READER_TOKEN_REGEX = /readerToken["']?\s*:\s*["']([^"']+)["']/;
@@ -317,29 +317,6 @@ export function componentHtmlByName($: CheerioAPI, componentName: string): strin
     }
   });
   return html;
-}
-
-// Genre id → title from the browse filter checkboxes, straight off the raw
-// document text: the /browse page can exceed 10 MB, which is far too large to
-// cheerio-parse on-device. Each genre renders `<label for="genre67">Title</label>`
-// beside its `<input name="genre[]" value="67">`, so the labels alone carry both
-// the id and the title. [] if absent.
-export function parseGenresFromHtml(html: string): Option[] {
-  const genres: Option[] = [];
-  const seen = new Set<string>();
-  const regex = /<label[^>]*\bfor="genre(\d+)"[^>]*>([\s\S]*?)<\/label>/g;
-  for (const match of html.matchAll(regex)) {
-    const id = match[1];
-    const title = match[2]
-      .replace(/<[^>]*>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (!title || seen.has(id)) continue;
-    seen.add(id);
-    genres.push({ id, title });
-  }
-  genres.sort((a, b) => a.title.localeCompare(b.title));
-  return genres;
 }
 
 export function hasNextPage($: CheerioAPI): boolean {
