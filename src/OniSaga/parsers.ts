@@ -2,7 +2,7 @@
 /* Copyright © 2026 Inkdex */
 
 import { ContentRating, type Chapter, type SourceManga, type TagSection } from "@paperback/types";
-import { type Cheerio, type CheerioAPI } from "cheerio";
+import { load, type Cheerio, type CheerioAPI } from "cheerio";
 import { type Element } from "domhandler";
 
 import { DOMAIN, LANGUAGES, type Option } from "./models";
@@ -130,6 +130,36 @@ export function parseMangaCards($: CheerioAPI, showNsfw: boolean): MangaCard[] {
     });
   });
 
+  return cards;
+}
+
+// One browse/search page of cards; a filtered browse Livewire response can be
+// 15 MB (the whole catalog), so we never parse more than this many.
+const CARD_PARSE_CAP = 100;
+
+// Parse browse/search cards straight off the Livewire HTML string. A filtered
+// browse response can render the entire catalog (tens of MB); `cheerio.load`-ing
+// all of it freezes the device, so instead find each `div.relative.group` card
+// wrapper by scanning the text, then cheerio-parse only that one small slice —
+// and stop after a page's worth. Bounds the work at ~100 tiny parses regardless
+// of how large the response is.
+export function parseMangaCardsFromHtml(html: string, showNsfw: boolean): MangaCard[] {
+  const starts: number[] = [];
+  const openDivRegex = /<div\b[^>]*?\bclass="([^"]*)"/g;
+  for (const match of html.matchAll(openDivRegex)) {
+    const classes = match[1].split(/\s+/);
+    if (classes.includes("relative") && classes.includes("group")) {
+      starts.push(match.index);
+      if (starts.length > CARD_PARSE_CAP) break;
+    }
+  }
+
+  const cards: MangaCard[] = [];
+  for (let i = 0; i < starts.length && cards.length < CARD_PARSE_CAP; i++) {
+    const slice = html.slice(starts[i], starts[i + 1] ?? html.length);
+    const parsed = parseMangaCards(load(slice), showNsfw);
+    if (parsed[0]) cards.push(parsed[0]);
+  }
   return cards;
 }
 
@@ -318,6 +348,29 @@ export function hasNextPage($: CheerioAPI): boolean {
     if ($(el).attr("disabled") === undefined) found = true;
   });
   return found;
+}
+
+// The /home page server-renders a "Latest Mangas" grid inline — no Livewire,
+// no 10MB+ /browse document. It sits between the Most Popular and Fan Favorites
+// Livewire islands, so slice from its heading to the next wire:snapshot and
+// parse the cards out of that one cheap (already-fetched) document.
+export function parseLatestFromHome(html: string, showNsfw: boolean): MangaCard[] {
+  const start = html.indexOf("Latest Mangas");
+  if (start < 0) return [];
+  const after = html.slice(start);
+  const end = after.indexOf("wire:snapshot");
+  return parseMangaCardsFromHtml(end > 0 ? after.slice(0, end) : after, showNsfw);
+}
+
+// String twin of hasNextPage for the multi-MB browse response we never fully
+// cheerio-load: an enabled `wire:click="...nextPage..."` control means there's
+// another page.
+export function hasNextPageFromHtml(html: string): boolean {
+  const regex = /<[^>]*\bwire:click="[^"]*nextPage[^"]*"[^>]*>/g;
+  for (const match of html.matchAll(regex)) {
+    if (!/\bdisabled\b/.test(match[0])) return true;
+  }
+  return false;
 }
 
 function parseStatus($: CheerioAPI): string {
