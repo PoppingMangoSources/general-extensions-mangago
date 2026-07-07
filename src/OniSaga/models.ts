@@ -13,10 +13,6 @@ export const PAGE_DELAY_KEY = "page_delay";
 export const READER_TOKEN_KEY_PREFIX = "reader_token_";
 export const SECTIONS_ORDER_KEY = "sections_order";
 export const SECTIONS_DELETED_KEY = "sections_deleted";
-export const GENRES_KEY = "genres_cache";
-export const GENRES_FETCHED_KEY = "genres_fetched_at";
-// Refetch the genre list from the site at most once every 48h.
-export const GENRES_TTL = 172_800_000;
 
 // Discover rail catalog. The array order is the default display order; the
 // section settings form lets the user reorder or hide individual rails.
@@ -145,9 +141,10 @@ export const SECTION_TOGGLES: Record<string, SectionToggle> = {
   },
 };
 
-// Fallback genre list, used until the live list is fetched from the browse
-// filter and cached (see parseGenres / getGenres). id = the Livewire filter's
-// genre id; kept current so a fresh install or a failed fetch still filters.
+// onisaga's fixed genre taxonomy (see getGenres). id = the Livewire filter's
+// numeric genre id, so a selection maps straight onto the browse/search POST.
+// Curated like the reference extension instead of scraped from the live filter,
+// which also carries thousands of loose tags.
 export const GENRES: Option[] = [
   { id: "1", title: "Action" },
   { id: "61", title: "Adaptation" },
