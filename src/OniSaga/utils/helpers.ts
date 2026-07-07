@@ -1,15 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import {
-  GENRES,
-  GENRES_FETCHED_KEY,
-  GENRES_KEY,
-  GENRES_TTL,
-  PAGE_DELAY_DEFAULT,
-  PAGE_DELAY_KEY,
-  type Option,
-} from "../models";
+import { GENRES, PAGE_DELAY_DEFAULT, PAGE_DELAY_KEY, type Option } from "../models";
 
 // iOS swaps straight quotes for curly ones; the site only matches the straight
 // forms, so normalize before searching.
@@ -47,43 +39,15 @@ export function parseJson<T>(raw: string, context: string): T {
   }
 }
 
-// ----- Genre cache -----
+// ----- Genres -----
 
-// The genre list shown in search, the Genres rail and the blacklist: the copy
-// fetched from the site if present, otherwise the bundled fallback so the source
-// works before the first fetch (or if it fails).
+// The genre list shown in search and the blacklist. onisaga's taxonomy is a
+// fixed set of ~90 genres (each with a stable numeric filter id), so we ship it
+// as a curated constant exactly like the reference extension — rather than
+// scraping the live browse/search filter, which also renders thousands of loose
+// tags that clutter the picker, slow the screen, and overflow the state store.
 export function getGenres(): Option[] {
-  const cached = Application.getState(GENRES_KEY) as Option[] | undefined;
-  return cached && cached.length > 0 ? cached : GENRES;
-}
-
-// Paperback's state store rejects any value of 128 KB or more. onisaga's live
-// search/browse filter can render thousands of genre + tag checkboxes, and the
-// serialized list overflows that cap — the raw setState then throws
-// "Data must be less than 131072 bytes" straight out of the search that
-// triggered the refresh, failing the whole screen. Keep the cache within a safe
-// budget (drop trailing entries until the JSON fits) and never let a state write
-// abort the calling list/search.
-const GENRE_STATE_BUDGET = 120_000;
-
-export function cacheGenres(genres: Option[], now: number): void {
-  let safe = genres;
-  while (safe.length > 0 && JSON.stringify(safe).length > GENRE_STATE_BUDGET) {
-    safe = safe.slice(0, Math.floor(safe.length * 0.9));
-  }
-  try {
-    Application.setState(safe, GENRES_KEY);
-    Application.setState(now, GENRES_FETCHED_KEY);
-  } catch {
-    // A failed state write must never break the browse/search that asked for the
-    // refresh; the bundled fallback list keeps the source usable regardless.
-  }
-}
-
-// True when the cache is empty or older than the TTL, so it's worth refetching.
-export function genresAreStale(now: number): boolean {
-  const at = (Application.getState(GENRES_FETCHED_KEY) as number | undefined) ?? 0;
-  return now - at > GENRES_TTL;
+  return GENRES;
 }
 
 // ----- Reader pacing -----
