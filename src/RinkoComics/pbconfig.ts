@@ -6,7 +6,7 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "RinkoComics",
   description: "Extension that pulls content from rinkocomics.com.",
-  version: "1.0.0-alpha.3",
+  version: "1.0.0-alpha.4",
   icon: "icon.png",
   language: "en",
   contentRating: ContentRating.EVERYONE,
