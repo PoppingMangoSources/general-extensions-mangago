@@ -54,7 +54,6 @@ export const ADULT_GENRE_NAMES: ReadonlySet<string> = new Set([
 
 export type PageMetadata = {
   page?: number;
-  collectedIds?: string[];
 };
 
 export type SearchMetadata = {
@@ -62,7 +61,6 @@ export type SearchMetadata = {
   year?: string;
   status?: string[];
   type?: string[];
-  orderBy?: string[];
   genres?: Record<string, "included" | "excluded">;
   // When set, getSearchResults returns the "Popular Series" ranking for the
   // given wpop range instead of running a normal search.
