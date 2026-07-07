@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-07T10:26:49.893Z",
+  "buildTime": "2026-07-07T10:34:55.635Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -35,7 +35,7 @@
     {
       "name": "HiveScans",
       "description": "Extension that pulls content from hivetoons.org.",
-      "version": "1.0.0-alpha.4",
+      "version": "1.0.0-alpha.5",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "SAFE",
@@ -58,7 +58,7 @@
     {
       "name": "KingOfShojo",
       "description": "Extension that pulls content from kingofshojo.com.",
-      "version": "1.0.0-alpha.6",
+      "version": "1.0.0-alpha.7",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
@@ -127,7 +127,7 @@
     {
       "name": "RinkoComics",
       "description": "Extension that pulls content from rinkocomics.com.",
-      "version": "1.0.0-alpha.3",
+      "version": "1.0.0-alpha.4",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "SAFE",
