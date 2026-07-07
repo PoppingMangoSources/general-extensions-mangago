@@ -506,7 +506,10 @@ export function proxyImage(url: string, mode: string): string {
   if (!match || /\/\/wsrv\.nl\//i.test(url) || /[?#]/.test(url)) return url;
   const width = mode === "fast" ? 1080 : 720;
   const quality = mode === "fast" ? 80 : 65;
-  return `https://wsrv.nl/?w=${width}&q=${quality}&output=webp&we&url=ssl:${match[1]}`;
+  // No output= override: keep each image's own format. Forcing webp 400s on
+  // ultra-tall strips (WebP caps at 16383px per side; these JPEG strips exceed
+  // it even at reduced width, while JPEG allows up to 65535px).
+  return `https://wsrv.nl/?w=${width}&q=${quality}&we&url=ssl:${match[1]}`;
 }
 
 // ---------------------------------------------------------------------------
