@@ -9,6 +9,7 @@ export const DISCOVER_TYPE_KEY = "discover_type";
 export const DISCOVER_STATUS_KEY = "discover_status";
 export const EXCLUDED_GENRES_KEY = "excluded_genres";
 export const LANGUAGES_KEY = "languages";
+export const DEDUPE_CHAPTERS_KEY = "dedupe_chapters";
 export const PAGE_DELAY_KEY = "page_delay";
 export const READER_TOKEN_KEY_PREFIX = "reader_token_";
 export const SECTIONS_ORDER_KEY = "sections_order";
