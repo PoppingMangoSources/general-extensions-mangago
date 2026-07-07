@@ -82,8 +82,20 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
   // re-home it before the server's per-session page quota trips.
   private readerSessions = new Map<
     string,
-    { token: string; referer: string; pagesServed: number }
+    {
+      token: string;
+      referer: string;
+      pagesServed: number;
+      refreshedAt?: number;
+      refreshOk?: boolean;
+    }
   >();
+
+  // Coalesce rapid re-mints: a genuinely dead session 403s every prefetched
+  // page, and each page's sequential retries would otherwise each reload the
+  // reader page. Reusing a very recent refresh outcome bounds those reloads to
+  // one per window instead of a burst that itself looks abusive.
+  private static readonly REFRESH_MIN_INTERVAL_MS = 8000;
 
   // De-duped reader-session refreshes: a prefetch burst can 429 many pages at
   // once, so the first refresh re-fetches the reader page (minting a token with
@@ -105,9 +117,20 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
     const session = this.readerSessions.get(cid);
     if (!session) return false;
 
+    // A reload moments ago won't yield a better token — reuse its outcome so a
+    // dead session can't trigger a reader-page reload per 403.
+    if (
+      session.refreshedAt !== undefined &&
+      Date.now() - session.refreshedAt < OniSagaInterceptor.REFRESH_MIN_INTERVAL_MS
+    ) {
+      return session.refreshOk ?? false;
+    }
+
     const task = (async () => {
       const [, page] = await Application.scheduleRequest({ url: session.referer, method: "GET" });
       const token = extractReaderToken(Application.arrayBufferToUTF8String(page));
+      session.refreshedAt = Date.now();
+      session.refreshOk = Boolean(token);
       if (!token) return false;
       session.token = token;
       session.pagesServed = 0;
@@ -116,6 +139,10 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
       // A Cloudflare challenge on the reader-page reload must surface so the
       // app opens the bypass; any other failure just means "couldn't refresh".
       if (error instanceof CloudflareError) throw error;
+      // Stamp the failure too, so a transient error doesn't invite an immediate
+      // reload storm; the next window is free to try again.
+      session.refreshedAt = Date.now();
+      session.refreshOk = false;
       return false;
     });
 
@@ -176,6 +203,27 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
           "user-agent": await Application.getDefaultUserAgent(),
         },
       });
+    }
+
+    // Browse/search/details endpoints can also 429 — onisaga rate-limits deep
+    // search pagination (the heaviest, multi-MB responses). Unlike the reader
+    // page API (handled below with its own shared cooldown), these have no
+    // pacing beyond the global limiter, so a rate-limited page would otherwise
+    // surface as an empty list. Honour Retry-After and retry once, bounded by
+    // the same header guard, preserving the original method and body (a Livewire
+    // update is a POST). The reader page API keeps its dedicated path.
+    if (!PAGE_API_REGEX.test(request.url) && response.status === 429) {
+      const attempt = Number(request.headers?.[PAGE_RETRY_HEADER] ?? "0");
+      if (attempt < PAGE_RETRY_LIMIT) {
+        await Application.sleep(
+          Math.min(getRetryDelayMs(response.headers), MAX_COOLDOWN_MS) / 1000,
+        );
+        const [, buffer] = await Application.scheduleRequest({
+          ...request,
+          headers: { ...request.headers, [PAGE_RETRY_HEADER]: String(attempt + 1) },
+        });
+        return buffer;
+      }
     }
 
     const cid = PAGE_API_REGEX.exec(request.url)?.[1];
@@ -297,28 +345,30 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
 // keeps the first screen snappy while staying well under the penalty
 // threshold. Everything except the page API passes through untouched
 // (Webtoon-style per-endpoint scoping).
-const BURST_CAPACITY = 10;
+// A short opener, mirroring the site's own reader — it fetches the current page
+// plus the next two before settling into a steady lookahead. Three quick pages
+// open the first screen without front-loading the frequency limiter.
+const BURST_CAPACITY = 3;
 const BURST_SPACING_SECONDS = 0.3;
 
-// Hard ceiling on page requests per rolling minute. The per-page delay sets the
-// cadence, but only this caps the *average* — so neither the initial burst nor a
-// fast Image Requests Limit setting can push the sustained rate past onisaga's
-// hidden frequency limiter (the "Rate limit exceeded" 429). Two independent live
-// estimates put that threshold near ~60/min (an ~88/min run tripped it at page
-// 62); 55 sits just under it, so a fast setting like 0.75s/page actually pays
-// off on long strip chapters instead of being flattened to the cap — and a rare
-// graze self-heals via the Retry-After cooldown plus the strike floor. Normal
-// chapters never reach the window anyway: the burst plus the per-page delay
-// clears them before 55 requests accumulate in a minute.
-const RATE_WINDOW_MS = 60_000;
-const RATE_WINDOW_MAX = 55;
+// Sustainable floor between page requests, evenly enforced (see pace). onisaga's
+// hidden frequency limiter trips a "Rate limit exceeded" 429 near ~60/min — but
+// as a *short-window* limiter, not a 60s average: front-loading ~50 requests in
+// ~35s (a big burst plus a sub-second per-page delay) trips it even though the
+// minute average is under 60. So the fix is even spacing, not a rolling average.
+// ~1.2s/request (~50/min) holds a clear margin under the threshold — even the
+// 3-page opener plus the first minute of steady requests stays near ~52, not
+// grazing 60 — matching the site's own ~1 req/s sustained cadence. The user's
+// Image Requests Limit can only make reading *slower* than this; it can't
+// undercut the floor and re-trip the limiter.
+const SUSTAINED_FLOOR_SECONDS = 1.2;
 
 export class OniSagaPageRateLimiter extends PaperbackInterceptor {
   private burst = BURST_CAPACITY;
   private lastChapterId = "";
   private chain: Promise<unknown> = Promise.resolve();
-  // Fire times of recent page requests, for the rolling-window rate cap.
-  private requestTimes: number[] = [];
+  // Fire time of the last page request, for even inter-request spacing.
+  private lastRequestAt = 0;
 
   override async interceptRequest(request: Request): Promise<Request> {
     const cid = PAGE_API_REGEX.exec(request.url)?.[1];
@@ -352,34 +402,25 @@ export class OniSagaPageRateLimiter extends PaperbackInterceptor {
       this.burst = 0; // after a penalty, hold the steady rate — don't burst again
     }
 
-    // Per-page cadence: a few quick pages for a snappy first screen, then the
-    // user's spacing (held to the safe floor while a strike is active).
+    // Minimum interval since the previous page request. The opener fires a few
+    // quick pages; after that every request is evenly spaced at the user's
+    // setting, floored to the sustainable rate (raised further while a strike is
+    // cooling). Even spacing — not a rolling average — is what keeps the
+    // short-window frequency limiter from tripping, since it never lets a burst
+    // of requests stack up inside the limiter's window.
+    let intervalSeconds: number;
     if (this.burst > 0) {
       this.burst -= 1;
-      await Application.sleep(BURST_SPACING_SECONDS);
+      intervalSeconds = BURST_SPACING_SECONDS;
     } else {
-      let seconds = getPageDelaySeconds();
-      if (Date.now() < pageCooldown.strikeUntil) seconds = Math.max(seconds, STRIKE_FLOOR_SECONDS);
-      await Application.sleep(seconds);
-    }
-
-    // Rolling-window backstop: whatever the burst or the user's spacing, hold to
-    // at most RATE_WINDOW_MAX page requests per minute so the frequency limiter
-    // can't trip. This is the average-rate guarantee the per-page delay lacks.
-    await this.throttleWindow();
-  }
-
-  private async throttleWindow(): Promise<void> {
-    let now = Date.now();
-    this.requestTimes = this.requestTimes.filter((t) => now - t < RATE_WINDOW_MS);
-    if (this.requestTimes.length >= RATE_WINDOW_MAX) {
-      const waitMs = RATE_WINDOW_MS - (now - this.requestTimes[0]);
-      if (waitMs > 0) {
-        await Application.sleep(waitMs / 1000);
-        now = Date.now();
-        this.requestTimes = this.requestTimes.filter((t) => now - t < RATE_WINDOW_MS);
+      intervalSeconds = Math.max(getPageDelaySeconds(), SUSTAINED_FLOOR_SECONDS);
+      if (Date.now() < pageCooldown.strikeUntil) {
+        intervalSeconds = Math.max(intervalSeconds, STRIKE_FLOOR_SECONDS);
       }
     }
-    this.requestTimes.push(now);
+
+    const waitMs = this.lastRequestAt + intervalSeconds * 1000 - Date.now();
+    if (waitMs > 0) await Application.sleep(waitMs / 1000);
+    this.lastRequestAt = Date.now();
   }
 }
