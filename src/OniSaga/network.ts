@@ -328,9 +328,12 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
             return buffer;
           }
         }
-      } catch {
-        // Fall through and return the original body; the reader shows a broken
-        // page rather than hanging the whole chapter.
+      } catch (error) {
+        // A Cloudflare challenge on the signed-image fetch must reach the app so
+        // it opens the bypass, not be flattened into a broken page.
+        if (error instanceof CloudflareError) throw error;
+        // Any other failure: fall through and return the original body; the
+        // reader shows a broken page rather than hanging the whole chapter.
       }
     }
 
