@@ -99,10 +99,11 @@ export const MIN_CHAPTERS_OPTIONS: Option[] = [
 ];
 
 // Seconds between reader page requests; faster cadences risk the site's
-// per-IP burst penalty (429). The id doubles as the numeric value. Faster
-// options are available for good connections/IPs — if a chapter starts
-// 429ing, pick a slower one.
-export const PAGE_DELAY_DEFAULT = "2";
+// per-IP burst penalty (429). The id doubles as the numeric value. The
+// rolling-window cap in network.ts bounds the sustained average regardless,
+// so even the fastest option stays under the observed penalty threshold —
+// if a chapter still 429s, pick a slower one.
+export const PAGE_DELAY_DEFAULT = "1";
 export const PAGE_DELAY_OPTIONS: Option[] = [
   { id: "0.75", title: "1 image per 0.75 seconds" },
   { id: "1", title: "1 image per 1.00 seconds" },
