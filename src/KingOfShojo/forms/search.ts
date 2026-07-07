@@ -11,28 +11,20 @@ import {
   type Tag,
 } from "@paperback/types";
 
-import {
-  ORDER_OPTIONS,
-  STATUS_OPTIONS,
-  TYPE_OPTIONS,
-  type OptionItem,
-  type SearchMetadata,
-} from "../models";
+import { STATUS_OPTIONS, TYPE_OPTIONS, type OptionItem, type SearchMetadata } from "../models";
 
 const toTags = (options: OptionItem[]): Tag[] =>
   options.map((option) => ({ id: option.id, title: option.value }));
 
-export class KingOfShojoSearchForm extends AdvancedSearchForm {
+export class KingOfShojoAdvancedSearchForm extends AdvancedSearchForm {
   private author: string;
   private year: string;
   private status: string[];
   private type: string[];
-  private orderBy: string[];
   private genres: Record<string, "included" | "excluded">;
 
   private readonly statusOptions = toTags(STATUS_OPTIONS);
   private readonly typeOptions = toTags(TYPE_OPTIONS);
-  private readonly orderOptions = toTags(ORDER_OPTIONS);
   private readonly genreOptions: Tag[];
 
   constructor(searchQuery: SearchQuery<SearchMetadata>, genres: OptionItem[]) {
@@ -44,7 +36,6 @@ export class KingOfShojoSearchForm extends AdvancedSearchForm {
     this.year = meta.year ?? "";
     this.status = meta.status ?? [];
     this.type = meta.type ?? [];
-    this.orderBy = meta.orderBy ?? [];
     this.genres = { ...meta.genres };
   }
 
@@ -54,12 +45,18 @@ export class KingOfShojoSearchForm extends AdvancedSearchForm {
         InputRow("author", {
           title: "Author",
           value: this.author,
-          onValueChange: Application.Selector(this as KingOfShojoSearchForm, "handleAuthorChange"),
+          onValueChange: Application.Selector(
+            this as KingOfShojoAdvancedSearchForm,
+            "handleAuthorChange",
+          ),
         }),
         InputRow("year", {
           title: "Year",
           value: this.year,
-          onValueChange: Application.Selector(this as KingOfShojoSearchForm, "handleYearChange"),
+          onValueChange: Application.Selector(
+            this as KingOfShojoAdvancedSearchForm,
+            "handleYearChange",
+          ),
         }),
       ]),
       Section("status", [
@@ -70,7 +67,10 @@ export class KingOfShojoSearchForm extends AdvancedSearchForm {
           items: this.statusOptions,
           minItemCount: 0,
           maxItemCount: 1,
-          onValueChange: Application.Selector(this as KingOfShojoSearchForm, "handleStatusChange"),
+          onValueChange: Application.Selector(
+            this as KingOfShojoAdvancedSearchForm,
+            "handleStatusChange",
+          ),
         }),
       ]),
       Section("type", [
@@ -81,18 +81,10 @@ export class KingOfShojoSearchForm extends AdvancedSearchForm {
           items: this.typeOptions,
           minItemCount: 0,
           maxItemCount: 1,
-          onValueChange: Application.Selector(this as KingOfShojoSearchForm, "handleTypeChange"),
-        }),
-      ]),
-      Section("order", [
-        SelectRow("orderBy", {
-          title: "Order By",
-          layout: "flow",
-          value: this.orderBy,
-          items: this.orderOptions,
-          minItemCount: 0,
-          maxItemCount: 1,
-          onValueChange: Application.Selector(this as KingOfShojoSearchForm, "handleOrderChange"),
+          onValueChange: Application.Selector(
+            this as KingOfShojoAdvancedSearchForm,
+            "handleTypeChange",
+          ),
         }),
       ]),
     ];
@@ -108,7 +100,7 @@ export class KingOfShojoSearchForm extends AdvancedSearchForm {
             allowExclusion: true,
             allowEmptySelection: true,
             onValueChange: Application.Selector(
-              this as KingOfShojoSearchForm,
+              this as KingOfShojoAdvancedSearchForm,
               "handleGenresChange",
             ),
           }),
@@ -135,10 +127,6 @@ export class KingOfShojoSearchForm extends AdvancedSearchForm {
     this.type = value;
   }
 
-  async handleOrderChange(value: string[]): Promise<void> {
-    this.orderBy = value;
-  }
-
   async handleGenresChange(value: Record<string, "included" | "excluded">): Promise<void> {
     this.genres = value;
   }
@@ -149,7 +137,6 @@ export class KingOfShojoSearchForm extends AdvancedSearchForm {
     if (this.year.trim()) result.year = this.year.trim();
     if (this.status.length > 0) result.status = this.status;
     if (this.type.length > 0) result.type = this.type;
-    if (this.orderBy.length > 0) result.orderBy = this.orderBy;
     if (Object.keys(this.genres).length > 0) result.genres = this.genres;
     return result;
   }
