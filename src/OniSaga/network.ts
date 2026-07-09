@@ -184,6 +184,13 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
         headers["sec-fetch-site"] = "same-origin";
         headers.referer = session.referer;
       }
+    } else if (headers.accept === undefined && headers.Accept === undefined) {
+      // Plain HTML fetches (reader page, /home, /manga, /browse) get a browser
+      // document Accept, matching the site's own reader. A request with no
+      // Accept looks bot-shaped and is likelier to draw a Cloudflare challenge —
+      // the transient cause of a reader page arriving without its token. Livewire
+      // calls set their own Accept: application/json, so they're left untouched.
+      headers.accept = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
     }
 
     return { ...request, headers };
@@ -369,12 +376,13 @@ const BURST_SPACING_SECONDS = 0.3;
 // as a *short-window* limiter, not a 60s average: front-loading ~50 requests in
 // ~35s (a big burst plus a sub-second per-page delay) trips it even though the
 // minute average is under 60. So the fix is even spacing, not a rolling average.
-// ~1.2s/request (~50/min) holds a clear margin under the threshold — even the
-// 3-page opener plus the first minute of steady requests stays near ~52, not
-// grazing 60 — matching the site's own ~1 req/s sustained cadence. The user's
-// Image Requests Limit can only make reading *slower* than this; it can't
-// undercut the floor and re-trip the limiter.
-const SUSTAINED_FLOOR_SECONDS = 1.2;
+// ~1.1s/request (~55/min) keeps a margin under the threshold while reading a
+// touch faster than the old 1.2s: the 6-page opener plus the first minute of
+// steady requests lands near ~57, still under 60. (Concurrency isn't the lever
+// here — round-trips already overlap; this sustained rate is what bounds
+// throughput.) The user's Image Requests Limit can only make reading *slower*
+// than this; it can't undercut the floor and re-trip the limiter.
+const SUSTAINED_FLOOR_SECONDS = 1.1;
 
 export class OniSagaPageRateLimiter extends PaperbackInterceptor {
   private burst = BURST_CAPACITY;
