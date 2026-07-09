@@ -704,10 +704,17 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     const segments = chapter.chapterId.split("/").filter(Boolean);
     const cid = segments[segments.length - 1] ?? "";
 
-    const [, buffer] = await Application.scheduleRequest({ url: chapterUrl, method: "GET" });
-    const body = Application.arrayBufferToUTF8String(buffer);
-
-    const token = extractReaderToken(body);
+    // The reader page occasionally comes back without its inlined token — a
+    // transient Cloudflare interstitial or a partial render — which used to fail
+    // the whole chapter open even though a reopen worked. Retry the fetch once
+    // before giving up (a real CF challenge still surfaces via the interceptor).
+    let body = "";
+    let token = "";
+    for (let attempt = 0; attempt < 2 && !token; attempt++) {
+      const [, buffer] = await Application.scheduleRequest({ url: chapterUrl, method: "GET" });
+      body = Application.arrayBufferToUTF8String(buffer);
+      token = extractReaderToken(body);
+    }
     if (!token) throw new Error("Could not find reader token on chapter page");
 
     // Request pages by their embedded `order` values — the site's own reader
