@@ -143,7 +143,10 @@ export const CARD_PARSE_CAP = 100;
 // wrapper by scanning the text, then cheerio-parse only that one small slice —
 // and stop after a page's worth. Bounds the work at ~100 tiny parses regardless
 // of how large the response is.
-export function parseMangaCardsFromHtml(html: string, showNsfw: boolean): MangaCard[] {
+export function parseMangaCardsFromHtml(
+  html: string,
+  showNsfw: boolean,
+): { cards: MangaCard[]; truncated: boolean } {
   const starts: number[] = [];
   const openDivRegex = /<div\b[^>]*?\bclass="([^"]*)"/g;
   for (const match of html.matchAll(openDivRegex)) {
@@ -153,6 +156,10 @@ export function parseMangaCardsFromHtml(html: string, showNsfw: boolean): MangaC
       if (starts.length > CARD_PARSE_CAP) break;
     }
   }
+  // Whether the RAW (pre-NSFW-filter) scan hit the cap — i.e. a whole-catalog
+  // render, not a server page. Reported separately from cards.length because
+  // NSFW filtering shrinks the returned count and would otherwise mask this.
+  const truncated = starts.length > CARD_PARSE_CAP;
 
   const cards: MangaCard[] = [];
   for (let i = 0; i < starts.length && cards.length < CARD_PARSE_CAP; i++) {
@@ -160,7 +167,7 @@ export function parseMangaCardsFromHtml(html: string, showNsfw: boolean): MangaC
     const parsed = parseMangaCards(load(slice), showNsfw);
     if (parsed[0]) cards.push(parsed[0]);
   }
-  return cards;
+  return { cards, truncated };
 }
 
 // Fallback for component markup that doesn't use the browse card layout (the
@@ -352,7 +359,7 @@ export function parseHomeRail(html: string, heading: string, showNsfw: boolean):
     if (at >= 0 && at < end) end = at;
   }
 
-  return parseMangaCardsFromHtml(after.slice(0, end), showNsfw);
+  return parseMangaCardsFromHtml(after.slice(0, end), showNsfw).cards;
 }
 
 // String twin of hasNextPage for the multi-MB browse response we never fully
