@@ -90,6 +90,13 @@ const FEATURED_LIMIT = 10;
 // The browse/search Livewire component renders this many cards per page.
 const BROWSE_PAGE_SIZE = 24;
 
+// A freshly-opened chapter onisaga hasn't imported yet serves a
+// `manga.chapter-page-loader` page (no reader token) that polls every 3s until
+// the import finishes. Mirror that poll: re-fetch the reader page up to this
+// many times, spaced this far apart, until the real reader with its token loads.
+const IMPORT_POLL_SECONDS = 3;
+const READER_MAX_ATTEMPTS = 12;
+
 // Carousel style per rail; toggle rails render as chip rows.
 function discoverSectionType(id: string): DiscoverSectionType {
   if (SECTION_TOGGLES[id]) return DiscoverSectionType.genres;
@@ -704,18 +711,30 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     const segments = chapter.chapterId.split("/").filter(Boolean);
     const cid = segments[segments.length - 1] ?? "";
 
-    // The reader page occasionally comes back without its inlined token — a
-    // transient Cloudflare interstitial or a partial render — which used to fail
-    // the whole chapter open even though a reopen worked. Retry the fetch once
-    // before giving up (a real CF challenge still surfaces via the interceptor).
+    // The reader page has no token in two cases: onisaga is still importing the
+    // chapter (a `manga.chapter-page-loader` page that polls every 3s), or a
+    // transient interstitial/partial render. Poll the import loader like the site
+    // does until the real reader appears; for a non-loader miss, one quick retry.
     let body = "";
     let token = "";
-    for (let attempt = 0; attempt < 2 && !token; attempt++) {
+    for (let attempt = 0; attempt < READER_MAX_ATTEMPTS && !token; attempt++) {
       const [, buffer] = await Application.scheduleRequest({ url: chapterUrl, method: "GET" });
       body = Application.arrayBufferToUTF8String(buffer);
       token = extractReaderToken(body);
+      if (token) break;
+      if (body.includes("manga.chapter-page-loader")) {
+        await Application.sleep(IMPORT_POLL_SECONDS);
+        continue;
+      }
+      if (attempt >= 1) break; // transient miss: one quick retry, then give up
     }
-    if (!token) throw new Error("Could not find reader token on chapter page");
+    if (!token) {
+      throw new Error(
+        body.includes("manga.chapter-page-loader")
+          ? "Chapter is still importing on onisaga; try again in a moment"
+          : "Could not find reader token on chapter page",
+      );
+    }
 
     // Request pages by their embedded `order` values — the site's own reader
     // does the same, and orders can have gaps after re-imports, where a
