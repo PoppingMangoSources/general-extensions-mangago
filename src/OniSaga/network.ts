@@ -172,7 +172,10 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
       session.refreshOk = Boolean(dto.token);
       if (!dto.token) return false;
       session.token = dto.token;
-      session.pagesServed = 0;
+      // Do NOT reset pagesServed here: /reader-token rotates the token within the
+      // SAME server session (its page budget already spent), unlike refreshSession
+      // below. Resetting would delay the proactive re-home by another budget and
+      // let a long chapter blow past the server's per-session page cap.
       return true;
     });
   }
@@ -229,8 +232,12 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
           return {
             ...request,
             url: cached.url,
+            // Spread the headers the earlier interceptors already set (notably the
+            // cookie header from CookieStorageInterceptor — cf_clearance) and only
+            // override the image-specific ones, so a cached scroll-back fetch can't
+            // drop the Cloudflare clearance and re-trigger a challenge.
             headers: {
-              "user-agent": headers["user-agent"],
+              ...headers,
               referer: session?.referer ?? `${DOMAIN}/`,
               accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
             },
@@ -324,21 +331,39 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
       }
     }
 
-    // A page-API 429 ("Rate limit exceeded") is the frequency limiter, not an
-    // auth problem — the site's own reader never re-mints on it, and neither do
-    // we (a fresh token still 429s; the reader-page reload it costs only adds
-    // load to the saturated window). It's a rolling window that usually refills
-    // in a few seconds, so the early strikes park the shared cooldown for only a
-    // short, jittered slice (~6s, like the site's resolvePageUrl cap) and retry.
-    // If those quick retries keep failing the window is genuinely saturated, so
-    // the final attempt honors the full Retry-After — a longer wait, but the page
-    // then loads instead of surfacing the JSON error as a broken image. Parking
-    // the whole pipeline (via pageCooldown.until, not a per-request sleep) stops
-    // the queued prefetch from hammering the window and holding it open; the
-    // raised floor (strikeUntil) then avoids an immediate re-trip.
+    // Two different page-API 429s share this status, and they need opposite
+    // recovery. The per-session page quota ("Session page limit exceeded") is
+    // keyed to the reader session, so only a full re-home (a new session key via
+    // refreshSession) clears it — waiting can't, and after the retry limit the
+    // JSON error would render as a broken image. This is the backstop for when
+    // the proactive re-home didn't fire in time (e.g. the local counter
+    // undercounted). The frequency limiter ("Rate limit exceeded") is the
+    // opposite: a rolling window a fresh session does NOT clear — only time does,
+    // and the site's own reader never re-mints on it. So the early strikes park
+    // the shared cooldown for a short, jittered slice (~6s, like the site's
+    // resolvePageUrl cap) and retry; if those keep failing the window is genuinely
+    // saturated, so the final attempt honors the full Retry-After — a longer wait,
+    // but the page then loads instead of breaking. Parking the whole pipeline
+    // (via pageCooldown.until, not a per-request sleep) stops the queued prefetch
+    // from hammering the window open; the raised floor (strikeUntil) then avoids
+    // an immediate re-trip.
     if (PAGE_API_REGEX.test(request.url) && response.status === 429) {
       const attempt = Number(request.headers?.[PAGE_RETRY_HEADER] ?? "0");
       if (attempt < PAGE_RETRY_LIMIT) {
+        // The per-session page-cap 429 only clears with a fresh session key.
+        if (
+          session &&
+          cid &&
+          /session|page limit/i.test(Application.arrayBufferToUTF8String(data)) &&
+          (await this.refreshSession(cid))
+        ) {
+          const [, buffer] = await Application.scheduleRequest({
+            url: request.url,
+            method: "GET",
+            headers: { ...request.headers, [PAGE_RETRY_HEADER]: String(attempt + 1) },
+          });
+          return buffer;
+        }
         const jitterMs = Date.now() % 500;
         const retryAfterMs = getRetryDelayMs(response.headers) + jitterMs;
         const waitMs =
