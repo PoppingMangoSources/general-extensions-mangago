@@ -49,7 +49,6 @@ import {
 } from "./models";
 import { OniSagaInterceptor, OniSagaPageRateLimiter } from "./network";
 import {
-  CARD_PARSE_CAP,
   buildStatSubtitle,
   componentHtmlByName,
   countPages,
@@ -310,8 +309,12 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
 
     const { cards, hasNext } = await this.fetchBrowse(`${DOMAIN}/browse`, updates, page);
     const fresh = cards.filter((card) => !collectedIds.includes(card.mangaId));
-    collectedIds.push(...fresh.map((card) => card.mangaId));
 
+    // Thread the initial /home id set through unchanged rather than appending
+    // every page's ids: it exists only to de-dupe the one-time overlap between
+    // the /home "Latest" grid and browse page 1 (both sorted newest-first, so
+    // later pages never re-hit it), and accumulating would grow the page metadata
+    // by ~24 slugs per page across a long scroll.
     return {
       items: fresh.map(map),
       metadata: hasNext ? { page: page + 1, collectedIds } : undefined,
@@ -613,8 +616,14 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     const mangaId = mangaIdFromHref(rawUrl) || (rawUrl.match(/\/read\/([^/]+)/)?.[1] ?? "");
     if (!mangaId) return undefined;
 
-    const $ = await this.fetchCheerio({ url: `${DOMAIN}/manga/${mangaId}`, method: "GET" });
-    const details = parseMangaDetails($, mangaId);
+    const [$, finalUrl] = await this.fetchCheerioWithFinalUrl({
+      url: `${DOMAIN}/manga/${mangaId}`,
+      method: "GET",
+    });
+    // Canonicalize an alias/redirecting slug so a pasted share link resolves to
+    // the same library entry as search results, not a duplicate.
+    const canonical = mangaIdFromHref(finalUrl) || mangaId;
+    const details = parseMangaDetails($, canonical);
 
     // Direct results honour the NSFW setting like every other list.
     if (!getShowNsfw() && details.mangaInfo.contentRating === ContentRating.ADULT) {
@@ -622,7 +631,7 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     }
 
     return {
-      mangaId,
+      mangaId: canonical,
       title: details.mangaInfo.primaryTitle,
       imageUrl: details.mangaInfo.thumbnailUrl ?? "",
       contentRating: details.mangaInfo.contentRating ?? ContentRating.EVERYONE,
@@ -632,8 +641,14 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   // ============================ Manga & Chapters ===============================
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
-    const $ = await this.fetchCheerio({ url: `${DOMAIN}/manga/${mangaId}`, method: "GET" });
-    return parseMangaDetails($, mangaId);
+    // Canonicalize via the final URL: an alias slug (e.g. /manga/handa-kun)
+    // redirects to the canonical one (/manga/barakamon-2), and returning the
+    // canonical id keeps alias imports from forking a duplicate library entry.
+    const [$, finalUrl] = await this.fetchCheerioWithFinalUrl({
+      url: `${DOMAIN}/manga/${mangaId}`,
+      method: "GET",
+    });
+    return parseMangaDetails($, mangaIdFromHref(finalUrl) || mangaId);
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
@@ -683,8 +698,9 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
 
   // Collapse repeat uploads of the same chapter+language to a single entry,
   // keeping the newest by upload date (MangaDex's "Skip Same Chapter" / Aidoku's
-  // dedupe). A numbered chapter keys on number+language; an unparseable one keys
-  // on its title so genuinely distinct extras aren't merged into one.
+  // dedupe). Key on the chapter title, which carries the original number *text*
+  // (`Chapter 10.10`), not the parsed float — `parseFloat("10.10") === 10.1`, so
+  // keying on chapNum would collapse distinct decimal extras like 10.1 and 10.10.
   private dedupeChapters(chapters: Chapter[]): Chapter[] {
     const byNewest = [...chapters].sort(
       (a, b) => (b.publishDate?.getTime() ?? 0) - (a.publishDate?.getTime() ?? 0),
@@ -692,10 +708,7 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     const seen = new Set<string>();
     const kept: Chapter[] = [];
     for (const chapter of byNewest) {
-      const key =
-        chapter.chapNum > 0
-          ? `${chapter.chapNum}-${chapter.langCode}`
-          : `${chapter.title}-${chapter.langCode}`;
+      const key = `${chapter.title}-${chapter.langCode}`;
       if (seen.has(key)) continue;
       seen.add(key);
       kept.push(chapter);
@@ -835,14 +848,16 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
 
     // Never cheerio-load the whole response: a filtered browse render can be
     // 15 MB, which freezes the device. Slice cards off the raw string instead.
-    const cards = parseMangaCardsFromHtml(html, showNsfw);
+    const { cards, truncated } = parseMangaCardsFromHtml(html, showNsfw);
     // The browse component paginates server-side (~24 cards/page), and its
     // "next" control markup varies, so the button regex alone would often miss
     // it — leaving search stuck on the first page. Treat a full page as "there's
     // more" (an empty next page terminates the loop); only skip the heuristic
-    // when we truncated a whole-catalog render (cards == cap), where paging the
-    // client-side list would just repeat the same items.
-    const fullPage = cards.length >= BROWSE_PAGE_SIZE && cards.length < CARD_PARSE_CAP;
+    // when the raw scan truncated a whole-catalog render, where paging the
+    // client-side list would just repeat the same items. Keyed on `truncated`
+    // (the pre-filter scan), not cards.length, so a hidden-NSFW render whose
+    // post-filter count dips below the cap can't masquerade as a partial page.
+    const fullPage = cards.length >= BROWSE_PAGE_SIZE && !truncated;
     return {
       cards,
       hasNext: fullPage || hasNextPageFromHtml(html),
@@ -898,6 +913,15 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   async fetchCheerio(request: Request): Promise<cheerio.CheerioAPI> {
     const [, data] = await Application.scheduleRequest(request);
     return cheerio.load(Application.arrayBufferToUTF8String(data));
+  }
+
+  // Like fetchCheerio, but also returns the response's final (post-redirect) URL
+  // so a manga fetched through an alias slug can be canonicalized to the slug the
+  // site redirected to — otherwise an alias/share-link import creates a separate
+  // library entry from the canonical one.
+  private async fetchCheerioWithFinalUrl(request: Request): Promise<[cheerio.CheerioAPI, string]> {
+    const [response, data] = await Application.scheduleRequest(request);
+    return [cheerio.load(Application.arrayBufferToUTF8String(data)), response.url];
   }
 }
 
