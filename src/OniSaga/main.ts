@@ -776,7 +776,10 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
       const [response, buffer] = await Application.scheduleRequest({
         url: `${DOMAIN}/api/chapter/${cid}/pages?from=0`,
         method: "GET",
-        headers: { "x-reader-token": token, referer },
+        // Set a fetch Accept (this /pages url doesn't match the page-API regex, so
+        // without it the interceptor would stamp the browser document Accept and
+        // the endpoint/Cloudflare could serve a non-JSON navigation body).
+        headers: { "x-reader-token": token, referer, accept: "*/*" },
       });
       // Adopt a rotated token so the reader session stays current.
       for (const [key, value] of Object.entries(response.headers ?? {})) {
