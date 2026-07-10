@@ -21,15 +21,17 @@ const PAGE_RETRY_HEADER = "x-pb-page-retry";
 const PAGE_RETRY_LIMIT = 3;
 // Backoff when a request 429s without a Retry-After.
 const RATE_LIMIT_FALLBACK_MS = 2500;
-// Ceiling on how long a non-reader 429 (browse/search) can park a retry, so a
-// pathological Retry-After can't freeze a listing fetch.
+// Ceiling on how long any 429 can park a retry — the reader's final escalated
+// attempt and the browse/search retry both honor Retry-After up to this — so a
+// pathological Retry-After can't freeze the pipeline indefinitely.
 const MAX_COOLDOWN_MS = 90_000;
 
-// Cap on the wait before retrying a page-API 429. The site's own reader ignores
-// the advertised ~60s Retry-After and retries after at most ~6s (its
-// resolvePageUrl waits Math.min(6000, …)): the frequency limiter is a rolling
-// window that refills in a few seconds, so a short wait clears it — and a fresh
-// token would not. Matching that turns a 60s reader stall into ~6s.
+// Cap on the wait before an EARLY page-API 429 retry. The site's own reader
+// ignores the advertised ~60s Retry-After and retries after at most ~6s (its
+// resolvePageUrl waits Math.min(6000, …)): the frequency window usually refills
+// in a few seconds, so a short wait clears it — and a fresh token would not.
+// Only the final retry escalates to the full Retry-After, for a window that's
+// genuinely saturated. Matching this turns the common 60s reader stall into ~6s.
 const RATE_LIMIT_MAX_WAIT_MS = 6000;
 
 // After a 429, hold at least this spacing (the proven-safe rate) until the
@@ -53,10 +55,13 @@ const SIGNED_URL_TTL_MS = 9 * 60 * 1000;
 // without bound; the oldest entry is evicted first (Map keeps insertion order).
 const SIGNED_URL_CACHE_MAX = 512;
 
-// Shared page-API strike state. A frequency 429 raises the sustained pacing
-// floor for a short while (`strikeUntil`) so a heavy binge doesn't immediately
-// re-trip the limiter right after recovering. Epoch ms.
-const pageCooldown = { strikeUntil: 0 };
+// Shared page-API cooldown/strike state. On a frequency 429 the whole pipeline
+// parks until `until` (a short ~6s window at first, escalating to the full
+// Retry-After only if the quick retries keep failing) so the queued prefetch
+// can't hammer the limiter open and hold it saturated; `strikeUntil` then holds
+// a raised pacing floor for a while so a heavy binge doesn't immediately
+// re-trip it right after recovering. Epoch ms.
+const pageCooldown = { until: 0, strikeUntil: 0 };
 
 // Response headers can arrive in any casing; read them case-insensitively.
 function getHeaderValue(
@@ -320,23 +325,29 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
     }
 
     // A page-API 429 ("Rate limit exceeded") is the frequency limiter, not an
-    // auth problem — the site's own reader never re-mints on it. It's a rolling
-    // window that refills in a few seconds, so the fix is exactly what the site
-    // does in resolvePageUrl: wait a short, jittered slice — capped at ~6s, NOT
-    // the advertised 60s Retry-After — and retry. Re-minting here is useless (a
-    // fresh token still 429s) and the reader-page reload it costs only adds load
-    // to the saturated window. Raising the sustained floor for a short while
-    // (strikeUntil) keeps a heavy binge from immediately re-tripping the limiter.
+    // auth problem — the site's own reader never re-mints on it, and neither do
+    // we (a fresh token still 429s; the reader-page reload it costs only adds
+    // load to the saturated window). It's a rolling window that usually refills
+    // in a few seconds, so the early strikes park the shared cooldown for only a
+    // short, jittered slice (~6s, like the site's resolvePageUrl cap) and retry.
+    // If those quick retries keep failing the window is genuinely saturated, so
+    // the final attempt honors the full Retry-After — a longer wait, but the page
+    // then loads instead of surfacing the JSON error as a broken image. Parking
+    // the whole pipeline (via pageCooldown.until, not a per-request sleep) stops
+    // the queued prefetch from hammering the window and holding it open; the
+    // raised floor (strikeUntil) then avoids an immediate re-trip.
     if (PAGE_API_REGEX.test(request.url) && response.status === 429) {
       const attempt = Number(request.headers?.[PAGE_RETRY_HEADER] ?? "0");
       if (attempt < PAGE_RETRY_LIMIT) {
         const jitterMs = Date.now() % 500;
-        const waitMs = Math.min(
-          RATE_LIMIT_MAX_WAIT_MS,
-          getRetryDelayMs(response.headers) + jitterMs,
-        );
-        pageCooldown.strikeUntil = Date.now() + STRIKE_DECAY_MS;
-        await Application.sleep(waitMs / 1000);
+        const retryAfterMs = getRetryDelayMs(response.headers) + jitterMs;
+        const waitMs =
+          attempt >= PAGE_RETRY_LIMIT - 1
+            ? Math.min(retryAfterMs, MAX_COOLDOWN_MS)
+            : Math.min(RATE_LIMIT_MAX_WAIT_MS, retryAfterMs);
+        const now = Date.now();
+        pageCooldown.until = Math.max(pageCooldown.until, now + waitMs);
+        pageCooldown.strikeUntil = now + STRIKE_DECAY_MS;
         const [, buffer] = await Application.scheduleRequest({
           url: request.url,
           method: "GET",
@@ -485,6 +496,15 @@ export class OniSagaPageRateLimiter extends PaperbackInterceptor {
   }
 
   private async pace(): Promise<void> {
+    // Park behind an open penalty cooldown first, so a 429 parks the whole
+    // pipeline together (the retry and every queued prefetch page) rather than
+    // each one hammering the still-saturated window.
+    const cooldownMs = pageCooldown.until - Date.now();
+    if (cooldownMs > 0) {
+      await Application.sleep(cooldownMs / 1000);
+      this.burst = 0; // after a penalty, hold the steady rate — don't burst again
+    }
+
     // Minimum interval since the previous page request. The opener fires a few
     // quick pages — its first couple back-to-back for a 2-wide first screen —
     // after that every request is evenly spaced at the user's setting, floored to
