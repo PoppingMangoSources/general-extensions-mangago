@@ -459,39 +459,25 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
   }
 }
 
-// Reader page-API pacing. The site rejects a fast burst with a 60s penalty
-// (the hidden limit above, ~1 req/s sustained), so page requests are
-// serialized and spaced at the user's Image Requests Limit — the same steady,
-// one-at-a-time cadence the site's own reader uses. A small initial burst
-// keeps the first screen snappy while staying well under the penalty
-// threshold. Everything except the page API passes through untouched
-// (Webtoon-style per-endpoint scoping).
-// A small, gentle opener for a snappy first screen. Kept modest (4 pages, 0.5s
-// apart) on purpose: onisaga's frequency limiter is a rolling ~60-req/min window
-// across the whole session, so a big fast burst (10 @ 0.3s ≈ 200/min) spikes a
-// window already loaded from earlier chapters and trips a 429 mid-read. Four
-// half-second pages front-load the first screen without spiking the window.
-const BURST_CAPACITY = 4;
-const BURST_SPACING_SECONDS = 0.5;
-
-// The first couple of opener pages fire back-to-back (no spacing) — a 2-wide
-// parallel opener matching the site reader's _preloadMax: 2 — so the first
-// screen paints instantly; the rest of the opener is lightly spaced. Two
-// requests can't spike the ~60/min window, and sustained reading still settles
-// to the safe floor below, so this stays stall-free.
-const BURST_CONCURRENCY = 2;
-
-// Sustained floor, evenly enforced. onisaga's limiter is a rolling ~60/min
-// window across the session (not per-chapter): sustained faster than that trips
-// a "Rate limit exceeded" 429 with a 60s Retry-After stall. ~1.1s (~55/min)
-// keeps a margin under it so continuous reading stays stall-free — the fastest
-// rate that doesn't periodically freeze for 60s. The user's Image Requests Limit
-// can only make it slower; it can't undercut this and re-trip the limiter.
+// Reader page-API pacing. onisaga's page-API limiter is BURST-sensitive, not
+// just rate-sensitive: a captured devtools log showed two prefetched pages fired
+// in the same instant (Paperback's chapter prefetcher hitting a parallel opener)
+// trip a "Rate limit exceeded" 429 with a 60s Retry-After — even with the
+// advertised per-minute counter barely touched (287/300 remaining, ~13 used). So
+// page requests are strictly serialized and EVEN-spaced — never two at once,
+// never a fast opener burst — at the user's Image Requests Limit, floored to a
+// sustainable rate. The first page still fires immediately (nothing precedes
+// it); everything after is one-at-a-time. Only the page API is paced
+// (Webtoon-style per-endpoint scoping); everything else passes through untouched.
+//
+// The floor is a rolling window across the session (not per-chapter): sustained
+// faster than ~1 req/s trips the 60s penalty, and a brief two-at-once spike trips
+// it too. ~1.1s (~55/min) with strict even spacing keeps a margin under it. The
+// user's Image Requests Limit can only make it slower; it can't undercut this and
+// re-trip the limiter.
 const SUSTAINED_FLOOR_SECONDS = 1.1;
 
 export class OniSagaPageRateLimiter extends PaperbackInterceptor {
-  private burst = BURST_CAPACITY;
-  private lastChapterId = "";
   private chain: Promise<unknown> = Promise.resolve();
   // Fire time of the last page request, for even inter-request spacing.
   private lastRequestAt = 0;
@@ -499,12 +485,8 @@ export class OniSagaPageRateLimiter extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
     const cid = PAGE_API_REGEX.exec(request.url)?.[1];
     if (!cid) return request;
-    // A fresh chapter gets a fresh burst so its first screen opens fast too —
-    // chapters are minutes apart in practice, so this stays under the ceiling.
-    if (cid !== this.lastChapterId) {
-      this.lastChapterId = cid;
-      if (Date.now() >= pageCooldown.strikeUntil) this.burst = BURST_CAPACITY;
-    }
+    // Serialize every page request through one chain so no two are ever in
+    // flight together; pace() then even-spaces them.
     const wait = this.chain.then(() => this.pace());
     // Keep the chain alive even if one wait rejects.
     this.chain = wait.catch(() => undefined);
@@ -525,28 +507,16 @@ export class OniSagaPageRateLimiter extends PaperbackInterceptor {
     // pipeline together (the retry and every queued prefetch page) rather than
     // each one hammering the still-saturated window.
     const cooldownMs = pageCooldown.until - Date.now();
-    if (cooldownMs > 0) {
-      await Application.sleep(cooldownMs / 1000);
-      this.burst = 0; // after a penalty, hold the steady rate — don't burst again
-    }
+    if (cooldownMs > 0) await Application.sleep(cooldownMs / 1000);
 
-    // Minimum interval since the previous page request. The opener fires a few
-    // quick pages — its first couple back-to-back for a 2-wide first screen —
-    // after that every request is evenly spaced at the user's setting, floored to
-    // the sustainable rate (raised further while a strike is cooling). Even
-    // spacing — not a rolling average — is what keeps the short-window frequency
-    // limiter from tripping, since it never lets a burst of requests stack up
-    // inside the limiter's window.
-    let intervalSeconds: number;
-    if (this.burst > 0) {
-      const fired = BURST_CAPACITY - this.burst; // 0-indexed position in the opener
-      this.burst -= 1;
-      intervalSeconds = fired < BURST_CONCURRENCY ? 0 : BURST_SPACING_SECONDS;
-    } else {
-      intervalSeconds = Math.max(getPageDelaySeconds(), SUSTAINED_FLOOR_SECONDS);
-      if (Date.now() < pageCooldown.strikeUntil) {
-        intervalSeconds = Math.max(intervalSeconds, STRIKE_FLOOR_SECONDS);
-      }
+    // Even spacing since the previous page request — never a burst, never two
+    // concurrent, which is exactly what trips onisaga's burst-sensitive limiter.
+    // Floored to the sustainable rate, raised further while a strike is cooling.
+    // The very first page fires immediately (lastRequestAt is 0, nothing precedes
+    // it); every one after is one-at-a-time at the floor.
+    let intervalSeconds = Math.max(getPageDelaySeconds(), SUSTAINED_FLOOR_SECONDS);
+    if (Date.now() < pageCooldown.strikeUntil) {
+      intervalSeconds = Math.max(intervalSeconds, STRIKE_FLOOR_SECONDS);
     }
 
     const waitMs = this.lastRequestAt + intervalSeconds * 1000 - Date.now();
