@@ -27,6 +27,14 @@ export const DISCOVER_SECTIONS: DiscoverSectionDef[] = [
   { id: "latest", title: "Latest" },
   { id: "highest_rated", title: "Highest Rated" },
   { id: "fan_favorites", title: "Fan Favorites" },
+  // Appended after the content rails so the top of discover is unchanged: a
+  // trending rail with a period toggle, then genre/type quick-filter chip rows.
+  // getDiscoverSectionItems already has live handlers for all three; they were
+  // simply never advertised here, so the rails never rendered. All are
+  // user-reorderable/removable via the sections settings like any other rail.
+  { id: "top_10_rising", title: "Top 10 Rising" },
+  { id: "genres", title: "Genres" },
+  { id: "types", title: "Types" },
 ];
 
 export interface Option {
