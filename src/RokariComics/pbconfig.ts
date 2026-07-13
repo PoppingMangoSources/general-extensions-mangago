@@ -1,27 +1,12 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/types";
+import { basePbConfig, customVersion } from "./generic/config";
 
-export default {
-  name: "RokariComics",
-  description: "Extension that pulls content from rokaricomics.com.",
-  version: "1.0.0-alpha.1",
-  icon: "icon.png",
-  language: "en",
-  contentRating: ContentRating.EVERYONE,
-  capabilities: [
-    SourceIntents.CHAPTER_PROVIDING,
-    SourceIntents.CLOUDFLARE_BYPASS_PROVIDING,
-    SourceIntents.DISCOVER_SECTION_PROVIDING,
-    SourceIntents.SEARCH_RESULT_PROVIDING,
-    SourceIntents.SETTINGS_FORM_PROVIDING,
-  ],
-  badges: [],
-  developers: [
-    {
-      name: "Popmango",
-      github: "https://github.com/PoppingMangoSources",
-    },
-  ],
-} satisfies ExtensionInfo;
+let pbConfig = basePbConfig;
+
+pbConfig.name = "RokariComics";
+pbConfig.description = "Extension that pulls content from rokaricomics.com.";
+pbConfig.version = customVersion({ increasePrerelease: 3 });
+
+export default pbConfig;

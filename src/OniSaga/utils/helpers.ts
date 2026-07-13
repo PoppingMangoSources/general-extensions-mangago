@@ -61,9 +61,8 @@ export function getGenres(): Option[] {
 // ----- Reader pacing -----
 
 // Stored option id for the reader's request spacing (see PAGE_DELAY_OPTIONS).
-// Snap a stale stored id to the default: the options list has been trimmed
-// (sub-2s cadences removed), and a SelectRow whose value isn't inside its items
-// hard-errors the settings form on devices that saved an old value.
+// Snap an obsolete stored id to the default: a SelectRow whose value isn't
+// inside its current items hard-errors the settings form.
 export function getPageDelayId(): string {
   const stored = Application.getState(PAGE_DELAY_KEY) as string | undefined;
   if (stored && PAGE_DELAY_OPTIONS.some((option) => option.id === stored)) return stored;

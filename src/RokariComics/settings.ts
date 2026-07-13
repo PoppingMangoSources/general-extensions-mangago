@@ -3,7 +3,7 @@
 
 import { ButtonRow, InputRow, LabelRow, Section, URL } from "@paperback/types";
 
-import { MangaStreamSettings } from "../generic/forms";
+import { MangaStreamSettings } from "./generic/forms";
 
 const BASE_URL_KEY = "rokaricomics.baseUrlOverride";
 

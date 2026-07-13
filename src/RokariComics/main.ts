@@ -18,10 +18,10 @@ import * as cheerio from "cheerio";
 import { type BasicAcceptedElems, type CheerioAPI } from "cheerio";
 import { type AnyNode } from "domhandler";
 
-import { getUsePostIds } from "../generic/forms";
-import { MangaStreamGeneric } from "../generic/main";
-import { type MangaStreamDiscoverSection, type MangaStreamSearchMetadata } from "../generic/models";
-import { getFilterTagsBySection, getIncludedTagBySection } from "../generic/utils";
+import { getUsePostIds } from "./generic/forms";
+import { MangaStreamGeneric } from "./generic/main";
+import { type MangaStreamDiscoverSection, type MangaStreamSearchMetadata } from "./generic/models";
+import { getFilterTagsBySection, getIncludedTagBySection } from "./generic/utils";
 import pbconfig from "./pbconfig";
 import { getBaseUrlOverride, RokariComicsSettings } from "./settings";
 

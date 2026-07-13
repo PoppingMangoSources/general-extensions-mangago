@@ -16,6 +16,11 @@ import { getPageDelaySeconds } from "./utils/helpers";
 // e.g. https://onisaga.com/api/chapter/3718181/page/0 -> ["3718181", "0"].
 const PAGE_API_REGEX = /\/api\/chapter\/([^/]+)\/page\/(\d+)/;
 
+// Marks the source's internal page-API lookup. The marker is removed in
+// interceptRequest before anything is sent to onisaga; it only prevents the
+// nested lookup from recursively trying to resolve itself.
+const PAGE_RESOLVE_HEADER = "x-pb-page-resolve";
+
 // Bounds re-entrant page retries (the retry re-runs both interceptors); matches
 // keiyoushi's `attempt < 3` retry cap.
 const PAGE_RETRY_HEADER = "x-pb-page-retry";
@@ -87,8 +92,100 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
   // budget — the site reader's _cdnUrls shortcut.
   private signedUrls = new Map<string, { url: string; at: number }>();
 
+  // Paperback can ask for the visible page and prefetch the same page at nearly
+  // the same time. Coalesce those lookups so one page consumes one protected API
+  // request and one slot in the paced queue. This is the Paperback equivalent of
+  // Aidoku resolving a page in get_image_request before returning the real image
+  // request to the app.
+  private pageResolveInFlight = new Map<string, Promise<string>>();
+
   setReaderToken(chapterId: string, token: string, referer: string): void {
     this.readerSessions.set(chapterId, { token, referer });
+  }
+
+  private cachedSignedUrl(key: string): string | undefined {
+    const cached = this.signedUrls.get(key);
+    if (!cached) return undefined;
+    if (Date.now() - cached.at < SIGNED_URL_TTL_MS) return cached.url;
+    this.signedUrls.delete(key);
+    return undefined;
+  }
+
+  private cacheSignedUrl(key: string, url: string): void {
+    // Refresh insertion order when replacing an entry so FIFO eviction remains
+    // a reasonable approximation of oldest-use eviction.
+    this.signedUrls.delete(key);
+    this.signedUrls.set(key, { url, at: Date.now() });
+    if (this.signedUrls.size > SIGNED_URL_CACHE_MAX) {
+      const oldest = this.signedUrls.keys().next().value;
+      if (oldest !== undefined) this.signedUrls.delete(oldest);
+    }
+  }
+
+  private imageRequest(request: Request, url: string, referer: string): Request {
+    const headers: Record<string, string> = { ...request.headers };
+    delete headers.Accept;
+    delete headers["X-Reader-Token"];
+    delete headers["x-reader-token"];
+    delete headers["sec-fetch-dest"];
+    delete headers["sec-fetch-mode"];
+    delete headers["sec-fetch-site"];
+    // Update the shared request object as well as returning it. Paperback's app
+    // chains interceptor return values, while the alpha.92 toolkit mock currently
+    // passes the original object to each later interceptor. Mutating here (as the
+    // built-in CookieStorageInterceptor does) keeps both runtimes on the same URL.
+    request.url = url;
+    request.headers = {
+      ...headers,
+      referer,
+      accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+    };
+    return request;
+  }
+
+  private async resolveSignedUrl(request: Request, cid: string, order: string): Promise<string> {
+    const key = `${cid}|${order}`;
+    const cached = this.cachedSignedUrl(key);
+    if (cached) return cached;
+
+    const existing = this.pageResolveInFlight.get(key);
+    if (existing) return existing;
+
+    const task = (async () => {
+      // Re-enter the normal request pipeline so cookie storage, page pacing,
+      // token rotation, auth recovery and shared 429 cooldown all still apply.
+      // The private marker is stripped by interceptRequest before the HTTP call.
+      const [response, buffer] = await Application.scheduleRequest({
+        url: request.url,
+        method: "GET",
+        headers: { ...request.headers, [PAGE_RESOLVE_HEADER]: "1" },
+      });
+      const raw = Application.arrayBufferToUTF8String(buffer);
+      let dto: PageApiResponse;
+      try {
+        dto = JSON.parse(raw) as PageApiResponse;
+      } catch (error) {
+        throw new Error(`Failed to parse onisaga page response (HTTP ${response.status})`, {
+          cause: error,
+        });
+      }
+      if (!dto.url) {
+        throw new Error(
+          dto.message
+            ? `onisaga page error: ${dto.message}`
+            : `onisaga page API failed (HTTP ${response.status})`,
+        );
+      }
+      this.cacheSignedUrl(key, dto.url);
+      return dto.url;
+    })();
+
+    this.pageResolveInFlight.set(key, task);
+    try {
+      return await task;
+    } finally {
+      if (this.pageResolveInFlight.get(key) === task) this.pageResolveInFlight.delete(key);
+    }
   }
 
   // Run at most one token refresh (light or full) per chapter per window: a
@@ -175,6 +272,9 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
     // ones); normalize to lower-case so the map never carries both casings.
     // Origin is only sent when a caller set it (browsers omit it on plain GETs).
     const headers: Record<string, string> = { ...request.headers };
+    const isPageResolver = headers[PAGE_RESOLVE_HEADER] === "1";
+    // This header is source-private control data, not part of onisaga's protocol.
+    delete headers[PAGE_RESOLVE_HEADER];
     const referer = headers.referer ?? headers.Referer ?? `${DOMAIN}/`;
     const origin = headers.origin ?? headers.Origin;
     delete headers.Referer;
@@ -182,6 +282,10 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
     headers.referer = referer;
     if (origin) headers.origin = origin;
     headers["user-agent"] = await Application.getDefaultUserAgent();
+    // Keep the request object in sync for the current toolkit mock, which passes
+    // this original object (rather than the preceding interceptor's return value)
+    // to later interceptors. This is also safe in Paperback's chained runtime.
+    request.headers = headers;
 
     // A reader page-API request carries the chapter's signed token and the
     // reader page as referer, matching the site's own reader fetch.
@@ -190,30 +294,14 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
     if (cid) {
       const session = this.readerSessions.get(cid);
 
-      // Serve a still-fresh signed CDN URL directly, skipping the page-API call
-      // (and the token / rate-limit budget it spends) — the site reader's
-      // _cdnUrls shortcut for scroll-back and re-opens. Capped under the ~10-min
-      // signing lifetime so a served URL never expires mid-view. The rewritten
-      // URL is no longer a page-API path, so the rate limiter (registered after
-      // us) skips pacing it and interceptResponse returns its bytes untouched.
+      // Resolve the protected JSON endpoint here, then hand Paperback the real
+      // signed image request. Besides matching Aidoku's get_image_request flow,
+      // this preserves the image response's MIME/cache metadata instead of
+      // substituting image bytes into an application/json response.
       const order = pageApiMatch?.[2];
-      if (order !== undefined) {
-        const cached = this.signedUrls.get(`${cid}|${order}`);
-        if (cached && Date.now() - cached.at < SIGNED_URL_TTL_MS) {
-          return {
-            ...request,
-            url: cached.url,
-            // Spread the headers the earlier interceptors already set (notably the
-            // cookie header from CookieStorageInterceptor — cf_clearance) and only
-            // override the image-specific ones, so a cached scroll-back fetch can't
-            // drop the Cloudflare clearance and re-trigger a challenge.
-            headers: {
-              ...headers,
-              referer: session?.referer ?? `${DOMAIN}/`,
-              accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-            },
-          };
-        }
+      if (!isPageResolver && order !== undefined) {
+        const signedUrl = await this.resolveSignedUrl(request, cid, order);
+        return this.imageRequest(request, signedUrl, session?.referer ?? `${DOMAIN}/`);
       }
 
       if (session) {
@@ -237,7 +325,7 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
       headers.accept = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
     }
 
-    return { ...request, headers };
+    return request;
   }
 
   override async interceptResponse(
@@ -305,7 +393,11 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
           const [, buffer] = await Application.scheduleRequest({
             url: request.url,
             method: "GET",
-            headers: { ...request.headers, [PAGE_RETRY_HEADER]: String(attempt + 1) },
+            headers: {
+              ...request.headers,
+              [PAGE_RESOLVE_HEADER]: "1",
+              [PAGE_RETRY_HEADER]: String(attempt + 1),
+            },
           });
           return buffer;
         }
@@ -340,71 +432,48 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
         const [, buffer] = await Application.scheduleRequest({
           url: request.url,
           method: "GET",
-          headers: { ...request.headers, [PAGE_RETRY_HEADER]: String(attempt + 1) },
+          headers: {
+            ...request.headers,
+            [PAGE_RESOLVE_HEADER]: "1",
+            [PAGE_RETRY_HEADER]: String(attempt + 1),
+          },
         });
         return buffer;
       }
       throw new Error("onisaga is rate limiting page requests; wait a minute and retry");
     }
 
-    // Lazy page resolution: a page-API url returns JSON pointing at the real
-    // signed image; fetch that and return its bytes. The image path (/_img/...)
-    // differs, so this sub-request doesn't re-enter this branch. An unrecoverable
-    // JSON error payload is surfaced as a thrown error AFTER the try/catch (the
-    // catch would swallow it), so the reader shows a retryable failure instead of
-    // rendering the JSON bytes as a corrupt image.
+    // Internal page resolution returns its JSON to resolveSignedUrl. The outer
+    // request has already been rewritten to the signed image URL, so Paperback
+    // receives the image's real response rather than JSON response metadata with
+    // substituted image bytes.
     let pageError: string | undefined;
     if (PAGE_API_REGEX.test(request.url) && response.status === 200) {
       try {
         const dto = JSON.parse(Application.arrayBufferToUTF8String(data)) as PageApiResponse;
-        if (dto.url) {
-          // Cache the signed URL so a scroll-back / re-open of this page serves
-          // from it (interceptRequest) instead of spending another page-API call.
-          const order = pageApiMatch?.[2];
-          if (cid && order !== undefined) {
-            this.signedUrls.set(`${cid}|${order}`, { url: dto.url, at: Date.now() });
-            if (this.signedUrls.size > SIGNED_URL_CACHE_MAX) {
-              const oldest = this.signedUrls.keys().next().value;
-              if (oldest !== undefined) this.signedUrls.delete(oldest);
-            }
-          }
-          const [, imageBuffer] = await Application.scheduleRequest({
-            url: dto.url,
-            method: "GET",
-            // Match the site's own reader on the signed-image fetch: a browser
-            // image Accept header alongside the Referer. Some signed pages come
-            // back unrenderable without it (the CDN/Cloudflare treats a missing
-            // Accept differently); it ends in */* so it can only broaden what the
-            // server may return, never reject.
-            headers: {
-              referer: session?.referer ?? `${DOMAIN}/`,
-              accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-            },
-          });
-          return imageBuffer;
-        }
+        if (dto.url) return data;
         // A 200 with no url is a JSON error payload (e.g. an expired token
-        // reported with a `message`), which would otherwise render as broken
-        // image bytes. Refresh the token and retry, like the 401/403 path; if
-        // the refresh can't recover it, surface the API's message.
+        // reported with a `message`). Refresh the token and retry, like the
+        // 401/403 path; if the refresh can't recover it, surface the API message.
         if (session && cid && dto.message) {
           const attempt = Number(request.headers?.[PAGE_RETRY_HEADER] ?? "0");
           if (attempt < PAGE_RETRY_LIMIT && (await this.refreshReaderToken(cid))) {
             const [, buffer] = await Application.scheduleRequest({
               url: request.url,
               method: "GET",
-              headers: { ...request.headers, [PAGE_RETRY_HEADER]: String(attempt + 1) },
+              headers: {
+                ...request.headers,
+                [PAGE_RESOLVE_HEADER]: "1",
+                [PAGE_RETRY_HEADER]: String(attempt + 1),
+              },
             });
             return buffer;
           }
           pageError = `onisaga page error: ${dto.message}`;
         }
       } catch (error) {
-        // A Cloudflare challenge on the signed-image fetch must reach the app so
-        // it opens the bypass, not be flattened into a broken page.
         if (error instanceof CloudflareError) throw error;
-        // Any other failure: fall through and return the original body; the
-        // reader shows a broken page rather than hanging the whole chapter.
+        // Let resolveSignedUrl report malformed JSON with the response status.
       }
     }
     if (pageError !== undefined) throw new Error(pageError);

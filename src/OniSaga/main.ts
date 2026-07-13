@@ -142,8 +142,8 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     ignoreImages: true,
   });
 
-  // The reader's page API gets its own paced budget: a quick initial burst,
-  // then the Image Requests Limit spacing (see network.ts).
+  // The reader's page API gets its own paced, de-duplicated budget while signed
+  // images continue through Paperback's normal image pipeline (see network.ts).
   pageRateLimiter = new OniSagaPageRateLimiter("onisaga-page-rate-limiter");
 
   // Cached `post-filter` states (token + snapshot) per listing URL — /browse
