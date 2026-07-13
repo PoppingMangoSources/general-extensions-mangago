@@ -1,7 +1,13 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import { GENRES, PAGE_DELAY_DEFAULT, PAGE_DELAY_KEY, type Option } from "../models";
+import {
+  GENRES,
+  PAGE_DELAY_DEFAULT,
+  PAGE_DELAY_KEY,
+  PAGE_DELAY_OPTIONS,
+  type Option,
+} from "../models";
 
 // iOS swaps straight quotes for curly ones; the site only matches the straight
 // forms, so normalize before searching.
@@ -55,8 +61,13 @@ export function getGenres(): Option[] {
 // ----- Reader pacing -----
 
 // Stored option id for the reader's request spacing (see PAGE_DELAY_OPTIONS).
+// Snap a stale stored id to the default: the options list has been trimmed
+// (sub-2s cadences removed), and a SelectRow whose value isn't inside its items
+// hard-errors the settings form on devices that saved an old value.
 export function getPageDelayId(): string {
-  return (Application.getState(PAGE_DELAY_KEY) as string | undefined) ?? PAGE_DELAY_DEFAULT;
+  const stored = Application.getState(PAGE_DELAY_KEY) as string | undefined;
+  if (stored && PAGE_DELAY_OPTIONS.some((option) => option.id === stored)) return stored;
+  return PAGE_DELAY_DEFAULT;
 }
 
 // Seconds between reader page-API requests, from the user's setting.
