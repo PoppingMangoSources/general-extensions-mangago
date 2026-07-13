@@ -47,21 +47,32 @@ export function getShowNsfw(): boolean {
   return (Application.getState(SHOW_NSFW_KEY) as boolean | undefined) ?? false;
 }
 
+// Every stored-selection getter validates against its CURRENT option list: a
+// SelectRow whose value isn't inside its items hard-errors the settings form,
+// so a stored id that a later release removed (this already happened once with
+// the pacing options) must be dropped/snapped, never rendered.
+
 export function getDiscoverType(): string {
-  return (Application.getState(DISCOVER_TYPE_KEY) as string | undefined) ?? "";
+  const stored = (Application.getState(DISCOVER_TYPE_KEY) as string | undefined) ?? "";
+  return TYPE_OPTIONS.some((option) => option.id === stored) ? stored : "";
 }
 
 export function getDiscoverStatus(): string {
-  return (Application.getState(DISCOVER_STATUS_KEY) as string | undefined) ?? "";
+  const stored = (Application.getState(DISCOVER_STATUS_KEY) as string | undefined) ?? "";
+  return STATUS_OPTIONS.some((option) => option.id === stored) ? stored : "";
 }
 
 export function getExcludedGenres(): string[] {
-  return (Application.getState(EXCLUDED_GENRES_KEY) as string[] | undefined) ?? [];
+  const stored = (Application.getState(EXCLUDED_GENRES_KEY) as string[] | undefined) ?? [];
+  return stored.filter((id) => getGenres().some((genre) => genre.id === id));
 }
 
-// Chapter languages to show (langCodes); defaults to English.
+// Chapter languages to show (langCodes); defaults to English, also when every
+// stored code has dropped out of the supported list (the row requires >= 1).
 export function getLanguages(): string[] {
-  return (Application.getState(LANGUAGES_KEY) as string[] | undefined) ?? ["en"];
+  const stored = (Application.getState(LANGUAGES_KEY) as string[] | undefined) ?? ["en"];
+  const valid = stored.filter((code) => LANGUAGES.some((lang) => lang.langCode === code));
+  return valid.length > 0 ? valid : ["en"];
 }
 
 // Drop duplicate uploads of the same chapter in the same language, keeping the
@@ -227,7 +238,7 @@ export class OniSagaSettingsForm extends Form {
         [
           SelectRow("type", {
             title: "Type",
-            value: this.type ? [this.type] : [],
+            value: [this.type],
             options: toTags(TYPE_OPTIONS),
             minItemCount: 0,
             maxItemCount: 1,
@@ -235,7 +246,7 @@ export class OniSagaSettingsForm extends Form {
           }),
           SelectRow("status", {
             title: "Status",
-            value: this.status ? [this.status] : [],
+            value: [this.status],
             options: toTags(STATUS_OPTIONS),
             minItemCount: 0,
             maxItemCount: 1,
@@ -271,8 +282,7 @@ export class OniSagaSettingsForm extends Form {
       Section(
         {
           id: "reader",
-          footer:
-            "Spacing between page requests after the initial fast burst. Slower is safer: the site rejects faster cadences with 429 errors.",
+          footer: "Spacing between reader page requests. Lowering this might cause 429 errors.",
         },
         [
           SelectRow("pageDelay", {
@@ -406,7 +416,7 @@ export class OniSagaAdvancedSearchForm extends AdvancedSearchForm {
       Section("type", [
         SelectRow("type", {
           title: "Type",
-          value: this.type ? [this.type] : [],
+          value: [this.type],
           options: toTags(TYPE_OPTIONS),
           minItemCount: 0,
           maxItemCount: 1,
@@ -416,7 +426,7 @@ export class OniSagaAdvancedSearchForm extends AdvancedSearchForm {
       Section("status", [
         SelectRow("status", {
           title: "Status",
-          value: this.status ? [this.status] : [],
+          value: [this.status],
           options: toTags(STATUS_OPTIONS),
           minItemCount: 0,
           maxItemCount: 1,
@@ -426,7 +436,7 @@ export class OniSagaAdvancedSearchForm extends AdvancedSearchForm {
       Section("minChapters", [
         SelectRow("minChapters", {
           title: "Min Chapters",
-          value: this.minChapters ? [this.minChapters] : [],
+          value: [this.minChapters],
           options: toTags(MIN_CHAPTERS_OPTIONS),
           minItemCount: 0,
           maxItemCount: 1,
