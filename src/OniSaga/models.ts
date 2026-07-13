@@ -11,7 +11,6 @@ export const EXCLUDED_GENRES_KEY = "excluded_genres";
 export const LANGUAGES_KEY = "languages";
 export const DEDUPE_CHAPTERS_KEY = "dedupe_chapters";
 export const PAGE_DELAY_KEY = "page_delay";
-export const READER_TOKEN_KEY_PREFIX = "reader_token_";
 export const SECTIONS_ORDER_KEY = "sections_order";
 export const SECTIONS_DELETED_KEY = "sections_deleted";
 
@@ -92,16 +91,11 @@ export const MIN_CHAPTERS_OPTIONS: Option[] = [
   { id: "200", title: "200+" },
 ];
 
-// Seconds between reader page requests; faster cadences risk the site's
-// per-IP burst penalty (429). The id doubles as the numeric value. The
-// rolling-window cap in network.ts bounds the sustained average regardless,
-// so even the fastest option stays under the observed penalty threshold —
-// if a chapter still 429s, pick a slower one.
-export const PAGE_DELAY_DEFAULT = "1";
+// Seconds between reader page requests; the id doubles as the numeric value.
+// These are keiyoushi's exact options and 2s default (its pref_rate_limit) —
+// lowering the delay risks the site's per-IP burst penalty (429).
+export const PAGE_DELAY_DEFAULT = "2";
 export const PAGE_DELAY_OPTIONS: Option[] = [
-  { id: "0.75", title: "1 image per 0.75 seconds" },
-  { id: "1", title: "1 image per 1.00 seconds" },
-  { id: "1.25", title: "1 image per 1.25 seconds" },
   { id: "1.5", title: "1 image per 1.50 seconds" },
   { id: "1.75", title: "1 image per 1.75 seconds" },
   { id: "2", title: "1 image per 2.00 seconds" },
@@ -121,26 +115,6 @@ export const SORT_OPTIONS: Option[] = [
 ];
 
 export const DEFAULT_SORT = "created_at";
-
-// Discover rails with an in-section toggle: each maps to its Livewire component
-// + the method that switches the view (the option ids are the method's param).
-export interface SectionToggle {
-  component: string;
-  method: string;
-  options: Option[];
-}
-
-export const SECTION_TOGGLES: Record<string, SectionToggle> = {
-  top_10_rising: {
-    component: "trending-top10",
-    method: "setPeriod",
-    options: [
-      { id: "day", title: "Day" },
-      { id: "week", title: "Week" },
-      { id: "month", title: "Month" },
-    ],
-  },
-};
 
 // onisaga's fixed genre taxonomy (see getGenres). id = the Livewire filter's
 // numeric genre id, so a selection maps straight onto the browse/search POST.
@@ -256,9 +230,6 @@ export type OniSagaSearchMetadata = {
   releaseStart?: string;
   releaseEnd?: string;
   genres?: Record<string, "included" | "excluded">;
-  // A discover chip tap: which toggle rail and which option were chosen.
-  toggleSection?: string;
-  toggleValue?: string;
 };
 
 // Livewire `post-filter` component public state. Field names (and the snake_case /
