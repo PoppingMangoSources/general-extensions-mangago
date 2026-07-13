@@ -134,9 +134,7 @@ function topMangaInfoItems(item: TopMangaItem): FeaturedCarouselItem["infoItems"
 
 export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
-  requestManager = new OniSagaInterceptor("onisaga-request", () =>
-    this.resetReaderSessionCookies(),
-  );
+  requestManager = new OniSagaInterceptor("onisaga-request");
   // Browse/search/discover share this generous limiter; images load freely.
   globalRateLimiter = new BasicRateLimiter("onisaga-rate-limiter", {
     numberOfRequests: 5,
@@ -184,25 +182,13 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   private static readonly TOP_MANGA_TTL = 60_000;
 
   async initialise(): Promise<void> {
-    // Cookie storage runs last on requests so a just-renewed long-reader
-    // session is injected after the page budget gate. Responses run in reverse,
-    // letting it save Set-Cookie before requestManager handles an error/retry.
+    // Cookie storage runs last on requests so the latest saved cookies are
+    // injected after the page-budget gate. Responses run in reverse, letting it
+    // save Set-Cookie before requestManager handles an error/retry.
     this.requestManager.registerInterceptor();
     this.globalRateLimiter.registerInterceptor();
     this.pageRateLimiter.registerInterceptor();
     this.cookieStorageInterceptor.registerInterceptor();
-  }
-
-  private resetReaderSessionCookies(): void {
-    // Keep cf_clearance and every other Cloudflare cookie. Only Laravel's
-    // anonymous site session and its paired CSRF value belong to the cumulative
-    // protected-page budget.
-    this.cookieStorageInterceptor.cookies = this.cookieStorageInterceptor.cookies.filter(
-      (cookie) => {
-        const name = cookie.name.toLowerCase();
-        return name !== "onisaga_session" && name !== "xsrf-token";
-      },
-    );
   }
 
   async saveCloudflareBypassCookies(cookies: Cookie[]): Promise<void> {

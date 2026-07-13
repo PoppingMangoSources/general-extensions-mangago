@@ -283,7 +283,7 @@ export class OniSagaSettingsForm extends Form {
         {
           id: "reader",
           footer:
-            "Page lookups stay evenly spaced, and long-reading sessions renew before their page cap.",
+            "Page lookups stay evenly spaced. A cross-chapter hourly safety budget preserves fast loading for normal chapters, then pauses unusually large binges before onisaga's long 429 lockout.",
         },
         [
           SelectRow("pageDelay", {

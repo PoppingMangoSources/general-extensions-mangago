@@ -11,6 +11,8 @@ export const EXCLUDED_GENRES_KEY = "excluded_genres";
 export const LANGUAGES_KEY = "languages";
 export const DEDUPE_CHAPTERS_KEY = "dedupe_chapters";
 export const PAGE_DELAY_KEY = "page_delay";
+export const PAGE_BUDGET_HISTORY_KEY = "onisaga_page_budget_history_v1";
+export const PAGE_BUDGET_BLOCKED_UNTIL_KEY = "onisaga_page_budget_blocked_until_v1";
 export const SECTIONS_ORDER_KEY = "sections_order";
 export const SECTIONS_DELETED_KEY = "sections_deleted";
 
@@ -92,9 +94,8 @@ export const MIN_CHAPTERS_OPTIONS: Option[] = [
 ];
 
 // Seconds between reader page requests; the id doubles as the numeric value.
-// Keep keiyoushi's tuning range and 2s default. Page requests are always
-// serialized; the separate cumulative reader-session ceiling is renewed before
-// it is reached, so a speculative slower per-minute cap is unnecessary.
+// Keep the fast tuning range and 2s default. A separate persisted rolling-hour
+// guard in network.ts handles long binges without making ordinary chapters slow.
 export const PAGE_DELAY_DEFAULT = "2";
 export const PAGE_DELAY_OPTIONS: Option[] = [
   { id: "1.5", title: "1 image per 1.50 seconds" },
