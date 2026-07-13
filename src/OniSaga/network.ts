@@ -40,6 +40,15 @@ const SIGNED_URL_TTL_MS = 9 * 60 * 1000;
 // without bound; the oldest entry is evicted first (Map keeps insertion order).
 const SIGNED_URL_CACHE_MAX = 512;
 
+// The response counter can still show plenty of the public 300-request budget
+// while the reader endpoint returns 429. A real alpha.12 capture failed on the
+// 26th charged lookup (300 -> 274 remaining), revealing a second, tighter
+// rolling reader window. Keep one slot of headroom and a small boundary margin:
+// no more than 24 protected page lookups may start in any ~60-second window.
+const PAGE_WINDOW_MS = 60_000;
+const PAGE_WINDOW_MAX_REQUESTS = 24;
+const PAGE_WINDOW_MARGIN_MS = 500;
+
 // Shared page-API cooldown. On a 429 the whole pipeline parks until `until` (the
 // honored Retry-After) so the retry and every queued prefetch page wait the
 // penalty out together instead of hammering the still-saturated window — the
@@ -488,17 +497,20 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
 // trip a "Rate limit exceeded" 429 with a 60s Retry-After — even with the
 // advertised per-minute counter barely touched (287/300 remaining, ~13 used). So
 // page requests are strictly serialized and EVEN-spaced — never two at once,
-// never a fast opener burst — at the user's Image Requests Limit (2s by default,
-// keiyoushi's pref_rate_limit). The first page still fires immediately (nothing
-// precedes it); everything after is one-at-a-time. Only the page API is paced
-// (Webtoon-style per-endpoint scoping); everything else passes through untouched.
-// The delay is honored as chosen (like keiyoushi's interceptor) — lowering it
-// risks re-tripping the burst penalty, hence the settings warning.
+// never a fast opener burst — at the user's Image Requests Limit (2.5s by
+// default). A second rolling-window guard caps every setting at 24 starts per
+// minute, which is the missing protection exposed by the alpha.12 field log.
+// The first page still fires immediately (nothing precedes it); everything after
+// is one-at-a-time. Only the page API is paced (Webtoon-style per-endpoint
+// scoping); everything else passes through untouched.
 
 export class OniSagaPageRateLimiter extends PaperbackInterceptor {
   private chain: Promise<unknown> = Promise.resolve();
   // Fire time of the last page request, for even inter-request spacing.
   private lastRequestAt = 0;
+  // Start times retained for the rolling reader window. Retries count too: each
+  // one reaches the protected endpoint and therefore consumes the same budget.
+  private requestStarts: number[] = [];
 
   override async interceptRequest(request: Request): Promise<Request> {
     const cid = PAGE_API_REGEX.exec(request.url)?.[1];
@@ -521,21 +533,41 @@ export class OniSagaPageRateLimiter extends PaperbackInterceptor {
   }
 
   private async pace(): Promise<void> {
-    // Park behind an open penalty cooldown first, so a 429 parks the whole
-    // pipeline together (the retry and every queued prefetch page) rather than
-    // each one hammering the still-saturated window.
-    const cooldownMs = pageCooldown.until - Date.now();
-    if (cooldownMs > 0) await Application.sleep(cooldownMs / 1000);
+    const intervalMs = getPageDelaySeconds() * 1000;
 
-    // Even spacing since the previous page request — never a burst, never two
-    // concurrent, which is exactly what trips onisaga's burst-sensitive limiter
-    // (keiyoushi serializes on one lock for the same reason). The very first page
-    // fires immediately (lastRequestAt is 0, nothing precedes it); every one after
-    // is one-at-a-time at the user's chosen delay (2s default).
-    const intervalSeconds = getPageDelaySeconds();
+    // Re-evaluate after every sleep. A 429 can open/extend the shared cooldown
+    // while this queued request is already sleeping for normal spacing; a
+    // one-shot calculation would let that request slip through two seconds
+    // later and hit the endpoint during Retry-After.
+    for (;;) {
+      const now = Date.now();
+      const cutoff = now - PAGE_WINDOW_MS;
+      this.requestStarts = this.requestStarts.filter((startedAt) => startedAt > cutoff);
 
-    const waitMs = this.lastRequestAt + intervalSeconds * 1000 - Date.now();
-    if (waitMs > 0) await Application.sleep(waitMs / 1000);
-    this.lastRequestAt = Date.now();
+      const oldestInFullWindow =
+        this.requestStarts.length >= PAGE_WINDOW_MAX_REQUESTS
+          ? this.requestStarts[this.requestStarts.length - PAGE_WINDOW_MAX_REQUESTS]
+          : undefined;
+      const rollingWindowUntil =
+        oldestInFullWindow === undefined
+          ? 0
+          : oldestInFullWindow + PAGE_WINDOW_MS + PAGE_WINDOW_MARGIN_MS;
+      const waitUntil = Math.max(
+        pageCooldown.until,
+        this.lastRequestAt + intervalMs,
+        rollingWindowUntil,
+      );
+      const waitMs = waitUntil - now;
+
+      if (waitMs > 0) {
+        await Application.sleep(waitMs / 1000);
+        continue;
+      }
+
+      const startedAt = Date.now();
+      this.lastRequestAt = startedAt;
+      this.requestStarts.push(startedAt);
+      return;
+    }
   }
 }

@@ -282,7 +282,8 @@ export class OniSagaSettingsForm extends Form {
       Section(
         {
           id: "reader",
-          footer: "Spacing between reader page requests. Lowering this might cause 429 errors.",
+          footer:
+            "Spacing between signed-page lookups. A 24-per-minute safety window is always enforced.",
         },
         [
           SelectRow("pageDelay", {
