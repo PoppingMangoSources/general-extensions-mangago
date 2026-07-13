@@ -92,10 +92,10 @@ export const MIN_CHAPTERS_OPTIONS: Option[] = [
 ];
 
 // Seconds between reader page requests; the id doubles as the numeric value.
-// Keep keiyoushi's tuning range, but use 2.5s by default so normal continuous
-// reading stays below onisaga's newly-observed ~25-lookups-per-minute window.
-// The rolling guard in network.ts still caps faster choices before they can 429.
-export const PAGE_DELAY_DEFAULT = "2.5";
+// Keep keiyoushi's tuning range and 2s default. Page requests are always
+// serialized; the separate cumulative reader-session ceiling is renewed before
+// it is reached, so a speculative slower per-minute cap is unnecessary.
+export const PAGE_DELAY_DEFAULT = "2";
 export const PAGE_DELAY_OPTIONS: Option[] = [
   { id: "1.5", title: "1 image per 1.50 seconds" },
   { id: "1.75", title: "1 image per 1.75 seconds" },

@@ -283,7 +283,7 @@ export class OniSagaSettingsForm extends Form {
         {
           id: "reader",
           footer:
-            "Spacing between signed-page lookups. A 24-per-minute safety window is always enforced.",
+            "Page lookups stay evenly spaced, and long-reading sessions renew before their page cap.",
         },
         [
           SelectRow("pageDelay", {

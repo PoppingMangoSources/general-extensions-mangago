@@ -40,14 +40,13 @@ const SIGNED_URL_TTL_MS = 9 * 60 * 1000;
 // without bound; the oldest entry is evicted first (Map keeps insertion order).
 const SIGNED_URL_CACHE_MAX = 512;
 
-// The response counter can still show plenty of the public 300-request budget
-// while the reader endpoint returns 429. A real alpha.12 capture failed on the
-// 26th charged lookup (300 -> 274 remaining), revealing a second, tighter
-// rolling reader window. Keep one slot of headroom and a small boundary margin:
-// no more than 24 protected page lookups may start in any ~60-second window.
-const PAGE_WINDOW_MS = 60_000;
-const PAGE_WINDOW_MAX_REQUESTS = 24;
-const PAGE_WINDOW_MARGIN_MS = 500;
+// A long real-world read succeeded for 172 pages, then permanently 429ed about
+// 32 pages into the next chapter (~204 protected lookups total over ~20 min),
+// even after Retry-After. That is a separate cumulative reader-session ceiling,
+// not the public 300-request counter or the rolling burst window. Renew the
+// normal anonymous reader session with twenty requests of headroom so the
+// capped session is retired before onisaga rejects it.
+const PAGE_SESSION_SOFT_LIMIT = 180;
 
 // Shared page-API cooldown. On a 429 the whole pipeline parks until `until` (the
 // honored Retry-After) so the retry and every queued prefetch page wait the
@@ -108,8 +107,54 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
   // request to the app.
   private pageResolveInFlight = new Map<string, Promise<string>>();
 
+  // Protected lookups started under the current anonymous site session. This is
+  // deliberately cross-chapter: the observed ceiling carried from chapter 1
+  // into chapter 2. OniSagaPageRateLimiter calls preparePageRequest immediately
+  // before the HTTP request, so queued prefetches cannot reserve stale slots or
+  // race a session renewal.
+  private pageRequestsInSession = 0;
+
+  // A renewal loads the current reader page after dropping only Laravel's
+  // anonymous session/CSRF cookies. Keep it coalesced in case a persistent 429
+  // response and the proactive soft limit notice the ceiling together.
+  private sessionRenewInFlight?: Promise<boolean>;
+
+  constructor(
+    id: string,
+    private readonly resetReaderSessionCookies?: () => void,
+  ) {
+    super(id);
+  }
+
   setReaderToken(chapterId: string, token: string, referer: string): void {
     this.readerSessions.set(chapterId, { token, referer });
+  }
+
+  // Called by the final page-only limiter just before the request is sent. At
+  // the cross-chapter soft limit, renew through the site's ordinary reader page
+  // and put its fresh token on the already-queued request. Cookie storage is
+  // registered after that limiter, so it injects the newly-issued session cookie
+  // rather than the retired one.
+  async preparePageRequest(request: Request): Promise<void> {
+    const cid = PAGE_API_REGEX.exec(request.url)?.[1];
+    if (!cid) return;
+
+    if (this.pageRequestsInSession >= PAGE_SESSION_SOFT_LIMIT) {
+      const renewed = await this.renewReaderSession(cid);
+      if (!renewed) {
+        throw new Error("Could not renew the onisaga reader session before its page limit");
+      }
+    }
+
+    this.pageRequestsInSession += 1;
+    const session = this.readerSessions.get(cid);
+    if (!session) return;
+
+    request.headers = {
+      ...request.headers,
+      "x-reader-token": session.token,
+      referer: session.referer,
+    };
   }
 
   private cachedSignedUrl(key: string): string | undefined {
@@ -197,7 +242,7 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
     }
   }
 
-  // Run at most one token refresh (light or full) per chapter per window: a
+  // Run at most one token refresh per chapter per window: a
   // prefetch burst can 401/403 many pages at once, and a dead session would
   // otherwise trigger one refresh per page. The first caller runs `mint`; the
   // rest await its result, and a refresh moments ago is reused outright. A
@@ -257,23 +302,45 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
     });
   }
 
-  // Full session re-home by reloading the reader page — a fresh load mints a
-  // token with a fresh session key, which the light token endpoint doesn't. Used
-  // as the last-resort recovery for a persistent 429 (like keiyoushi reloading
-  // the chapter page on a failed page request), which clears a "Session page
-  // limit" quota that simply waiting cannot.
-  private refreshSession(cid: string): Promise<boolean> {
-    return this.coalesceRefresh(cid, async () => {
-      const session = this.readerSessions.get(cid);
-      if (!session) return false;
-      const [, page] = await Application.scheduleRequest({ url: session.referer, method: "GET" });
+  // Retire a cumulatively capped anonymous reader session while preserving the
+  // Cloudflare clearance cookie. The callback is supplied by main.ts because
+  // CookieStorageInterceptor owns the actual cookie jar. Loading the current
+  // reader page is the site's normal way to establish a session and mint the
+  // chapter-scoped reader token; no token is fabricated here.
+  private async renewReaderSession(cid: string): Promise<boolean> {
+    if (this.sessionRenewInFlight) return this.sessionRenewInFlight;
+    if (!this.resetReaderSessionCookies) return false;
+
+    const session = this.readerSessions.get(cid);
+    if (!session) return false;
+
+    const task = (async () => {
+      this.resetReaderSessionCookies?.();
+      const [, page] = await Application.scheduleRequest({
+        url: session.referer,
+        method: "GET",
+      });
       const token = extractReaderToken(Application.arrayBufferToUTF8String(page));
       session.refreshedAt = Date.now();
       session.refreshOk = Boolean(token);
       if (!token) return false;
+
       session.token = token;
+      this.pageRequestsInSession = 0;
       return true;
+    })().catch((error: unknown) => {
+      if (error instanceof CloudflareError) throw error;
+      session.refreshedAt = Date.now();
+      session.refreshOk = false;
+      return false;
     });
+
+    this.sessionRenewInFlight = task;
+    try {
+      return await task;
+    } finally {
+      if (this.sessionRenewInFlight === task) this.sessionRenewInFlight = undefined;
+    }
   }
 
   override async interceptRequest(request: Request): Promise<Request> {
@@ -418,25 +485,28 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
     // penalty is the advertised ~60s and a fresh token does NOT clear it — only
     // the wait does, so we don't re-mint for it. Parking the whole pipeline (via
     // pageCooldown.until) makes the retry and every queued prefetch page wait the
-    // penalty out together, the effect keiyoushi gets from its one lock. On the
-    // final attempt we also re-home the session (a fresh reader-page load), the
-    // way keiyoushi reloads the chapter page on a persistent failure. The one
-    // 429 that waiting can NEVER clear is the per-session "Session page limit"
-    // quota — detect it from the body and re-home immediately instead of burning
-    // a pointless 60s park on it. After the retry budget, throw a clear error:
-    // the JSON error body would otherwise render as a corrupt image.
+    // penalty out together, the effect keiyoushi gets from its one lock. A
+    // cumulative reader-session ceiling does not clear after Retry-After:
+    // proactively renew at 180 starts, and also renew here when its explicit
+    // message appears or a generic rate-limit response persists after the first
+    // full wait. After the retry budget, throw a clear error: the JSON error body
+    // would otherwise render as a corrupt image.
     if (PAGE_API_REGEX.test(request.url) && response.status === 429) {
       const attempt = Number(request.headers?.[PAGE_RETRY_HEADER] ?? "0");
       if (attempt < PAGE_RETRY_LIMIT) {
-        const sessionCapped = /session page limit/i.test(Application.arrayBufferToUTF8String(data));
-        if (sessionCapped && session && cid) {
-          await this.refreshSession(cid);
+        const body = Application.arrayBufferToUTF8String(data);
+        const sessionCapped = /session page limit/i.test(body);
+        const persistentGenericLimit = attempt > 0 && /rate limit exceeded/i.test(body);
+        const likelyCumulativeLimit =
+          this.pageRequestsInSession >= PAGE_SESSION_SOFT_LIMIT ||
+          sessionCapped ||
+          persistentGenericLimit;
+        if (likelyCumulativeLimit && session && cid && (await this.renewReaderSession(cid))) {
+          // A fresh session has no open penalty. The retry below is still paced
+          // and counted as its first protected lookup.
         } else {
           const waitMs = Math.min(getRetryDelayMs(response.headers), MAX_COOLDOWN_MS);
           pageCooldown.until = Math.max(pageCooldown.until, Date.now() + waitMs);
-          if (session && cid && attempt === PAGE_RETRY_LIMIT - 1) {
-            await this.refreshSession(cid);
-          }
         }
         const [, buffer] = await Application.scheduleRequest({
           url: request.url,
@@ -497,27 +567,34 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
 // trip a "Rate limit exceeded" 429 with a 60s Retry-After — even with the
 // advertised per-minute counter barely touched (287/300 remaining, ~13 used). So
 // page requests are strictly serialized and EVEN-spaced — never two at once,
-// never a fast opener burst — at the user's Image Requests Limit (2.5s by
-// default). A second rolling-window guard caps every setting at 24 starts per
-// minute, which is the missing protection exposed by the alpha.12 field log.
-// The first page still fires immediately (nothing precedes it); everything after
-// is one-at-a-time. Only the page API is paced (Webtoon-style per-endpoint
-// scoping); everything else passes through untouched.
+// never a fast opener burst — at the user's Image Requests Limit (2s by
+// default). The later 172+32-page field result showed that the apparent
+// "26-request" failure was actually the separate cumulative ~200-page session
+// ceiling handled above, so no speculative per-minute cap is imposed here. The
+// first page still fires immediately (nothing precedes it); everything after is
+// one-at-a-time. Only the page API is paced (Webtoon-style per-endpoint scoping);
+// everything else passes through untouched.
 
 export class OniSagaPageRateLimiter extends PaperbackInterceptor {
   private chain: Promise<unknown> = Promise.resolve();
   // Fire time of the last page request, for even inter-request spacing.
   private lastRequestAt = 0;
-  // Start times retained for the rolling reader window. Retries count too: each
-  // one reaches the protected endpoint and therefore consumes the same budget.
-  private requestStarts: number[] = [];
+  constructor(
+    id: string,
+    private readonly beforePageRequest?: (request: Request) => Promise<void>,
+  ) {
+    super(id);
+  }
 
   override async interceptRequest(request: Request): Promise<Request> {
     const cid = PAGE_API_REGEX.exec(request.url)?.[1];
     if (!cid) return request;
     // Serialize every page request through one chain so no two are ever in
     // flight together; pace() then even-spaces them.
-    const wait = this.chain.then(() => this.pace());
+    const wait = this.chain.then(async () => {
+      await this.pace();
+      await this.beforePageRequest?.(request);
+    });
     // Keep the chain alive even if one wait rejects.
     this.chain = wait.catch(() => undefined);
     await wait;
@@ -541,22 +618,7 @@ export class OniSagaPageRateLimiter extends PaperbackInterceptor {
     // later and hit the endpoint during Retry-After.
     for (;;) {
       const now = Date.now();
-      const cutoff = now - PAGE_WINDOW_MS;
-      this.requestStarts = this.requestStarts.filter((startedAt) => startedAt > cutoff);
-
-      const oldestInFullWindow =
-        this.requestStarts.length >= PAGE_WINDOW_MAX_REQUESTS
-          ? this.requestStarts[this.requestStarts.length - PAGE_WINDOW_MAX_REQUESTS]
-          : undefined;
-      const rollingWindowUntil =
-        oldestInFullWindow === undefined
-          ? 0
-          : oldestInFullWindow + PAGE_WINDOW_MS + PAGE_WINDOW_MARGIN_MS;
-      const waitUntil = Math.max(
-        pageCooldown.until,
-        this.lastRequestAt + intervalMs,
-        rollingWindowUntil,
-      );
+      const waitUntil = Math.max(pageCooldown.until, this.lastRequestAt + intervalMs);
       const waitMs = waitUntil - now;
 
       if (waitMs > 0) {
@@ -566,7 +628,6 @@ export class OniSagaPageRateLimiter extends PaperbackInterceptor {
 
       const startedAt = Date.now();
       this.lastRequestAt = startedAt;
-      this.requestStarts.push(startedAt);
       return;
     }
   }

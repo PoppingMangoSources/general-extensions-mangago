@@ -133,8 +133,10 @@ function topMangaInfoItems(item: TopMangaItem): FeaturedCarouselItem["infoItems"
 }
 
 export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
-  requestManager = new OniSagaInterceptor("onisaga-request");
   cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
+  requestManager = new OniSagaInterceptor("onisaga-request", () =>
+    this.resetReaderSessionCookies(),
+  );
   // Browse/search/discover share this generous limiter; images load freely.
   globalRateLimiter = new BasicRateLimiter("onisaga-rate-limiter", {
     numberOfRequests: 5,
@@ -144,7 +146,9 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
 
   // The reader's page API gets its own paced, de-duplicated budget while signed
   // images continue through Paperback's normal image pipeline (see network.ts).
-  pageRateLimiter = new OniSagaPageRateLimiter("onisaga-page-rate-limiter");
+  pageRateLimiter = new OniSagaPageRateLimiter("onisaga-page-rate-limiter", (request) =>
+    this.requestManager.preparePageRequest(request),
+  );
 
   // Cached `post-filter` states (token + snapshot) per listing URL — /browse
   // plus each active /search/{term}. A single shared slot would let every new
@@ -180,10 +184,25 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   private static readonly TOP_MANGA_TTL = 60_000;
 
   async initialise(): Promise<void> {
-    this.cookieStorageInterceptor.registerInterceptor();
+    // Cookie storage runs last on requests so a just-renewed long-reader
+    // session is injected after the page budget gate. Responses run in reverse,
+    // letting it save Set-Cookie before requestManager handles an error/retry.
     this.requestManager.registerInterceptor();
     this.globalRateLimiter.registerInterceptor();
     this.pageRateLimiter.registerInterceptor();
+    this.cookieStorageInterceptor.registerInterceptor();
+  }
+
+  private resetReaderSessionCookies(): void {
+    // Keep cf_clearance and every other Cloudflare cookie. Only Laravel's
+    // anonymous site session and its paired CSRF value belong to the cumulative
+    // protected-page budget.
+    this.cookieStorageInterceptor.cookies = this.cookieStorageInterceptor.cookies.filter(
+      (cookie) => {
+        const name = cookie.name.toLowerCase();
+        return name !== "onisaga_session" && name !== "xsrf-token";
+      },
+    );
   }
 
   async saveCloudflareBypassCookies(cookies: Cookie[]): Promise<void> {
