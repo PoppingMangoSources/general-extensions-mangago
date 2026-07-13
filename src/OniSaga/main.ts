@@ -22,6 +22,7 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
+  type UpdateManager,
 } from "@paperback/types";
 import * as cheerio from "cheerio";
 
@@ -39,9 +40,7 @@ import {
 import {
   DEFAULT_SORT,
   DOMAIN,
-  SECTION_TOGGLES,
   SORT_OPTIONS,
-  TYPE_OPTIONS,
   type LivewireResponse,
   type LivewireState,
   type OniSagaSearchMetadata,
@@ -56,7 +55,6 @@ import {
   extractReaderToken,
   hasNextPageFromHtml,
   parseChapters,
-  parseAnchorCards,
   parseHomeRail,
   parseMangaCards,
   parseMangaCardsFromHtml,
@@ -91,22 +89,24 @@ const BROWSE_PAGE_SIZE = 24;
 
 // A freshly-opened chapter onisaga hasn't imported yet serves a
 // `manga.chapter-page-loader` page (no reader token) that polls every 3s until
-// the import finishes. Mirror that poll: re-fetch the reader page up to this
-// many times, spaced this far apart, until the real reader with its token loads.
-const IMPORT_POLL_SECONDS = 3;
-const READER_MAX_ATTEMPTS = 12;
+// the import finishes. Mirror that poll: re-fetch the reader page until the real
+// reader with its token loads — quickly at first so a fast import opens
+// snappily, then more slowly, since a long chapter's first import can take well
+// over a minute (a 36s budget was observed timing out on real chapters).
+// Worst case ≈ 6×3s + 11×6s ≈ 84s of waiting before giving up with a clear
+// "come back shortly" error; the import keeps running server-side regardless.
+const IMPORT_POLL_FAST_SECONDS = 3;
+const IMPORT_POLL_SLOW_SECONDS = 6;
+const IMPORT_POLL_FAST_COUNT = 6;
+const READER_MAX_ATTEMPTS = 18;
 
-// Carousel style per rail; toggle rails render as chip rows.
+// Carousel style per rail.
 function discoverSectionType(id: string): DiscoverSectionType {
-  if (SECTION_TOGGLES[id]) return DiscoverSectionType.genres;
   switch (id) {
     case "top_manga":
       return DiscoverSectionType.featured;
     case "highest_rated":
       return DiscoverSectionType.prominentCarousel;
-    case "genres":
-    case "types":
-      return DiscoverSectionType.genres;
     default:
       return DiscoverSectionType.simpleCarousel;
   }
@@ -158,9 +158,13 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   private static readonly BROWSE_STATE_TTL = 1_800_000;
   private static readonly BROWSE_STATE_CACHE_MAX = 8;
 
-  // Cached server-rendered /trending document (the toggle rails live here).
-  private homeHtmlCache?: { html: string; at: number };
   private static readonly HOME_TTL = 60_000;
+
+  // Library-update scan bounds (see processTitlesForUpdates): pages of the
+  // Latest feed scanned per refresh (~24 titles each), and the maximum age of
+  // the last refresh for which that window is trusted to cover the gap.
+  private static readonly UPDATE_SCAN_MAX_PAGES = 8;
+  private static readonly UPDATE_SCAN_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 
   // Cached /home document. It server-renders the Latest, Fan Favorites and Top
   // Rated rails inline, so one fetch serves several rails instead of a separate
@@ -222,24 +226,6 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     section: DiscoverSection,
     metadata: { page?: number; collectedIds?: string[] } | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    // Toggle rails render as chip rows; a chip tap routes through getSearchResults.
-    const toggle = SECTION_TOGGLES[section.id];
-    if (toggle) {
-      return {
-        items: toggle.options.map((option) => ({
-          type: "genresCarouselItem",
-          searchQuery: {
-            title: "",
-            metadata: {
-              toggleSection: section.id,
-              toggleValue: option.id,
-            } satisfies OniSagaSearchMetadata,
-          },
-          name: option.title,
-        })),
-      };
-    }
-
     switch (section.id) {
       case "top_manga":
         return this.getTopMangaFeatured();
@@ -260,34 +246,6 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
       }
       case "fan_favorites":
         return this.fetchFanFavorites();
-      case "genres": {
-        // Drop blacklisted genres: including one here while searchUpdates also
-        // adds it to excludeGenre would send it as both included and excluded.
-        const excluded = new Set(getExcludedGenres());
-        return {
-          items: getGenres()
-            .filter((genre) => !excluded.has(genre.id))
-            .map((genre) => ({
-              type: "genresCarouselItem",
-              searchQuery: {
-                title: "",
-                metadata: { genres: { [genre.id]: "included" } } satisfies OniSagaSearchMetadata,
-              },
-              name: genre.title,
-            })),
-        };
-      }
-      case "types":
-        return {
-          items: TYPE_OPTIONS.filter((t) => t.id).map((type) => ({
-            type: "genresCarouselItem",
-            searchQuery: {
-              title: "",
-              metadata: { type: type.id } satisfies OniSagaSearchMetadata,
-            },
-            name: type.title,
-          })),
-        };
       default:
         return { items: [] };
     }
@@ -357,21 +315,6 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
       if (error instanceof CloudflareError) throw error;
       return [];
     }
-  }
-
-  // /trending carries the Livewire toggle rails; pull it once and cache it.
-  private async fetchHomeHtml(): Promise<string> {
-    const now = Date.now();
-    const cached = this.homeHtmlCache;
-    if (cached && now - cached.at < OniSagaExtension.HOME_TTL) return cached.html;
-
-    const [, buffer] = await Application.scheduleRequest({
-      url: `${DOMAIN}/trending`,
-      method: "GET",
-    });
-    const html = Application.arrayBufferToUTF8String(buffer);
-    this.homeHtmlCache = { html, at: now };
-    return html;
   }
 
   // POST a Livewire update and return the first component's re-render.
@@ -518,39 +461,6 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     });
   }
 
-  // A toggle chip was tapped: drive the rail's Livewire method on /trending and
-  // parse the re-rendered cards.
-  private async getToggledSection(
-    sectionId: string,
-    value: string,
-  ): Promise<PagedResults<SearchResultItem>> {
-    const toggle = SECTION_TOGGLES[sectionId];
-    if (!toggle) return { items: [] };
-
-    try {
-      const $ = cheerio.load(await this.fetchHomeHtml());
-      const state = extractLivewireState($, toggle.component);
-      if (!state) return { items: [] };
-
-      const { html } = await this.livewireUpdate(
-        `${DOMAIN}/trending`,
-        buildSectionToggleRequest(state, toggle.method, value),
-        "livewire toggle",
-      );
-      if (!html) return { items: [] };
-      const $component = cheerio.load(html);
-      // The Top 10 component re-renders as a ranked list, not poster cards;
-      // fall back to the anchor-based parser when the card markup is absent.
-      let cards = parseMangaCards($component, getShowNsfw());
-      if (cards.length === 0) cards = parseAnchorCards($component, getShowNsfw());
-
-      return { items: toSearchItems(cards) };
-    } catch (error) {
-      if (error instanceof CloudflareError) throw error;
-      return { items: [] };
-    }
-  }
-
   // ================================ Search =====================================
 
   async getSearchResults(
@@ -558,11 +468,6 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     metadata: { page?: number } | undefined,
     sortingOption?: SortingOption,
   ): Promise<PagedResults<SearchResultItem>> {
-    // A discover toggle chip routes here with no title — fetch its ranged cards.
-    if (query.metadata?.toggleSection) {
-      return this.getToggledSection(query.metadata.toggleSection, query.metadata.toggleValue ?? "");
-    }
-
     const title = straightenQuotes(query.title ?? "").trim();
 
     if (title.startsWith("http")) {
@@ -696,6 +601,55 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     return chapters;
   }
 
+  // Bulk library-update check. Without this, a refresh fetches every followed
+  // title individually (a /manga page + a Livewire chapter-list POST each —
+  // hundreds of requests for a large library, against the same site that rate
+  // limits the reader). Instead, scan the first pages of the Latest feed (the
+  // same created_at browse the Latest rail uses, ~24 titles/page): a followed
+  // title that appears there gets checked with high priority, everything else
+  // is skipped this round. Guard rails, since cards carry no timestamps:
+  // - Only trust the scan for a recent refresh gap (<= UPDATE_SCAN_MAX_AGE_MS);
+  //   an older gap falls through to the app's normal per-title refresh.
+  // - The scan ignores the user's NSFW/genre/type filters — a followed title
+  //   must never be skipped because a display filter hid it.
+  // - Any scan failure leaves priorities untouched (never skip on bad data).
+  async processTitlesForUpdates(
+    updateManager: UpdateManager,
+    lastUpdateDate?: Date,
+  ): Promise<void> {
+    if (!lastUpdateDate) return;
+    if (Date.now() - lastUpdateDate.getTime() > OniSagaExtension.UPDATE_SCAN_MAX_AGE_MS) return;
+
+    const queued = updateManager.getQueuedItems();
+    if (queued.length === 0) return;
+
+    // Pure defaults: created_at sort (newest updates first), no user filters.
+    const updates = defaultUpdates();
+
+    const recentIds = new Set<string>();
+    try {
+      for (let page = 1; page <= OniSagaExtension.UPDATE_SCAN_MAX_PAGES; page++) {
+        const { cards, hasNext } = await this.fetchBrowse(`${DOMAIN}/browse`, updates, page, true);
+        const before = recentIds.size;
+        for (const card of cards) recentIds.add(card.mangaId);
+        // An empty or repeated page means the feed ended (or the Livewire state
+        // went stale mid-scan) — the window is as big as it's going to get.
+        if (cards.length === 0 || recentIds.size === before || !hasNext) break;
+      }
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+      return; // failed scan: never mark titles skippable on bad data
+    }
+    if (recentIds.size === 0) return;
+
+    for (const manga of queued) {
+      await updateManager.setUpdatePriority(
+        manga.mangaId,
+        recentIds.has(manga.mangaId) ? "high" : "skip",
+      );
+    }
+  }
+
   // Collapse repeat uploads of the same chapter+language to a single entry,
   // keeping the newest by upload date (MangaDex's "Skip Same Chapter" / Aidoku's
   // dedupe). Key on the chapter title, which carries the original number *text*
@@ -736,7 +690,12 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
       token = extractReaderToken(body);
       if (token) break;
       if (body.includes("manga.chapter-page-loader")) {
-        await Application.sleep(IMPORT_POLL_SECONDS);
+        // No sleep after the final fetch — the loop is about to exit and throw.
+        if (attempt < READER_MAX_ATTEMPTS - 1) {
+          await Application.sleep(
+            attempt < IMPORT_POLL_FAST_COUNT ? IMPORT_POLL_FAST_SECONDS : IMPORT_POLL_SLOW_SECONDS,
+          );
+        }
         continue;
       }
       if (attempt >= 1) break; // transient miss: one quick retry, then give up
@@ -744,7 +703,7 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     if (!token) {
       throw new Error(
         body.includes("manga.chapter-page-loader")
-          ? "Chapter is still importing on onisaga; try again in a moment"
+          ? "onisaga is importing this chapter for the first time and it's taking a while — the import keeps running, so reopen the chapter in a minute"
           : "Could not find reader token on chapter page",
       );
     }
@@ -764,7 +723,7 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     // A chapter still being imported embeds only a partial page list; the site's
     // reader grows it by polling /pages. Paperback gets a static list, so ask
     // that endpoint once for the authoritative set before answering.
-    if (body.includes("importInProgress: true")) {
+    if (/importInProgress["']?\s*:\s*true/.test(body)) {
       const backfilled = await this.fetchImportingPageOrders(cid, token, chapterUrl);
       if (backfilled.length > orders.length) orders = backfilled;
     }
@@ -826,9 +785,10 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     baseUrl: string,
     updates: PostFilterUpdates,
     page: number,
+    // The library-update scan passes true: a hidden-NSFW followed title must
+    // still be seen in the Latest window, or it would be wrongly skipped.
+    showNsfw: boolean = getShowNsfw(),
   ): Promise<{ cards: MangaCard[]; hasNext: boolean }> {
-    const showNsfw = getShowNsfw();
-
     const state = await this.resolveBrowseState(baseUrl);
     if (!state) return { cards: [], hasNext: false };
 
@@ -848,16 +808,17 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
 
     // Never cheerio-load the whole response: a filtered browse render can be
     // 15 MB, which freezes the device. Slice cards off the raw string instead.
-    const { cards, truncated } = parseMangaCardsFromHtml(html, showNsfw);
+    const { cards, rawCount, truncated } = parseMangaCardsFromHtml(html, showNsfw);
     // The browse component paginates server-side (~24 cards/page), and its
     // "next" control markup varies, so the button regex alone would often miss
     // it — leaving search stuck on the first page. Treat a full page as "there's
     // more" (an empty next page terminates the loop); only skip the heuristic
     // when the raw scan truncated a whole-catalog render, where paging the
-    // client-side list would just repeat the same items. Keyed on `truncated`
-    // (the pre-filter scan), not cards.length, so a hidden-NSFW render whose
-    // post-filter count dips below the cap can't masquerade as a partial page.
-    const fullPage = cards.length >= BROWSE_PAGE_SIZE && !truncated;
+    // client-side list would just repeat the same items. Keyed on the RAW
+    // pre-filter count, not cards.length: with NSFW hidden (the default), one
+    // adult card on a full server page would shrink the filtered count and end
+    // pagination early, silently truncating search/browse results.
+    const fullPage = rawCount >= BROWSE_PAGE_SIZE && !truncated;
     return {
       cards,
       hasNext: fullPage || hasNextPageFromHtml(html),
