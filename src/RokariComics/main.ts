@@ -23,7 +23,7 @@ import { MangaStreamGeneric } from "../generic/main";
 import { type MangaStreamDiscoverSection, type MangaStreamSearchMetadata } from "../generic/models";
 import { getFilterTagsBySection, getIncludedTagBySection } from "../generic/utils";
 import pbconfig from "./pbconfig";
-import { getBaseUrlOverride, RokariComicsSettings } from "./forms";
+import { getBaseUrlOverride, RokariComicsSettings } from "./settings";
 
 const DOMAIN_NAME = "https://rokaricomics.com";
 
