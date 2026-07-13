@@ -59,20 +59,6 @@ export function defaultUpdates(): PostFilterUpdates {
   };
 }
 
-export function isDefaultUpdates(updates: PostFilterUpdates): boolean {
-  return (
-    updates.platform === "" &&
-    updates.status === "" &&
-    updates.sort === DEFAULT_SORT &&
-    updates.min_chapters === "" &&
-    updates.group === null &&
-    updates.release_start === null &&
-    updates.release_end === null &&
-    updates.genre.length === 0 &&
-    updates.excludeGenre.length === 0
-  );
-}
-
 // The snapshot lives in a `wire:snapshot` attribute; the CSRF token in a
 // `<meta name="csrf-token">` (or `_token` input). Match the component by name.
 export function extractLivewireState(
