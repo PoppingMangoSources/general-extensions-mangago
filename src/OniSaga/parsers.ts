@@ -10,7 +10,10 @@ import { chapterIdFromHref, getGenres, mangaIdFromHref } from "./utils/helpers";
 
 const READER_TOKEN_REGEX = /readerToken["']?\s*:\s*["']([^"']+)["']/;
 const TOTAL_PAGES_REGEX = /totalPages["']?\s*:\s*(\d+)/;
-const PAGE_ORDER_REGEX = /["']?order["']?\s*:\s*(\d+)/g;
+// Quoted key + no word char before it: the reader page's page list is
+// JSON.stringify output (`{"order":0,...}`), and an unanchored bare match also
+// hits `border:0` inline styles, `"sort_order":3` and CSS `order:2`.
+const PAGE_ORDER_REGEX = /(?<![\w-])["']order["']\s*:\s*(\d+)/g;
 const CHAPTER_NUMBER_REGEX = /(\d+(?:\.\d+)?)/;
 
 const TYPE_BADGES = new Set(["manga", "manhwa", "manhua", "shounen", "seinen", "shoujo", "josei"]);
@@ -146,7 +149,7 @@ export const CARD_PARSE_CAP = 100;
 export function parseMangaCardsFromHtml(
   html: string,
   showNsfw: boolean,
-): { cards: MangaCard[]; truncated: boolean } {
+): { cards: MangaCard[]; rawCount: number; truncated: boolean } {
   const starts: number[] = [];
   const openDivRegex = /<div\b[^>]*?\bclass="([^"]*)"/g;
   for (const match of html.matchAll(openDivRegex)) {
@@ -156,9 +159,11 @@ export function parseMangaCardsFromHtml(
       if (starts.length > CARD_PARSE_CAP) break;
     }
   }
-  // Whether the RAW (pre-NSFW-filter) scan hit the cap — i.e. a whole-catalog
-  // render, not a server page. Reported separately from cards.length because
-  // NSFW filtering shrinks the returned count and would otherwise mask this.
+  // Raw pre-filter card count and whether the scan hit the cap (a whole-catalog
+  // render, not a server page). Reported separately from cards.length because
+  // NSFW/malformed-card filtering shrinks the returned count — pagination
+  // decisions must key on what the server actually rendered, not what survived
+  // the filters.
   const truncated = starts.length > CARD_PARSE_CAP;
 
   const cards: MangaCard[] = [];
@@ -167,46 +172,7 @@ export function parseMangaCardsFromHtml(
     const parsed = parseMangaCards(load(slice), showNsfw);
     if (parsed[0]) cards.push(parsed[0]);
   }
-  return { cards, truncated };
-}
-
-// Fallback for component markup that doesn't use the browse card layout (the
-// /trending Top 10 re-renders as a compact ranked list, not poster cards):
-// any manga anchor wrapping a poster image becomes a card.
-export function parseAnchorCards($: CheerioAPI, showNsfw: boolean): MangaCard[] {
-  const cards: MangaCard[] = [];
-  const seen = new Set<string>();
-
-  $("a[href*='/manga/']").each((_, el) => {
-    const a = $(el);
-    const img = a.find("img").first();
-    if (img.length === 0) return;
-    const mangaId = mangaIdFromHref(a.attr("href") ?? "");
-    if (!mangaId || seen.has(mangaId)) return;
-
-    const title = (a.attr("title") || a.attr("aria-label") || img.attr("alt") || a.text())
-      .replace(/\s*(?:manga\s*)?cover\s*$/i, "")
-      .trim();
-    const imageUrl = resolveImageUrl(img);
-    if (!title || !imageUrl) return;
-
-    // In the ranked-list layout the 18+ marker sits beside the anchor in the
-    // row, not inside it, so check the containing row too before trusting it.
-    const row = a.closest("li");
-    const scope = (row.length > 0 ? row : a.parent()) as Cheerio<Element>;
-    const isAdult = hasAdultMarker(a) || hasAdultMarker(scope);
-    if (isAdult && !showNsfw) return;
-
-    seen.add(mangaId);
-    cards.push({
-      mangaId,
-      title,
-      imageUrl,
-      contentRating: isAdult ? ContentRating.ADULT : ContentRating.EVERYONE,
-    });
-  });
-
-  return cards;
+  return { cards, rawCount: starts.length, truncated };
 }
 
 // ============================= Top-manga ranking =============================
@@ -264,7 +230,10 @@ export function parseTopManga($: CheerioAPI, showNsfw: boolean): TopMangaItem[] 
     if (!readsMatch) return;
 
     podium.push({
-      rank: parseInt(a.text().match(/\b0?(\d)\b/)?.[1] ?? "9", 10),
+      // A standalone digit only — not one bordered by digits/commas/letters, so
+      // the "1" of "1,234 reads" can never be mistaken for the rank. Unranked
+      // falls to 9 (sorted last, still shown).
+      rank: parseInt(a.text().match(/(?<![\w,])0?(\d)(?![\w,])/)?.[1] ?? "9", 10),
       item: {
         mangaId: mangaIdFromHref(a.attr("href") ?? ""),
         title: (img.attr("alt") ?? "").replace(/\s*cover\s*$/i, "").trim(),
@@ -326,14 +295,6 @@ export function componentHtmlByName($: CheerioAPI, componentName: string): strin
   return html;
 }
 
-export function hasNextPage($: CheerioAPI): boolean {
-  let found = false;
-  $("[wire\\:click*='nextPage']").each((_, el) => {
-    if ($(el).attr("disabled") === undefined) found = true;
-  });
-  return found;
-}
-
 // The /home page server-renders every discover rail inline — no 10MB+ /browse
 // document. Slice one rail out by its section heading, stopping at the next
 // rail's heading, a Livewire island (`wire:snapshot`) or a flux section heading,
@@ -362,13 +323,15 @@ export function parseHomeRail(html: string, heading: string, showNsfw: boolean):
   return parseMangaCardsFromHtml(after.slice(0, end), showNsfw).cards;
 }
 
-// String twin of hasNextPage for the multi-MB browse response we never fully
-// cheerio-load: an enabled `wire:click="...nextPage..."` control means there's
-// another page.
+// Scans the multi-MB browse response we never fully cheerio-load: an enabled
+// `wire:click="...nextPage..."` control means there's another page. The
+// disabled check must match the ATTRIBUTE only — `\bdisabled\b` also matches
+// Tailwind's `disabled:opacity-50` variant classes on an enabled button, which
+// would report the last visible page as final and truncate pagination.
 export function hasNextPageFromHtml(html: string): boolean {
   const regex = /<[^>]*\bwire:click="[^"]*nextPage[^"]*"[^>]*>/g;
   for (const match of html.matchAll(regex)) {
-    if (!/\bdisabled\b/.test(match[0])) return true;
+    if (!/\sdisabled(?=[\s=>/])/.test(match[0])) return true;
   }
   return false;
 }
@@ -399,12 +362,15 @@ export function parseMangaDetails($: CheerioAPI, mangaId: string): SourceManga {
 
   // The poster markup varies between titles, so try the poster block loosely
   // then fall back to the page's og:image/twitter:image. An empty thumbnailUrl
-  // makes Paperback throw "Invalid URL", so this must always resolve something.
+  // makes Paperback throw "Invalid URL", so this must always resolve something —
+  // the site favicon is the guaranteed-valid last resort (a blank cover beats a
+  // hard error on the details screen).
   const thumbnailUrl =
     resolveImageUrl($(".w-32 picture img").first()) ||
     resolveImageUrl($(".w-32 img").first()) ||
     resolveUrl($('meta[property="og:image"]').attr("content")?.trim() ?? "") ||
-    resolveUrl($('meta[name="twitter:image"]').attr("content")?.trim() ?? "");
+    resolveUrl($('meta[name="twitter:image"]').attr("content")?.trim() ?? "") ||
+    `${DOMAIN}/favicon.ico`;
 
   const infoSection = $("div.flex.flex-col.md\\:flex-row").first();
 
@@ -496,7 +462,14 @@ function detailsDate(details: string[]): string {
   return (
     details.find((d) => {
       const lower = d.toLowerCase();
-      return lower.includes("ago") || lower === "today" || lower === "yesterday";
+      return (
+        lower.includes("ago") ||
+        lower === "today" ||
+        lower === "yesterday" ||
+        // Absolute dates (deep chapter lists commonly switch to them): any
+        // detail carrying a year reads as the date column.
+        /\b(19|20)\d{2}\b/.test(d)
+      );
     }) ?? ""
   );
 }
@@ -511,10 +484,17 @@ export function parseChapterDate(value: string): Date {
     return now;
   }
 
-  const match = date.match(/(\d+)\s+(minute|hour|day|week|month|year)s?\s+ago/);
-  if (!match) return now;
+  // "3 hours ago" and the article form "an hour ago" / "a day ago" (= 1).
+  const match = date.match(/(\d+|an?)\s+(minute|hour|day|week|month|year)s?\s+ago/);
+  if (!match) {
+    // Not a relative date — try an absolute one ("Jan 5, 2024") before giving
+    // up: defaulting to "now" would make old chapters look freshly updated and
+    // skew the dedupe's keep-newest pick.
+    const absolute = new Date(value.trim());
+    return Number.isNaN(absolute.getTime()) ? now : absolute;
+  }
 
-  const value2 = parseInt(match[1], 10);
+  const value2 = /^\d/.test(match[1]) ? parseInt(match[1], 10) : 1;
   switch (match[2]) {
     case "minute":
       now.setMinutes(now.getMinutes() - value2);
