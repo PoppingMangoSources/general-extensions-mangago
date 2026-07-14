@@ -25,6 +25,10 @@ const PAGE_API_REGEX = /\/api\/chapter\/([^/]+)\/page\/(\d+)/;
 // nested lookup from recursively trying to resolve itself.
 const PAGE_RESOLVE_HEADER = "x-pb-page-resolve";
 
+// Kept internal to the lazy resolver. A nested scheduleRequest challenge must
+// be promoted to the outer page response before Paperback can launch bypass.
+class PageResolverCloudflareChallengeError extends Error {}
+
 // Bounds re-entrant page retries (the retry re-runs both interceptors); matches
 // keiyoushi's `attempt < 3` retry cap.
 const PAGE_RETRY_HEADER = "x-pb-page-retry";
@@ -85,6 +89,25 @@ export function getHeaderValue(
 export function getRetryDelayMs(headers: Record<string, string> | undefined): number {
   const retryAfter = Number(getHeaderValue(headers, "retry-after"));
   return Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : RATE_LIMIT_FALLBACK_MS;
+}
+
+// Cloudflare normally labels a managed challenge with `cf-mitigated`, as in
+// the captured reader 403. Keep a narrow HTML fallback for proxies/runtimes that
+// omit that header, without mistaking onisaga's ordinary JSON token 403s for a
+// challenge just because the site itself is proxied through Cloudflare.
+export function isCloudflareChallengeResponse(
+  url: string,
+  status: number,
+  headers: Record<string, string> | undefined,
+  bodyText = "",
+): boolean {
+  if (!url.startsWith(DOMAIN)) return false;
+  if (getHeaderValue(headers, "cf-mitigated")?.toLowerCase() === "challenge") return true;
+  if (status !== 403) return false;
+
+  const contentType = getHeaderValue(headers, "content-type")?.toLowerCase() ?? "";
+  if (!contentType.includes("text/html")) return false;
+  return /just a moment|challenge-platform|cf-browser-verification|_cf_chl_opt/i.test(bodyText);
 }
 
 // Sanitize persisted history before it affects pacing. Sorting also makes the
@@ -163,6 +186,13 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
   // request to the app.
   private pageResolveInFlight = new Map<string, Promise<string>>();
 
+  // URLs currently being fetched by the nested resolver. While one is in this
+  // set, interceptResponse returns a Cloudflare challenge body to resolveSignedUrl
+  // instead of throwing from the nested response and turning it into an
+  // Alamofire request-adaptation error. The outer request cannot reach the same
+  // URL concurrently because it is awaiting this lookup.
+  private pageResolveNetworkRequests = new Set<string>();
+
   setReaderToken(chapterId: string, token: string, referer: string): void {
     this.readerSessions.set(chapterId, { token, referer });
   }
@@ -236,12 +266,22 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
       // Re-enter the normal request pipeline so cookie storage, page pacing,
       // token rotation, auth recovery and shared 429 cooldown all still apply.
       // The private marker is stripped by interceptRequest before the HTTP call.
-      const [response, buffer] = await Application.scheduleRequest({
-        url: request.url,
-        method: "GET",
-        headers: { ...request.headers, [PAGE_RESOLVE_HEADER]: "1" },
-      });
+      this.pageResolveNetworkRequests.add(request.url);
+      let response: Response;
+      let buffer: ArrayBuffer;
+      try {
+        [response, buffer] = await Application.scheduleRequest({
+          url: request.url,
+          method: "GET",
+          headers: { ...request.headers, [PAGE_RESOLVE_HEADER]: "1" },
+        });
+      } finally {
+        this.pageResolveNetworkRequests.delete(request.url);
+      }
       const raw = Application.arrayBufferToUTF8String(buffer);
+      if (isCloudflareChallengeResponse(request.url, response.status, response.headers, raw)) {
+        throw new PageResolverCloudflareChallengeError();
+      }
       let dto: PageApiResponse;
       try {
         dto = JSON.parse(raw) as PageApiResponse;
@@ -362,8 +402,24 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
       // substituting image bytes into an application/json response.
       const order = pageApiMatch?.[2];
       if (!isPageResolver && order !== undefined) {
-        const signedUrl = await this.resolveSignedUrl(request, cid, order);
-        return this.imageRequest(request, signedUrl, session?.referer ?? `${DOMAIN}/`);
+        try {
+          const signedUrl = await this.resolveSignedUrl(request, cid, order);
+          return this.imageRequest(request, signedUrl, session?.referer ?? `${DOMAIN}/`);
+        } catch (error) {
+          if (
+            !(error instanceof PageResolverCloudflareChallengeError) &&
+            !(error instanceof CloudflareError)
+          ) {
+            throw error;
+          }
+          // The lookup above runs inside request adaptation. Propagating its
+          // CloudflareError from here becomes Alamofire.requestAdaptationFailed,
+          // which Paperback cannot turn into its bypass banner. Let this outer
+          // page request reach the same endpoint once: the managed-challenge
+          // response then reaches interceptResponse below, where CloudflareError
+          // is emitted from the supported response stage. Once the user solves
+          // it, Paperback retries and the nested lookup resolves normally.
+        }
       }
 
       if (session) {
@@ -395,14 +451,28 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
     response: Response,
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
-    const cfMitigated = getHeaderValue(response.headers, "cf-mitigated");
-    if (cfMitigated === "challenge") {
+    const challengeBody = response.status === 403 ? Application.arrayBufferToUTF8String(data) : "";
+    if (
+      isCloudflareChallengeResponse(request.url, response.status, response.headers, challengeBody)
+    ) {
+      // This response belongs to the scheduleRequest nested inside
+      // interceptRequest. Hand it back to resolveSignedUrl, which converts it to
+      // an internal sentinel and lets the outer request make the challenge at a
+      // response stage Paperback can handle.
+      if (this.pageResolveNetworkRequests.has(request.url)) return data;
+
+      // Kagane's working bypass path preserves the challenged request URL and
+      // headers. In particular, using the actual protected endpoint lets
+      // Cloudflare solve the same rule that rejected it; opening only `/` can be
+      // a clean 200 while the API path remains challenged.
+      const resolutionHeaders = { ...request.headers };
+      delete resolutionHeaders[PAGE_RETRY_HEADER];
+      delete resolutionHeaders[PAGE_RESOLVE_HEADER];
+      resolutionHeaders["user-agent"] = await Application.getDefaultUserAgent();
       throw new CloudflareError({
-        url: `${DOMAIN}/`,
+        url: request.url,
         method: request.method ?? "GET",
-        headers: {
-          "user-agent": await Application.getDefaultUserAgent(),
-        },
+        headers: resolutionHeaders,
       });
     }
 

@@ -8,6 +8,7 @@ import { OniSaga } from "../OniSaga/main.js";
 import {
   getHeaderValue,
   getRetryDelayMs,
+  isCloudflareChallengeResponse,
   normalisePageRequestStarts,
   PAGE_BUDGET_MAX_REQUESTS,
   PAGE_BUDGET_WINDOW_MS,
@@ -26,6 +27,35 @@ export async function runTests(logger: TestLogger) {
     expect(getRetryDelayMs({ "retry-after": "3" })).to.equal(3000);
     expect(getRetryDelayMs({})).to.equal(2000);
   });
+
+  suite.test(
+    "reader challenge detection distinguishes Cloudflare HTML from token 403s",
+    async () => {
+      const pageUrl = "https://onisaga.com/api/chapter/2843379/page/8";
+      expect(
+        isCloudflareChallengeResponse(pageUrl, 403, {
+          "Content-Type": "text/html; charset=UTF-8",
+          "CF-Mitigated": "challenge",
+        }),
+      ).to.equal(true);
+      expect(
+        isCloudflareChallengeResponse(
+          pageUrl,
+          403,
+          { "content-type": "text/html; charset=UTF-8" },
+          "<title>Just a moment...</title><script>window._cf_chl_opt = {}</script>",
+        ),
+      ).to.equal(true);
+      expect(
+        isCloudflareChallengeResponse(
+          pageUrl,
+          403,
+          { "content-type": "application/json", server: "cloudflare" },
+          '{"error":"invalid reader token"}',
+        ),
+      ).to.equal(false);
+    },
+  );
 
   suite.test("reader markup parser handles the current two-page import result", async () => {
     const markup = `

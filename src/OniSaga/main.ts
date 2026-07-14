@@ -192,6 +192,14 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   }
 
   async saveCloudflareBypassCookies(cookies: Cookie[]): Promise<void> {
+    await this.cloudflareBypassCompleted({ url: `${DOMAIN}/`, method: "GET" }, cookies, {});
+  }
+
+  async cloudflareBypassCompleted(
+    _request: Request,
+    cookies: Cookie[],
+    _localStorage: Record<string, string>,
+  ): Promise<void> {
     for (const cookie of cookies) {
       if (
         cookie.name.startsWith("cf") ||
