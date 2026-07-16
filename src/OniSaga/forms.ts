@@ -283,7 +283,7 @@ export class OniSagaSettingsForm extends Form {
         {
           id: "reader",
           footer:
-            "Page lookups stay evenly spaced. A cross-chapter hourly safety budget preserves fast loading for normal chapters, then pauses unusually large binges before onisaga's long 429 lockout.",
+            "Page lookups start quickly, then settle into a sustainable cross-chapter pace. If onisaga's hourly safety budget is already full, the reader reports the remaining pause instead of staying at Loading 0%.",
         },
         [
           SelectRow("pageDelay", {

@@ -18,6 +18,7 @@ import {
   type Form,
   type PagedResults,
   type Request,
+  type Response,
   type SearchQuery,
   type SearchResultItem,
   type SortingOption,
@@ -189,6 +190,17 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     this.globalRateLimiter.registerInterceptor();
     this.pageRateLimiter.registerInterceptor();
     this.cookieStorageInterceptor.registerInterceptor();
+
+    // Paperback does not re-run request interceptors after a redirect. Preserve
+    // OniSaga's browser UA, reader referer and page token on every follow-up,
+    // including signed CDN image redirects.
+    Application.setRedirectHandler(
+      Application.Selector(this as OniSagaExtension, "handleRedirect"),
+    );
+  }
+
+  async handleRedirect(request: Request, response: Response): Promise<Request> {
+    return this.requestManager.prepareRedirect(request, response);
   }
 
   async saveCloudflareBypassCookies(cookies: Cookie[]): Promise<void> {

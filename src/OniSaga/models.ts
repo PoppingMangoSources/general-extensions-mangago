@@ -13,6 +13,7 @@ export const DEDUPE_CHAPTERS_KEY = "dedupe_chapters";
 export const PAGE_DELAY_KEY = "page_delay";
 export const PAGE_BUDGET_HISTORY_KEY = "onisaga_page_budget_history_v1";
 export const PAGE_BUDGET_BLOCKED_UNTIL_KEY = "onisaga_page_budget_blocked_until_v1";
+export const PAGE_TOKEN_BUCKET_KEY = "onisaga_page_token_bucket_v1";
 export const SECTIONS_ORDER_KEY = "sections_order";
 export const SECTIONS_DELETED_KEY = "sections_deleted";
 
@@ -94,8 +95,8 @@ export const MIN_CHAPTERS_OPTIONS: Option[] = [
 ];
 
 // Seconds between reader page requests; the id doubles as the numeric value.
-// Keep the fast tuning range and 2s default. A separate persisted rolling-hour
-// guard in network.ts handles long binges without making ordinary chapters slow.
+// Keep the fast tuning range and 2s default. network.ts combines this short
+// spacing with a persisted burst/refill budget for sustained reading.
 export const PAGE_DELAY_DEFAULT = "2";
 export const PAGE_DELAY_OPTIONS: Option[] = [
   { id: "1.5", title: "1 image per 1.50 seconds" },
