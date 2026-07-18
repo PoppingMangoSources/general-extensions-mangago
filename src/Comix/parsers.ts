@@ -105,7 +105,7 @@ export const parseChapters = (sourceManga: SourceManga, items: ChapterItem[]): C
     title: chapter.name,
     volume: chapter.volume,
     version: chapter.isOfficial
-      ? (chapter.group?.name ?? "Official")
+      ? `★ ${chapter.group?.name ?? "Official"}`
       : (chapter.group?.name ?? "Unknown"),
     sortingIndex: chapter.number,
     publishDate: parseRelativeDate(chapter.createdAtFormatted),
