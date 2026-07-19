@@ -11,7 +11,7 @@ import {
 } from "@paperback/types";
 
 import {
-  DIRECTION_OPTIONS,
+  SORT_DIRECTION_OPTIONS,
   STATUS_OPTIONS,
   TYPE_OPTIONS,
   type OptionItem,
@@ -21,7 +21,7 @@ import {
 const toTags = (options: OptionItem[]): Tag[] =>
   options.map((option) => ({ id: option.id, title: option.value }));
 
-export class HiveScansAdvancedSearchForm extends AdvancedSearchForm {
+export class HiveToonsAdvancedSearchForm extends AdvancedSearchForm {
   private status: string[];
   private type: string[];
   private direction: string[];
@@ -29,7 +29,7 @@ export class HiveScansAdvancedSearchForm extends AdvancedSearchForm {
 
   private readonly statusOptions: Tag[] = toTags(STATUS_OPTIONS);
   private readonly typeOptions: Tag[] = toTags(TYPE_OPTIONS);
-  private readonly directionOptions: Tag[] = toTags(DIRECTION_OPTIONS);
+  private readonly directionOptions: Tag[] = toTags(SORT_DIRECTION_OPTIONS);
   private readonly genreOptions: Tag[];
 
   constructor(searchQuery: SearchQuery<SearchMetadata>, genreOptions: OptionItem[]) {
@@ -54,7 +54,7 @@ export class HiveScansAdvancedSearchForm extends AdvancedSearchForm {
           minItemCount: 0,
           maxItemCount: 1,
           onValueChange: Application.Selector(
-            this as HiveScansAdvancedSearchForm,
+            this as HiveToonsAdvancedSearchForm,
             "handleStatusChange",
           ),
         }),
@@ -68,7 +68,7 @@ export class HiveScansAdvancedSearchForm extends AdvancedSearchForm {
           minItemCount: 0,
           maxItemCount: 1,
           onValueChange: Application.Selector(
-            this as HiveScansAdvancedSearchForm,
+            this as HiveToonsAdvancedSearchForm,
             "handleTypeChange",
           ),
         }),
@@ -82,7 +82,7 @@ export class HiveScansAdvancedSearchForm extends AdvancedSearchForm {
           minItemCount: 0,
           maxItemCount: 1,
           onValueChange: Application.Selector(
-            this as HiveScansAdvancedSearchForm,
+            this as HiveToonsAdvancedSearchForm,
             "handleDirectionChange",
           ),
         }),
@@ -100,7 +100,7 @@ export class HiveScansAdvancedSearchForm extends AdvancedSearchForm {
             allowExclusion: true,
             allowEmptySelection: true,
             onValueChange: Application.Selector(
-              this as HiveScansAdvancedSearchForm,
+              this as HiveToonsAdvancedSearchForm,
               "handleGenresChange",
             ),
           }),
