@@ -13,9 +13,9 @@ import {
 
 import {
   DOMAIN,
-  type HiveToonsChapter,
-  type HiveToonsChapterData,
-  type HiveToonsPost,
+  type HiveScansChapter,
+  type HiveScansChapterData,
+  type HiveScansPost,
 } from "./models";
 
 export function encodeMangaId(slug: string): string {
@@ -41,7 +41,7 @@ export function normalizeSearchTerm(term: string): string {
     .replace(/\s+/g, " ");
 }
 
-export function isNovel(post: Pick<HiveToonsPost, "isNovel" | "seriesType">): boolean {
+export function isNovel(post: Pick<HiveScansPost, "isNovel" | "seriesType">): boolean {
   return post.isNovel === true || (post.seriesType ?? "").toUpperCase() === "NOVEL";
 }
 
@@ -104,7 +104,7 @@ function seriesTypeTag(seriesType?: string | null): string | undefined {
   }
 }
 
-export function parseSearchResults(posts: HiveToonsPost[]): SearchResultItem[] {
+export function parseSearchResults(posts: HiveScansPost[]): SearchResultItem[] {
   return posts
     .filter((post) => !isNovel(post))
     .map((post) => ({
@@ -116,7 +116,7 @@ export function parseSearchResults(posts: HiveToonsPost[]): SearchResultItem[] {
     }));
 }
 
-export function toFeaturedItems(posts: HiveToonsPost[]): DiscoverSectionItem[] {
+export function toFeaturedItems(posts: HiveScansPost[]): DiscoverSectionItem[] {
   return posts
     .filter((post) => !isNovel(post))
     .map((post) => {
@@ -148,7 +148,7 @@ export function toFeaturedItems(posts: HiveToonsPost[]): DiscoverSectionItem[] {
     });
 }
 
-export function toHotReleaseItems(posts: HiveToonsPost[]): DiscoverSectionItem[] {
+export function toHotReleaseItems(posts: HiveScansPost[]): DiscoverSectionItem[] {
   return posts
     .filter((post) => !isNovel(post))
     .map((post) => {
@@ -171,7 +171,7 @@ export function toHotReleaseItems(posts: HiveToonsPost[]): DiscoverSectionItem[]
     });
 }
 
-export function toLatestUpdateItems(posts: HiveToonsPost[]): DiscoverSectionItem[] {
+export function toLatestUpdateItems(posts: HiveScansPost[]): DiscoverSectionItem[] {
   return posts
     .filter((post) => !isNovel(post))
     .flatMap((post): DiscoverSectionItem[] => {
@@ -197,7 +197,7 @@ export function toLatestUpdateItems(posts: HiveToonsPost[]): DiscoverSectionItem
     });
 }
 
-export function parseMangaDetails(post: HiveToonsPost): SourceManga {
+export function parseMangaDetails(post: HiveScansPost): SourceManga {
   const genreNames = [
     seriesTypeTag(post.seriesType),
     ...(post.genres ?? []).map((genre) => genre.name),
@@ -233,18 +233,18 @@ export function parseMangaDetails(post: HiveToonsPost): SourceManga {
   };
 }
 
-function chapterNumber(chapter: HiveToonsChapter): number {
+function chapterNumber(chapter: HiveScansChapter): number {
   return typeof chapter.number === "number"
     ? chapter.number
     : parseFloat(String(chapter.number)) || 0;
 }
 
-function isChapterLocked(chapter: HiveToonsChapter): boolean {
+function isChapterLocked(chapter: HiveScansChapter): boolean {
   return chapter.isLocked === true || chapter.isTimeLocked === true;
 }
 
 export function parseChapterList(
-  chapters: HiveToonsChapter[],
+  chapters: HiveScansChapter[],
   sourceManga: SourceManga,
   showLocked: boolean,
 ): Chapter[] {
@@ -276,7 +276,7 @@ export function parseChapterList(
   });
 }
 
-export function parseChapterDetails(data: HiveToonsChapterData, chapter: Chapter): ChapterDetails {
+export function parseChapterDetails(data: HiveScansChapterData, chapter: Chapter): ChapterDetails {
   if (data.isShortLinkLocked) throw new Error("Chapter locked (short link).");
   if (data.isLockedByCoins) throw new Error("Chapter locked — coins required to unlock.");
   if (data.isPermanentlyLocked) throw new Error("Chapter permanently locked.");
@@ -287,7 +287,7 @@ export function parseChapterDetails(data: HiveToonsChapterData, chapter: Chapter
     .filter((url) => url.length > 0);
 
   if (pages.length === 0) {
-    throw new Error("No chapter pages were returned by HiveToons.");
+    throw new Error("No chapter pages were returned by HiveScans.");
   }
 
   return {
