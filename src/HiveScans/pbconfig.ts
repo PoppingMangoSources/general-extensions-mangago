@@ -6,7 +6,7 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "HiveScans",
   description: "Extension that pulls content from hivetoons.org.",
-  version: "1.0.0-alpha.6",
+  version: "1.0.0-alpha.7",
   icon: "icons.png",
   language: "en",
   contentRating: ContentRating.EVERYONE,
