@@ -18,7 +18,7 @@ export class HiveScansSettingsForm extends Form {
           subtitle: "Shows paid chapters with a 🔒. Unlock them on the website before reading.",
           value: getShowLockedChapters(),
           onValueChange: Application.Selector(
-            this as HiveToonsSettingsForm,
+            this as HiveScansSettingsForm,
             "handleShowLockedChange",
           ),
         }),
