@@ -13,16 +13,10 @@ import {
 
 import {
   DOMAIN,
-  LOCK_PREFIX,
-  type HiveScansChapter,
-  type HiveScansPage,
-  type HiveScansPost,
-  type OptionItem,
+  type HiveToonsChapter,
+  type HiveToonsChapterData,
+  type HiveToonsPost,
 } from "./models";
-
-// ---------------------------------------------------------------------------
-// id helpers
-// ---------------------------------------------------------------------------
 
 export function encodeMangaId(slug: string): string {
   return encodeURIComponent(slug).replace(
@@ -47,11 +41,7 @@ export function normalizeSearchTerm(term: string): string {
     .replace(/\s+/g, " ");
 }
 
-// ---------------------------------------------------------------------------
-// field helpers
-// ---------------------------------------------------------------------------
-
-export function isNovel(post: Pick<HiveScansPost, "isNovel" | "seriesType">): boolean {
+export function isNovel(post: Pick<HiveToonsPost, "isNovel" | "seriesType">): boolean {
   return post.isNovel === true || (post.seriesType ?? "").toUpperCase() === "NOVEL";
 }
 
@@ -114,11 +104,7 @@ function seriesTypeTag(seriesType?: string | null): string | undefined {
   }
 }
 
-// ---------------------------------------------------------------------------
-// listing parsers
-// ---------------------------------------------------------------------------
-
-export function parseSearchResults(posts: HiveScansPost[]): SearchResultItem[] {
+export function parseSearchResults(posts: HiveToonsPost[]): SearchResultItem[] {
   return posts
     .filter((post) => !isNovel(post))
     .map((post) => ({
@@ -130,41 +116,88 @@ export function parseSearchResults(posts: HiveScansPost[]): SearchResultItem[] {
     }));
 }
 
-export function toFeaturedItems(posts: HiveScansPost[]): DiscoverSectionItem[] {
+export function toFeaturedItems(posts: HiveToonsPost[]): DiscoverSectionItem[] {
   return posts
     .filter((post) => !isNovel(post))
-    .map((post) => ({
-      type: "featuredCarouselItem" as const,
-      mangaId: encodeMangaId(post.slug),
-      title: Application.decodeHTMLEntities(post.postTitle),
-      imageUrl: post.featuredImage ?? "",
-      supertitle: formatSeriesSubtitle(post.seriesType, post.seriesStatus) || undefined,
-      contentRating: ContentRating.EVERYONE,
-    }));
+    .map((post) => {
+      const ratingInfo =
+        post.averageRating == null
+          ? undefined
+          : { symbol: "star.fill" as const, text: post.averageRating.toString() };
+      const statusText = mapStatus(post.seriesStatus);
+      const statusInfo =
+        statusText === "Unknown" ? undefined : { symbol: "book.fill" as const, text: statusText };
+
+      return {
+        type: "featuredCarouselItem" as const,
+        mangaId: encodeMangaId(post.slug),
+        title: Application.decodeHTMLEntities(post.postTitle),
+        imageUrl: post.featuredImage ?? "",
+        supertitle: cleanField(post.author) ?? (formatSeriesSubtitle(post.seriesType) || undefined),
+        summary: stripHtml(post.postContent ?? "") || undefined,
+        infoItems:
+          ratingInfo && statusInfo
+            ? [ratingInfo, statusInfo]
+            : ratingInfo
+              ? [ratingInfo]
+              : statusInfo
+                ? [statusInfo]
+                : undefined,
+        contentRating: ContentRating.EVERYONE,
+      };
+    });
 }
 
-export function toSimpleItems(posts: HiveScansPost[]): DiscoverSectionItem[] {
+export function toHotReleaseItems(posts: HiveToonsPost[]): DiscoverSectionItem[] {
   return posts
     .filter((post) => !isNovel(post))
-    .map((post) => ({
-      type: "simpleCarouselItem" as const,
-      mangaId: encodeMangaId(post.slug),
-      title: Application.decodeHTMLEntities(post.postTitle),
-      imageUrl: post.featuredImage ?? "",
-      subtitle: formatSeriesSubtitle(post.seriesType, post.seriesStatus) || undefined,
-      contentRating: ContentRating.EVERYONE,
-    }));
+    .map((post) => {
+      const latestChapter = post.chapters?.[0];
+      const subtitle = [
+        latestChapter ? `Ch. ${latestChapter.number}` : undefined,
+        post.averageRating == null ? undefined : `★ ${post.averageRating}`,
+      ]
+        .filter((value): value is string => Boolean(value))
+        .join(" • ");
+
+      return {
+        type: "prominentCarouselItem" as const,
+        mangaId: encodeMangaId(post.slug),
+        title: Application.decodeHTMLEntities(post.postTitle),
+        imageUrl: post.featuredImage ?? "",
+        subtitle: subtitle || formatSeriesSubtitle(post.seriesType, post.seriesStatus) || undefined,
+        contentRating: ContentRating.EVERYONE,
+      };
+    });
 }
 
-export function genresToOptions(genres: { id: number; name: string }[]): OptionItem[] {
-  return genres.map((genre) => ({ id: genre.id.toString(), value: genre.name.trim() }));
+export function toLatestUpdateItems(posts: HiveToonsPost[]): DiscoverSectionItem[] {
+  return posts
+    .filter((post) => !isNovel(post))
+    .flatMap((post): DiscoverSectionItem[] => {
+      const latestChapter = post.chapters?.[0];
+      if (!latestChapter) return [];
+
+      const timestamp =
+        post.lastChapterAddedAt ?? latestChapter.updatedAt ?? latestChapter.createdAt;
+      const publishDate = new Date(timestamp);
+
+      return [
+        {
+          type: "chapterUpdatesCarouselItem",
+          mangaId: encodeMangaId(post.slug),
+          chapterId: latestChapter.number.toString(),
+          title: Application.decodeHTMLEntities(post.postTitle),
+          imageUrl: post.featuredImage ?? "",
+          subtitle: post.averageRating == null ? undefined : `★ ${post.averageRating.toString()}`,
+          publishDate: Number.isNaN(publishDate.getTime()) ? undefined : publishDate,
+          contentRating: ContentRating.EVERYONE,
+        },
+      ];
+    });
 }
 
-// ---------------------------------------------------------------------------
-// manga details
-// ---------------------------------------------------------------------------
-
-export function parseMangaDetails(post: HiveScansPost): SourceManga {
+export function parseMangaDetails(post: HiveToonsPost): SourceManga {
   const genreNames = [
     seriesTypeTag(post.seriesType),
     ...(post.genres ?? []).map((genre) => genre.name),
@@ -173,7 +206,7 @@ export function parseMangaDetails(post: HiveScansPost): SourceManga {
 
   const secondaryTitles = post.alternativeTitles
     ? post.alternativeTitles
-        .split(/[,\n]/)
+        .split(/\s+\/\s+|[,\n]/)
         .map((title) => title.trim())
         .filter((title) => title.length > 0)
     : [];
@@ -195,31 +228,23 @@ export function parseMangaDetails(post: HiveScansPost): SourceManga {
       status: mapStatus(post.seriesStatus),
       contentRating: ContentRating.EVERYONE,
       tagGroups: tags.length > 0 ? [{ id: "genres", title: "Genres", tags }] : [],
-      additionalInfo: { slug: post.slug },
       shareUrl: `${DOMAIN}/series/${post.slug}`,
     },
   };
 }
 
-// ---------------------------------------------------------------------------
-// chapters
-// ---------------------------------------------------------------------------
-
-function chapterNumber(chapter: HiveScansChapter): number {
+function chapterNumber(chapter: HiveToonsChapter): number {
   return typeof chapter.number === "number"
     ? chapter.number
     : parseFloat(String(chapter.number)) || 0;
 }
 
-function isChapterLocked(chapter: HiveScansChapter): boolean {
+function isChapterLocked(chapter: HiveToonsChapter): boolean {
   return chapter.isLocked === true || chapter.isTimeLocked === true;
 }
 
-// Visibility rule: keep public chapters that are either accessible, or (when
-// the user opts in) locked. Inaccessible chapters are prefixed with a lock
-// glyph so they read as paid in the list.
 export function parseChapterList(
-  chapters: HiveScansChapter[],
+  chapters: HiveToonsChapter[],
   sourceManga: SourceManga,
   showLocked: boolean,
 ): Chapter[] {
@@ -236,7 +261,7 @@ export function parseChapterList(
 
   return sorted.map((chapter, index) => {
     const realTitle = chapter.title?.trim() ?? "";
-    const title = chapter.isAccessible ? realTitle : `${LOCK_PREFIX}${realTitle}`.trim();
+    const title = chapter.isAccessible ? realTitle : `🔒 ${realTitle}`.trim();
 
     return {
       chapterId: chapter.id.toString(),
@@ -251,7 +276,7 @@ export function parseChapterList(
   });
 }
 
-export function parseChapterDetails(data: HiveScansPage, chapter: Chapter): ChapterDetails {
+export function parseChapterDetails(data: HiveToonsChapterData, chapter: Chapter): ChapterDetails {
   if (data.isShortLinkLocked) throw new Error("Chapter locked (short link).");
   if (data.isLockedByCoins) throw new Error("Chapter locked — coins required to unlock.");
   if (data.isPermanentlyLocked) throw new Error("Chapter permanently locked.");
@@ -262,7 +287,7 @@ export function parseChapterDetails(data: HiveScansPage, chapter: Chapter): Chap
     .filter((url) => url.length > 0);
 
   if (pages.length === 0) {
-    throw new Error("No chapter page data could be parsed from HiveScans for this chapter.");
+    throw new Error("No chapter pages were returned by HiveToons.");
   }
 
   return {
