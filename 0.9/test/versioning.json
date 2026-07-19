@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-19T15:32:39.499Z",
+  "buildTime": "2026-07-19T15:34:46.083Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -12,7 +12,7 @@
     {
       "name": "HiveScans",
       "description": "Extension that pulls content from hivetoons.org.",
-      "version": "1.0.0-alpha.6",
+      "version": "1.0.0-alpha.7",
       "icon": "icons.png",
       "language": "en",
       "contentRating": "SAFE",
