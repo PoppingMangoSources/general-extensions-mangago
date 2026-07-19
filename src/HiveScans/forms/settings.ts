@@ -9,7 +9,7 @@ export function getShowLockedChapters(): boolean {
   return (Application.getState(SHOW_LOCKED_KEY) ?? false) as boolean;
 }
 
-export class HiveToonsSettingsForm extends Form {
+export class HiveScansSettingsForm extends Form {
   override getSections() {
     return [
       Section("chapters", [
