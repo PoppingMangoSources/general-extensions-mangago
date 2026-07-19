@@ -23,8 +23,8 @@ import {
   type SourceManga,
 } from "@paperback/types";
 
-import { HiveToonsAdvancedSearchForm } from "./forms/search";
-import { getShowLockedChapters, HiveToonsSettingsForm } from "./forms/settings";
+import { HiveScansAdvancedSearchForm } from "./forms/search";
+import { getShowLockedChapters, HiveScansSettingsForm } from "./forms/settings";
 import {
   API_URL,
   GENRES_CACHE_TTL,
@@ -34,16 +34,16 @@ import {
   SECTION_NEW,
   SECTION_POPULAR,
   SORTING_OPTIONS,
-  type HiveToonsChapterResponse,
-  type HiveToonsGenre,
-  type HiveToonsPostDetailsResponse,
-  type HiveToonsPost,
-  type HiveToonsSearchResponse,
+  type HiveScansChapterResponse,
+  type HiveScansGenre,
+  type HiveScansPostDetailsResponse,
+  type HiveScansPost,
+  type HiveScansSearchResponse,
   type OptionItem,
   type PageMetadata,
   type SearchMetadata,
 } from "./models";
-import { fetchJSON, HiveToonsInterceptor } from "./network";
+import { fetchJSON, HiveScansInterceptor } from "./network";
 import {
   decodeMangaId,
   encodeMangaId,
@@ -57,16 +57,16 @@ import {
   toHotReleaseItems,
   toLatestUpdateItems,
 } from "./parsers";
-import type HiveToonsConfig from "./pbconfig";
+import type HiveScansConfig from "./pbconfig";
 
-export class HiveToonsExtension implements ExtensionImpl<typeof HiveToonsConfig> {
+export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig> {
   private rateLimiter = new BasicRateLimiter("rateLimiter", {
     numberOfRequests: 5,
     bufferInterval: 4,
     ignoreImages: true,
   });
   private cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
-  private interceptor = new HiveToonsInterceptor("main");
+  private interceptor = new HiveScansInterceptor("main");
 
   private genresCache: { options: OptionItem[]; timestamp: number } | null = null;
 
@@ -77,7 +77,7 @@ export class HiveToonsExtension implements ExtensionImpl<typeof HiveToonsConfig>
   }
 
   async getSettingsForm(): Promise<Form> {
-    return new HiveToonsSettingsForm();
+    return new HiveScansSettingsForm();
   }
 
   async cloudflareBypassCompleted(
@@ -131,7 +131,7 @@ export class HiveToonsExtension implements ExtensionImpl<typeof HiveToonsConfig>
         .setQueryItem("searchTerm", "")
         .setQueryItem("orderBy", "totalViews")
         .toString();
-      const data = await fetchJSON<HiveToonsSearchResponse>({ url, method: "GET" });
+      const data = await fetchJSON<HiveScansSearchResponse>({ url, method: "GET" });
       const posts = (data.posts ?? []).filter((post) => !isNovel(post)).slice(0, 8);
       const details = await Promise.all(
         posts.map(async (post) => (await this.fetchPostDetails(encodeMangaId(post.slug))).post),
@@ -152,7 +152,7 @@ export class HiveToonsExtension implements ExtensionImpl<typeof HiveToonsConfig>
       .setQueryItem("tag", section.id)
       .toString();
 
-    const data = await fetchJSON<HiveToonsSearchResponse>({ url, method: "GET" });
+    const data = await fetchJSON<HiveScansSearchResponse>({ url, method: "GET" });
     const items =
       section.id === SECTION_HOT
         ? toHotReleaseItems(data.posts ?? [])
@@ -167,7 +167,7 @@ export class HiveToonsExtension implements ExtensionImpl<typeof HiveToonsConfig>
   }
 
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
-    return new HiveToonsAdvancedSearchForm(query, await this.getGenres());
+    return new HiveScansAdvancedSearchForm(query, await this.getGenres());
   }
 
   async getSearchResults(
@@ -193,7 +193,7 @@ export class HiveToonsExtension implements ExtensionImpl<typeof HiveToonsConfig>
       return { items, metadata: hasNextPage ? { page: page + 1 } : undefined };
     }
 
-    const posts: HiveToonsPost[] = [];
+    const posts: HiveScansPost[] = [];
     let apiPage = metadata?.apiPage ?? 1;
     let apiOffset = metadata?.apiOffset ?? 0;
     let nextMetadata: PageMetadata | undefined;
@@ -237,7 +237,7 @@ export class HiveToonsExtension implements ExtensionImpl<typeof HiveToonsConfig>
     query: SearchQuery<SearchMetadata>,
     sortingOption: SortingOption | undefined,
     page: number,
-  ): Promise<HiveToonsSearchResponse> {
+  ): Promise<HiveScansSearchResponse> {
     const searchTerm = normalizeSearchTerm(query.title ?? "");
 
     const builder = new URL(API_URL)
@@ -257,7 +257,7 @@ export class HiveToonsExtension implements ExtensionImpl<typeof HiveToonsConfig>
     const includeIds = genres.filter(([, state]) => state === "included").map(([id]) => id);
     if (includeIds.length > 0) builder.setQueryItem("genreIds", includeIds.join(","));
 
-    return fetchJSON<HiveToonsSearchResponse>({
+    return fetchJSON<HiveScansSearchResponse>({
       url: builder.toString(),
       method: "GET",
     });
@@ -300,17 +300,17 @@ export class HiveToonsExtension implements ExtensionImpl<typeof HiveToonsConfig>
       .setQueryItem("chapterId", chapter.chapterId)
       .toString();
 
-    const data = await fetchJSON<HiveToonsChapterResponse>({ url, method: "GET" });
+    const data = await fetchJSON<HiveScansChapterResponse>({ url, method: "GET" });
     if (!data.chapter) {
       throw new Error(`No chapter data returned for chapter ${chapter.chapterId}`);
     }
     return parseChapterDetails(data.chapter, chapter);
   }
 
-  private async fetchPostDetails(mangaId: string): Promise<HiveToonsPostDetailsResponse> {
+  private async fetchPostDetails(mangaId: string): Promise<HiveScansPostDetailsResponse> {
     const slug = decodeMangaId(mangaId);
     const url = new URL(API_URL).addPathComponent("post").setQueryItem("postSlug", slug).toString();
-    return fetchJSON<HiveToonsPostDetailsResponse>({ url, method: "GET" });
+    return fetchJSON<HiveScansPostDetailsResponse>({ url, method: "GET" });
   }
 
   private async getGenres(): Promise<OptionItem[]> {
@@ -320,7 +320,7 @@ export class HiveToonsExtension implements ExtensionImpl<typeof HiveToonsConfig>
 
     try {
       const url = new URL(API_URL).addPathComponent("genres").toString();
-      const genres = await fetchJSON<HiveToonsGenre[]>({ url, method: "GET" });
+      const genres = await fetchJSON<HiveScansGenre[]>({ url, method: "GET" });
       const options: OptionItem[] = genres.map((genre) => ({
         id: genre.id.toString(),
         value: genre.name.trim(),
@@ -334,4 +334,4 @@ export class HiveToonsExtension implements ExtensionImpl<typeof HiveToonsConfig>
   }
 }
 
-export const HiveToons = new HiveToonsExtension();
+export const HiveScans = new HiveScansExtension();
