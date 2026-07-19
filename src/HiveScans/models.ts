@@ -31,12 +31,12 @@ export type OptionItem = {
   value: string;
 };
 
-export interface HiveToonsGenre {
+export interface HiveScansGenre {
   id: number;
   name: string;
 }
 
-export interface HiveToonsPost {
+export interface HiveScansPost {
   slug: string;
   postTitle: string;
   postContent?: string | null;
@@ -49,16 +49,16 @@ export interface HiveToonsPost {
   seriesStatus?: string | null;
   lastChapterAddedAt?: string | null;
   averageRating?: number | null;
-  genres?: HiveToonsGenre[];
-  chapters?: HiveToonsChapter[];
+  genres?: HiveScansGenre[];
+  chapters?: HiveScansChapter[];
 }
 
-export interface HiveToonsSearchResponse {
-  posts: HiveToonsPost[];
+export interface HiveScansSearchResponse {
+  posts: HiveScansPost[];
   totalCount: number;
 }
 
-export interface HiveToonsChapter {
+export interface HiveScansChapter {
   id: number;
   number: number | string;
   title?: string | null;
@@ -70,28 +70,28 @@ export interface HiveToonsChapter {
   isTimeLocked?: boolean;
 }
 
-export interface HiveToonsPostDetails extends HiveToonsPost {
-  chapters: HiveToonsChapter[];
+export interface HiveScansPostDetails extends HiveScansPost {
+  chapters: HiveScansChapter[];
 }
 
-export interface HiveToonsPostDetailsResponse {
-  post: HiveToonsPostDetails;
+export interface HiveScansPostDetailsResponse {
+  post: HiveScansPostDetails;
 }
 
-export interface HiveToonsPageImage {
+export interface HiveScansPageImage {
   url: string;
   order?: number | null;
 }
 
-export interface HiveToonsChapterData {
-  images: HiveToonsPageImage[];
+export interface HiveScansChapterData {
+  images: HiveScansPageImage[];
   isPermanentlyLocked?: boolean;
   isLockedByCoins?: boolean;
   isShortLinkLocked?: boolean;
 }
 
-export interface HiveToonsChapterResponse {
-  chapter?: HiveToonsChapterData;
+export interface HiveScansChapterResponse {
+  chapter?: HiveScansChapterData;
 }
 
 export const STATUS_OPTIONS: OptionItem[] = [
