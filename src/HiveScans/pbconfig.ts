@@ -4,9 +4,9 @@
 import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/types";
 
 export default {
-  name: "HiveScans",
+  name: "HiveToons",
   description: "Extension that pulls content from hivetoons.org.",
-  version: "1.0.0-alpha.5",
+  version: "1.0.0-alpha.6",
   icon: "icons.png",
   language: "en",
   contentRating: ContentRating.EVERYONE,
@@ -20,8 +20,8 @@ export default {
   badges: [],
   developers: [
     {
-      name: "PoppingMango",
-      github: "https://github.com/PoppingMango",
+      name: "PopMango",
+      github: "https://github.com/PoppingMangoSources",
     },
   ],
 } satisfies ExtensionInfo;
