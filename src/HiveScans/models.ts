@@ -1,23 +1,24 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-// HiveScans pulls from the hivetoons.org JSON API (api.hivetoons.org).
+import type { SortingOption } from "@paperback/types";
 
 export const DOMAIN = "https://hivetoons.org";
-export const DOMAIN_API = "https://api.hivetoons.org/api";
-
+export const API_URL = "https://api.hivetoons.org/api";
 export const PAGE_SIZE = 18;
+export const GENRES_CACHE_TTL = 60 * 60 * 1000;
 
-// Prefix shown on chapters the account can't currently read (locked/paid).
-export const LOCK_PREFIX = "🔒 ";
+export const SECTION_POPULAR = "popular";
+export const SECTION_HOT = "hot";
+export const SECTION_NEW = "new";
+export const SECTION_GENRES = "genres";
 
-export type Metadata = {
+export type PageMetadata = {
   page?: number;
+  apiPage?: number;
+  apiOffset?: number;
 };
 
-// Persisted advanced-search selections. Status/type/direction are single
-// select (stored as arrays to match SelectRow); genres are inclusive
-// multi-select, matching the API's comma-joined `genreIds`.
 export type SearchMetadata = {
   status?: string[];
   type?: string[];
@@ -30,15 +31,12 @@ export type OptionItem = {
   value: string;
 };
 
-// --- API response DTOs (subset of the fields this extension uses) ---
-
-export interface HiveScansGenre {
+export interface HiveToonsGenre {
   id: number;
   name: string;
 }
 
-export interface HiveScansPost {
-  id: number;
+export interface HiveToonsPost {
   slug: string;
   postTitle: string;
   postContent?: string | null;
@@ -49,52 +47,53 @@ export interface HiveScansPost {
   artist?: string | null;
   seriesType?: string | null;
   seriesStatus?: string | null;
-  genres?: HiveScansGenre[];
+  lastChapterAddedAt?: string | null;
+  averageRating?: number | null;
+  genres?: HiveToonsGenre[];
+  chapters?: HiveToonsChapter[];
 }
 
-export interface HiveScansSearchResponse {
-  posts: HiveScansPost[];
+export interface HiveToonsSearchResponse {
+  posts: HiveToonsPost[];
   totalCount: number;
 }
 
-export interface HiveScansChapter {
+export interface HiveToonsChapter {
   id: number;
-  slug: string;
   number: number | string;
   title?: string | null;
   createdAt: string;
+  updatedAt?: string | null;
   chapterStatus: string;
   isAccessible: boolean;
   isLocked?: boolean;
   isTimeLocked?: boolean;
 }
 
-export interface HiveScansPostDetails extends HiveScansPost {
-  chapters: HiveScansChapter[];
+export interface HiveToonsPostDetails extends HiveToonsPost {
+  chapters: HiveToonsChapter[];
 }
 
-export interface HiveScansPostDetailsResponse {
-  post: HiveScansPostDetails;
+export interface HiveToonsPostDetailsResponse {
+  post: HiveToonsPostDetails;
 }
 
-export interface HiveScansPageImage {
+export interface HiveToonsPageImage {
   url: string;
   order?: number | null;
 }
 
-export interface HiveScansPage {
-  images: HiveScansPageImage[];
+export interface HiveToonsChapterData {
+  images: HiveToonsPageImage[];
   isPermanentlyLocked?: boolean;
   isLockedByCoins?: boolean;
   isShortLinkLocked?: boolean;
 }
 
-// The `/api/chapter` endpoint wraps the page data in a `chapter` envelope.
-export interface HiveScansChapterResponse {
-  chapter?: HiveScansPage;
+export interface HiveToonsChapterResponse {
+  chapter?: HiveToonsChapterData;
 }
 
-// Static filter option sets (genres are fetched at runtime).
 export const STATUS_OPTIONS: OptionItem[] = [
   { id: "ONGOING", value: "Ongoing" },
   { id: "COMPLETED", value: "Completed" },
@@ -112,7 +111,15 @@ export const TYPE_OPTIONS: OptionItem[] = [
   { id: "SPANISH", value: "Spanish" },
 ];
 
-export const DIRECTION_OPTIONS: OptionItem[] = [
+export const SORT_DIRECTION_OPTIONS: OptionItem[] = [
   { id: "desc", value: "Descending" },
   { id: "asc", value: "Ascending" },
+];
+
+export const SORTING_OPTIONS: SortingOption[] = [
+  { id: "lastChapterAddedAt", label: "Last Chapter" },
+  { id: "totalViews", label: "Views" },
+  { id: "createdAt", label: "Added Date" },
+  { id: "chaptersCount", label: "Chapters Count" },
+  { id: "postTitle", label: "Alphabetical" },
 ];
