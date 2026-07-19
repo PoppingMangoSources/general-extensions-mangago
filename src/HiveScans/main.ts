@@ -3,6 +3,7 @@
 
 import {
   BasicRateLimiter,
+  CloudflareError,
   CookieStorageInterceptor,
   DiscoverSectionType,
   URL,
@@ -22,67 +23,61 @@ import {
   type SourceManga,
 } from "@paperback/types";
 
-import { HiveScansAdvancedSearchForm } from "./forms/search";
-import { getShowLockedChapters, HiveScansSettingsForm } from "./forms/settings";
+import { HiveToonsAdvancedSearchForm } from "./forms/search";
+import { getShowLockedChapters, HiveToonsSettingsForm } from "./forms/settings";
 import {
-  DOMAIN_API,
+  API_URL,
+  GENRES_CACHE_TTL,
   PAGE_SIZE,
-  type HiveScansGenre,
-  type HiveScansPostDetailsResponse,
-  type HiveScansChapterResponse,
-  type HiveScansSearchResponse,
-  type Metadata,
+  SECTION_GENRES,
+  SECTION_HOT,
+  SECTION_NEW,
+  SECTION_POPULAR,
+  SORTING_OPTIONS,
+  type HiveToonsChapterResponse,
+  type HiveToonsGenre,
+  type HiveToonsPostDetailsResponse,
+  type HiveToonsPost,
+  type HiveToonsSearchResponse,
   type OptionItem,
+  type PageMetadata,
   type SearchMetadata,
 } from "./models";
-import { fetchJSON, HiveScansInterceptor } from "./network";
+import { fetchJSON, HiveToonsInterceptor } from "./network";
 import {
   decodeMangaId,
   encodeMangaId,
-  genresToOptions,
+  isNovel,
   normalizeSearchTerm,
   parseChapterDetails,
   parseChapterList,
   parseMangaDetails,
   parseSearchResults,
   toFeaturedItems,
-  toSimpleItems,
+  toHotReleaseItems,
+  toLatestUpdateItems,
 } from "./parsers";
-import type HiveScansConfig from "./pbconfig";
+import type HiveToonsConfig from "./pbconfig";
 
-const SECTION_POPULAR = "popular";
-const SECTION_LATEST = "latest";
-const SECTION_GENRES = "genres";
-
-const GENRES_CACHE_TTL = 60 * 60 * 1000;
-
-const SORTING_OPTIONS: SortingOption[] = [
-  { id: "lastChapterAddedAt", label: "Last Chapter" },
-  { id: "totalViews", label: "Views" },
-  { id: "createdAt", label: "Added Date" },
-  { id: "chaptersCount", label: "Chapters Count" },
-  { id: "postTitle", label: "Alphabetical" },
-];
-
-export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig> {
-  globalRateLimiter = new BasicRateLimiter("rateLimiter", {
+export class HiveToonsExtension implements ExtensionImpl<typeof HiveToonsConfig> {
+  private rateLimiter = new BasicRateLimiter("rateLimiter", {
     numberOfRequests: 5,
     bufferInterval: 4,
     ignoreImages: true,
   });
-  cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
-  hiveScansInterceptor = new HiveScansInterceptor("main");
+  private cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
+  private interceptor = new HiveToonsInterceptor("main");
 
   private genresCache: { options: OptionItem[]; timestamp: number } | null = null;
 
   async initialise(): Promise<void> {
-    this.globalRateLimiter.registerInterceptor();
+    this.rateLimiter.registerInterceptor();
     this.cookieStorageInterceptor.registerInterceptor();
-    this.hiveScansInterceptor.registerInterceptor();
+    this.interceptor.registerInterceptor();
   }
 
   async getSettingsForm(): Promise<Form> {
-    return new HiveScansSettingsForm();
+    return new HiveToonsSettingsForm();
   }
 
   async cloudflareBypassCompleted(
@@ -101,21 +96,18 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
     }
   }
 
-  // ----------------------------------------------------------------
-  // Discover
-  // ----------------------------------------------------------------
-
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
       { id: SECTION_POPULAR, title: "Popular", type: DiscoverSectionType.featured },
-      { id: SECTION_LATEST, title: "Latest Updates", type: DiscoverSectionType.simpleCarousel },
+      { id: SECTION_HOT, title: "Hot Releases", type: DiscoverSectionType.prominentCarousel },
+      { id: SECTION_NEW, title: "Latest Updates", type: DiscoverSectionType.chapterUpdates },
       { id: SECTION_GENRES, title: "Genres", type: DiscoverSectionType.genres },
     ];
   }
 
   async getDiscoverSectionItems(
     section: DiscoverSection,
-    metadata: Metadata | undefined,
+    metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     if (section.id === SECTION_GENRES) {
       const genres = await this.getGenres();
@@ -131,51 +123,124 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
       return { items, metadata: undefined };
     }
 
-    const page = (metadata as { page?: number } | undefined)?.page ?? 1;
-    const orderBy = section.id === SECTION_POPULAR ? "totalViews" : "lastChapterAddedAt";
-    const url = new URL(DOMAIN_API)
-      .addPathComponent("query")
+    if (section.id === SECTION_POPULAR) {
+      const url = new URL(API_URL)
+        .addPathComponent("query")
+        .setQueryItem("page", "1")
+        .setQueryItem("perPage", PAGE_SIZE.toString())
+        .setQueryItem("searchTerm", "")
+        .setQueryItem("orderBy", "totalViews")
+        .toString();
+      const data = await fetchJSON<HiveToonsSearchResponse>({ url, method: "GET" });
+      const posts = (data.posts ?? []).filter((post) => !isNovel(post)).slice(0, 8);
+      const details = await Promise.all(
+        posts.map(async (post) => (await this.fetchPostDetails(encodeMangaId(post.slug))).post),
+      );
+      return { items: toFeaturedItems(details), metadata: undefined };
+    }
+
+    if (section.id !== SECTION_HOT && section.id !== SECTION_NEW) {
+      return { items: [], metadata: undefined };
+    }
+
+    const page = metadata?.page ?? 1;
+    const url = new URL(API_URL)
+      .addPathComponent("posts")
       .setQueryItem("page", page.toString())
       .setQueryItem("perPage", PAGE_SIZE.toString())
       .setQueryItem("searchTerm", "")
-      .setQueryItem("orderBy", orderBy)
+      .setQueryItem("tag", section.id)
       .toString();
 
-    const data = await fetchJSON<HiveScansSearchResponse>({ url, method: "GET" });
+    const data = await fetchJSON<HiveToonsSearchResponse>({ url, method: "GET" });
     const items =
-      section.id === SECTION_POPULAR
-        ? toFeaturedItems(data.posts ?? [])
-        : toSimpleItems(data.posts ?? []);
+      section.id === SECTION_HOT
+        ? toHotReleaseItems(data.posts ?? [])
+        : toLatestUpdateItems(data.posts ?? []);
 
     const hasNextPage = data.totalCount > page * PAGE_SIZE;
     return { items, metadata: hasNextPage ? { page: page + 1 } : undefined };
   }
-
-  // ----------------------------------------------------------------
-  // Search
-  // ----------------------------------------------------------------
 
   async getSortingOptions(_query: SearchQuery<SearchMetadata>): Promise<SortingOption[]> {
     return SORTING_OPTIONS;
   }
 
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
-    return new HiveScansAdvancedSearchForm(query, await this.getGenres());
+    return new HiveToonsAdvancedSearchForm(query, await this.getGenres());
   }
 
   async getSearchResults(
     query: SearchQuery<SearchMetadata>,
-    metadata: Metadata | undefined,
+    metadata: PageMetadata | undefined,
     sortingOption?: SortingOption,
   ): Promise<PagedResults<SearchResultItem>> {
-    // Let users paste a series link into search to open it directly.
     const pasted = await this.resolveUrlQuery(query.title ?? "");
     if (pasted) return pasted;
 
-    const page = metadata?.page ?? 1;
+    const excludedGenreIds = new Set(
+      Object.entries(query.metadata?.genres ?? {})
+        .filter(([, state]) => state === "excluded")
+        .map(([id]) => id),
+    );
+
+    if (excludedGenreIds.size === 0) {
+      const page = metadata?.page ?? 1;
+      const data = await this.fetchSearchPage(query, sortingOption, page);
+      const items = parseSearchResults(data.posts ?? []);
+      const hasNextPage = data.totalCount > page * PAGE_SIZE;
+
+      return { items, metadata: hasNextPage ? { page: page + 1 } : undefined };
+    }
+
+    const posts: HiveToonsPost[] = [];
+    let apiPage = metadata?.apiPage ?? 1;
+    let apiOffset = metadata?.apiOffset ?? 0;
+    let nextMetadata: PageMetadata | undefined;
+
+    while (posts.length < PAGE_SIZE) {
+      const data = await this.fetchSearchPage(query, sortingOption, apiPage);
+      const pagePosts = data.posts ?? [];
+
+      while (apiOffset < pagePosts.length && posts.length < PAGE_SIZE) {
+        const post = pagePosts[apiOffset++];
+        if (
+          !post ||
+          isNovel(post) ||
+          (post.genres ?? []).some((genre) => excludedGenreIds.has(genre.id.toString()))
+        ) {
+          continue;
+        }
+        posts.push(post);
+      }
+
+      const hasNextApiPage = data.totalCount > apiPage * PAGE_SIZE;
+      if (posts.length === PAGE_SIZE) {
+        nextMetadata =
+          apiOffset < pagePosts.length
+            ? { apiPage, apiOffset }
+            : hasNextApiPage
+              ? { apiPage: apiPage + 1, apiOffset: 0 }
+              : undefined;
+        break;
+      }
+      if (!hasNextApiPage) break;
+
+      apiPage += 1;
+      apiOffset = 0;
+    }
+
+    return { items: parseSearchResults(posts), metadata: nextMetadata };
+  }
+
+  private async fetchSearchPage(
+    query: SearchQuery<SearchMetadata>,
+    sortingOption: SortingOption | undefined,
+    page: number,
+  ): Promise<HiveToonsSearchResponse> {
     const searchTerm = normalizeSearchTerm(query.title ?? "");
 
-    const builder = new URL(DOMAIN_API)
+    const builder = new URL(API_URL)
       .addPathComponent("query")
       .setQueryItem("page", page.toString())
       .setQueryItem("perPage", PAGE_SIZE.toString())
@@ -190,84 +255,62 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
 
     const genres = Object.entries(meta?.genres ?? {});
     const includeIds = genres.filter(([, state]) => state === "included").map(([id]) => id);
-    const excludeIds = genres.filter(([, state]) => state === "excluded").map(([id]) => id);
     if (includeIds.length > 0) builder.setQueryItem("genreIds", includeIds.join(","));
-    if (excludeIds.length > 0) builder.setQueryItem("excludeGenreIds", excludeIds.join(","));
 
-    const data = await fetchJSON<HiveScansSearchResponse>({
+    return fetchJSON<HiveToonsSearchResponse>({
       url: builder.toString(),
       method: "GET",
     });
-
-    const items = parseSearchResults(data.posts ?? []);
-    const hasNextPage = data.totalCount > page * PAGE_SIZE;
-
-    return { items, metadata: hasNextPage ? { page: page + 1 } : undefined };
   }
 
-  // Resolves a pasted `hivetoons.org/series/<slug>` link to a single result.
   private async resolveUrlQuery(
     query: string,
   ): Promise<PagedResults<SearchResultItem> | undefined> {
-    const match = query.trim().match(/^https?:\/\/[^/]*hivetoons\.org\/series\/([^/?#]+)/i);
-    if (!match) return undefined;
+    const match = query.trim().match(/^https?:\/\/(?:www\.)?hivetoons\.org\/series\/([^/?#]+)/i);
+    const slug = match?.[1];
+    if (!slug) return undefined;
 
-    try {
-      const manga = await this.getMangaDetails(encodeMangaId(decodeURIComponent(match[1])));
-      return {
-        items: [
-          {
-            mangaId: manga.mangaId,
-            title: manga.mangaInfo.primaryTitle,
-            imageUrl: manga.mangaInfo.thumbnailUrl,
-            contentRating: manga.mangaInfo.contentRating,
-          },
-        ],
-        metadata: undefined,
-      };
-    } catch {
-      return undefined;
-    }
+    const manga = await this.getMangaDetails(encodeMangaId(decodeURIComponent(slug)));
+    return {
+      items: [
+        {
+          mangaId: manga.mangaId,
+          title: manga.mangaInfo.primaryTitle,
+          imageUrl: manga.mangaInfo.thumbnailUrl,
+          contentRating: manga.mangaInfo.contentRating,
+        },
+      ],
+      metadata: undefined,
+    };
   }
 
-  // ----------------------------------------------------------------
-  // Manga details & chapters
-  // ----------------------------------------------------------------
-
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
-    const data = await this.fetchPost(mangaId);
+    const data = await this.fetchPostDetails(mangaId);
     return parseMangaDetails(data.post);
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
-    const data = await this.fetchPost(sourceManga.mangaId);
+    const data = await this.fetchPostDetails(sourceManga.mangaId);
     return parseChapterList(data.post.chapters ?? [], sourceManga, getShowLockedChapters());
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    const url = new URL(DOMAIN_API)
+    const url = new URL(API_URL)
       .addPathComponent("chapter")
       .setQueryItem("chapterId", chapter.chapterId)
       .toString();
 
-    const data = await fetchJSON<HiveScansChapterResponse>({ url, method: "GET" });
+    const data = await fetchJSON<HiveToonsChapterResponse>({ url, method: "GET" });
     if (!data.chapter) {
       throw new Error(`No chapter data returned for chapter ${chapter.chapterId}`);
     }
     return parseChapterDetails(data.chapter, chapter);
   }
 
-  // ----------------------------------------------------------------
-  // Helpers
-  // ----------------------------------------------------------------
-
-  private async fetchPost(mangaId: string): Promise<HiveScansPostDetailsResponse> {
+  private async fetchPostDetails(mangaId: string): Promise<HiveToonsPostDetailsResponse> {
     const slug = decodeMangaId(mangaId);
-    const url = new URL(DOMAIN_API)
-      .addPathComponent("post")
-      .setQueryItem("postSlug", slug)
-      .toString();
-    return fetchJSON<HiveScansPostDetailsResponse>({ url, method: "GET" });
+    const url = new URL(API_URL).addPathComponent("post").setQueryItem("postSlug", slug).toString();
+    return fetchJSON<HiveToonsPostDetailsResponse>({ url, method: "GET" });
   }
 
   private async getGenres(): Promise<OptionItem[]> {
@@ -276,16 +319,19 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
     }
 
     try {
-      const url = new URL(DOMAIN_API).addPathComponent("genres").toString();
-      const genres = await fetchJSON<HiveScansGenre[]>({ url, method: "GET" });
-      const options = genresToOptions(genres);
+      const url = new URL(API_URL).addPathComponent("genres").toString();
+      const genres = await fetchJSON<HiveToonsGenre[]>({ url, method: "GET" });
+      const options: OptionItem[] = genres.map((genre) => ({
+        id: genre.id.toString(),
+        value: genre.name.trim(),
+      }));
       this.genresCache = { options, timestamp: Date.now() };
       return options;
-    } catch {
-      // Genres are optional; a failure shouldn't break the search form.
-      return this.genresCache?.options ?? [];
+    } catch (error) {
+      if (error instanceof CloudflareError || !this.genresCache) throw error;
+      return this.genresCache.options;
     }
   }
 }
 
-export const HiveScans = new HiveScansExtension();
+export const HiveToons = new HiveToonsExtension();
