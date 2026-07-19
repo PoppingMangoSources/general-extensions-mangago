@@ -9,17 +9,16 @@ export function getShowLockedChapters(): boolean {
   return (Application.getState(SHOW_LOCKED_KEY) ?? false) as boolean;
 }
 
-export class HiveScansSettingsForm extends Form {
+export class HiveToonsSettingsForm extends Form {
   override getSections() {
     return [
       Section("chapters", [
         ToggleRow("showLocked", {
           title: "Show locked chapters",
-          subtitle:
-            "List paid/locked chapters (marked with 🔒). They still require an unlock on the website to read.",
+          subtitle: "Shows paid chapters with a 🔒. Unlock them on the website before reading.",
           value: getShowLockedChapters(),
           onValueChange: Application.Selector(
-            this as HiveScansSettingsForm,
+            this as HiveToonsSettingsForm,
             "handleShowLockedChange",
           ),
         }),
