@@ -12,7 +12,7 @@ import { DOMAIN } from "./models";
 
 const IMAGE_EXTENSION_REGEX = /\.(jpe?g|png|webp|gif|avif|bmp|svg)(\?|#|$)/i;
 
-export class HiveToonsInterceptor extends PaperbackInterceptor {
+export class HiveScansInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
     const accept = IMAGE_EXTENSION_REGEX.test(request.url)
       ? "image/avif,image/webp,image/apng,image/png,image/svg+xml,*/*;q=0.8"
