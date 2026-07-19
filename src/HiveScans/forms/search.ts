@@ -21,7 +21,7 @@ import {
 const toTags = (options: OptionItem[]): Tag[] =>
   options.map((option) => ({ id: option.id, title: option.value }));
 
-export class HiveToonsAdvancedSearchForm extends AdvancedSearchForm {
+export class HiveScansAdvancedSearchForm extends AdvancedSearchForm {
   private status: string[];
   private type: string[];
   private direction: string[];
@@ -54,7 +54,7 @@ export class HiveToonsAdvancedSearchForm extends AdvancedSearchForm {
           minItemCount: 0,
           maxItemCount: 1,
           onValueChange: Application.Selector(
-            this as HiveToonsAdvancedSearchForm,
+            this as HiveScansAdvancedSearchForm,
             "handleStatusChange",
           ),
         }),
@@ -68,7 +68,7 @@ export class HiveToonsAdvancedSearchForm extends AdvancedSearchForm {
           minItemCount: 0,
           maxItemCount: 1,
           onValueChange: Application.Selector(
-            this as HiveToonsAdvancedSearchForm,
+            this as HiveScansAdvancedSearchForm,
             "handleTypeChange",
           ),
         }),
@@ -82,7 +82,7 @@ export class HiveToonsAdvancedSearchForm extends AdvancedSearchForm {
           minItemCount: 0,
           maxItemCount: 1,
           onValueChange: Application.Selector(
-            this as HiveToonsAdvancedSearchForm,
+            this as HiveScansAdvancedSearchForm,
             "handleDirectionChange",
           ),
         }),
@@ -100,7 +100,7 @@ export class HiveToonsAdvancedSearchForm extends AdvancedSearchForm {
             allowExclusion: true,
             allowEmptySelection: true,
             onValueChange: Application.Selector(
-              this as HiveToonsAdvancedSearchForm,
+              this as HiveScansAdvancedSearchForm,
               "handleGenresChange",
             ),
           }),
