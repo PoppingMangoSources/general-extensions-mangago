@@ -19,7 +19,9 @@ export const CDN_URL = "https://cdn.scans.gg/uploads";
 // "has next page" by comparing the returned count against the limit.
 export const SERIES_PAGE_SIZE = 21;
 export const LATEST_PAGE_SIZE = 14;
-export const POPULAR_PAGE_SIZE = 7;
+// Fetch beyond the website's seven-card preview so local SFW/hidden-genre
+// filtering can backfill a full Paperback results row.
+export const POPULAR_FETCH_SIZE = 50;
 export const CHAPTER_PAGE_SIZE = 100;
 
 /** Persisted-settings keys. */

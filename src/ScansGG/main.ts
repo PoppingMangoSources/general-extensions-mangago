@@ -28,7 +28,7 @@ import {
   CDN_URL,
   CHAPTER_PAGE_SIZE,
   LATEST_PAGE_SIZE,
-  POPULAR_PAGE_SIZE,
+  POPULAR_FETCH_SIZE,
   POPULAR_RANGE_OPTIONS,
   SERIES_PAGE_SIZE,
   TAG_OPTIONS,
@@ -121,7 +121,7 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
       { id: SECTION_POPULAR, title: "Popular", type: DiscoverSectionType.featured },
       {
         id: SECTION_POPULAR_RANGES,
-        title: "Popular Timeframes",
+        title: "Most Popular",
         type: DiscoverSectionType.genres,
       },
       { id: SECTION_LATEST, title: "Latest Updates", type: DiscoverSectionType.chapterUpdates },
@@ -171,11 +171,22 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
     }
 
     if (section.id === SECTION_POPULAR) {
-      const popular = await this.fetchPopularSeries("daily", undefined, contentFilters);
-      const enriched = await this.enrichPopularChapters(popular);
+      // Keep the original full Popular carousel. The site's timeframe endpoint
+      // is only a seven-card preview and becomes much smaller after SFW and
+      // hidden-genre filtering.
+      const page = await this.fetchFilteredSeries(
+        metadata,
+        {
+          chapters: true,
+          group_details: true,
+          collab_groups_details: true,
+        },
+        (series) =>
+          Boolean(series.cover) && seriesMatchesFilters(series, undefined, contentFilters),
+      );
       return {
-        items: enriched.map(toFeaturedItem).filter(hasImage),
-        metadata: undefined,
+        items: page.data.map(toFeaturedItem).filter(hasImage),
+        metadata: page.metadata,
       };
     }
 
@@ -306,38 +317,17 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
   ): Promise<SeriesDto[]> {
     const response = await fetchApi<SeriesDto[]>("series", {
       popular: range,
-      limit: POPULAR_PAGE_SIZE,
+      limit: POPULAR_FETCH_SIZE,
       chapters: true,
       group_details: true,
       collab_groups_details: true,
     });
-    return (response.data ?? []).filter(
-      (series) =>
-        Boolean(series.cover) && seriesMatchesFilters(series, searchMetadata, contentFilters),
-    );
-  }
-
-  private async enrichPopularChapters(seriesList: SeriesDto[]): Promise<SeriesDto[]> {
-    return Promise.all(
-      seriesList.map(async (series) => {
-        if (series.chapters?.[0]?.group?.title) return series;
-        try {
-          const response = await fetchApi<ChapterDto[]>("chapters", {
-            series_id: series.id,
-            page: 1,
-            limit: 1,
-            sort: "date",
-            group_details: true,
-            collab_groups_details: true,
-          });
-          const latest = response.data?.[0];
-          return latest ? { ...series, chapters: [latest] } : series;
-        } catch (error) {
-          if (error instanceof CloudflareError) throw error;
-          return series;
-        }
-      }),
-    );
+    return (response.data ?? [])
+      .filter(
+        (series) =>
+          Boolean(series.cover) && seriesMatchesFilters(series, searchMetadata, contentFilters),
+      )
+      .slice(0, SERIES_PAGE_SIZE);
   }
 
   private async fetchFilteredLatestSeries(
