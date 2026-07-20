@@ -282,17 +282,12 @@ export function parseMangaDetails(series: SeriesDto, requestedMangaId?: string):
 // chapters
 // ---------------------------------------------------------------------------
 
-// Compose a readable chapter title from the chapter's own title and the
-// scanlation group (Paperback has no dedicated scanlator field, so the group is
-// folded into the title — it also disambiguates duplicate numbers from
-// different groups).
+// Keep the chapter's real title separate from its scanlation group. Paperback
+// renders `version` as the group label and uses it to distinguish releases of
+// the same chapter number, matching sources such as Comix.
 function buildChapterTitle(chapter: ChapterDto): string | undefined {
-  const bits: string[] = [];
   const title = chapter.title?.trim();
-  const group = chapter.group?.title?.trim();
-  if (title) bits.push(Application.decodeHTMLEntities(title));
-  if (group) bits.push(group);
-  return bits.length > 0 ? bits.join(" • ") : undefined;
+  return title ? Application.decodeHTMLEntities(title) : undefined;
 }
 
 export function parseChapterList(
@@ -305,6 +300,7 @@ export function parseChapterList(
     chapterId: String(chapter.id),
     sourceManga,
     title: buildChapterTitle(chapter),
+    version: scanlationTeam(chapter) ?? "Unknown",
     chapNum: chapterNumberValue(chapter.number),
     volume: 0,
     langCode: "en",
