@@ -9,6 +9,7 @@ export const PAGE_SIZE = 18;
 export const GENRES_CACHE_TTL = 60 * 60 * 1000;
 
 export const SECTION_POPULAR = "popular";
+export const SECTION_NOVELS = "novels";
 export const SECTION_HOT = "hot";
 export const SECTION_NEW = "new";
 export const SECTION_GENRES = "genres";
@@ -64,10 +65,10 @@ export interface HiveScansChapter {
   title?: string | null;
   createdAt: string;
   updatedAt?: string | null;
-  chapterStatus: string;
-  isAccessible: boolean;
+  chapterStatus?: string;
+  isAccessible?: boolean;
   isLocked?: boolean;
-  isTimeLocked?: boolean;
+  isPermanentlyLocked?: boolean;
 }
 
 export interface HiveScansPostDetails extends HiveScansPost {
@@ -84,7 +85,8 @@ export interface HiveScansPageImage {
 }
 
 export interface HiveScansChapterData {
-  images: HiveScansPageImage[];
+  content?: string | null;
+  images?: HiveScansPageImage[];
   isPermanentlyLocked?: boolean;
   isLockedByCoins?: boolean;
   isShortLinkLocked?: boolean;
@@ -96,6 +98,7 @@ export interface HiveScansChapterResponse {
 
 export const STATUS_OPTIONS: OptionItem[] = [
   { id: "ONGOING", value: "Ongoing" },
+  { id: "HIATUS", value: "Hiatus" },
   { id: "COMPLETED", value: "Completed" },
   { id: "CANCELLED", value: "Cancelled" },
   { id: "DROPPED", value: "Dropped" },
@@ -104,6 +107,7 @@ export const STATUS_OPTIONS: OptionItem[] = [
 ];
 
 export const TYPE_OPTIONS: OptionItem[] = [
+  { id: "NOVEL", value: "Novel" },
   { id: "MANGA", value: "Manga" },
   { id: "MANHUA", value: "Manhua" },
   { id: "MANHWA", value: "Manhwa" },

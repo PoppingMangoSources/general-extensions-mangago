@@ -32,6 +32,7 @@ import {
   SECTION_GENRES,
   SECTION_HOT,
   SECTION_NEW,
+  SECTION_NOVELS,
   SECTION_POPULAR,
   SORTING_OPTIONS,
   type HiveScansChapterResponse,
@@ -45,6 +46,7 @@ import {
 } from "./models";
 import { fetchJSON, HiveScansInterceptor } from "./network";
 import {
+  contentRatingForGenres,
   decodeMangaId,
   encodeMangaId,
   isNovel,
@@ -56,6 +58,7 @@ import {
   toFeaturedItems,
   toHotReleaseItems,
   toLatestUpdateItems,
+  toNovelItems,
 } from "./parsers";
 import type HiveScansConfig from "./pbconfig";
 
@@ -99,6 +102,7 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
       { id: SECTION_POPULAR, title: "Popular", type: DiscoverSectionType.featured },
+      { id: SECTION_NOVELS, title: "Top Novels", type: DiscoverSectionType.prominentCarousel },
       { id: SECTION_HOT, title: "Hot Releases", type: DiscoverSectionType.prominentCarousel },
       { id: SECTION_NEW, title: "Latest Updates", type: DiscoverSectionType.chapterUpdates },
       { id: SECTION_GENRES, title: "Genres", type: DiscoverSectionType.genres },
@@ -118,6 +122,7 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
           title: "",
           metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
         },
+        contentRating: contentRatingForGenres([genre.value]),
         metadata: undefined,
       }));
       return { items, metadata: undefined };
@@ -137,6 +142,20 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
         posts.map(async (post) => (await this.fetchPostDetails(encodeMangaId(post.slug))).post),
       );
       return { items: toFeaturedItems(details), metadata: undefined };
+    }
+
+    if (section.id === SECTION_NOVELS) {
+      const url = new URL(API_URL)
+        .addPathComponent("query")
+        .setQueryItem("page", "1")
+        .setQueryItem("perPage", "4")
+        .setQueryItem("searchTerm", "")
+        .setQueryItem("seriesType", "NOVEL")
+        .setQueryItem("orderBy", "totalViews")
+        .setQueryItem("orderDirection", "desc")
+        .toString();
+      const data = await fetchJSON<HiveScansSearchResponse>({ url, method: "GET" });
+      return { items: toNovelItems(data.posts ?? []), metadata: undefined };
     }
 
     if (section.id !== SECTION_HOT && section.id !== SECTION_NEW) {
@@ -206,7 +225,6 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
         const post = pagePosts[apiOffset++];
         if (
           !post ||
-          isNovel(post) ||
           (post.genres ?? []).some((genre) => excludedGenreIds.has(genre.id.toString()))
         ) {
           continue;
