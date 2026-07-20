@@ -36,7 +36,13 @@ import {
   TYPE_OPTIONS,
   type SearchMetadata,
 } from "./models";
-import { fetchFlightPayload, fetchHtmlPage, fetchPagePayload, OMangaInterceptor } from "./network";
+import {
+  buildSeriesNavigationHeaders,
+  fetchFlightPayload,
+  fetchHtmlPage,
+  fetchPagePayload,
+  OMangaInterceptor,
+} from "./network";
 import {
   getContentRatingForGenres,
   parseCatalogItems,
@@ -411,7 +417,7 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
 
   private fetchSeriesPage(slug: string): Promise<string> {
     const url = `${getDomain()}/manga/${slug}`;
-    return fetchPagePayload(url, '{"initialTab"');
+    return fetchPagePayload(url, '{"initialTab"', buildSeriesNavigationHeaders(slug));
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {

@@ -74,11 +74,14 @@ export const fetchHtmlPage = async (url: string): Promise<string> => {
  * navigation requests. A fraction of the full page's size, so it's the fast
  * path; callers fall back to the full page if the payload comes up short.
  */
-export const fetchFlightPayload = async (url: string): Promise<string> => {
+export const fetchFlightPayload = async (
+  url: string,
+  headers: Record<string, string> = {},
+): Promise<string> => {
   const [response, buffer] = await Application.scheduleRequest({
     url,
     method: "GET",
-    headers: { accept: "text/x-component", rsc: "1" },
+    headers: { accept: "text/x-component", ...headers, rsc: "1" },
   });
 
   if (response.status < 200 || response.status >= 300) {
@@ -88,9 +91,27 @@ export const fetchFlightPayload = async (url: string): Promise<string> => {
   return Application.arrayBufferToUTF8String(buffer);
 };
 
-export const fetchPagePayload = async (url: string, requiredMarker: string): Promise<string> => {
+export const buildSeriesNavigationHeaders = (slug: string): Record<string, string> => {
+  // Refetch only the leaf page; shared layouts otherwise dominate short series payloads.
+  const page = ["__PAGE__", {}, null, "refetch"];
+  const tab = [["tab", "", "oc", null], { children: page }, null, null, 4];
+  const series = [["slug", slug, "d", null], { children: tab }, null, null, 8];
+  const manga = ["manga", { children: series }, null, null, 8];
+  const routerState = ["", { children: manga }, null, null, 28];
+
+  return {
+    "next-router-state-tree": encodeURIComponent(JSON.stringify(routerState)),
+    "next-url": `/manga/${slug}`,
+  };
+};
+
+export const fetchPagePayload = async (
+  url: string,
+  requiredMarker: string,
+  headers?: Record<string, string>,
+): Promise<string> => {
   try {
-    const payload = await fetchFlightPayload(url);
+    const payload = await fetchFlightPayload(url, headers);
     if (payload.includes(requiredMarker)) return payload;
   } catch (error) {
     if (error instanceof CloudflareError) throw error;

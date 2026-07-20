@@ -8,7 +8,9 @@ import { TestSuite, registerDefaultTests } from "./suite.js";
 export async function runTests(logger: TestLogger) {
   const suite = new TestSuite("oManga tests", logger);
   registerDefaultTests(suite, OManga, sourceInfo, {
-    mangaProviding: { getMangaDetails: ["renai-catalog"] },
+    mangaProviding: {
+      getMangaDetails: ["a-secretly-capable-child-is-seeking-for-her-dad"],
+    },
   });
 
   suite.test("discover sections", async () => {
@@ -38,6 +40,12 @@ export async function runTests(logger: TestLogger) {
 
     expect(searchForm.getSections().length).greaterThan(0);
     expect(settingsForm.getSections().length).greaterThan(0);
+  });
+
+  suite.test("long series payload", async () => {
+    const manga = await OManga.getMangaDetails("the-baby-raises-the-villain");
+    const chapters = await OManga.getChapters(manga);
+    expect(chapters.length).greaterThan(100);
   });
 
   await suite.run();

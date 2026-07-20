@@ -7,7 +7,7 @@ import { ContentRating, SourceIntents } from "@paperback/types";
 export default {
   name: "oManga",
   description: "Extension that pulls content from omanga.to.",
-  version: "1.0.0-alpha.2",
+  version: "1.0.0-alpha.3",
   icon: "icon.png",
   language: "en",
   contentRating: ContentRating.ADULT,
