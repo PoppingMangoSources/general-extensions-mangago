@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-20T02:04:28.391Z",
+  "buildTime": "2026-07-20T07:26:09.715Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -127,7 +127,7 @@
     {
       "name": "Scans.GG",
       "description": "Extension that pulls content from scans.gg.",
-      "version": "1.0.0-alpha.12",
+      "version": "1.0.0-alpha.13",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
