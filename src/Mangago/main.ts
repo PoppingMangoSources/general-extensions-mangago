@@ -50,7 +50,7 @@ import {
 } from "./parsers";
 import type MangagoConfig from "./pbconfig";
 import { getMangagoPageUrls } from "./utils/reader";
-import { absoluteUrl, canonicalReaderUrl } from "./utils/urls";
+import { absoluteUrl, canonicalReaderUrl, decodeMangaId } from "./utils/urls";
 
 class MangagoExtension implements ExtensionImpl<typeof MangagoConfig> {
   private interceptor = new MangagoInterceptor("mangago-interceptor");
@@ -262,13 +262,13 @@ class MangagoExtension implements ExtensionImpl<typeof MangagoConfig> {
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
-    const { html } = await fetchPage(absoluteUrl(mangaId));
+    const { html } = await fetchPage(absoluteUrl(decodeMangaId(mangaId)));
 
     return parseMangaDetails(html, mangaId);
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
-    const { html } = await fetchPage(absoluteUrl(sourceManga.mangaId));
+    const { html } = await fetchPage(absoluteUrl(decodeMangaId(sourceManga.mangaId)));
 
     return parseChapters(html, sourceManga);
   }
@@ -276,7 +276,9 @@ class MangagoExtension implements ExtensionImpl<typeof MangagoConfig> {
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
     // The id is self-sufficient (an absolute mirror URL or a read-manga path);
     // getMangagoPageUrls sweeps every mirror for numeric-only titles.
-    const pages = await getMangagoPageUrls(canonicalReaderUrl(absoluteUrl(chapter.chapterId)));
+    const pages = await getMangagoPageUrls(
+      canonicalReaderUrl(absoluteUrl(decodeMangaId(chapter.chapterId))),
+    );
 
     return {
       id: chapter.chapterId,

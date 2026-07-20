@@ -79,6 +79,24 @@ export function isReaderMirrorHost(host: string): boolean {
   return /(?:^|\.)(?:mangago\.zone|youhim\.me)$/i.test(host);
 }
 
+// Escape id characters the app rejects, keeping `/` so ids stay paths.
+export function encodeMangaId(value: string): string {
+  return value.replace(/[^\w.\-@()[\]%?#+=/&:]/gu, (char) => {
+    const encoded = encodeURIComponent(char);
+    return encoded !== char ? encoded : `%${char.charCodeAt(0).toString(16).toUpperCase()}`;
+  });
+}
+
+// Decode before fetching: mangago's router 404s on percent-escapes (%27) but
+// serves the raw form.
+export function decodeMangaId(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 export function absoluteUrl(url: string): string {
   if (!url) return "";
   if (url.startsWith("//")) return `https:${url}`;

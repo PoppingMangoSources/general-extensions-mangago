@@ -13,6 +13,7 @@ import { parseFeaturedDetail } from "./parsers";
 import { descrambleMangagoImage, parseImageContext } from "./utils/descramble";
 import {
   absoluteUrl,
+  decodeMangaId,
   isReaderMirrorHost,
   readerHostOf,
   readerOrigin,
@@ -136,5 +137,5 @@ export async function fetchPage(
 
 // Fetch fields for FeaturedCarouselItem (rating/status/author/summary only exist on detail pages).
 export async function getFeaturedInfo(mangaId: string): Promise<FeaturedDetail> {
-  return parseFeaturedDetail((await fetchPage(absoluteUrl(mangaId))).html);
+  return parseFeaturedDetail((await fetchPage(absoluteUrl(decodeMangaId(mangaId)))).html);
 }

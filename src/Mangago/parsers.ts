@@ -25,7 +25,7 @@ import {
   type MangagoListing,
   type MangagoSearchMetadata,
 } from "./models";
-import { absoluteUrl, canonicalReaderUrl } from "./utils/urls";
+import { absoluteUrl, canonicalReaderUrl, encodeMangaId } from "./utils/urls";
 
 // Only "Official" is special-cased; every other group name is extracted
 // dynamically from the chapter title's [brackets]/(parens) or the uploader field.
@@ -134,9 +134,9 @@ function toPathname(href: string): string {
 
   // The URL builder needs an absolute input (it throws on a bare path).
   try {
-    return new URL(absoluteUrl(normalizedHref)).path;
+    return encodeMangaId(new URL(absoluteUrl(normalizedHref)).path);
   } catch {
-    return normalizedHref;
+    return encodeMangaId(normalizedHref);
   }
 }
 
@@ -374,7 +374,7 @@ export function parseMangaDetails(html: string, mangaId: string): SourceManga {
     mangaInfo: {
       primaryTitle: title,
       secondaryTitles,
-      thumbnailUrl: imageUrl,
+      thumbnailUrl: imageUrl || `${DOMAIN}/favicon.ico`,
       synopsis: description,
       author,
       artist,
