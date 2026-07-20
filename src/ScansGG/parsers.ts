@@ -5,6 +5,7 @@ import {
   ContentRating,
   type Chapter,
   type DiscoverSectionItem,
+  type FeaturedCarouselItem,
   type SearchResultItem,
   type SourceManga,
   type Tag,
@@ -19,6 +20,7 @@ import {
   TAGS_MAP,
   TYPE_NAMES,
   type ChapterDto,
+  type LatestChapterDto,
   type PageListDto,
   type SeriesDto,
 } from "./models";
@@ -107,6 +109,46 @@ function tagNames(tags?: number[] | null): string[] {
   return (tags ?? []).map((id) => TAGS_MAP[id]).filter((name): name is string => Boolean(name));
 }
 
+function creatorNames(creators?: string[] | null): string | undefined {
+  const names = [...new Set((creators ?? []).map((name) => name.trim()).filter(Boolean))];
+  return names.length > 0 ? Application.decodeHTMLEntities(names.join(", ")) : undefined;
+}
+
+function scanlationTeam(chapter?: LatestChapterDto | null): string | undefined {
+  if (!chapter) return undefined;
+  const names = [chapter.group?.title, ...(chapter.collab_groups ?? []).map((group) => group.title)]
+    .map((name) => name?.trim())
+    .filter((name): name is string => Boolean(name));
+  const uniqueNames = [...new Set(names)];
+  return uniqueNames.length > 0
+    ? Application.decodeHTMLEntities(uniqueNames.join(", "))
+    : undefined;
+}
+
+function formatViews(value?: number | null): string | undefined {
+  if (value == null || !Number.isFinite(value) || value < 0) return undefined;
+  return Math.trunc(value).toLocaleString("en-US");
+}
+
+function featuredInfoItems(series: SeriesDto): FeaturedCarouselItem["infoItems"] {
+  const views = formatViews(series.popular_views ?? series.views);
+  const group = scanlationTeam(series.chapters?.[0]);
+  const items = [
+    views ? { symbol: "eye.fill", text: views } : undefined,
+    group ? { symbol: "person.2.fill", text: group } : undefined,
+  ].filter((item): item is { symbol: string; text: string } => Boolean(item));
+  if (items.length === 0) return undefined;
+  return (
+    items.length === 1 ? [items[0]] : [items[0], items[1]]
+  ) as FeaturedCarouselItem["infoItems"];
+}
+
+function toPaperbackRating(series: Pick<SeriesDto, "rating" | "rating_count">): number | undefined {
+  if (series.rating_count == null || series.rating_count <= 0) return undefined;
+  if (series.rating == null || !Number.isFinite(series.rating)) return undefined;
+  return Math.min(1, Math.max(0, series.rating / 5));
+}
+
 // Prefer the series type (Manga/Manhwa/…) as the card subtitle; fall back to
 // the publication status when the type is missing.
 function cardSubtitle(series: SeriesDto): string | undefined {
@@ -136,8 +178,9 @@ export function toFeaturedItem(series: SeriesDto): DiscoverSectionItem {
     mangaId: buildSlugId(series.id, series.title),
     title: Application.decodeHTMLEntities(series.title),
     imageUrl: buildCoverUrl(series.cover),
-    supertitle: tagNames(series.tags).slice(0, 3).join(" • ") || cardSubtitle(series),
+    supertitle: creatorNames(series.author) ?? cardSubtitle(series),
     summary: stripHtml(series.summary) || undefined,
+    infoItems: featuredInfoItems(series),
     contentRating: deriveContentRating(series),
   };
 }
@@ -169,14 +212,16 @@ export function toSimpleItem(series: SeriesDto): DiscoverSectionItem {
 export function toLatestItem(series: SeriesDto): DiscoverSectionItem {
   const latest = series.chapters?.[0];
   if (!latest?.id) return toSimpleItem(series);
+  const chapter = latest.number != null ? `Ch. ${formatChapterNumber(latest.number)}` : undefined;
+  const team = scanlationTeam(latest);
   return {
     type: "chapterUpdatesCarouselItem",
     mangaId: buildSlugId(series.id, series.title),
     chapterId: String(latest.id),
     title: Application.decodeHTMLEntities(series.title),
     imageUrl: buildCoverUrl(series.cover),
-    subtitle: latest.number != null ? `Chapter ${formatChapterNumber(latest.number)}` : undefined,
-    publishDate: parseDate(latest.created_at),
+    subtitle: [chapter, team].filter(Boolean).join(" | ") || undefined,
+    publishDate: parseDate(latest.updated_at ?? latest.created_at),
     contentRating: deriveContentRating(series),
   };
 }
@@ -224,6 +269,7 @@ export function parseMangaDetails(series: SeriesDto, requestedMangaId?: string):
       author: author.length > 0 ? author : undefined,
       artist: artist.length > 0 ? artist : undefined,
       status: mapStatus(series.status),
+      rating: toPaperbackRating(series),
       contentRating: deriveContentRating(series),
       tagGroups: tags.length > 0 ? [{ id: "tags", title: "Tags", tags }] : [],
       additionalInfo: { slugId },

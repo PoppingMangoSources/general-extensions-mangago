@@ -4,7 +4,7 @@
 import {
   AdvancedSearchForm,
   Section,
-  SelectRow,
+  SelectSection,
   TriStateSelectRow,
   type SearchQuery,
   type Tag,
@@ -37,6 +37,7 @@ export class ScansGGAdvancedSearchForm extends AdvancedSearchForm {
   private statuses: TriStateSelection;
   private tags: TriStateSelection;
   private tagMatchMode: TagMatchMode[];
+  private popularRange: SearchMetadata["popularRange"];
 
   constructor(searchQuery: SearchQuery<SearchMetadata>) {
     super();
@@ -45,6 +46,7 @@ export class ScansGGAdvancedSearchForm extends AdvancedSearchForm {
     this.statuses = { ...meta.statuses };
     this.tags = { ...meta.tags };
     this.tagMatchMode = [meta.tagMatchMode ?? "and"];
+    this.popularRange = meta.popularRange;
   }
 
   override getSections() {
@@ -91,26 +93,15 @@ export class ScansGGAdvancedSearchForm extends AdvancedSearchForm {
           ),
         }),
       ]),
-      Section(
-        {
-          id: "tag_match_mode",
-          footer: "AND requires every included tag. OR requires at least one included tag.",
-        },
-        [
-          SelectRow("tag_match_mode", {
-            title: "Included Tags Match",
-            layout: "flow",
-            value: this.tagMatchMode,
-            items: TAG_MATCH_OPTIONS,
-            minItemCount: 1,
-            maxItemCount: 1,
-            onValueChange: Application.Selector(
-              this as ScansGGAdvancedSearchForm,
-              "handleTagMatchModeChange",
-            ),
-          }),
-        ],
-      ),
+      SelectSection(this, {
+        id: "tag_match_mode",
+        footer: "AND requires every included tag. OR requires at least one included tag.",
+        layout: "flow",
+        value: this.tagMatchMode,
+        items: TAG_MATCH_OPTIONS,
+        minItemCount: 1,
+        maxItemCount: 1,
+      }),
     ];
   }
 
@@ -126,12 +117,9 @@ export class ScansGGAdvancedSearchForm extends AdvancedSearchForm {
     this.tags = value;
   }
 
-  async handleTagMatchModeChange(value: string[]): Promise<void> {
-    this.tagMatchMode = [value[0] === "or" ? "or" : "and"];
-  }
-
   override getSearchQueryMetadata(): SearchMetadata {
     const result: SearchMetadata = {};
+    if (this.popularRange) result.popularRange = this.popularRange;
     if (Object.keys(this.types).length > 0) result.types = this.types;
     if (Object.keys(this.statuses).length > 0) result.statuses = this.statuses;
     if (Object.keys(this.tags).length > 0) {

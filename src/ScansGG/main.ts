@@ -27,11 +27,15 @@ import { getDomain, ScansGGSettingsForm } from "./forms/settings";
 import {
   CDN_URL,
   CHAPTER_PAGE_SIZE,
+  LATEST_PAGE_SIZE,
+  POPULAR_PAGE_SIZE,
+  POPULAR_RANGE_OPTIONS,
   SERIES_PAGE_SIZE,
   TAG_OPTIONS,
   type ChapterDto,
   type Metadata,
   type PageListDto,
+  type PopularRange,
   type SearchMetadata,
   type SeriesDto,
 } from "./models";
@@ -57,6 +61,7 @@ import {
 import { pageListViaWebView } from "./utils/webView";
 
 const SECTION_POPULAR = "popular";
+const SECTION_POPULAR_RANGES = "popular_ranges";
 const SECTION_LATEST = "latest";
 const SECTION_ALL_SERIES = "all_series";
 const SECTION_GENRES = "genres";
@@ -114,15 +119,20 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
       { id: SECTION_POPULAR, title: "Popular", type: DiscoverSectionType.featured },
+      {
+        id: SECTION_POPULAR_RANGES,
+        title: "Popular Timeframes",
+        type: DiscoverSectionType.genres,
+      },
       { id: SECTION_LATEST, title: "Latest Updates", type: DiscoverSectionType.chapterUpdates },
       { id: SECTION_ALL_SERIES, title: "All Series", type: DiscoverSectionType.simpleCarousel },
       { id: SECTION_GENRES, title: "Genres", type: DiscoverSectionType.genres },
     ];
   }
 
-  // Discover only touches the `/series` listing — the one feed the site's own
-  // front page uses. Other homepage-ish endpoints on this API stall
-  // indefinitely rather than answer or 404.
+  // The homepage uses `/series` for popular/all-series and `/chapters` for its
+  // update feed. Keep those request shapes aligned with the website so group
+  // and timeframe metadata stay available.
   async getDiscoverSectionItems(
     section: DiscoverSection,
     metadata: Metadata | undefined,
@@ -147,33 +157,53 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
       return { items, metadata: undefined };
     }
 
-    // Latest Updates asks for each series' newest chapters so the cards can
-    // carry a chapter badge, exactly like the site's front-page strip.
-    const withChapters = section.id === SECTION_LATEST;
+    if (section.id === SECTION_POPULAR_RANGES) {
+      const items: DiscoverSectionItem[] = POPULAR_RANGE_OPTIONS.map((range) => ({
+        type: "genresCarouselItem",
+        name: range.value,
+        searchQuery: {
+          title: "",
+          metadata: { popularRange: range.id } satisfies SearchMetadata,
+        },
+        metadata: undefined,
+      }));
+      return { items, metadata: undefined };
+    }
+
+    if (section.id === SECTION_POPULAR) {
+      const popular = await this.fetchPopularSeries("daily", undefined, contentFilters);
+      const enriched = await this.enrichPopularChapters(popular);
+      return {
+        items: enriched.map(toFeaturedItem).filter(hasImage),
+        metadata: undefined,
+      };
+    }
+
+    if (section.id === SECTION_LATEST) {
+      const page = await this.fetchFilteredLatestSeries(
+        metadata,
+        (series) =>
+          Boolean(series.cover) &&
+          seriesMatchesFilters(series, undefined, contentFilters) &&
+          series.chapters?.[0]?.id != null,
+      );
+      const items = page.data
+        .map(toLatestItem)
+        .filter(hasImage)
+        .filter((item) => item.type === "chapterUpdatesCarouselItem");
+      return { items, metadata: page.metadata };
+    }
+
+    if (section.id !== SECTION_ALL_SERIES) {
+      throw new Error(`Unknown discover section: ${section.id}`);
+    }
 
     const page = await this.fetchFilteredSeries(
       metadata,
-      { chapters: withChapters ? true : undefined },
-      (series) =>
-        Boolean(series.cover) &&
-        seriesMatchesFilters(series, undefined, contentFilters) &&
-        (!withChapters || series.chapters?.[0]?.id != null),
+      {},
+      (series) => Boolean(series.cover) && seriesMatchesFilters(series, undefined, contentFilters),
     );
-
-    const toItem =
-      section.id === SECTION_POPULAR
-        ? toFeaturedItem
-        : section.id === SECTION_LATEST
-          ? toLatestItem
-          : toSimpleItem;
-    let items = page.data.map(toItem).filter(hasImage);
-    // A chapter-updates section is decoded as ChapterUpdatesCarouselItem
-    // wholesale, so an entry without a chapter id would fail the whole array.
-    if (section.id === SECTION_LATEST) {
-      items = items.filter((item) => item.type === "chapterUpdatesCarouselItem");
-    }
-
-    return { items, metadata: page.metadata };
+    return { items: page.data.map(toSimpleItem).filter(hasImage), metadata: page.metadata };
   }
 
   // ----------------------------------------------------------------
@@ -199,6 +229,14 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
     const includedStatuses = getSelectedIds(meta?.statuses, "included");
     const includedTags = getSelectedIds(meta?.tags, "included");
     const contentFilters = getContentFilters();
+
+    if (meta?.popularRange && term.length === 0) {
+      const popular = await this.fetchPopularSeries(meta.popularRange, meta, contentFilters);
+      return {
+        items: popular.map(toSearchResultItem).filter((item) => item.imageUrl.length > 0),
+        metadata: undefined,
+      };
+    }
 
     const page = await this.fetchFilteredSeries(
       metadata,
@@ -259,6 +297,90 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
     }
 
     return { data: matches, metadata: { offset, index } };
+  }
+
+  private async fetchPopularSeries(
+    range: PopularRange,
+    searchMetadata: SearchMetadata | undefined,
+    contentFilters: ReturnType<typeof getContentFilters>,
+  ): Promise<SeriesDto[]> {
+    const response = await fetchApi<SeriesDto[]>("series", {
+      popular: range,
+      limit: POPULAR_PAGE_SIZE,
+      chapters: true,
+      group_details: true,
+      collab_groups_details: true,
+    });
+    return (response.data ?? []).filter(
+      (series) =>
+        Boolean(series.cover) && seriesMatchesFilters(series, searchMetadata, contentFilters),
+    );
+  }
+
+  private async enrichPopularChapters(seriesList: SeriesDto[]): Promise<SeriesDto[]> {
+    return Promise.all(
+      seriesList.map(async (series) => {
+        if (series.chapters?.[0]?.group?.title) return series;
+        try {
+          const response = await fetchApi<ChapterDto[]>("chapters", {
+            series_id: series.id,
+            page: 1,
+            limit: 1,
+            sort: "date",
+            group_details: true,
+            collab_groups_details: true,
+          });
+          const latest = response.data?.[0];
+          return latest ? { ...series, chapters: [latest] } : series;
+        } catch (error) {
+          if (error instanceof CloudflareError) throw error;
+          return series;
+        }
+      }),
+    );
+  }
+
+  private async fetchFilteredLatestSeries(
+    metadata: Metadata | undefined,
+    predicate: (series: SeriesDto) => boolean,
+  ): Promise<{ data: SeriesDto[]; metadata?: Metadata }> {
+    const matches: SeriesDto[] = [];
+    let page = metadata?.page ?? 1;
+    let index = metadata?.index ?? 0;
+
+    for (let batch = 0; batch < MAX_FILTER_BATCHES; batch++) {
+      const response = await fetchApi<SeriesDto[]>("chapters", {
+        page,
+        limit: LATEST_PAGE_SIZE,
+        chapters: true,
+        series_details: true,
+        group_details: true,
+        collab_groups_details: true,
+        sort: "date",
+      });
+      const data = response.data ?? [];
+      const hasMore = response.meta?.has_more === true || data.length === LATEST_PAGE_SIZE;
+
+      while (index < data.length && matches.length < LATEST_PAGE_SIZE) {
+        const series = data[index];
+        index++;
+        if (series && predicate(series)) matches.push(series);
+      }
+
+      if (matches.length === LATEST_PAGE_SIZE) {
+        if (index < data.length) return { data: matches, metadata: { page, index } };
+        return {
+          data: matches,
+          metadata: hasMore ? { page: page + 1, index: 0 } : undefined,
+        };
+      }
+
+      if (!hasMore) return { data: matches, metadata: undefined };
+      page++;
+      index = 0;
+    }
+
+    return { data: matches, metadata: { page, index } };
   }
 
   // Resolve a pasted `scans.gg/series/<id>` URL (or `id:<id>`) to a single card.

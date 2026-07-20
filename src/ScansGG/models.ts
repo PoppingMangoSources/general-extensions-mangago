@@ -18,6 +18,8 @@ export const CDN_URL = "https://cdn.scans.gg/uploads";
 // Page sizes. `/series` doesn't return a pagination envelope, so we infer
 // "has next page" by comparing the returned count against the limit.
 export const SERIES_PAGE_SIZE = 21;
+export const LATEST_PAGE_SIZE = 14;
+export const POPULAR_PAGE_SIZE = 7;
 export const CHAPTER_PAGE_SIZE = 100;
 
 /** Persisted-settings keys. */
@@ -45,6 +47,10 @@ export interface ResponseDto<T> {
 
 export interface MetaDto {
   has_more?: boolean;
+  page?: number;
+  limit?: number;
+  offset?: number;
+  count?: number;
 }
 
 /** A series/manga as returned by `/series` (listing and detail share it). */
@@ -63,6 +69,12 @@ export interface SeriesDto {
   type?: number | null;
   /** Site's own rating tier: 1 safe, 2 suggestive, 3 mature, 4+ adult. */
   content_rating?: number | null;
+  /** Average reader-review score on the site's five-star scale. */
+  rating?: number | null;
+  rating_count?: number | null;
+  views?: number | null;
+  /** Views accumulated inside the requested popular timeframe. */
+  popular_views?: number | null;
   alternative_titles?: AlternativeTitleDto[] | null;
   /** Free-text theme names (in addition to the numeric `tags`). */
   themes?: string[] | null;
@@ -80,6 +92,11 @@ export interface LatestChapterDto {
   id?: number;
   number?: number | string;
   created_at?: string | null;
+  updated_at?: string | null;
+  views?: number | null;
+  group_id?: number | null;
+  group?: GroupDto | null;
+  collab_groups?: GroupDto[] | null;
 }
 
 /** A chapter as returned by `/chapters`. */
@@ -90,9 +107,11 @@ export interface ChapterDto {
   created_at?: string | null;
   group_id?: number | null;
   group?: GroupDto | null;
+  collab_groups?: GroupDto[] | null;
 }
 
 export interface GroupDto {
+  id?: number | null;
   title?: string | null;
 }
 
@@ -117,13 +136,15 @@ export interface PageDto {
 
 /** Cursor for filtered `/series` pagination. */
 export interface Metadata extends JSONObject {
-  offset: number;
-  index: number;
+  offset?: number;
+  page?: number;
+  index?: number;
 }
 
 export type TriStateValue = "included" | "excluded";
 export type TriStateSelection = Record<string, TriStateValue>;
 export type TagMatchMode = "and" | "or";
+export type PopularRange = (typeof POPULAR_RANGE_OPTIONS)[number]["id"];
 
 /** Advanced-search selections keyed by the numeric ids used by the API. */
 export type SearchMetadata = {
@@ -131,6 +152,7 @@ export type SearchMetadata = {
   statuses?: TriStateSelection;
   tags?: TriStateSelection;
   tagMatchMode?: TagMatchMode;
+  popularRange?: PopularRange;
 };
 
 export interface OptionItem {
@@ -166,6 +188,16 @@ export const STATUS_OPTIONS: OptionItem[] = [
   { id: "4", value: "Cancelled" },
   { id: "5", value: "Dropped" },
 ];
+
+/** Time windows accepted by `/series?popular=...`, matching the website picker. */
+export const POPULAR_RANGE_OPTIONS = [
+  { id: "daily", value: "1 Day" },
+  { id: "weekly", value: "7 Days" },
+  { id: "monthly", value: "1 Month" },
+  { id: "3months", value: "3 Months" },
+  { id: "6months", value: "6 Months" },
+  { id: "1year", value: "1 Year" },
+] as const;
 
 /** Numeric tag id → display name. */
 export const TAGS_MAP: Record<number, string> = {
