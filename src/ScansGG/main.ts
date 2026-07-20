@@ -66,6 +66,9 @@ const SECTION_LATEST = "latest";
 const SECTION_ALL_SERIES = "all_series";
 const SECTION_GENRES = "genres";
 
+// The website's Most Popular carousel shows seven entries. Fetching extra
+// candidates first lets local content filters still fill all seven slots.
+const TOP_MANGA_SIZE = 7;
 // Guards the chapter-pagination loop against a misbehaving `has_more` flag.
 const MAX_CHAPTER_PAGES = 200;
 // Avoid an unbounded scan when a combination of local exclusions is very narrow.
@@ -118,7 +121,7 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
-      { id: SECTION_POPULAR, title: "Popular", type: DiscoverSectionType.featured },
+      { id: SECTION_POPULAR, title: "Top Manga", type: DiscoverSectionType.featured },
       {
         id: SECTION_POPULAR_RANGES,
         title: "Most Popular",
@@ -158,7 +161,9 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
     }
 
     if (section.id === SECTION_POPULAR_RANGES) {
-      const items: DiscoverSectionItem[] = POPULAR_RANGE_OPTIONS.map((range) => ({
+      const items: DiscoverSectionItem[] = POPULAR_RANGE_OPTIONS.filter(
+        (range) => range.id !== "monthly",
+      ).map((range) => ({
         type: "genresCarouselItem",
         name: range.value,
         searchQuery: {
@@ -171,22 +176,11 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
     }
 
     if (section.id === SECTION_POPULAR) {
-      // Keep the original full Popular carousel. The site's timeframe endpoint
-      // is only a seven-card preview and becomes much smaller after SFW and
-      // hidden-genre filtering.
-      const page = await this.fetchFilteredSeries(
-        metadata,
-        {
-          chapters: true,
-          group_details: true,
-          collab_groups_details: true,
-        },
-        (series) =>
-          Boolean(series.cover) && seriesMatchesFilters(series, undefined, contentFilters),
-      );
+      const monthly = await this.fetchPopularSeries("monthly", undefined, contentFilters);
+      const enriched = await this.enrichPopularChapters(monthly.slice(0, TOP_MANGA_SIZE));
       return {
-        items: page.data.map(toFeaturedItem).filter(hasImage),
-        metadata: page.metadata,
+        items: enriched.map(toFeaturedItem).filter(hasImage),
+        metadata: undefined,
       };
     }
 
@@ -328,6 +322,32 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
           Boolean(series.cover) && seriesMatchesFilters(series, searchMetadata, contentFilters),
       )
       .slice(0, SERIES_PAGE_SIZE);
+  }
+
+  // Popular responses include view totals but omit their latest chapter. Fetch
+  // one chapter for each of the seven hero cards so Paperback can show the
+  // primary and collaborating scanlation groups.
+  private async enrichPopularChapters(seriesList: SeriesDto[]): Promise<SeriesDto[]> {
+    return Promise.all(
+      seriesList.map(async (series) => {
+        if (series.chapters?.[0]?.group?.title) return series;
+        try {
+          const response = await fetchApi<ChapterDto[]>("chapters", {
+            series_id: series.id,
+            page: 1,
+            limit: 1,
+            sort: "date",
+            group_details: true,
+            collab_groups_details: true,
+          });
+          const latest = response.data?.[0];
+          return latest ? { ...series, chapters: [latest] } : series;
+        } catch (error) {
+          if (error instanceof CloudflareError) throw error;
+          return series;
+        }
+      }),
+    );
   }
 
   private async fetchFilteredLatestSeries(
