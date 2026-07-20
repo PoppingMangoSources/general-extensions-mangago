@@ -13,7 +13,6 @@ import {
   type DiscoverSection,
   type DiscoverSectionItem,
   type ExtensionImpl,
-  type FeaturedCarouselItem,
   type Form,
   type PagedResults,
   type Request,
@@ -28,7 +27,6 @@ import { OMangaSettingsForm } from "./forms/settings";
 import {
   AGE_RATING_OPTIONS,
   type CatalogItem,
-  type FeaturedDetail,
   GENRE_OPTIONS,
   getDomain,
   type PageMetadata,
@@ -38,13 +36,12 @@ import {
   TYPE_OPTIONS,
   type SearchMetadata,
 } from "./models";
-import { fetchFlightPayload, fetchHtmlPage, OMangaInterceptor } from "./network";
+import { fetchFlightPayload, fetchHtmlPage, fetchPagePayload, OMangaInterceptor } from "./network";
 import {
   getContentRatingForGenres,
   parseCatalogItems,
   parseChapterDetails,
   parseChapters,
-  parseFeaturedDetail,
   parseHomeCarousel,
   parseHomeLinkSection,
   parseHomeSection,
@@ -58,8 +55,6 @@ import {
 import type OMangaConfig from "./pbconfig";
 
 const FEATURED_HERO_LIMIT = 8;
-const FEATURED_INFO_STATE_KEY = "omanga_featured_info";
-const FEATURED_INFO_CACHE_LIMIT = 40;
 
 const SECTION_POPULAR = "popular";
 const SECTION_RANDOM = "random";
@@ -95,7 +90,6 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
   private cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
   private interceptor = new OMangaInterceptor("main");
 
-  private featuredInfoCache: Record<string, FeaturedDetail> | undefined;
   private homepageRequest: { domain: string; page: Promise<string> } | undefined;
   private seriesPageRequest: { key: string; page: Promise<string> } | undefined;
 
@@ -186,14 +180,14 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
       };
     }
 
-    // The hero headlines the front page's Popular This Week row, enriched
-    // with detail-page info; its weekly feed fills in if the row is absent.
+    // The hero uses listing data only; detail-page enrichment would fan out
+    // into eight slow requests before Paperback can render the row.
     if (section.id === SECTION_POPULAR) {
       let items = parseHomeSection(await this.getHomepage(), "Popular This Week");
       if (items.length === 0) {
         items = (await this.fetchCatalogPage({ sort: "by_views", order: "desc" }, undefined)).items;
       }
-      return { items: await this.buildHeroItems(items), metadata: undefined };
+      return { items: this.buildFeaturedItems(items), metadata: undefined };
     }
 
     // Most Liked renders the exact row the homepage shows, falling through to
@@ -276,35 +270,23 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
     };
   }
 
-  // Hero cards: author above the title, the description as the summary, and
-  // year + status pills below it — fields only the detail pages carry.
-  private async buildHeroItems(items: CatalogItem[]): Promise<DiscoverSectionItem[]> {
-    return Promise.all(
-      items
-        .filter((item) => item.poster.length > 0)
-        .slice(0, FEATURED_HERO_LIMIT)
-        .map(async (item): Promise<DiscoverSectionItem> => {
-          const info = await this.getFeaturedInfo(item.slug);
-          const year = item.year ? String(item.year) : info.year;
-          const pills: { symbol: string; text: string }[] = [];
-          if (year) pills.push({ symbol: "calendar", text: year });
-          if (info.status) pills.push({ symbol: "book.fill", text: info.status });
-
-          return {
-            type: "featuredCarouselItem",
-            mangaId: item.slug,
-            title: item.title,
-            imageUrl: item.poster,
-            supertitle: info.author ?? item.type ?? "",
-            summary: info.description ?? (item.genres ?? []).slice(0, 4).join(" · "),
-            infoItems: pills.length
-              ? (pills.slice(0, 2) as FeaturedCarouselItem["infoItems"])
-              : undefined,
-            contentRating: getContentRatingForGenres(item.genres),
-            metadata: undefined,
-          };
+  private buildFeaturedItems(items: CatalogItem[]): DiscoverSectionItem[] {
+    return items
+      .filter((item) => item.poster.length > 0)
+      .slice(0, FEATURED_HERO_LIMIT)
+      .map(
+        (item): DiscoverSectionItem => ({
+          type: "featuredCarouselItem",
+          mangaId: item.slug,
+          title: item.title,
+          imageUrl: item.poster,
+          supertitle: item.type ?? "",
+          summary: (item.genres ?? []).slice(0, 4).join(" · "),
+          infoItems: item.year ? [{ symbol: "calendar", text: String(item.year) }] : undefined,
+          contentRating: getContentRatingForGenres(item.genres),
+          metadata: undefined,
         }),
-    );
+      );
   }
 
   private getHomepage(): Promise<string> {
@@ -313,48 +295,13 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
       return this.homepageRequest.page;
     }
 
-    const request = { domain, page: fetchHtmlPage(`${domain}/`) };
+    const request = { domain, page: fetchPagePayload(`${domain}/`, '"updates":[') };
     request.page = request.page.catch((error: unknown) => {
       if (this.homepageRequest === request) this.homepageRequest = undefined;
       throw error;
     });
     this.homepageRequest = request;
     return request.page;
-  }
-
-  // Detail-page lookups behind the hero, cached so reopening Discover doesn't
-  // refetch; a failed lookup degrades to the plain catalog card.
-  private async getFeaturedInfo(slug: string): Promise<FeaturedDetail> {
-    const cache = this.loadFeaturedInfoCache();
-    const cached = cache[slug];
-    if (cached) return cached;
-    try {
-      const info = parseFeaturedDetail(await this.getSeriesPage(slug));
-      cache[slug] = info;
-      this.persistFeaturedInfoCache(cache);
-      return info;
-    } catch {
-      return {};
-    }
-  }
-
-  private loadFeaturedInfoCache(): Record<string, FeaturedDetail> {
-    if (this.featuredInfoCache) return this.featuredInfoCache;
-    const raw = Application.getState(FEATURED_INFO_STATE_KEY);
-    this.featuredInfoCache =
-      raw && typeof raw === "object" && !Array.isArray(raw)
-        ? { ...(raw as Record<string, FeaturedDetail>) }
-        : {};
-    return this.featuredInfoCache;
-  }
-
-  private persistFeaturedInfoCache(cache: Record<string, FeaturedDetail>): void {
-    const slugs = Object.keys(cache);
-    while (slugs.length > FEATURED_INFO_CACHE_LIMIT) {
-      const oldestSlug = slugs.shift();
-      if (oldestSlug) delete cache[oldestSlug];
-    }
-    Application.setState(cache, FEATURED_INFO_STATE_KEY);
   }
 
   async getSettingsForm(): Promise<Form> {
@@ -425,7 +372,7 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
     const page = metadata?.page ?? 1;
     const url = buildCatalogUrl({ ...query, page: page > 1 ? String(page) : undefined });
 
-    const items = parseCatalogItems(await fetchHtmlPage(url));
+    const items = parseCatalogItems(await fetchPagePayload(url, '"initialItems":['));
     const firstId = items[0]?.id;
 
     if (page > 1 && firstId !== undefined && firstId === metadata?.firstId) {
@@ -462,18 +409,9 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
     return request.page;
   }
 
-  // The bare payload is a fraction of the full page (the transfer, not the
-  // server, is what makes slow connections crawl). Accept it only when it
-  // carries the series props — a partial payload falls back to the full page.
-  private async fetchSeriesPage(slug: string): Promise<string> {
+  private fetchSeriesPage(slug: string): Promise<string> {
     const url = `${getDomain()}/manga/${slug}`;
-    try {
-      const payload = await fetchFlightPayload(url);
-      if (payload.includes('{"initialTab"')) return payload;
-    } catch (error) {
-      if (error instanceof CloudflareError) throw error;
-    }
-    return fetchHtmlPage(url);
+    return fetchPagePayload(url, '{"initialTab"');
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {

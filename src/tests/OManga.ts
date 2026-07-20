@@ -13,15 +13,21 @@ export async function runTests(logger: TestLogger) {
 
   suite.test("discover sections", async () => {
     const sections = await OManga.getDiscoverSections();
+    const popularSection = sections.find((section) => section.id === "popular");
     const updatesSection = sections.find((section) => section.id === "updates");
     const genresSection = sections.find((section) => section.id === "genres");
 
+    expect(popularSection).not.equal(undefined);
     expect(updatesSection).not.equal(undefined);
     expect(genresSection).not.equal(undefined);
-    if (!updatesSection || !genresSection) throw new Error("Missing discover sections");
+    if (!popularSection || !updatesSection || !genresSection) {
+      throw new Error("Missing discover sections");
+    }
 
+    const popular = await OManga.getDiscoverSectionItems(popularSection, undefined);
     const updates = await OManga.getDiscoverSectionItems(updatesSection, undefined);
     const genres = await OManga.getDiscoverSectionItems(genresSection, undefined);
+    expect(popular.items.length).greaterThan(0);
     expect(updates.items.length).greaterThan(0);
     expect(genres.items.length).greaterThan(0);
   });

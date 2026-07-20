@@ -16,7 +16,6 @@ import { getDomain, getShowAllVersions, isOfficialTeam } from "./models";
 import type {
   CatalogItem,
   ChapterEntry,
-  FeaturedDetail,
   HomeLinkCard,
   HomeUpdate,
   ReaderChapter,
@@ -302,22 +301,6 @@ export const parseCoverUrl = (html: string): string =>
   html.match(/property="og:image"\s+content="([^"]+)"/)?.[1] ??
   html.match(/"og:image","content":"([^"]+)"/)?.[1] ??
   "";
-
-export const parseFeaturedDetail = (html: string): FeaturedDetail => {
-  let props: SeriesProps;
-  try {
-    props = parseSeriesProps(html, "featured");
-  } catch {
-    return {};
-  }
-  return {
-    author: props.author?.trim() || undefined,
-    description: props.description?.trim() || undefined,
-    status: props.status?.trim() || undefined,
-    // The release year only exists as the subtitle's catalog link.
-    year: html.match(/[?&]year=(\d{4})/)?.[1],
-  };
-};
 
 const contentRatingForSeries = (props: SeriesProps): ContentRating => {
   const age = (props.ageRating ?? "").trim();

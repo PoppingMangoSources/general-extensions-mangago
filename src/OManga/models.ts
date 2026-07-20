@@ -286,13 +286,6 @@ export interface HomeUpdate {
   };
 }
 
-export interface FeaturedDetail {
-  author?: string;
-  description?: string;
-  status?: string;
-  year?: string;
-}
-
 export interface HomeLinkCard {
   slug: string;
   title: string;

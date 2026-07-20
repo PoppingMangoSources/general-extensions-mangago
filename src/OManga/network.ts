@@ -24,9 +24,11 @@ export class OMangaInterceptor extends PaperbackInterceptor {
         // Referer; site documents want a plain navigation accept.
         referer: `${getDomain()}/`,
         "user-agent": await Application.getDefaultUserAgent(),
-        accept: isImage
-          ? "image/avif,image/webp,image/apng,image/*,*/*;q=0.8"
-          : "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        accept:
+          request.headers?.accept ??
+          (isImage
+            ? "image/avif,image/webp,image/apng,image/*,*/*;q=0.8"
+            : "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"),
         "accept-language": "en-US,en;q=0.9",
       },
     };
@@ -76,7 +78,7 @@ export const fetchFlightPayload = async (url: string): Promise<string> => {
   const [response, buffer] = await Application.scheduleRequest({
     url,
     method: "GET",
-    headers: { rsc: "1" },
+    headers: { accept: "text/x-component", rsc: "1" },
   });
 
   if (response.status < 200 || response.status >= 300) {
@@ -84,4 +86,14 @@ export const fetchFlightPayload = async (url: string): Promise<string> => {
   }
 
   return Application.arrayBufferToUTF8String(buffer);
+};
+
+export const fetchPagePayload = async (url: string, requiredMarker: string): Promise<string> => {
+  try {
+    const payload = await fetchFlightPayload(url);
+    if (payload.includes(requiredMarker)) return payload;
+  } catch (error) {
+    if (error instanceof CloudflareError) throw error;
+  }
+  return fetchHtmlPage(url);
 };
