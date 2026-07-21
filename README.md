@@ -19,7 +19,6 @@ The repository's own sources are currently available from `0.9/test` while they 
 
 ## Installation
 
-- [Add the stable repository to Paperback][stable-installation]
 - [Add the testing repository to Paperback][test-installation]
 
 After installing the repository, refresh it in Paperback to receive source updates.
@@ -30,6 +29,5 @@ Report source problems through this repository's [Issues page][issues]. Include 
 
 These extensions are not affiliated with Paperback or any supported website. All site names and logos belong to their respective owners.
 
-[stable-installation]: https://poppingmangosources.github.io/general-extensions-mangago/0.9/stable/
 [test-installation]: https://poppingmangosources.github.io/general-extensions-mangago/0.9/test/
 [issues]: https://github.com/PoppingMangoSources/general-extensions-mangago/issues
