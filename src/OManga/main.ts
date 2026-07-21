@@ -303,6 +303,7 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
       ? (sortingOption?.id ?? "real_views")
       : "real_views";
     const sortId = selectedSortId === "real_views" && meta?.sort ? meta.sort : selectedSortId;
+    const isTopSeriesQuery = meta?.sort === "rating" && meta.types?.length === 1;
 
     let { items, nextMetadata } = await this.fetchCatalogPage(
       {
@@ -325,13 +326,15 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
       metadata,
     );
 
-    items = items.filter((item) => (item._count?.chapters ?? 0) > 0);
-    if (items.length === 0 && title.length === 0 && sortId === "real_views") {
-      ({ items, nextMetadata } = await this.fetchCatalogPage(
-        { sort: "rating", order: "desc" },
-        metadata,
-      ));
+    if (!isTopSeriesQuery) {
       items = items.filter((item) => (item._count?.chapters ?? 0) > 0);
+      if (items.length === 0 && title.length === 0 && sortId === "real_views") {
+        ({ items, nextMetadata } = await this.fetchCatalogPage(
+          { sort: "rating", order: "desc" },
+          metadata,
+        ));
+        items = items.filter((item) => (item._count?.chapters ?? 0) > 0);
+      }
     }
 
     return {
