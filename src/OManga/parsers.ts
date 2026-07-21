@@ -20,6 +20,7 @@ import type {
   HomeUpdate,
   ReaderChapter,
   SeriesProps,
+  TopSeriesCountry,
 } from "./models";
 
 const FLIGHT_CHUNK_REGEX = /self\.__next_f\.push\(\[1,"((?:[^"\\]|\\.)*)"\]\)/g;
@@ -80,6 +81,11 @@ const filterValidCatalogItems = (items: CatalogItem[] | undefined): CatalogItem[
 
 export const parseCatalogItems = (items: CatalogItem[]): CatalogItem[] =>
   filterValidCatalogItems(items);
+
+export const parseCatalogPageItems = (html: string): CatalogItem[] =>
+  filterValidCatalogItems(
+    parseJsonAt(decodeFlightPayload(html), '"initialItems":[', '"initialItems":'.length),
+  );
 
 export const getContentRatingForGenres = (genres: string[] | undefined): ContentRating => {
   const lower = (genres ?? []).map((genre) => genre.toLowerCase());
@@ -147,6 +153,14 @@ export const parseHomeSection = (html: string, title: string): CatalogItem[] => 
   } catch {
     return [];
   }
+};
+
+export const parseHomeTopSeries = (html: string, country: TopSeriesCountry): CatalogItem[] => {
+  const groups = parseJsonAt<Partial<Record<TopSeriesCountry, CatalogItem[]>>>(
+    decodeFlightPayload(html),
+    '{"korea":[',
+  );
+  return filterValidCatalogItems(groups?.[country]);
 };
 
 export const toHomeCarouselItem = (item: CatalogItem): DiscoverSectionItem => ({

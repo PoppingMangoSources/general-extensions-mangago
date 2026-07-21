@@ -47,6 +47,7 @@ import {
   type SearchMetadata,
 } from "./models";
 import {
+  buildCatalogPageUrl,
   buildSeriesNavigationHeaders,
   fetchCatalog,
   fetchFlightPayload,
@@ -57,11 +58,13 @@ import {
 import {
   getContentRatingForGenres,
   parseCatalogItems,
+  parseCatalogPageItems,
   parseChapterDetails,
   parseChapters,
   parseHomeCarousel,
   parseHomeLinkSection,
   parseHomeSection,
+  parseHomeTopSeries,
   parseHomeUpdates,
   parseMangaDetails,
   toHomeCarouselItem,
@@ -131,7 +134,7 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
         name: chip.title,
         searchQuery: {
           title: "",
-          metadata: { types: [chip.type], sort: "rating" } satisfies SearchMetadata,
+          metadata: { topSeriesCountry: chip.country } satisfies SearchMetadata,
         },
         metadata: undefined,
       }));
@@ -299,13 +302,20 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
     const title = (query.title ?? "").trim();
     const meta = query.metadata;
 
+    if (meta?.topSeriesCountry) {
+      const items = parseHomeTopSeries(await this.getHomepage(), meta.topSeriesCountry);
+      return {
+        items: items.map(toSearchResultItem).filter((item) => item.imageUrl.length > 0),
+        metadata: undefined,
+      };
+    }
+
     const selectedSortId = SORT_OPTIONS.some((option) => option.id === sortingOption?.id)
       ? (sortingOption?.id ?? "real_views")
       : "real_views";
     const sortId = selectedSortId === "real_views" && meta?.sort ? meta.sort : selectedSortId;
-    const isTopSeriesQuery = meta?.sort === "rating" && meta.types?.length === 1;
 
-    let { items, nextMetadata } = await this.fetchCatalogPage(
+    const { items, nextMetadata } = await this.fetchSearchPage(
       {
         q: title.length > 0 ? title : undefined,
         genre: resolveOptionValues(GENRE_OPTIONS, meta?.genres),
@@ -326,20 +336,28 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
       metadata,
     );
 
-    if (!isTopSeriesQuery) {
-      items = items.filter((item) => (item._count?.chapters ?? 0) > 0);
-      if (items.length === 0 && title.length === 0 && sortId === "real_views") {
-        ({ items, nextMetadata } = await this.fetchCatalogPage(
-          { sort: "rating", order: "desc" },
-          metadata,
-        ));
-        items = items.filter((item) => (item._count?.chapters ?? 0) > 0);
-      }
-    }
-
     return {
       items: items.map(toSearchResultItem).filter((item) => item.imageUrl.length > 0),
       metadata: nextMetadata,
+    };
+  }
+
+  private async fetchSearchPage(
+    query: CatalogQuery,
+    metadata: PageMetadata | undefined,
+  ): Promise<{ items: CatalogItem[]; nextMetadata: PageMetadata | undefined }> {
+    const page = metadata?.page ?? 1;
+    const url = buildCatalogPageUrl({ ...query, page: page > 1 ? String(page) : undefined });
+    const items = parseCatalogPageItems(await fetchPagePayload(url, '"initialItems":['));
+    const firstId = items[0]?.id;
+
+    if (page > 1 && firstId !== undefined && firstId === metadata?.firstId) {
+      return { items: [], nextMetadata: undefined };
+    }
+
+    return {
+      items,
+      nextMetadata: items.length === 36 ? { page: page + 1, firstId } : undefined,
     };
   }
 

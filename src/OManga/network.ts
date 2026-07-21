@@ -13,8 +13,10 @@ import { type CatalogQuery, type CatalogResponse, getDomain } from "./models";
 
 const IMAGE_EXTENSION_REGEX = /\.(jpe?g|png|webp|gif|avif)(\?|#|$)/i;
 
-export const buildCatalogUrl = (query: CatalogQuery): string => {
-  const url = new URL(getDomain()).addPathComponent("api").addPathComponent("catalog");
+const buildCatalogUrl = (query: CatalogQuery, api: boolean): string => {
+  const url = new URL(getDomain());
+  if (api) url.addPathComponent("api");
+  url.addPathComponent("catalog");
   for (const [key, value] of Object.entries(query)) {
     if (value === undefined) continue;
     const values = (Array.isArray(value) ? value : [value]).filter(Boolean);
@@ -23,8 +25,10 @@ export const buildCatalogUrl = (query: CatalogQuery): string => {
   return url.toString();
 };
 
+export const buildCatalogPageUrl = (query: CatalogQuery): string => buildCatalogUrl(query, false);
+
 export const fetchCatalog = async (query: CatalogQuery): Promise<CatalogResponse> => {
-  const url = buildCatalogUrl(query);
+  const url = buildCatalogUrl(query, true);
   const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
   if (response.status < 200 || response.status >= 300) {
     throw new Error(`Catalog request failed with status ${response.status}: ${url}`);
