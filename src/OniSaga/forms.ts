@@ -278,11 +278,11 @@ export class OniSagaSettingsForm extends Form {
         {
           id: "reader",
           footer:
-            "Page lookups start quickly, then settle into a sustainable cross-chapter pace. If onisaga's hourly safety budget is already full, the reader reports the remaining pause instead of staying at Loading 0%.",
+            "Signed page lookups are paced separately from image downloads. The hourly safety ceiling still prevents onisaga's long reader lockout.",
         },
         [
           SelectRow("pageDelay", {
-            title: "Image Requests Limit",
+            title: "Reader Request Speed",
             layout: "flow",
             value: [this.pageDelay],
             items: toTags(PAGE_DELAY_OPTIONS),

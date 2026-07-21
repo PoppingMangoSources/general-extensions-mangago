@@ -12,8 +12,6 @@ export const BROWSE_STATE_TTL = 1_800_000;
 export const BROWSE_STATE_CACHE_MAX = 8;
 export const HOME_TTL = 60_000;
 export const TOP_MANGA_TTL = 60_000;
-export const UPDATE_SCAN_MAX_PAGES = 8;
-export const UPDATE_SCAN_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 
 export const SHOW_NSFW_KEY = "show_nsfw";
 export const DISCOVER_TYPE_KEY = "discover_type";
@@ -24,7 +22,6 @@ export const DEDUPE_CHAPTERS_KEY = "dedupe_chapters";
 export const PAGE_DELAY_KEY = "page_delay";
 export const PAGE_BUDGET_HISTORY_KEY = "onisaga_page_budget_history_v1";
 export const PAGE_BUDGET_BLOCKED_UNTIL_KEY = "onisaga_page_budget_blocked_until_v1";
-export const PAGE_TOKEN_BUCKET_KEY = "onisaga_page_token_bucket_v1";
 export const SECTIONS_ORDER_KEY = "sections_order";
 export const SECTIONS_DELETED_KEY = "sections_deleted";
 
@@ -99,13 +96,13 @@ export const MIN_CHAPTERS_OPTIONS: Option[] = [
   { id: "200", title: "200+" },
 ];
 
-export const PAGE_DELAY_DEFAULT = "2";
+export const PAGE_DELAY_DEFAULT = "0.5";
 export const PAGE_DELAY_OPTIONS: Option[] = [
-  { id: "1.5", title: "1 image per 1.50 seconds" },
-  { id: "1.75", title: "1 image per 1.75 seconds" },
-  { id: "2", title: "1 image per 2.00 seconds" },
-  { id: "2.25", title: "1 image per 2.25 seconds" },
-  { id: "2.5", title: "1 image per 2.50 seconds" },
+  { id: "0.5", title: "Fast — 2 lookups per second" },
+  { id: "0.75", title: "Balanced — 1 lookup per 0.75 seconds" },
+  { id: "1", title: "Cautious — 1 lookup per second" },
+  { id: "1.25", title: "Slow — 1 lookup per 1.25 seconds" },
+  { id: "1.5", title: "Slowest — 1 lookup per 1.5 seconds" },
 ];
 
 export const SORT_OPTIONS: Option[] = [

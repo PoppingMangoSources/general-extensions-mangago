@@ -13,7 +13,6 @@ import {
   DOMAIN,
   PAGE_BUDGET_BLOCKED_UNTIL_KEY,
   PAGE_BUDGET_HISTORY_KEY,
-  PAGE_TOKEN_BUCKET_KEY,
   type PageApiResponse,
 } from "./models";
 
@@ -59,23 +58,10 @@ const SIGNED_URL_CACHE_MAX = 512;
 export const PAGE_BUDGET_WINDOW_MS = 65 * 60 * 1000;
 export const PAGE_BUDGET_MAX_REQUESTS = 350;
 
-// Allow a normal chapter/prefetch run to start quickly, then refill at a rate
-// that mathematically stays inside 350 requests in any 65-minute window:
-// 30 initial tokens + 320 refills over the window. The existing rolling history
-// remains a hard backstop and safely covers migration from alpha.16.
-export const PAGE_BURST_CAPACITY = 30;
-export const PAGE_TOKEN_REFILL_INTERVAL_MS =
-  PAGE_BUDGET_WINDOW_MS / (PAGE_BUDGET_MAX_REQUESTS - PAGE_BURST_CAPACITY);
-
 // Short pacing delays are worth hiding behind prefetch. A wait longer than this
 // is surfaced immediately with a countdown so Paperback never sits at 0% for
 // most of an hour with no explanation.
 export const PAGE_MAX_INLINE_WAIT_MS = 30_000;
-
-export type PageTokenBucketState = {
-  tokens: number;
-  updatedAt: number;
-};
 
 // Shared page-API circuit. An unexpected 429 parks the retry and every queued
 // prefetch page for the measured long safety window, preventing one response
@@ -112,9 +98,9 @@ const withHeaders = (
   return result;
 };
 
-const getOniSagaUserAgent = async (): Promise<string> => {
-  return completeMobileSafariUserAgent(await Application.getDefaultUserAgent());
-};
+let oniSagaUserAgent: Promise<string> | undefined;
+const getOniSagaUserAgent = (): Promise<string> =>
+  (oniSagaUserAgent ??= Application.getDefaultUserAgent().then(completeMobileSafariUserAgent));
 
 // Response headers can arrive in any casing; read them case-insensitively.
 export const getHeaderValue = (
@@ -146,7 +132,7 @@ export const isCloudflareChallengeResponse = (
 ): boolean => {
   if (!url.startsWith(DOMAIN)) return false;
   if (getHeaderValue(headers, "cf-mitigated")?.toLowerCase() === "challenge") return true;
-  if (status !== 403) return false;
+  if (status !== 403 && status !== 503) return false;
 
   const contentType = getHeaderValue(headers, "content-type")?.toLowerCase() ?? "";
   if (!contentType.includes("text/html")) return false;
@@ -177,76 +163,6 @@ export const pageBudgetReadyAt = (starts: number[], now: number): number => {
   const recent = normalisePageRequestStarts(starts, now);
   if (recent.length < PAGE_BUDGET_MAX_REQUESTS) return now;
   return (recent[0] ?? now) + PAGE_BUDGET_WINDOW_MS;
-};
-
-const refillPageTokenBucket = (state: PageTokenBucketState, now: number): PageTokenBucketState => {
-  if (now <= state.updatedAt) return state;
-  return {
-    tokens: Math.min(
-      PAGE_BURST_CAPACITY,
-      state.tokens + (now - state.updatedAt) / PAGE_TOKEN_REFILL_INTERVAL_MS,
-    ),
-    updatedAt: now,
-  };
-};
-
-const isPageTokenBucketState = (value: unknown, now: number): value is PageTokenBucketState => {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-  const candidate = value as Partial<PageTokenBucketState>;
-  return (
-    typeof candidate.tokens === "number" &&
-    Number.isFinite(candidate.tokens) &&
-    candidate.tokens >= 0 &&
-    typeof candidate.updatedAt === "number" &&
-    Number.isFinite(candidate.updatedAt) &&
-    candidate.updatedAt <= now
-  );
-};
-
-// Restore the persisted bucket and reconcile any history entries written after
-// it (for example if the app stopped between the two state writes). On first
-// alpha.17 launch, replay the retained alpha.16 history from a full bucket so a
-// busy existing install does not receive a fresh 30-request burst.
-export const normalisePageTokenBucket = (
-  value: unknown,
-  starts: number[],
-  now: number,
-): PageTokenBucketState => {
-  const recent = normalisePageRequestStarts(starts, now);
-  const persisted = isPageTokenBucketState(value, now);
-  let state: PageTokenBucketState = persisted
-    ? {
-        tokens: Math.min(PAGE_BURST_CAPACITY, value.tokens),
-        updatedAt: value.updatedAt,
-      }
-    : {
-        tokens: PAGE_BURST_CAPACITY,
-        updatedAt: recent[0] ?? now,
-      };
-
-  const unaccountedStarts = persisted
-    ? recent.filter((startedAt) => startedAt > state.updatedAt)
-    : recent;
-  for (const startedAt of unaccountedStarts) {
-    state = refillPageTokenBucket(state, startedAt);
-    state = { tokens: Math.max(0, state.tokens - 1), updatedAt: startedAt };
-  }
-
-  return refillPageTokenBucket(state, now);
-};
-
-export const pageTokenReadyAt = (state: PageTokenBucketState, now: number): number => {
-  const refilled = refillPageTokenBucket(state, now);
-  if (refilled.tokens >= 1) return now;
-  return now + (1 - refilled.tokens) * PAGE_TOKEN_REFILL_INTERVAL_MS;
-};
-
-export const consumePageToken = (
-  state: PageTokenBucketState,
-  now: number,
-): PageTokenBucketState => {
-  const refilled = refillPageTokenBucket(state, now);
-  return { tokens: Math.max(0, refilled.tokens - 1), updatedAt: now };
 };
 
 export const formatPageSafetyPause = (waitMs: number): string => {
@@ -320,6 +236,16 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
   // Alamofire request-adaptation error. The outer request cannot reach the same
   // URL concurrently because it is awaiting this lookup.
   private pageResolveNetworkRequests = new Set<string>();
+
+  resetAfterCloudflareBypass(): void {
+    this.refreshInFlight.clear();
+    this.pageResolveInFlight.clear();
+    this.pageResolveNetworkRequests.clear();
+    for (const session of this.readerSessions.values()) {
+      session.refreshedAt = undefined;
+      session.refreshOk = undefined;
+    }
+  }
 
   setReaderToken(chapterId: string, token: string, referer: string): void {
     this.readerSessions.set(chapterId, { token, referer });
@@ -629,7 +555,10 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
     response: Response,
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
-    const challengeBody = response.status === 403 ? Application.arrayBufferToUTF8String(data) : "";
+    const challengeBody =
+      response.status === 403 || response.status === 503
+        ? Application.arrayBufferToUTF8String(data)
+        : "";
     if (
       isCloudflareChallengeResponse(request.url, response.status, response.headers, challengeBody)
     ) {
@@ -768,22 +697,15 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
   }
 }
 
-// Reader page-API pacing. Requests are strictly serialized and evenly spaced at
-// the user's Image Requests Limit (2s by default). A persisted token bucket lets
-// ordinary chapters start quickly, then settles sustained reading to the safe
-// 350/65-minute envelope. The retained rolling history is a hard backstop. Long
-// safety waits fail with a countdown instead of holding Paperback at 0%. Only
-// the protected page API is paced; signed CDN images and ordinary requests pass.
+// Reader page-API starts are evenly spaced while the persisted rolling history
+// remains the hard long-window ceiling. OniSaga's own reader preloads two pages
+// concurrently; 0.5s spacing is at least as conservative without making a normal
+// chapter take several minutes to resolve. Signed CDN images bypass this gate.
 
 export class OniSagaPageRateLimiter extends PaperbackInterceptor {
   private chain: Promise<unknown> = Promise.resolve();
-  // Fire time of the last page request, for even inter-request spacing.
   private lastRequestAt = 0;
   private requestStarts: number[] = [];
-  private tokenBucket: PageTokenBucketState = {
-    tokens: PAGE_BURST_CAPACITY,
-    updatedAt: 0,
-  };
   private stateLoaded = false;
   constructor(
     id: string,
@@ -795,8 +717,8 @@ export class OniSagaPageRateLimiter extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
     const cid = PAGE_API_REGEX.exec(request.url)?.[1];
     if (!cid) return request;
-    // Serialize every page request through one chain so no two are ever in
-    // flight together; pace() then even-spaces them.
+    // Serialize admission through one chain so concurrent Paperback prefetches
+    // cannot start together; pace() evenly spaces their API lookups.
     const wait = this.chain.then(async () => {
       await this.pace();
       await this.beforePageRequest?.(request);
@@ -825,14 +747,12 @@ export class OniSagaPageRateLimiter extends PaperbackInterceptor {
       const now = Date.now();
       this.loadState(now);
       this.requestStarts = normalisePageRequestStarts(this.requestStarts, now);
-      this.tokenBucket = normalisePageTokenBucket(this.tokenBucket, this.requestStarts, now);
 
       const waitUntil = Math.max(
         pageCooldown.until,
         readBlockedUntil(now),
         this.lastRequestAt + intervalMs,
         pageBudgetReadyAt(this.requestStarts, now),
-        pageTokenReadyAt(this.tokenBucket, now),
       );
       const waitMs = waitUntil - now;
 
@@ -846,7 +766,6 @@ export class OniSagaPageRateLimiter extends PaperbackInterceptor {
 
       const startedAt = Date.now();
       this.lastRequestAt = startedAt;
-      this.tokenBucket = consumePageToken(this.tokenBucket, startedAt);
       this.requestStarts.push(startedAt);
       this.saveState();
       return;
@@ -859,18 +778,10 @@ export class OniSagaPageRateLimiter extends PaperbackInterceptor {
       Application.getState(PAGE_BUDGET_HISTORY_KEY),
       now,
     );
-    this.tokenBucket = normalisePageTokenBucket(
-      Application.getState(PAGE_TOKEN_BUCKET_KEY),
-      this.requestStarts,
-      now,
-    );
     this.stateLoaded = true;
   }
 
   private saveState(): void {
-    // Save the bucket first. If the app stops between writes, losing one token
-    // is conservative; the opposite order could grant an uncharged request.
-    Application.setState(this.tokenBucket, PAGE_TOKEN_BUCKET_KEY);
     Application.setState(this.requestStarts, PAGE_BUDGET_HISTORY_KEY);
   }
 }
