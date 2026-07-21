@@ -1,41 +1,35 @@
-# General Extensions
+# PoppingMango Sources
 
-Paperback extensions for websites with unique, non-generic themes.
+Unofficial Paperback extensions built and maintained in this repository. This source list is independent of Inkdex and focuses on the repository's own sources instead of repeating the stock Inkdex catalog.
 
-## Available Extensions
+## Sources
 
-- [Atsumaru](https://atsu.moe)
-- [Comix](https://comix.to)
-- [MangaDemon](https://demonicscans.org)
-- [MangaDex](https://mangadex.org)
-- [MangaDot](https://mangadot.net)
-- [MangaFire](https://mangafire.to)
-- [MangaFox](https://fanfox.net)
-- [MangaKatana](https://mangakatana.com)
-- [Mangapill](https://mangapill.com)
-- [MangaPlus](https://mangaplus.shueisha.co.jp)
-- [MangaTaro](https://mangataro.org)
-- [Mgeko](https://mgeko.cc)
-- [PunkRecords](https://punkrecordz.com)
-- [RoyalRoad](https://www.royalroad.com)
-- [QiScans](https://qimanhwa.com)
-- [Webtoon](https://webtoons.com)
-- [WeebCentral](https://weebcentral.com)
+The repository's own sources are currently available from `0.9/test` while they are prepared for stable release.
+
+| Source | Website | Status |
+| --- | --- | --- |
+| [HiveScans](https://hivetoons.org) | `hivetoons.org` | Testing |
+| [KingOfShojo](https://kingofshojo.com) | `kingofshojo.com` | Testing |
+| [oManga](https://omanga.to) | `omanga.to` | Testing |
+| [OniSaga](https://onisaga.com) | `onisaga.com` | Testing |
+| [RinkoComics](https://rinkocomics.com) | `rinkocomics.com` | Testing |
+| [RokariComics](https://rokaricomics.com) | `rokaricomics.com` | Testing |
+| [Scans.GG](https://scans.gg) | `scans.gg` | Testing |
+| [VyManga](https://vymanga.com) | `vymanga.com` | Testing |
 
 ## Installation
 
-To add these extensions to Paperback, it’s recommended to install the registry via the [installation page][registry-installation-page] on the Inkdex website. Alternatively, you can install just this repository by visiting [this webpage][repository-installation-page].
+- [Add the stable repository to Paperback][stable-installation]
+- [Add the testing repository to Paperback][test-installation]
 
-## Support Guidelines
+After installing the repository, refresh it in Paperback to receive source updates.
 
-Need help? Check out our [Support Guidelines][support-guidelines] in the [registry repository][registry-repository]. Issues and discussions are disabled in the extension repositories and should be posted in the registry repository instead.
+## Support
 
-## Contributing Guidelines
+Report source problems through this repository's [Issues page][issues]. Include the affected source, the page or title that failed, and screenshots or request details when possible.
 
-Want to contribute? Read the [Contributing Guidelines][contributing-guidelines] in the [registry repository][registry-repository] to get started.
+These extensions are not affiliated with Paperback or any supported website. All site names and logos belong to their respective owners.
 
-[registry-installation-page]: https://inkdex.github.io/installation
-[repository-installation-page]: https://inkdex.github.io/general-extensions/0.9/stable
-[support-guidelines]: https://github.com/inkdex/extensions/blob/master/.github/SUPPORT.md
-[registry-repository]: https://github.com/inkdex/extensions
-[contributing-guidelines]: https://github.com/inkdex/extensions/blob/master/.github/CONTRIBUTING.md
+[stable-installation]: https://poppingmangosources.github.io/general-extensions-mangago/0.9/stable/
+[test-installation]: https://poppingmangosources.github.io/general-extensions-mangago/0.9/test/
+[issues]: https://github.com/PoppingMangoSources/general-extensions-mangago/issues
