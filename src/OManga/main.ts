@@ -62,6 +62,7 @@ import {
   parseHomeCarousel,
   parseHomeLinkSection,
   parseHomeSection,
+  parseHomeTopSeries,
   parseHomeUpdates,
   parseMangaDetails,
   toHomeCarouselItem,
@@ -131,7 +132,11 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
         name: chip.title,
         searchQuery: {
           title: "",
-          metadata: { types: [chip.type], sort: "rating" } satisfies SearchMetadata,
+          metadata: {
+            topSeriesCountry: chip.country,
+            types: [chip.type],
+            sort: "rating",
+          } satisfies SearchMetadata,
         },
         metadata: undefined,
       }));
@@ -298,6 +303,15 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
   ): Promise<PagedResults<SearchResultItem>> {
     const title = (query.title ?? "").trim();
     const meta = query.metadata;
+
+    if (meta?.topSeriesCountry) {
+      const items = parseHomeTopSeries(
+        await fetchPagePayload(`${getDomain()}/`, '{"korea":['),
+        meta.topSeriesCountry,
+      );
+      const results = items.map(toSearchResultItem).filter((item) => item.imageUrl.length > 0);
+      if (results.length > 0) return { items: results, metadata: undefined };
+    }
 
     const selectedSortId = SORT_OPTIONS.some((option) => option.id === sortingOption?.id)
       ? (sortingOption?.id ?? "real_views")

@@ -126,6 +126,7 @@ export interface ReaderChapter {
 export interface PageMetadata extends JSONObject {
   page: number;
 }
+export type TopSeriesCountry = "korea" | "japan" | "china";
 export type SearchMetadata = {
   genres?: string[];
   excludeGenres?: string[];
@@ -140,6 +141,7 @@ export type SearchMetadata = {
   chaptersTo?: string;
   tag?: string;
   sort?: string;
+  topSeriesCountry?: TopSeriesCountry;
 };
 
 export type OptionItem = {
@@ -254,9 +256,9 @@ export const SORT_OPTIONS = [
   { id: "by_views", label: "Views" },
 ] as const;
 export const TOP_SERIES_CHIPS = [
-  { title: "From Korea", type: "Manhwa" },
-  { title: "From Japan", type: "Manga" },
-  { title: "From China", type: "Manhua" },
+  { title: "From Korea", country: "korea", type: "Manhwa" },
+  { title: "From Japan", country: "japan", type: "Manga" },
+  { title: "From China", country: "china", type: "Manhua" },
 ] as const;
 export interface HomeUpdate {
   id: number;
