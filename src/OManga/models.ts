@@ -20,6 +20,7 @@ export type CatalogQuery = Record<string, string | string[] | undefined>;
 export interface CatalogResponse {
   items: CatalogItem[];
   hasMore: boolean;
+  nextPage?: number | null;
 }
 
 const BASE_URL_KEY = "omanga_base_url";
@@ -124,9 +125,7 @@ export interface ReaderChapter {
 }
 export interface PageMetadata extends JSONObject {
   page: number;
-  firstId?: number;
 }
-export type TopSeriesCountry = "korea" | "japan" | "china";
 export type SearchMetadata = {
   genres?: string[];
   excludeGenres?: string[];
@@ -141,7 +140,6 @@ export type SearchMetadata = {
   chaptersTo?: string;
   tag?: string;
   sort?: string;
-  topSeriesCountry?: TopSeriesCountry;
 };
 
 export type OptionItem = {
@@ -256,9 +254,9 @@ export const SORT_OPTIONS = [
   { id: "by_views", label: "Views" },
 ] as const;
 export const TOP_SERIES_CHIPS = [
-  { title: "From Korea", country: "korea" },
-  { title: "From Japan", country: "japan" },
-  { title: "From China", country: "china" },
+  { title: "From Korea", type: "Manhwa" },
+  { title: "From Japan", type: "Manga" },
+  { title: "From China", type: "Manhua" },
 ] as const;
 export interface HomeUpdate {
   id: number;

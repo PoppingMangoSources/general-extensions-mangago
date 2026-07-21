@@ -47,7 +47,6 @@ import {
   type SearchMetadata,
 } from "./models";
 import {
-  buildCatalogPageUrl,
   buildSeriesNavigationHeaders,
   fetchCatalog,
   fetchFlightPayload,
@@ -58,13 +57,11 @@ import {
 import {
   getContentRatingForGenres,
   parseCatalogItems,
-  parseCatalogPageItems,
   parseChapterDetails,
   parseChapters,
   parseHomeCarousel,
   parseHomeLinkSection,
   parseHomeSection,
-  parseHomeTopSeries,
   parseHomeUpdates,
   parseMangaDetails,
   toHomeCarouselItem,
@@ -134,7 +131,7 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
         name: chip.title,
         searchQuery: {
           title: "",
-          metadata: { topSeriesCountry: chip.country } satisfies SearchMetadata,
+          metadata: { types: [chip.type], sort: "rating" } satisfies SearchMetadata,
         },
         metadata: undefined,
       }));
@@ -302,20 +299,12 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
     const title = (query.title ?? "").trim();
     const meta = query.metadata;
 
-    if (meta?.topSeriesCountry) {
-      const items = parseHomeTopSeries(await this.getHomepage(), meta.topSeriesCountry);
-      return {
-        items: items.map(toSearchResultItem).filter((item) => item.imageUrl.length > 0),
-        metadata: undefined,
-      };
-    }
-
     const selectedSortId = SORT_OPTIONS.some((option) => option.id === sortingOption?.id)
       ? (sortingOption?.id ?? "real_views")
       : "real_views";
     const sortId = selectedSortId === "real_views" && meta?.sort ? meta.sort : selectedSortId;
 
-    const { items, nextMetadata } = await this.fetchSearchPage(
+    const { items, nextMetadata } = await this.fetchCatalogPage(
       {
         q: title.length > 0 ? title : undefined,
         genre: resolveOptionValues(GENRE_OPTIONS, meta?.genres),
@@ -342,25 +331,6 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
     };
   }
 
-  private async fetchSearchPage(
-    query: CatalogQuery,
-    metadata: PageMetadata | undefined,
-  ): Promise<{ items: CatalogItem[]; nextMetadata: PageMetadata | undefined }> {
-    const page = metadata?.page ?? 1;
-    const url = buildCatalogPageUrl({ ...query, page: page > 1 ? String(page) : undefined });
-    const items = parseCatalogPageItems(await fetchPagePayload(url, '"initialItems":['));
-    const firstId = items[0]?.id;
-
-    if (page > 1 && firstId !== undefined && firstId === metadata?.firstId) {
-      return { items: [], nextMetadata: undefined };
-    }
-
-    return {
-      items,
-      nextMetadata: items.length === 36 ? { page: page + 1, firstId } : undefined,
-    };
-  }
-
   private async fetchCatalogPage(
     query: CatalogQuery,
     metadata: PageMetadata | undefined,
@@ -368,9 +338,9 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
     const page = metadata?.page ?? 1;
     const response = await fetchCatalog({ ...query, page: String(page) });
     const items = parseCatalogItems(response.items);
-    const nextMetadata: PageMetadata | undefined = response.hasMore
-      ? { page: page + 1 }
-      : undefined;
+    const nextPage = response.nextPage ?? page + 1;
+    const nextMetadata: PageMetadata | undefined =
+      response.hasMore && items.length > 0 && nextPage > page ? { page: nextPage } : undefined;
     return { items, nextMetadata };
   }
 
