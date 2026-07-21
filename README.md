@@ -20,7 +20,6 @@ Unofficial Paperback extensions built and maintained in this repository. This so
 This is the testing branch. Sources here may change before they are promoted to stable.
 
 - [Add the testing repository to Paperback][test-installation]
-- [Add the stable repository to Paperback][stable-installation]
 
 After installing the repository, refresh it in Paperback to receive source updates.
 
@@ -31,5 +30,4 @@ Report source problems through this repository's [Issues page][issues]. Include 
 These extensions are not affiliated with Paperback or any supported website. All site names and logos belong to their respective owners.
 
 [test-installation]: https://poppingmangosources.github.io/general-extensions-mangago/0.9/test/
-[stable-installation]: https://poppingmangosources.github.io/general-extensions-mangago/0.9/stable/
 [issues]: https://github.com/PoppingMangoSources/general-extensions-mangago/issues
