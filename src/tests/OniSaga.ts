@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import { type TestLogger } from "@paperback/types";
+import { CloudflareError, type TestLogger } from "@paperback/types";
 import { expect } from "chai";
 
 import { OniSaga } from "../OniSaga/main.js";
@@ -51,6 +51,59 @@ export async function runTests(logger: TestLogger) {
         '{"error":"invalid reader token"}',
       ),
     ).to.equal(false);
+  });
+
+  suite.test("concurrent requests share one Cloudflare probe", async () => {
+    const manager = new OniSagaInterceptor("onisaga-cloudflare-probe-test");
+    const firstRequest = { url: "https://onisaga.com/browse", method: "GET", headers: {} };
+    const secondRequest = {
+      url: "https://onisaga.com/top-manga?sort=reads",
+      method: "GET",
+      headers: {},
+    };
+    const thirdRequest = {
+      url: "https://onisaga.com/top-manga?sort=rated",
+      method: "GET",
+      headers: {},
+    };
+    let secondReleased = false;
+    let thirdReleased = false;
+
+    await manager.interceptRequest(firstRequest);
+    const second = manager.interceptRequest(secondRequest).then(() => {
+      secondReleased = true;
+    });
+    const third = manager.interceptRequest(thirdRequest).then(() => {
+      thirdReleased = true;
+    });
+    await Promise.resolve();
+    expect(secondReleased).to.equal(false);
+    expect(thirdReleased).to.equal(false);
+
+    let challenged = false;
+    try {
+      await manager.interceptResponse(
+        firstRequest,
+        {
+          url: firstRequest.url,
+          status: 503,
+          headers: { "cf-mitigated": "challenge", "content-type": "text/html" },
+          cookies: [],
+        },
+        new TextEncoder().encode("<title>Just a moment...</title>").buffer,
+      );
+    } catch (error) {
+      challenged = error instanceof CloudflareError;
+    }
+    expect(challenged).to.equal(true);
+    await Promise.resolve();
+    expect(secondReleased).to.equal(false);
+    expect(thirdReleased).to.equal(false);
+
+    manager.resetAfterCloudflareBypass();
+    await Promise.all([second, third]);
+    expect(secondReleased).to.equal(true);
+    expect(thirdReleased).to.equal(true);
   });
 
   suite.test("reader markup parser preserves sparse page order", async () => {

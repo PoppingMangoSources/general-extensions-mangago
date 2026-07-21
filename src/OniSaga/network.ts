@@ -40,6 +40,11 @@ const RATE_LIMIT_FALLBACK_MS = 2000;
 // much longer block is handled by the separate rolling-budget circuit below.
 const MAX_COOLDOWN_MS = 90_000;
 
+// Discover asks several sections for data at once. Let one request verify the
+// current clearance before the rest of that burst leave the app; otherwise one
+// expired session produces a separate Paperback bypass prompt per section.
+const CLOUDFLARE_PROBE_FRESH_MS = 5000;
+
 // A signed CDN URL is valid ~10 min; reuse a cached one for up to 9 (matching
 // the site reader's _cdnUrls window) so scroll-back and re-opens spend no
 // page-API call, leaving a safe margin before the signature expires.
@@ -191,6 +196,9 @@ const rememberLongPageBlock = (now: number): number => {
 };
 
 export class OniSagaInterceptor extends PaperbackInterceptor {
+  private cloudflareProbe?: { promise: Promise<void>; release: () => void };
+  private cloudflareVerifiedAt = 0;
+
   // Per-chapter reader sessions (chapterId -> token + reader-page referer) set
   // by getChapterDetails; the page API wants both, like the site's own reader.
   private readerSessions = new Map<
@@ -238,6 +246,7 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
   private pageResolveNetworkRequests = new Set<string>();
 
   resetAfterCloudflareBypass(): void {
+    this.completeCloudflareProbe();
     this.refreshInFlight.clear();
     this.pageResolveInFlight.clear();
     this.pageResolveNetworkRequests.clear();
@@ -245,6 +254,31 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
       session.refreshedAt = undefined;
       session.refreshOk = undefined;
     }
+  }
+
+  private async waitForCloudflareProbe(request: Request): Promise<void> {
+    if (
+      !request.url.startsWith(DOMAIN) ||
+      PAGE_API_REGEX.test(request.url) ||
+      getHeaderValue(request.headers, PAGE_RESOLVE_HEADER) === "1" ||
+      Date.now() - this.cloudflareVerifiedAt < CLOUDFLARE_PROBE_FRESH_MS
+    ) {
+      return;
+    }
+
+    if (this.cloudflareProbe) return this.cloudflareProbe.promise;
+
+    let release = (): void => {};
+    const promise = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.cloudflareProbe = { promise, release };
+  }
+
+  private completeCloudflareProbe(): void {
+    this.cloudflareVerifiedAt = Date.now();
+    this.cloudflareProbe?.release();
+    this.cloudflareProbe = undefined;
   }
 
   setReaderToken(chapterId: string, token: string, referer: string): void {
@@ -469,6 +503,8 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
   }
 
   override async interceptRequest(request: Request): Promise<Request> {
+    await this.waitForCloudflareProbe(request);
+
     // Keep a caller-provided Referer/Origin (Livewire calls send page-specific
     // ones); normalize to lower-case so the map never carries both casings.
     // Origin is only sent when a caller set it (browsers omit it on plain GETs).
@@ -583,6 +619,8 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
         headers: resolutionHeaders,
       });
     }
+
+    if (request.url.startsWith(DOMAIN)) this.completeCloudflareProbe();
 
     // Browse/search/details endpoints can also 429 — onisaga rate-limits deep
     // search pagination (the heaviest, multi-MB responses). Unlike the reader
