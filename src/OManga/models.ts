@@ -7,7 +7,7 @@ export const DEFAULT_DOMAIN = "https://omanga.to";
 export const FEATURED_HERO_LIMIT = 8;
 
 export const SECTION_POPULAR = "popular";
-export const SECTION_RANDOM = "random";
+export const SECTION_TREND = "trend";
 export const SECTION_UPDATES = "updates";
 export const SECTION_TOP_SERIES = "top_series";
 export const SECTION_NEW_SEASON = "new_season";
@@ -54,6 +54,7 @@ const OFFICIAL_TEAMS = new Set([
   "pocketcomics",
   "shonenjump",
   "vizmanga",
+  "vizmedia",
   "yenpress",
   "webcomic",
   "webcomics",

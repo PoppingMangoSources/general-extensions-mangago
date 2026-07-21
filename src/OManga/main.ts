@@ -38,7 +38,7 @@ import {
   SECTION_MOST_LIKED,
   SECTION_NEW_SEASON,
   SECTION_POPULAR,
-  SECTION_RANDOM,
+  SECTION_TREND,
   SECTION_TOP_SERIES,
   SECTION_UPDATES,
   SORT_OPTIONS,
@@ -59,7 +59,6 @@ import {
   parseCatalogItems,
   parseChapterDetails,
   parseChapters,
-  parseHomeCarousel,
   parseHomeLinkSection,
   parseHomeSection,
   parseHomeTopSeries,
@@ -108,7 +107,11 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
       { id: SECTION_POPULAR, title: "Popular", type: DiscoverSectionType.featured },
-      { id: SECTION_UPDATES, title: "Updates", type: DiscoverSectionType.chapterUpdates },
+      {
+        id: SECTION_UPDATES,
+        title: "Latest Updates",
+        type: DiscoverSectionType.chapterUpdates,
+      },
       { id: SECTION_TOP_SERIES, title: "Top Series", type: DiscoverSectionType.genres },
       { id: SECTION_NEW_SEASON, title: "New Season", type: DiscoverSectionType.simpleCarousel },
       { id: SECTION_MOST_LIKED, title: "Most Liked", type: DiscoverSectionType.simpleCarousel },
@@ -117,7 +120,7 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
         title: "Best Ongoings",
         type: DiscoverSectionType.prominentCarousel,
       },
-      { id: SECTION_RANDOM, title: "Random Picks", type: DiscoverSectionType.simpleCarousel },
+      { id: SECTION_TREND, title: "In the Trend", type: DiscoverSectionType.simpleCarousel },
       { id: SECTION_GENRES, title: "Genres", type: DiscoverSectionType.genres },
     ];
   }
@@ -161,14 +164,6 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
       return { items: parseHomeUpdates(await this.getHomepage(true)), metadata: undefined };
     }
 
-    if (section.id === SECTION_RANDOM) {
-      const items = parseHomeCarousel(await this.getHomepage());
-      return {
-        items: items.filter((item) => item.poster.length > 0).map(toHomeCarouselItem),
-        metadata: undefined,
-      };
-    }
-
     if (section.id === SECTION_POPULAR) {
       let items = parseHomeSection(await this.getHomepage(), "Popular This Week");
       if (items.length === 0) {
@@ -189,6 +184,29 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
 
     if (section.id === SECTION_NEW_SEASON) {
       const cards = parseHomeLinkSection(await this.getHomepage(), "New Season", '"hl-col-items"');
+      if (cards.length > 0) {
+        return {
+          items: cards.map(
+            (card): DiscoverSectionItem => ({
+              type: "simpleCarouselItem",
+              mangaId: card.slug,
+              title: card.title,
+              imageUrl: card.cover,
+              subtitle: [card.type, card.year].filter(Boolean).join(" "),
+              metadata: undefined,
+            }),
+          ),
+          metadata: undefined,
+        };
+      }
+    }
+
+    if (section.id === SECTION_TREND) {
+      const cards = parseHomeLinkSection(
+        await this.getHomepage(),
+        "In the Trend",
+        '"hl-col-items"',
+      );
       if (cards.length > 0) {
         return {
           items: cards.map(
@@ -232,9 +250,11 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
             sort:
               section.id === SECTION_NEW_SEASON
                 ? "by_date"
-                : section.id === SECTION_MOST_LIKED
-                  ? "votes"
-                  : "real_views",
+                : section.id === SECTION_TREND
+                  ? "by_views"
+                  : section.id === SECTION_MOST_LIKED
+                    ? "votes"
+                    : "real_views",
             order: "desc",
           };
 

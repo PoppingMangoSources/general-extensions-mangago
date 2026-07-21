@@ -130,11 +130,6 @@ export const toSimpleCarouselItem = (item: CatalogItem): DiscoverSectionItem => 
   };
 };
 
-export const parseHomeCarousel = (html: string): CatalogItem[] =>
-  filterValidCatalogItems(
-    parseJsonAt(decodeFlightPayload(html), '"items":[{"id"', '"items":'.length),
-  );
-
 export const parseHomeSection = (html: string, title: string): CatalogItem[] => {
   const payload = decodeFlightPayload(html);
   const heading = payload.indexOf(`{"title":"${title}","moreHref"`);
