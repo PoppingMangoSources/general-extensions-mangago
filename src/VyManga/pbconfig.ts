@@ -6,8 +6,8 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "VyManga",
   description: "Extension that pulls content from vymanga.com.",
-  version: "1.0.0-alpha.7",
-  icon: "icons.png",
+  version: "1.0.0-alpha.8",
+  icon: "icon.png",
   language: "en",
   contentRating: ContentRating.MATURE,
   capabilities: [

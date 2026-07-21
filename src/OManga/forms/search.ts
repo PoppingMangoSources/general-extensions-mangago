@@ -35,8 +35,6 @@ const YEAR_TAGS = toTags(YEAR_OPTIONS);
 
 type TriState = Record<string, "included" | "excluded">;
 
-// Metadata keeps include/exclude as two id arrays (what discover chips pass
-// and the catalog query wants); the tri-state rows edit them as one record.
 const toTriState = (included?: string[], excluded?: string[]): TriState => {
   const record: TriState = {};
   for (const id of included ?? []) record[id] = "included";
@@ -47,9 +45,6 @@ const toTriState = (included?: string[], excluded?: string[]): TriState => {
 const pickState = (record: TriState, state: "included" | "excluded"): string[] =>
   Object.keys(record).filter((id) => record[id] === state);
 
-// The site's filter drawer, one to one: Genres and Type as tri-state rows
-// (tap once to require, again to exclude), Status, Age Rating, minimum
-// Rating, Release Year, a chapter-count range, and a free-text tag.
 export class OMangaAdvancedSearchForm extends AdvancedSearchForm {
   private genres: TriState;
   private genreStrict: boolean;
@@ -120,7 +115,7 @@ export class OMangaAdvancedSearchForm extends AdvancedSearchForm {
           title: "Status",
           layout: "flow",
           value: this.statuses,
-          options: STATUS_TAGS,
+          items: STATUS_TAGS,
           minItemCount: 0,
           maxItemCount: STATUS_TAGS.length,
           onValueChange: Application.Selector(
@@ -134,7 +129,7 @@ export class OMangaAdvancedSearchForm extends AdvancedSearchForm {
           title: "Age Rating",
           layout: "flow",
           value: this.ageRatings,
-          options: AGE_RATING_TAGS,
+          items: AGE_RATING_TAGS,
           minItemCount: 0,
           maxItemCount: AGE_RATING_TAGS.length,
           onValueChange: Application.Selector(
@@ -148,7 +143,7 @@ export class OMangaAdvancedSearchForm extends AdvancedSearchForm {
           title: "Rating",
           layout: "flow",
           value: this.minRating ? [this.minRating] : [],
-          options: MIN_RATING_TAGS,
+          items: MIN_RATING_TAGS,
           minItemCount: 0,
           maxItemCount: 1,
           onValueChange: Application.Selector(
@@ -162,7 +157,7 @@ export class OMangaAdvancedSearchForm extends AdvancedSearchForm {
           title: "Release Year",
           layout: "flow",
           value: this.years,
-          options: YEAR_TAGS,
+          items: YEAR_TAGS,
           minItemCount: 0,
           maxItemCount: YEAR_TAGS.length,
           onValueChange: Application.Selector(

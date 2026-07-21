@@ -11,9 +11,6 @@ import * as cheerio from "cheerio";
 
 const IMAGE_EXTENSION_REGEX = /\.(jpe?g|png|webp|gif|avif|bmp|svg)(\?|#|$)/i;
 
-// vymanga.com serves a different (mobile) page layout to the device's default
-// iOS user agent, where the chapter list points at stray nav links. A desktop
-// user agent returns the layout the parsers expect.
 const DESKTOP_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
@@ -28,8 +25,6 @@ export class VyMangaInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
     const baseUrl = this.getBaseUrl();
 
-    // Image GETs only need referer + user agent; dropping origin and
-    // accept-language keeps the per-page request overhead minimal.
     if (IMAGE_EXTENSION_REGEX.test(request.url)) {
       return {
         ...request,
@@ -61,7 +56,12 @@ export class VyMangaInterceptor extends PaperbackInterceptor {
     response: Response,
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
-    if (response.headers?.["cf-mitigated"] === "challenge") {
+    const contentType = response.headers?.["content-type"] ?? "";
+    const body = contentType.includes("text/html") ? Application.arrayBufferToUTF8String(data) : "";
+    if (
+      response.headers?.["cf-mitigated"] === "challenge" ||
+      /(?:Just a moment|cf-chl-|_cf_chl_opt)/i.test(body)
+    ) {
       throw new CloudflareError({
         url: request.url,
         method: request.method ?? "GET",
@@ -72,7 +72,7 @@ export class VyMangaInterceptor extends PaperbackInterceptor {
   }
 }
 
-export async function fetchCheerio(request: Request): Promise<cheerio.CheerioAPI> {
+export const fetchCheerio = async (request: Request): Promise<cheerio.CheerioAPI> => {
   const [response, data] = await Application.scheduleRequest(request);
   if (response.status === 404) {
     throw new Error(`Content not found: ${request.url}`);
@@ -80,7 +80,11 @@ export async function fetchCheerio(request: Request): Promise<cheerio.CheerioAPI
   if (response.status !== 200) {
     throw new Error(`Request failed with status ${response.status}: ${request.url}`);
   }
-  return cheerio.load(Application.arrayBufferToUTF8String(data), {
+  const body = Application.arrayBufferToUTF8String(data);
+  if (/<title>Site Unavailable<\/title>|Unable to access this site/i.test(body)) {
+    throw new Error("VyManga is currently unavailable from this network.");
+  }
+  return cheerio.load(body, {
     xml: { xmlMode: false, decodeEntities: false },
   });
-}
+};

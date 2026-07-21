@@ -28,10 +28,18 @@ import {
   CDN_URL,
   CHAPTER_PAGE_SIZE,
   LATEST_PAGE_SIZE,
+  MAX_CHAPTER_PAGES,
+  MAX_FILTER_BATCHES,
   POPULAR_FETCH_SIZE,
   POPULAR_RANGE_OPTIONS,
   SERIES_PAGE_SIZE,
+  SECTION_ALL_SERIES,
+  SECTION_GENRES,
+  SECTION_LATEST,
+  SECTION_POPULAR,
+  SECTION_POPULAR_RANGES,
   TAG_OPTIONS,
+  TOP_MANGA_SIZE,
   type ChapterDto,
   type Metadata,
   type PageListDto,
@@ -41,44 +49,24 @@ import {
 } from "./models";
 import { fetchApi, ScansGGInterceptor, type QueryValue } from "./network";
 import {
+  getContentFilters,
+  getSelectedIds,
+  hasImage,
+  isGenreVisible,
   numericSeriesId,
+  parseChapterId,
   parseChapterList,
   parseChapterPages,
   parseMangaDetails,
   parseReaderPagePaths,
+  seriesMatchesFilters,
   toFeaturedItem,
   toLatestItem,
   toSearchResultItem,
   toSimpleItem,
 } from "./parsers";
 import type ScansGGConfig from "./pbconfig";
-import {
-  getContentFilters,
-  getSelectedIds,
-  isGenreVisible,
-  seriesMatchesFilters,
-} from "./utils/filters";
 import { pageListViaWebView } from "./utils/webView";
-
-const SECTION_POPULAR = "popular";
-const SECTION_POPULAR_RANGES = "popular_ranges";
-const SECTION_LATEST = "latest";
-const SECTION_ALL_SERIES = "all_series";
-const SECTION_GENRES = "genres";
-
-// The website's Most Popular carousel shows seven entries. Fetching extra
-// candidates first lets local content filters still fill all seven slots.
-const TOP_MANGA_SIZE = 7;
-// Guards the chapter-pagination loop against a misbehaving `has_more` flag.
-const MAX_CHAPTER_PAGES = 200;
-// Avoid an unbounded scan when a combination of local exclusions is very narrow.
-const MAX_FILTER_BATCHES = 10;
-
-// Paperback rejects an empty image URL and fails the whole carousel, so drop
-// any card that ended up without a cover rather than break the section.
-function hasImage(item: DiscoverSectionItem): boolean {
-  return "imageUrl" in item && item.imageUrl.length > 0;
-}
 
 export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
   globalRateLimiter = new BasicRateLimiter("rateLimiter", {
@@ -115,10 +103,6 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
     }
   }
 
-  // ----------------------------------------------------------------
-  // Discover
-  // ----------------------------------------------------------------
-
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
       { id: SECTION_POPULAR, title: "Top Manga", type: DiscoverSectionType.featured },
@@ -133,9 +117,6 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
     ];
   }
 
-  // The homepage uses `/series` for popular/all-series and `/chapters` for its
-  // update feed. Keep those request shapes aligned with the website so group
-  // and timeframe metadata stay available.
   async getDiscoverSectionItems(
     section: DiscoverSection,
     metadata: Metadata | undefined,
@@ -211,10 +192,6 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
     return { items: page.data.map(toSimpleItem).filter(hasImage), metadata: page.metadata };
   }
 
-  // ----------------------------------------------------------------
-  // Search
-  // ----------------------------------------------------------------
-
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
     return new ScansGGAdvancedSearchForm(query);
   }
@@ -224,7 +201,6 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
     metadata: Metadata | undefined,
     _sortingOption?: SortingOption,
   ): Promise<PagedResults<SearchResultItem>> {
-    // Let readers paste a series link (or "id:123") straight into search.
     const pasted = await this.resolveDirectQuery((query.title ?? "").trim());
     if (pasted) return pasted;
 
@@ -249,8 +225,6 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
         q: term.length > 0 ? term : undefined,
         q_type: includedTypes.length > 0 ? includedTypes : undefined,
         q_status: includedStatuses.length > 0 ? includedStatuses : undefined,
-        // One included tag is safe to send to the API. Multiple tags stay
-        // local so the selected AND/OR mode is exact regardless of API defaults.
         q_tags: includedTags.length === 1 ? includedTags : undefined,
       },
       (series) => Boolean(series.cover) && seriesMatchesFilters(series, meta, contentFilters),
@@ -324,9 +298,6 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
       .slice(0, SERIES_PAGE_SIZE);
   }
 
-  // Popular responses include view totals but omit their latest chapter. Fetch
-  // one chapter for each of the seven hero cards so Paperback can show the
-  // primary and collaborating scanlation groups.
   private async enrichPopularChapters(seriesList: SeriesDto[]): Promise<SeriesDto[]> {
     return Promise.all(
       seriesList.map(async (series) => {
@@ -393,7 +364,6 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
     return { data: matches, metadata: { page, index } };
   }
 
-  // Resolve a pasted `scans.gg/series/<id>` URL (or `id:<id>`) to a single card.
   private async resolveDirectQuery(
     query: string,
   ): Promise<PagedResults<SearchResultItem> | undefined> {
@@ -431,10 +401,6 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
     }
   }
 
-  // ----------------------------------------------------------------
-  // Manga details, chapters & pages
-  // ----------------------------------------------------------------
-
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
     const response = await fetchApi<SeriesDto>("series", {
       id: mangaId,
@@ -442,7 +408,7 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
       sources: true,
     });
     if (!response.data) throw new Error(`No series data returned for id ${mangaId}.`);
-    return parseMangaDetails(response.data, mangaId);
+    return parseMangaDetails(response.data);
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
@@ -451,7 +417,6 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
     let hasMore = true;
 
     while (hasMore && page <= MAX_CHAPTER_PAGES) {
-      // The chapters endpoint only accepts the bare numeric series id.
       const response = await fetchApi<ChapterDto[]>("chapters", {
         series_id: numericSeriesId(sourceManga.mangaId),
         limit: CHAPTER_PAGE_SIZE,
@@ -464,17 +429,11 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
       page++;
     }
 
-    return parseChapterList(chapters, sourceManga, await this.resolveSlugId(sourceManga));
+    return parseChapterList(chapters, sourceManga, numericSeriesId(sourceManga.mangaId));
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    const storedSeriesId = chapter.additionalInfo?.seriesId ?? chapter.sourceManga.mangaId;
-    const groupId = chapter.additionalInfo?.groupId ?? "0";
-    // The reader endpoints hang on bare numeric ids; upgrade old stored ids
-    // to the slugged form before touching them.
-    const seriesId = storedSeriesId.includes("-")
-      ? storedSeriesId
-      : await this.resolveSlugId(chapter.sourceManga);
+    const { seriesId, chapterId, groupId } = parseChapterId(chapter.chapterId);
 
     const toDetails = (pages: string[]): ChapterDetails => ({
       id: chapter.chapterId,
@@ -482,33 +441,21 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
       pages,
     });
 
-    // The chapter backend can take close to a minute on chapters it hasn't
-    // cached yet, and the transport cuts off at 60s. Run the JSON endpoint
-    // and the reader page in parallel and take whichever yields pages first.
-    // A group-less request (the site's own primary form, letting the server
-    // pick the default release) joins the race in case the stored group's
-    // data is what the backend is choking on.
     const attempts = [
-      this.pagesViaApi(seriesId, chapter, groupId),
-      this.pagesViaReaderHtml(seriesId, chapter, groupId),
+      this.pagesViaApi(seriesId, chapterId, groupId),
+      this.pagesViaReaderHtml(seriesId, chapterId, groupId),
     ];
-    if (groupId !== "0") attempts.push(this.pagesViaApi(seriesId, chapter, "0"));
+    if (groupId !== "0") attempts.push(this.pagesViaApi(seriesId, chapterId, "0"));
     try {
       return toDetails(await Promise.any(attempts));
-    } catch {
-      // A timed-out round still leaves the server cache warm, so one more
-      // API attempt tends to answer quickly.
-    }
+    } catch {}
 
     try {
-      return toDetails(await this.pagesViaApi(seriesId, chapter, groupId));
-    } catch {
-      // Last resort below.
-    }
+      return toDetails(await this.pagesViaApi(seriesId, chapterId, groupId));
+    } catch {}
 
-    // Final fallback: render the reader in a WebView and scrape the images.
     const pages = await pageListViaWebView(
-      this.readerUrl(seriesId, chapter.chapterId, groupId),
+      this.readerUrl(seriesId, chapterId, groupId),
       this.cookieStorageInterceptor,
     );
     if (pages.length === 0) {
@@ -517,7 +464,6 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
     return toDetails(pages);
   }
 
-  // The site's canonical reader URL carries the release group as `?group=`.
   private readerUrl(seriesId: string, chapterId: string, groupId: string): string {
     const groupSuffix = groupId !== "0" ? `?group=${groupId}` : "";
     return `${getDomain()}/series/${seriesId}/${chapterId}${groupSuffix}`;
@@ -525,54 +471,36 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
 
   private async pagesViaApi(
     seriesId: string,
-    chapter: Chapter,
+    chapterId: string,
     groupId: string,
   ): Promise<string[]> {
     const query: Record<string, string> = {
       series_id: seriesId,
-      chapter_id: chapter.chapterId,
+      chapter_id: chapterId,
     };
     if (groupId !== "0") query.group_id = groupId;
     const response = await fetchApi<PageListDto>("chapter-navigation", query);
     if (!response.data) {
-      throw new Error(`No page data returned for chapter ${chapter.chapterId}.`);
+      throw new Error(`No page data returned for chapter ${chapterId}.`);
     }
-    return parseChapterPages(response.data, chapter);
+    return parseChapterPages(response.data, chapterId);
   }
 
-  // The reader page's server-rendered HTML embeds the same page list in its
-  // Nuxt payload, so it doubles as a second independent source of pages.
   private async pagesViaReaderHtml(
     seriesId: string,
-    chapter: Chapter,
+    chapterId: string,
     groupId: string,
   ): Promise<string[]> {
-    const url = this.readerUrl(seriesId, chapter.chapterId, groupId);
+    const url = this.readerUrl(seriesId, chapterId, groupId);
     const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
     if (response.status !== 200) {
       throw new Error(`Reader page failed with status ${response.status}.`);
     }
     const paths = parseReaderPagePaths(Application.arrayBufferToUTF8String(buffer));
     if (paths.length === 0) {
-      throw new Error(`No pages found in the reader payload for ${chapter.chapterId}.`);
+      throw new Error(`No pages found in the reader payload for ${chapterId}.`);
     }
-    return paths.map((path) => `${CDN_URL}/pages/${chapter.chapterId}/${path}`);
-  }
-
-  // Canonical `{id}-{slug}` series id: from the manga id itself, the stored
-  // details, or (for entries saved by older builds) a fresh details fetch.
-  private async resolveSlugId(sourceManga: SourceManga): Promise<string> {
-    if (sourceManga.mangaId.includes("-")) return sourceManga.mangaId;
-    const stored = sourceManga.mangaInfo?.additionalInfo?.slugId;
-    if (typeof stored === "string" && stored.includes("-")) return stored;
-    try {
-      const details = await this.getMangaDetails(sourceManga.mangaId);
-      const slugId = details.mangaInfo.additionalInfo?.slugId;
-      if (typeof slugId === "string" && slugId.length > 0) return slugId;
-    } catch {
-      // Fall back to whatever id we already have.
-    }
-    return sourceManga.mangaId;
+    return paths.map((path) => `${CDN_URL}/pages/${chapterId}/${path}`);
   }
 }
 

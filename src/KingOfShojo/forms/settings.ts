@@ -17,40 +17,28 @@ const SHOW_ADULT_KEY = "kingofshojo.showAdultContent";
 const IMAGE_MODE_KEY = "kingofshojo.imageMode";
 
 const IMAGE_MODE_DEFAULT = "saver";
-// "fast" is the legacy persisted id for what is now "quality".
 const IMAGE_MODES = new Set(["saver", "quality", "fast", "original"]);
 
-// The CDN serves each reader page as a ~1.3 MB full-resolution JPEG, which is
-// slow and heavy on mobile data. Default to routing pages through an image proxy
-// (wsrv.nl) resized + recompressed; "original" opts out to direct full-size
-// loading.
-export function getImageMode(): string {
+export const getImageMode = (): string => {
   const value = Application.getState(IMAGE_MODE_KEY);
   if (typeof value !== "string" || !IMAGE_MODES.has(value)) return IMAGE_MODE_DEFAULT;
   return value === "fast" ? "quality" : value;
-}
+};
 
-// Off by default: adult-tagged titles are hidden from search/browse and the
-// featured hero until the reader opts in.
-export function getShowAdultContent(): boolean {
+export const getShowAdultContent = (): boolean => {
   return Application.getState(SHOW_ADULT_KEY) === true;
-}
+};
 
-// These sites rotate domains often; let users point at the new one without
-// waiting for an extension update.
-export function getBaseUrlOverride(): string | undefined {
+export const getBaseUrlOverride = (): string | undefined => {
   const value = Application.getState(BASE_URL_KEY);
   if (typeof value === "string") {
     const trimmed = value.trim().replace(/\/+$/, "");
     if (trimmed.length > 0) return trimmed;
   }
   return undefined;
-}
+};
 
-// Normalise before persisting: a scheme-less value would make every
-// `new URL(baseUrl)` in the extension throw and brick the source.
-// Returns the stored value, or undefined when the input was unusable.
-function setBaseUrlOverride(value: string): string | undefined {
+const setBaseUrlOverride = (value: string): string | undefined => {
   let trimmed = value.trim().replace(/\/+$/, "");
   if (trimmed.length === 0) {
     Application.setState("", BASE_URL_KEY);
@@ -64,7 +52,7 @@ function setBaseUrlOverride(value: string): string | undefined {
   }
   Application.setState(trimmed, BASE_URL_KEY);
   return trimmed;
-}
+};
 
 export class KingOfShojoSettingsForm extends Form {
   private override: string;
@@ -76,10 +64,8 @@ export class KingOfShojoSettingsForm extends Form {
 
   async updateOverride(value: string): Promise<void> {
     const stored = setBaseUrlOverride(value);
-    // Keep the previous value when the input couldn't be parsed as a URL.
     if (stored !== undefined) {
       this.override = stored;
-      // Cached discover content belongs to the old domain.
       Application.invalidateDiscoverSections();
     }
     this.reloadForm();

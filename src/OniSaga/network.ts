@@ -8,6 +8,7 @@ import {
   type Response,
 } from "@paperback/types";
 
+import { getPageDelaySeconds } from "./forms";
 import {
   DOMAIN,
   PAGE_BUDGET_BLOCKED_UNTIL_KEY,
@@ -15,7 +16,6 @@ import {
   PAGE_TOKEN_BUCKET_KEY,
   type PageApiResponse,
 } from "./models";
-import { getPageDelaySeconds } from "./utils/helpers";
 
 // Matches a reader page-API url and captures the chapter id and page order,
 // e.g. https://onisaga.com/api/chapter/3718181/page/0 -> ["3718181", "0"].
@@ -85,7 +85,7 @@ const pageCooldown = { until: 0 };
 // Paperback currently reports a bare iOS WebView UA. Cloudflare can treat that
 // differently from the full Safari UA used by its challenge WebView, so complete
 // only the missing browser tokens while preserving the device/OS fingerprint.
-export function completeMobileSafariUserAgent(userAgent: string): string {
+export const completeMobileSafariUserAgent = (userAgent: string): string => {
   if (!/\b(?:iPhone|iPad|iPod)\b/.test(userAgent) || /\bSafari\//.test(userAgent)) {
     return userAgent;
   }
@@ -95,12 +95,12 @@ export function completeMobileSafariUserAgent(userAgent: string): string {
     ? userAgent
     : userAgent.replace(/\sMobile\//, ` Version/${version} Mobile/`);
   return /\bSafari\//.test(withVersion) ? withVersion : `${withVersion} Safari/604.1`;
-}
+};
 
-function withHeaders(
+const withHeaders = (
   headers: Record<string, string> | undefined,
   overrides: Record<string, string | undefined>,
-): Record<string, string> {
+): Record<string, string> => {
   const result: Record<string, string> = {};
   const replaced = new Set(Object.keys(overrides).map((key) => key.toLowerCase()));
   for (const [key, value] of Object.entries(headers ?? {})) {
@@ -110,40 +110,40 @@ function withHeaders(
     if (value !== undefined) result[key] = value;
   }
   return result;
-}
+};
 
-async function getOniSagaUserAgent(): Promise<string> {
+const getOniSagaUserAgent = async (): Promise<string> => {
   return completeMobileSafariUserAgent(await Application.getDefaultUserAgent());
-}
+};
 
 // Response headers can arrive in any casing; read them case-insensitively.
-export function getHeaderValue(
+export const getHeaderValue = (
   headers: Record<string, string> | undefined,
   name: string,
-): string | undefined {
+): string | undefined => {
   const wanted = name.toLowerCase();
   for (const [key, value] of Object.entries(headers ?? {})) {
     if (key.toLowerCase() === wanted) return value;
   }
   return undefined;
-}
+};
 
 // Delay before retrying a rate-limited request, honouring Retry-After.
-export function getRetryDelayMs(headers: Record<string, string> | undefined): number {
+export const getRetryDelayMs = (headers: Record<string, string> | undefined): number => {
   const retryAfter = Number(getHeaderValue(headers, "retry-after"));
   return Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : RATE_LIMIT_FALLBACK_MS;
-}
+};
 
 // Cloudflare normally labels a managed challenge with `cf-mitigated`, as in
 // the captured reader 403. Keep a narrow HTML fallback for proxies/runtimes that
 // omit that header, without mistaking onisaga's ordinary JSON token 403s for a
 // challenge just because the site itself is proxied through Cloudflare.
-export function isCloudflareChallengeResponse(
+export const isCloudflareChallengeResponse = (
   url: string,
   status: number,
   headers: Record<string, string> | undefined,
   bodyText = "",
-): boolean {
+): boolean => {
   if (!url.startsWith(DOMAIN)) return false;
   if (getHeaderValue(headers, "cf-mitigated")?.toLowerCase() === "challenge") return true;
   if (status !== 403) return false;
@@ -151,11 +151,11 @@ export function isCloudflareChallengeResponse(
   const contentType = getHeaderValue(headers, "content-type")?.toLowerCase() ?? "";
   if (!contentType.includes("text/html")) return false;
   return /just a moment|challenge-platform|cf-browser-verification|_cf_chl_opt/i.test(bodyText);
-}
+};
 
 // Sanitize persisted history before it affects pacing. Sorting also makes the
 // result stable if a previous build wrote starts while the device clock moved.
-export function normalisePageRequestStarts(value: unknown, now: number): number[] {
+export const normalisePageRequestStarts = (value: unknown, now: number): number[] => {
   if (!Array.isArray(value)) return [];
   const cutoff = now - PAGE_BUDGET_WINDOW_MS;
   return value
@@ -168,18 +168,18 @@ export function normalisePageRequestStarts(value: unknown, now: number): number[
     )
     .sort((a, b) => a - b)
     .slice(-PAGE_BUDGET_MAX_REQUESTS);
-}
+};
 
 // Earliest safe start under the persisted rolling budget. Returning `now` means
 // the request may proceed immediately; at capacity, the oldest charged lookup
 // must age out first.
-export function pageBudgetReadyAt(starts: number[], now: number): number {
+export const pageBudgetReadyAt = (starts: number[], now: number): number => {
   const recent = normalisePageRequestStarts(starts, now);
   if (recent.length < PAGE_BUDGET_MAX_REQUESTS) return now;
   return (recent[0] ?? now) + PAGE_BUDGET_WINDOW_MS;
-}
+};
 
-function refillPageTokenBucket(state: PageTokenBucketState, now: number): PageTokenBucketState {
+const refillPageTokenBucket = (state: PageTokenBucketState, now: number): PageTokenBucketState => {
   if (now <= state.updatedAt) return state;
   return {
     tokens: Math.min(
@@ -188,9 +188,9 @@ function refillPageTokenBucket(state: PageTokenBucketState, now: number): PageTo
     ),
     updatedAt: now,
   };
-}
+};
 
-function isPageTokenBucketState(value: unknown, now: number): value is PageTokenBucketState {
+const isPageTokenBucketState = (value: unknown, now: number): value is PageTokenBucketState => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const candidate = value as Partial<PageTokenBucketState>;
   return (
@@ -201,17 +201,17 @@ function isPageTokenBucketState(value: unknown, now: number): value is PageToken
     Number.isFinite(candidate.updatedAt) &&
     candidate.updatedAt <= now
   );
-}
+};
 
 // Restore the persisted bucket and reconcile any history entries written after
 // it (for example if the app stopped between the two state writes). On first
 // alpha.17 launch, replay the retained alpha.16 history from a full bucket so a
 // busy existing install does not receive a fresh 30-request burst.
-export function normalisePageTokenBucket(
+export const normalisePageTokenBucket = (
   value: unknown,
   starts: number[],
   now: number,
-): PageTokenBucketState {
+): PageTokenBucketState => {
   const recent = normalisePageRequestStarts(starts, now);
   const persisted = isPageTokenBucketState(value, now);
   let state: PageTokenBucketState = persisted
@@ -233,43 +233,46 @@ export function normalisePageTokenBucket(
   }
 
   return refillPageTokenBucket(state, now);
-}
+};
 
-export function pageTokenReadyAt(state: PageTokenBucketState, now: number): number {
+export const pageTokenReadyAt = (state: PageTokenBucketState, now: number): number => {
   const refilled = refillPageTokenBucket(state, now);
   if (refilled.tokens >= 1) return now;
   return now + (1 - refilled.tokens) * PAGE_TOKEN_REFILL_INTERVAL_MS;
-}
+};
 
-export function consumePageToken(state: PageTokenBucketState, now: number): PageTokenBucketState {
+export const consumePageToken = (
+  state: PageTokenBucketState,
+  now: number,
+): PageTokenBucketState => {
   const refilled = refillPageTokenBucket(state, now);
   return { tokens: Math.max(0, refilled.tokens - 1), updatedAt: now };
-}
+};
 
-export function formatPageSafetyPause(waitMs: number): string {
+export const formatPageSafetyPause = (waitMs: number): string => {
   const seconds = Math.max(1, Math.ceil(waitMs / 1000));
   const duration =
     seconds < 90
       ? `${seconds} second${seconds === 1 ? "" : "s"}`
       : `${Math.ceil(seconds / 60)} minutes`;
   return `OniSaga safety pause — retry in about ${duration}. This prevents the site's hour-long page lockout.`;
-}
+};
 
-function readBlockedUntil(now: number): number {
+const readBlockedUntil = (now: number): number => {
   const value = Number(Application.getState(PAGE_BUDGET_BLOCKED_UNTIL_KEY) ?? 0);
   if (!Number.isFinite(value) || value <= now) {
     if (value !== 0) Application.setState(undefined, PAGE_BUDGET_BLOCKED_UNTIL_KEY);
     return 0;
   }
   return value;
-}
+};
 
-function rememberLongPageBlock(now: number): number {
+const rememberLongPageBlock = (now: number): number => {
   const until = now + PAGE_BUDGET_WINDOW_MS;
   pageCooldown.until = Math.max(pageCooldown.until, until);
   Application.setState(until, PAGE_BUDGET_BLOCKED_UNTIL_KEY);
   return until;
-}
+};
 
 export class OniSagaInterceptor extends PaperbackInterceptor {
   // Per-chapter reader sessions (chapterId -> token + reader-page referer) set

@@ -27,10 +27,20 @@ import { OMangaSettingsForm } from "./forms/settings";
 import {
   AGE_RATING_OPTIONS,
   type CatalogItem,
+  type CatalogQuery,
+  FEATURED_HERO_LIMIT,
   GENRE_OPTIONS,
   getDomain,
   type PageMetadata,
   resolveOptionValues,
+  SECTION_BEST_ONGOING,
+  SECTION_GENRES,
+  SECTION_MOST_LIKED,
+  SECTION_NEW_SEASON,
+  SECTION_POPULAR,
+  SECTION_RANDOM,
+  SECTION_TOP_SERIES,
+  SECTION_UPDATES,
   SORT_OPTIONS,
   TOP_SERIES_CHIPS,
   TYPE_OPTIONS,
@@ -38,6 +48,7 @@ import {
 } from "./models";
 import {
   buildSeriesNavigationHeaders,
+  fetchCatalog,
   fetchFlightPayload,
   fetchHtmlPage,
   fetchPagePayload,
@@ -59,32 +70,6 @@ import {
   toSimpleCarouselItem,
 } from "./parsers";
 import type OMangaConfig from "./pbconfig";
-
-const FEATURED_HERO_LIMIT = 8;
-
-const SECTION_POPULAR = "popular";
-const SECTION_RANDOM = "random";
-const SECTION_UPDATES = "updates";
-const SECTION_TOP_SERIES = "top_series";
-const SECTION_NEW_SEASON = "new_season";
-const SECTION_MOST_LIKED = "most_liked";
-const SECTION_BEST_ONGOING = "best_ongoing";
-const SECTION_GENRES = "genres";
-
-/** Catalog query values; repeated keys become repeated parameters. */
-type CatalogQuery = Record<string, string | string[] | undefined>;
-
-const buildCatalogUrl = (query: CatalogQuery): string => {
-  const parts: string[] = [];
-  for (const [key, value] of Object.entries(query)) {
-    if (value === undefined) continue;
-    for (const single of Array.isArray(value) ? value : [value]) {
-      if (single.length === 0) continue;
-      parts.push(`${key}=${encodeURIComponent(single)}`);
-    }
-  }
-  return parts.length > 0 ? `${getDomain()}/catalog?${parts.join("&")}` : `${getDomain()}/catalog`;
-};
 
 export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
   private rateLimiter = new BasicRateLimiter("rateLimiter", {
@@ -119,9 +104,6 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
     this.seriesPageRequest = undefined;
   }
 
-  // Mirrors the site's own front page: a Popular hero built from its weekly
-  // row, the Updates feed, New Season, Most Liked, Best Ongoings, the Top
-  // Series country tabs (as tappable chips), and a genre grid.
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
       { id: SECTION_POPULAR, title: "Popular", type: DiscoverSectionType.featured },
@@ -170,14 +152,10 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
       return { items, metadata: undefined };
     }
 
-    // The Updates feed comes off the front page itself, chapter numbers and
-    // release times included.
     if (section.id === SECTION_UPDATES) {
       return { items: parseHomeUpdates(await this.getHomepage()), metadata: undefined };
     }
 
-    // The front page's top strip is a fresh random shuffle on every load —
-    // surfaced here as its own row, rotating whenever the cached page renews.
     if (section.id === SECTION_RANDOM) {
       const items = parseHomeCarousel(await this.getHomepage());
       return {
@@ -186,8 +164,6 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
       };
     }
 
-    // The hero uses listing data only; detail-page enrichment would fan out
-    // into eight slow requests before Paperback can render the row.
     if (section.id === SECTION_POPULAR) {
       let items = parseHomeSection(await this.getHomepage(), "Popular This Week");
       if (items.length === 0) {
@@ -196,8 +172,6 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
       return { items: this.buildFeaturedItems(items), metadata: undefined };
     }
 
-    // Most Liked renders the exact row the homepage shows, falling through to
-    // its catalog feed only if the row is absent.
     if (section.id === SECTION_MOST_LIKED) {
       const homeItems = parseHomeSection(await this.getHomepage(), "Most liked");
       if (homeItems.length > 0) {
@@ -208,9 +182,6 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
       }
     }
 
-    // New Season and Best Ongoings are element-rendered rows — parsed off the
-    // front page so they carry the site's exact picks, with their catalog
-    // approximations only as fallback.
     if (section.id === SECTION_NEW_SEASON) {
       const cards = parseHomeLinkSection(await this.getHomepage(), "New Season", '"hl-col-items"');
       if (cards.length > 0) {
@@ -249,8 +220,6 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
       }
     }
 
-    // The remaining rows are catalog queries — the same feeds the site's own
-    // "More" arrows point at, so each row paginates on scroll.
     const query: CatalogQuery =
       section.id === SECTION_BEST_ONGOING
         ? { sort: "rating", order: "desc", status: "Ongoing" }
@@ -330,16 +299,12 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
     const title = (query.title ?? "").trim();
     const meta = query.metadata;
 
-    // An explicit sort pick wins; the untouched default ("Popularity") yields
-    // to a query's own default sort (the Top Series chips search by rating).
     const selectedSortId = SORT_OPTIONS.some((option) => option.id === sortingOption?.id)
       ? (sortingOption?.id ?? "real_views")
       : "real_views";
     const sortId = selectedSortId === "real_views" && meta?.sort ? meta.sort : selectedSortId;
 
-    // Selections travel as underscore-safe option ids; the catalog wants the
-    // display values ("Gender_Bender" → "Gender Bender").
-    const { items, nextMetadata } = await this.fetchCatalogPage(
+    let { items, nextMetadata } = await this.fetchCatalogPage(
       {
         q: title.length > 0 ? title : undefined,
         genre: resolveOptionValues(GENRE_OPTIONS, meta?.genres),
@@ -360,33 +325,31 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
       metadata,
     );
 
+    items = items.filter((item) => (item._count?.chapters ?? 0) > 0);
+    if (items.length === 0 && title.length === 0 && sortId === "real_views") {
+      ({ items, nextMetadata } = await this.fetchCatalogPage(
+        { sort: "rating", order: "desc" },
+        metadata,
+      ));
+      items = items.filter((item) => (item._count?.chapters ?? 0) > 0);
+    }
+
     return {
       items: items.map(toSearchResultItem).filter((item) => item.imageUrl.length > 0),
       metadata: nextMetadata,
     };
   }
 
-  /**
-   * Fetch one catalog page and derive the next-page cursor. The first item id
-   * of each page rides along in the cursor: if the next page opens with the
-   * same id, the server ignored `page` and pagination ends instead of looping.
-   */
   private async fetchCatalogPage(
     query: CatalogQuery,
     metadata: PageMetadata | undefined,
   ): Promise<{ items: CatalogItem[]; nextMetadata: PageMetadata | undefined }> {
     const page = metadata?.page ?? 1;
-    const url = buildCatalogUrl({ ...query, page: page > 1 ? String(page) : undefined });
-
-    const items = parseCatalogItems(await fetchPagePayload(url, '"initialItems":['));
-    const firstId = items[0]?.id;
-
-    if (page > 1 && firstId !== undefined && firstId === metadata?.firstId) {
-      return { items: [], nextMetadata: undefined };
-    }
-
-    const nextMetadata: PageMetadata | undefined =
-      items.length === 36 ? { page: page + 1, firstId } : undefined; // full catalog page
+    const response = await fetchCatalog({ ...query, page: String(page) });
+    const items = parseCatalogItems(response.items);
+    const nextMetadata: PageMetadata | undefined = response.hasMore
+      ? { page: page + 1 }
+      : undefined;
     return { items, nextMetadata };
   }
 
@@ -395,8 +358,6 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
-    // The series page embeds the complete chapter list; the cache means
-    // opening a title costs one request, not one per tab.
     return parseChapters(await this.getSeriesPage(sourceManga.mangaId), sourceManga);
   }
 
@@ -423,9 +384,6 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
     const url = `${getDomain()}/manga/${chapter.sourceManga.mangaId}/chapter/${chapter.chapterId}`;
 
-    // The bare payload is a fraction of the full reader page, so try it
-    // first; any shortfall (blocked, reshaped, missing pages) falls back to
-    // the full page.
     try {
       return parseChapterDetails(await fetchFlightPayload(url), chapter);
     } catch (error) {

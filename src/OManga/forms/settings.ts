@@ -11,9 +11,6 @@ import {
   setShowAllVersions,
 } from "../models";
 
-// Normalise before persisting: a scheme-less or malformed value would make
-// every request URL invalid and brick the source. Empty clears the override;
-// undefined signals the input couldn't be parsed and should be ignored.
 const normalizeDomainInput = (value: string): string | undefined => {
   let trimmed = value.trim().replace(/\/+$/, "");
   if (trimmed.length === 0) return "";

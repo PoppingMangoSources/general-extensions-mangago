@@ -1,47 +1,33 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-// Scans.GG serves everything from a bespoke JSON API (api.scans.gg); the
-// website itself is only used for share/webview URLs and the Referer header.
-
 import type { JSONObject } from "@paperback/types";
-
-/** Reader-facing website — used for `shareUrl`, webview and the Referer. */
 export const DEFAULT_DOMAIN = "https://scans.gg";
-
-/** JSON API host. Every listing/detail/page request goes here. */
 export const DEFAULT_API_URL = "https://api.scans.gg";
-
-/** CDN hosting covers and chapter pages. */
 export const CDN_URL = "https://cdn.scans.gg/uploads";
 
-// Page sizes. `/series` doesn't return a pagination envelope, so we infer
-// "has next page" by comparing the returned count against the limit.
 export const SERIES_PAGE_SIZE = 21;
 export const LATEST_PAGE_SIZE = 14;
-// Fetch beyond the website's seven-card preview so local SFW/hidden-genre
-// filtering can backfill a full Paperback results row.
 export const POPULAR_FETCH_SIZE = 50;
 export const CHAPTER_PAGE_SIZE = 100;
+export const TOP_MANGA_SIZE = 7;
+export const MAX_CHAPTER_PAGES = 200;
+export const MAX_FILTER_BATCHES = 10;
 
-/** Persisted-settings keys. */
+export const SECTION_POPULAR = "popular";
+export const SECTION_POPULAR_RANGES = "popular_ranges";
+export const SECTION_LATEST = "latest";
+export const SECTION_ALL_SERIES = "all_series";
+export const SECTION_GENRES = "genres";
 export const BASE_URL_KEY = "scansgg.baseUrlOverride";
 export const API_URL_KEY = "scansgg.apiUrlOverride";
 export const CONTENT_PREFERENCE_KEY = "scansgg.contentPreference";
 export const HIDDEN_GENRES_KEY = "scansgg.hiddenGenres";
 
-// One UA for every request class (API, documents, images, WebView, and the
-// Cloudflare bypass) — cf_clearance cookies are bound to the exact UA string,
-// so mixing agents invalidates a solved challenge.
 export const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) " +
   "Chrome/138.0.0.0 Safari/537.36";
 
-// ---------------------------------------------------------------------------
-// API response DTOs (only the fields this extension consumes)
-// ---------------------------------------------------------------------------
-
-/** Every endpoint wraps its payload in `{ data, meta? }`. */
 export interface ResponseDto<T> {
   data: T;
   meta?: MetaDto | null;
@@ -54,33 +40,23 @@ export interface MetaDto {
   offset?: number;
   count?: number;
 }
-
-/** A series/manga as returned by `/series` (listing and detail share it). */
 export interface SeriesDto {
   id: number;
   title: string;
   summary?: string | null;
-  /** CDN cover filename; can be an empty string when no cover is set. */
   cover?: string | null;
   author?: string[] | null;
   artist?: string[] | null;
-  /** Numeric tag ids; resolved to names through `TAGS_MAP`. */
   tags?: number[] | null;
   status?: number | null;
-  /** Numeric type id; resolved through `TYPE_NAMES`. */
   type?: number | null;
-  /** Site's own rating tier: 1 safe, 2 suggestive, 3 mature, 4+ adult. */
   content_rating?: number | null;
-  /** Average reader-review score on the site's five-star scale. */
   rating?: number | null;
   rating_count?: number | null;
   views?: number | null;
-  /** Views accumulated inside the requested popular timeframe. */
   popular_views?: number | null;
   alternative_titles?: AlternativeTitleDto[] | null;
-  /** Free-text theme names (in addition to the numeric `tags`). */
   themes?: string[] | null;
-  /** Only present on the `series_details=true` latest feed. */
   chapters?: LatestChapterDto[] | null;
 }
 
@@ -88,8 +64,6 @@ export interface AlternativeTitleDto {
   language?: string | null;
   title?: string | null;
 }
-
-/** Slim chapter attached to a series on the latest feed. */
 export interface LatestChapterDto {
   id?: number;
   number?: number | string;
@@ -100,8 +74,6 @@ export interface LatestChapterDto {
   group?: GroupDto | null;
   collab_groups?: GroupDto[] | null;
 }
-
-/** A chapter as returned by `/chapters`. */
 export interface ChapterDto {
   id: number;
   number: number | string;
@@ -116,8 +88,6 @@ export interface GroupDto {
   id?: number | null;
   title?: string | null;
 }
-
-/** Page-list payload from `/chapter-navigation` (pages nested under `chapter`). */
 export interface PageListDto {
   chapter?: ChapterPagesDto | null;
 }
@@ -132,11 +102,6 @@ export interface PageDto {
   path: string;
 }
 
-// ---------------------------------------------------------------------------
-// Discover / search metadata
-// ---------------------------------------------------------------------------
-
-/** Cursor for filtered `/series` pagination. */
 export interface Metadata extends JSONObject {
   offset?: number;
   page?: number;
@@ -147,8 +112,6 @@ export type TriStateValue = "included" | "excluded";
 export type TriStateSelection = Record<string, TriStateValue>;
 export type TagMatchMode = "and" | "or";
 export type PopularRange = (typeof POPULAR_RANGE_OPTIONS)[number]["id"];
-
-/** Advanced-search selections keyed by the numeric ids used by the API. */
 export type SearchMetadata = {
   types?: TriStateSelection;
   statuses?: TriStateSelection;
@@ -162,11 +125,6 @@ export interface OptionItem {
   value: string;
 }
 
-// ---------------------------------------------------------------------------
-// Filter option sets (ids are the values the API expects)
-// ---------------------------------------------------------------------------
-
-/** Numeric type id → display name (matches the search filter ids). */
 export const TYPE_NAMES: Record<number, string> = {
   1: "Comic",
   2: "Manga",
@@ -190,8 +148,6 @@ export const STATUS_OPTIONS: OptionItem[] = [
   { id: "4", value: "Cancelled" },
   { id: "5", value: "Dropped" },
 ];
-
-/** Time windows accepted by `/series?popular=...`, matching the website picker. */
 export const POPULAR_RANGE_OPTIONS = [
   { id: "daily", value: "1 Day" },
   { id: "weekly", value: "7 Days" },
@@ -200,8 +156,6 @@ export const POPULAR_RANGE_OPTIONS = [
   { id: "6months", value: "6 Months" },
   { id: "1year", value: "1 Year" },
 ] as const;
-
-/** Numeric tag id → display name. */
 export const TAGS_MAP: Record<number, string> = {
   1: "Fantasy",
   2: "Romance",
@@ -258,16 +212,10 @@ export const TAG_OPTIONS: OptionItem[] = Object.entries(TAGS_MAP)
   .map(([id, value]) => ({ id, value }))
   .sort((a, b) => a.value.localeCompare(b.value));
 
-// Tag ids that force a title's content rating up. Explicit adult tags mark a
-// title ADULT; softer suggestive/BL-GL tags mark it MATURE so it isn't shown
-// to readers who keep those categories hidden.
 export const ADULT_TAG_IDS = new Set<number>([33, 34, 35, 38, 40, 44]);
 export const MATURE_TAG_IDS = new Set<number>([21, 24, 27, 28, 29, 30, 31, 37, 42]);
 
-// API status code → Paperback status string. The numbering matches the site's
-// own status filter, so Hiatus/Dropped are surfaced distinctly instead of
-// being collapsed into "Cancelled".
-export function mapStatus(status?: number | null): string {
+export const mapStatus = (status?: number | null): string => {
   switch (status) {
     case 1:
       return "Ongoing";
@@ -282,4 +230,4 @@ export function mapStatus(status?: number | null): string {
     default:
       return "Unknown";
   }
-}
+};

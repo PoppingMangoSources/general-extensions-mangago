@@ -20,11 +20,6 @@ export class ScansGGInterceptor extends PaperbackInterceptor {
     const isApi = request.url.startsWith(getApiUrl());
     const isImage = IMAGE_EXTENSION_REGEX.test(request.url);
 
-    // Match what a real browser sends for each request class: XHR-style JSON
-    // headers for the API, a navigation accept for site documents, and an
-    // image accept for CDN images. A mismatched accept — or an Origin header
-    // on a plain document GET, which browsers never send — reads as bot
-    // traffic and gets the connection held open until it drops.
     const accept = isApi
       ? "application/json, text/plain, */*"
       : isImage
@@ -38,7 +33,6 @@ export class ScansGGInterceptor extends PaperbackInterceptor {
       accept,
       "accept-language": "en-US,en;q=0.5",
     };
-    // Browsers only attach Origin to cross-origin requests (the API).
     if (isApi) headers.origin = domain;
 
     return { ...request, headers };
@@ -59,18 +53,11 @@ export class ScansGGInterceptor extends PaperbackInterceptor {
     return data;
   }
 }
-
-/** A single query value; arrays are joined into the `[a,b,c]` form the API uses. */
 export type QueryValue = string | number | boolean | string[];
-
-/**
- * GET a JSON endpoint under the API host and return its `data` payload.
- * Query values are appended in insertion order; `undefined` values are skipped.
- */
-export async function fetchApi<T>(
+export const fetchApi = async <T>(
   path: string,
   query: Record<string, QueryValue | undefined> = {},
-): Promise<ResponseDto<T>> {
+): Promise<ResponseDto<T>> => {
   const builder = new URL(getApiUrl()).addPathComponent(path);
   for (const [key, value] of Object.entries(query)) {
     if (value === undefined) continue;
@@ -91,7 +78,14 @@ export async function fetchApi<T>(
   try {
     return JSON.parse(text) as ResponseDto<T>;
   } catch (error: unknown) {
+    if (/^\s*<(?:!doctype|html)/i.test(text)) {
+      throw new CloudflareError({
+        url,
+        method: "GET",
+        headers: { "user-agent": USER_AGENT },
+      });
+    }
     const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to parse JSON from ${url}: ${reason}`);
+    throw new Error(`Failed to parse JSON from ${url}: ${reason}`, { cause: error });
   }
-}
+};

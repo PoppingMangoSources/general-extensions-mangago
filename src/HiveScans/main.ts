@@ -3,7 +3,6 @@
 
 import {
   BasicRateLimiter,
-  CloudflareError,
   CookieStorageInterceptor,
   DiscoverSectionType,
   URL,
@@ -27,7 +26,6 @@ import { HiveScansAdvancedSearchForm } from "./forms/search";
 import { getShowLockedChapters, HiveScansSettingsForm } from "./forms/settings";
 import {
   API_URL,
-  GENRES_CACHE_TTL,
   PAGE_SIZE,
   SECTION_GENRES,
   SECTION_HOT,
@@ -36,7 +34,6 @@ import {
   SECTION_POPULAR,
   SORTING_OPTIONS,
   type HiveScansChapterResponse,
-  type HiveScansGenre,
   type HiveScansPostDetailsResponse,
   type HiveScansPost,
   type HiveScansSearchResponse,
@@ -44,7 +41,7 @@ import {
   type PageMetadata,
   type SearchMetadata,
 } from "./models";
-import { fetchJSON, HiveScansInterceptor } from "./network";
+import { fetchGenres, fetchJSON, HiveScansInterceptor } from "./network";
 import {
   contentRatingForGenres,
   decodeMangaId,
@@ -71,7 +68,7 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
   private cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
   private interceptor = new HiveScansInterceptor("main");
 
-  private genresCache: { options: OptionItem[]; timestamp: number } | null = null;
+  private genresPromise?: Promise<OptionItem[]>;
 
   async initialise(): Promise<void> {
     this.rateLimiter.registerInterceptor();
@@ -88,6 +85,7 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
     cookies: Cookie[],
     _localStorage: Record<string, string>,
   ): Promise<void> {
+    this.genresPromise = undefined;
     for (const cookie of cookies) {
       if (
         cookie.name.startsWith("cf") ||
@@ -114,7 +112,9 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     if (section.id === SECTION_GENRES) {
-      const genres = await this.getGenres();
+      const genres = await (this.genresPromise ??= fetchGenres().then((items) =>
+        items.map((item) => ({ id: item.id, value: item.title })),
+      ));
       const items: DiscoverSectionItem[] = genres.map((genre) => ({
         type: "genresCarouselItem",
         name: genre.value,
@@ -186,7 +186,10 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
   }
 
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
-    return new HiveScansAdvancedSearchForm(query, await this.getGenres());
+    const genres = await (this.genresPromise ??= fetchGenres().then((items) =>
+      items.map((item) => ({ id: item.id, value: item.title })),
+    ));
+    return new HiveScansAdvancedSearchForm(query, genres);
   }
 
   async getSearchResults(
@@ -329,26 +332,6 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
     const slug = decodeMangaId(mangaId);
     const url = new URL(API_URL).addPathComponent("post").setQueryItem("postSlug", slug).toString();
     return fetchJSON<HiveScansPostDetailsResponse>({ url, method: "GET" });
-  }
-
-  private async getGenres(): Promise<OptionItem[]> {
-    if (this.genresCache && Date.now() - this.genresCache.timestamp < GENRES_CACHE_TTL) {
-      return this.genresCache.options;
-    }
-
-    try {
-      const url = new URL(API_URL).addPathComponent("genres").toString();
-      const genres = await fetchJSON<HiveScansGenre[]>({ url, method: "GET" });
-      const options: OptionItem[] = genres.map((genre) => ({
-        id: genre.id.toString(),
-        value: genre.name.trim(),
-      }));
-      this.genresCache = { options, timestamp: Date.now() };
-      return options;
-    } catch (error) {
-      if (error instanceof CloudflareError || !this.genresCache) throw error;
-      return this.genresCache.options;
-    }
   }
 }
 

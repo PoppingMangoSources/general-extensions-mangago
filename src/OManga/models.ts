@@ -4,6 +4,23 @@
 import type { JSONObject } from "@paperback/types";
 
 export const DEFAULT_DOMAIN = "https://omanga.to";
+export const FEATURED_HERO_LIMIT = 8;
+
+export const SECTION_POPULAR = "popular";
+export const SECTION_RANDOM = "random";
+export const SECTION_UPDATES = "updates";
+export const SECTION_TOP_SERIES = "top_series";
+export const SECTION_NEW_SEASON = "new_season";
+export const SECTION_MOST_LIKED = "most_liked";
+export const SECTION_BEST_ONGOING = "best_ongoing";
+export const SECTION_GENRES = "genres";
+
+export type CatalogQuery = Record<string, string | string[] | undefined>;
+
+export interface CatalogResponse {
+  items: CatalogItem[];
+  hasMore: boolean;
+}
 
 const BASE_URL_KEY = "omanga_base_url";
 const ALL_VERSIONS_KEY = "omanga_all_versions";
@@ -21,8 +38,6 @@ export const setDomainOverride = (value: string): void => {
   Application.setState(value, BASE_URL_KEY);
 };
 
-// Official publisher/platform teams get a star in the chapter list, matched
-// on the team name/slug with spacing and punctuation ignored.
 const OFFICIAL_TEAMS = new Set([
   "official",
   "tapas",
@@ -57,8 +72,6 @@ export const getShowAllVersions = (): boolean =>
 export const setShowAllVersions = (value: boolean): void => {
   Application.setState(value, ALL_VERSIONS_KEY);
 };
-
-/** Series card as embedded in catalog pages and homepage rows. */
 export interface CatalogItem {
   id: number;
   title: string;
@@ -72,8 +85,6 @@ export interface CatalogItem {
   year?: number; // homepage rows only
   _count?: { chapters?: number };
 }
-
-/** One chapter row in the series payload's `chapters` array. */
 export interface ChapterEntry {
   id: number;
   mangaId: number;
@@ -85,8 +96,6 @@ export interface ChapterEntry {
   isLocked?: boolean;
   team?: { id?: number; name?: string; slug?: string } | null;
 }
-
-/** Series payload embedded in `/manga/<slug>` pages. */
 export interface SeriesProps {
   mangaId: number;
   slug: string;
@@ -103,8 +112,6 @@ export interface SeriesProps {
   altNames?: string[];
   chapters?: ChapterEntry[];
 }
-
-/** Chapter payload embedded in `/manga/<slug>/chapter/<number>` pages. */
 export interface ReaderChapter {
   id: number;
   number: number;
@@ -115,16 +122,9 @@ export interface ReaderChapter {
   translator?: string | null;
   team?: { name?: string; slug?: string } | null;
 }
-
-/** Pagination cursor for Paperback's PagedResults. */
 export interface PageMetadata extends JSONObject {
   page: number;
-  // First item id of the previous page — detects a server that ignored `page`
-  // and echoed the same list, so pagination stops instead of looping.
-  firstId?: number;
 }
-
-/** Advanced-search selections carried through SearchQuery.metadata (option ids). */
 export type SearchMetadata = {
   genres?: string[];
   excludeGenres?: string[];
@@ -138,8 +138,6 @@ export type SearchMetadata = {
   chaptersFrom?: string;
   chaptersTo?: string;
   tag?: string;
-  // Default catalog sort for queries launched from discover chips; an explicit
-  // pick in the sort menu still wins.
   sort?: string;
 };
 
@@ -148,15 +146,10 @@ export type OptionItem = {
   value: string;
 };
 
-// The app rejects option ids containing spaces, so ids are the display value
-// with spaces collapsed to underscores; `resolveOptionValues` maps them back to the
-// exact strings the catalog expects.
 const toOptionId = (value: string): string => value.replace(/\s+/g, "_");
 
 const toOptions = (values: string[]): OptionItem[] =>
   values.map((value) => ({ id: toOptionId(value), value }));
-
-/** Resolve selected option ids back to their site-facing values. */
 export const resolveOptionValues = (
   options: OptionItem[],
   ids?: string[],
@@ -215,7 +208,6 @@ export const TYPE_OPTIONS: OptionItem[] = toOptions([
   "Other",
 ]);
 
-// Ids are the catalog's stored values; labels match the site's filter drawer.
 export const STATUS_OPTIONS: OptionItem[] = [
   { id: "Ongoing", value: "Ongoing" },
   { id: "Completed", value: "Completed" },
@@ -233,7 +225,6 @@ export const AGE_RATING_OPTIONS: OptionItem[] = toOptions([
   "21+",
 ]);
 
-// Minimum community score, as the site's Rating filter offers it.
 export const MIN_RATING_OPTIONS: OptionItem[] = [
   { id: "5", value: "5+ (Average)" },
   { id: "6", value: "6+ (Good)" },
@@ -251,8 +242,6 @@ export const YEAR_OPTIONS: OptionItem[] = Array.from(
     return { id: year, value: year };
   },
 );
-
-/** Catalog sort keys, in the order the sort picker offers them. */
 export const SORT_OPTIONS = [
   { id: "real_views", label: "Popularity" },
   { id: "updated_at", label: "Recently Updated" },
@@ -263,15 +252,11 @@ export const SORT_OPTIONS = [
   { id: "chapters", label: "Chapter Count" },
   { id: "by_views", label: "Views" },
 ] as const;
-
-/** "Top Series" chips — the site's country tabs, mapped to type filters. */
 export const TOP_SERIES_CHIPS = [
   { title: "From Korea", type: "Manhwa" },
   { title: "From Japan", type: "Manga" },
   { title: "From China", type: "Manhua" },
 ] as const;
-
-/** One row of the homepage Updates feed. */
 export interface HomeUpdate {
   id: number;
   number: number;

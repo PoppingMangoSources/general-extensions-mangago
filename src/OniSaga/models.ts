@@ -2,8 +2,19 @@
 /* Copyright © 2026 Inkdex */
 
 export const DOMAIN = "https://onisaga.com";
+export const FEATURED_LIMIT = 10;
+export const BROWSE_PAGE_SIZE = 24;
+export const IMPORT_POLL_FAST_SECONDS = 3;
+export const IMPORT_POLL_SLOW_SECONDS = 6;
+export const IMPORT_POLL_FAST_COUNT = 6;
+export const READER_MAX_ATTEMPTS = 18;
+export const BROWSE_STATE_TTL = 1_800_000;
+export const BROWSE_STATE_CACHE_MAX = 8;
+export const HOME_TTL = 60_000;
+export const TOP_MANGA_TTL = 60_000;
+export const UPDATE_SCAN_MAX_PAGES = 8;
+export const UPDATE_SCAN_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 
-// State keys
 export const SHOW_NSFW_KEY = "show_nsfw";
 export const DISCOVER_TYPE_KEY = "discover_type";
 export const DISCOVER_STATUS_KEY = "discover_status";
@@ -17,8 +28,6 @@ export const PAGE_TOKEN_BUCKET_KEY = "onisaga_page_token_bucket_v1";
 export const SECTIONS_ORDER_KEY = "sections_order";
 export const SECTIONS_DELETED_KEY = "sections_deleted";
 
-// Discover rail catalog. The array order is the default display order; the
-// section settings form lets the user reorder or hide individual rails.
 export interface DiscoverSectionDef {
   id: string;
   title: string;
@@ -37,20 +46,17 @@ export interface Option {
 }
 
 export interface LanguageOption {
-  // Badge text the site stamps on a chapter row (e.g. "EN", "PT-BR", "ES-LA").
   badge: string;
-  // Paperback langCode reported on the Chapter.
   langCode: string;
   title: string;
 }
 
-// Chapter-language badges → Paperback langCodes (used only to tag each chapter).
 export const LANGUAGES: LanguageOption[] = [
   { badge: "EN", langCode: "en", title: "🇬🇧 English" },
   { badge: "JA", langCode: "ja", title: "🇯🇵 日本語" },
   { badge: "KO", langCode: "ko", title: "🇰🇷 한국어" },
   { badge: "ZH", langCode: "zh", title: "🇨🇳 中文" },
-  { badge: "ZH-HANT", langCode: "zh-Hant", title: "🇹🇼 中文 (繁體)" },
+  { badge: "ZH-HANT", langCode: "zh-hant", title: "🇹🇼 中文 (繁體)" },
   { badge: "FR", langCode: "fr", title: "🇫🇷 Français" },
   { badge: "DE", langCode: "de", title: "🇩🇪 Deutsch" },
   { badge: "IT", langCode: "it", title: "🇮🇹 Italiano" },
@@ -67,7 +73,6 @@ export const LANGUAGES: LanguageOption[] = [
   { badge: "TH", langCode: "th", title: "🇹🇭 ไทย" },
 ];
 
-// Content type (Livewire `platform` field).
 export const TYPE_OPTIONS: Option[] = [
   { id: "", title: "All" },
   { id: "MANGA", title: "Manga" },
@@ -94,9 +99,6 @@ export const MIN_CHAPTERS_OPTIONS: Option[] = [
   { id: "200", title: "200+" },
 ];
 
-// Seconds between reader page requests; the id doubles as the numeric value.
-// Keep the fast tuning range and 2s default. network.ts combines this short
-// spacing with a persisted burst/refill budget for sustained reading.
 export const PAGE_DELAY_DEFAULT = "2";
 export const PAGE_DELAY_OPTIONS: Option[] = [
   { id: "1.5", title: "1 image per 1.50 seconds" },
@@ -106,7 +108,6 @@ export const PAGE_DELAY_OPTIONS: Option[] = [
   { id: "2.5", title: "1 image per 2.50 seconds" },
 ];
 
-// Livewire `sort` field.
 export const SORT_OPTIONS: Option[] = [
   { id: "created_at", title: "Latest" },
   { id: "view", title: "Popular" },
@@ -119,10 +120,6 @@ export const SORT_OPTIONS: Option[] = [
 
 export const DEFAULT_SORT = "created_at";
 
-// onisaga's fixed genre taxonomy (see getGenres). id = the Livewire filter's
-// numeric genre id, so a selection maps straight onto the browse/search POST.
-// Curated like the reference extension instead of scraped from the live filter,
-// which also carries thousands of loose tags.
 export const GENRES: Option[] = [
   { id: "1", title: "Action" },
   { id: "61", title: "Adaptation" },
@@ -220,8 +217,6 @@ export const GENRES: Option[] = [
   { id: "71", title: "Yuri" },
 ];
 
-// Search/discover metadata threaded through SearchQuery. Declared as a type alias
-// (not an interface) so it carries the implicit index signature JSONObject needs.
 export type OniSagaSearchMetadata = {
   page?: number;
   collectedIds?: string[];
@@ -235,8 +230,6 @@ export type OniSagaSearchMetadata = {
   genres?: Record<string, "included" | "excluded">;
 };
 
-// Livewire `post-filter` component public state. Field names (and the snake_case /
-// camelCase mix) must match the component exactly; all are always serialized.
 export interface PostFilterUpdates {
   platform: string;
   status: string;

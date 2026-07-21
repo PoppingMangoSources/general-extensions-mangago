@@ -16,9 +16,9 @@ import type { SearchMetadata } from "./models";
 
 const HIDE_LOCKED_KEY = "hide_paid_chapters";
 
-export function getHideLocked(): boolean {
+export const getHideLocked = (): boolean => {
   return (Application.getState(HIDE_LOCKED_KEY) ?? false) as boolean;
-}
+};
 
 export class RinkoComicsSettingsForm extends Form {
   override getSections() {

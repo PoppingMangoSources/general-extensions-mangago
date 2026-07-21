@@ -3,6 +3,7 @@
 
 import {
   BasicRateLimiter,
+  CloudflareError,
   ContentRating,
   CookieStorageInterceptor,
   DiscoverSectionType,
@@ -27,10 +28,13 @@ import {
 import { VyMangaSearchForm } from "./forms/search";
 import { getBaseUrlOverride, VyMangaSettingsForm } from "./forms/settings";
 import {
+  BROWSE_SORT,
   DEFAULT_DOMAIN,
+  FEATURED_LIMIT,
+  GENRES_KEY,
   NEXT_PAGE_SELECTOR,
   SEARCH_PATH,
-  SORT_OPTIONS,
+  SORTING_OPTIONS,
   type OptionItem,
   type PageMetadata,
   type SearchMetadata,
@@ -38,6 +42,7 @@ import {
 import { fetchCheerio, VyMangaInterceptor } from "./network";
 import {
   extractMangaId,
+  getStoredGenres,
   parseCards,
   parseChapterPages,
   parseChapters,
@@ -45,41 +50,6 @@ import {
   parseMangaDetails,
 } from "./parsers";
 import type VyMangaConfig from "./pbconfig";
-
-const SORTING_OPTIONS: SortingOption[] = SORT_OPTIONS.map((option) => ({
-  id: option.id,
-  label: option.value,
-}));
-
-// Discover browse rows map to a `sort` field on the `/search` endpoint.
-const BROWSE_SORT: Record<string, string> = {
-  popular: "viewed",
-  latest_updates: "updated_at",
-  top_rated: "scored",
-  newest: "created_at",
-};
-
-// Genres are scraped from the site nav rather than hardcoded, then persisted as
-// a JSON string so they survive an app restart. `last_genres_fetch` records the
-// fetch time (seconds) so the list is only refetched once the TTL lapses.
-const GENRES_KEY = "vymanga_genres";
-const LAST_GENRES_FETCH_KEY = "last_genres_fetch";
-const GENRES_TTL_SECONDS = 172800; // 2 days
-
-function getStoredGenres(): OptionItem[] {
-  const raw = Application.getState(GENRES_KEY) as string | undefined;
-  if (raw === undefined) return [];
-  try {
-    return JSON.parse(raw) as OptionItem[];
-  } catch {
-    return [];
-  }
-}
-
-// The featured hero fetches per-title details (author/description), so cap the
-// count and cache the result to keep discover snappy.
-const FEATURED_LIMIT = 8;
-const FEATURED_TTL = 5 * 60 * 1000;
 
 export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
   globalRateLimiter = new BasicRateLimiter("rateLimiter", {
@@ -90,7 +60,8 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
   cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
   mainInterceptor = new VyMangaInterceptor("main", () => this.baseUrl);
 
-  private featuredCache: { items: DiscoverSectionItem[]; timestamp: number } | null = null;
+  private featuredItems?: DiscoverSectionItem[];
+  private genresPromise?: Promise<OptionItem[]>;
 
   get baseUrl(): string {
     return getBaseUrlOverride() ?? DEFAULT_DOMAIN;
@@ -115,6 +86,8 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
     cookies: Cookie[],
     _localStorage: Record<string, string>,
   ): Promise<void> {
+    this.featuredItems = undefined;
+    this.genresPromise = undefined;
     for (const cookie of cookies) {
       if (
         cookie.name.startsWith("cf") ||
@@ -125,10 +98,6 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
       }
     }
   }
-
-  // ----------------------------------------------------------------
-  // Discover
-  // ----------------------------------------------------------------
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
@@ -180,10 +149,6 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
     return { items, metadata: nextPage ? { page: page + 1 } : undefined };
   }
 
-  // ----------------------------------------------------------------
-  // Search
-  // ----------------------------------------------------------------
-
   async getSortingOptions(): Promise<SortingOption[]> {
     return SORTING_OPTIONS;
   }
@@ -200,7 +165,6 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
     const title = (query.title || "").trim();
     const meta = query.metadata ?? {};
 
-    // Let readers paste a manga link into search to open it directly.
     const pasted = await this.resolveUrlQuery(title);
     if (pasted) return pasted;
 
@@ -284,14 +248,11 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
         ],
         metadata: undefined,
       };
-    } catch {
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
       return undefined;
     }
   }
-
-  // ----------------------------------------------------------------
-  // Details, chapters, pages
-  // ----------------------------------------------------------------
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
     const url = this.mangaUrl(mangaId);
@@ -305,12 +266,9 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    // chapterId is the full external reader URL. Chapters cached by an older
-    // version stored a relative id that can't be opened — ask for a refresh.
     if (!/^https?:\/\//i.test(chapter.chapterId)) {
       throw new Error("Refresh the chapter list to reload chapters.");
     }
-    // ?view=0 renders every page at once instead of paging.
     const url = `${chapter.chapterId}${chapter.chapterId.includes("?") ? "&" : "?"}view=0`;
     const $ = await fetchCheerio({ url, method: "GET" });
     const pages = parseChapterPages($, this.baseUrl);
@@ -320,20 +278,12 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
     return { id: chapter.chapterId, mangaId: chapter.sourceManga.mangaId, pages };
   }
 
-  // ----------------------------------------------------------------
-  // Helpers
-  // ----------------------------------------------------------------
-
   private mangaUrl(mangaId: string): string {
     return `${this.baseUrl}/manga/${mangaId}`;
   }
 
-  // Enriches the Popular hero with author + description + rating by fetching
-  // each title's details (capped and cached).
   private async buildFeaturedItems(): Promise<DiscoverSectionItem[]> {
-    if (this.featuredCache && Date.now() - this.featuredCache.timestamp < FEATURED_TTL) {
-      return this.featuredCache.items;
-    }
+    if (this.featuredItems) return this.featuredItems;
 
     const rating = this.contentRating;
     const $ = await fetchCheerio({ url: this.browseUrl("viewed", 1), method: "GET" });
@@ -349,8 +299,8 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
           supertitle = manga.mangaInfo.author;
           summary = manga.mangaInfo.synopsis || undefined;
           status = manga.mangaInfo.status;
-        } catch {
-          // Keep the basic card if the details request fails.
+        } catch (error) {
+          if (error instanceof CloudflareError) throw error;
         }
         const infoItems: FeaturedCarouselItem["infoItems"] =
           status && status !== "Unknown" ? [{ symbol: "book.closed", text: status }] : undefined;
@@ -367,37 +317,27 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
       }),
     );
 
-    this.featuredCache = { items, timestamp: Date.now() };
+    this.featuredItems = items;
     return items;
   }
 
   private async getGenres(): Promise<OptionItem[]> {
-    // Force a refetch only when nothing has been stored yet.
-    await this.updateGenres(getStoredGenres().length === 0);
-    return getStoredGenres();
+    if (this.genresPromise) return this.genresPromise;
+    const request = this.loadGenres().catch((error: unknown) => {
+      if (this.genresPromise === request) this.genresPromise = undefined;
+      throw error;
+    });
+    this.genresPromise = request;
+    return this.genresPromise;
   }
 
-  private async updateGenres(force: boolean): Promise<void> {
-    const lastFetch = Number(Application.getState(LAST_GENRES_FETCH_KEY) ?? 0);
-    const cached = lastFetch + GENRES_TTL_SECONDS > Date.now() / 1000;
-    if (cached && !force) {
-      // The cache is still valid; only refetch if the persisted value went missing.
-      if (Application.getState(GENRES_KEY) === undefined) {
-        await this.updateGenres(true);
-      }
-      return;
-    }
-
-    try {
-      const $ = await fetchCheerio({ url: this.baseUrl, method: "GET" });
-      const genres = parseGenres($);
-      if (genres.length > 0) {
-        Application.setState(JSON.stringify(genres), GENRES_KEY);
-        Application.setState(String(Date.now() / 1000), LAST_GENRES_FETCH_KEY);
-      }
-    } catch {
-      // Keep whatever is stored (possibly nothing) until the next attempt.
-    }
+  private async loadGenres(): Promise<OptionItem[]> {
+    const stored = getStoredGenres();
+    if (stored.length > 0) return stored;
+    const $ = await fetchCheerio({ url: this.baseUrl, method: "GET" });
+    const genres = parseGenres($);
+    if (genres.length > 0) Application.setState(JSON.stringify(genres), GENRES_KEY);
+    return genres;
   }
 }
 

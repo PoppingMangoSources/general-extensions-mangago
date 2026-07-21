@@ -11,7 +11,7 @@ import {
   type Tag,
 } from "@paperback/types";
 
-import { getDomain } from "./forms/settings";
+import { getContentPreference, getDomain, getHiddenGenreIds } from "./forms/settings";
 import {
   ADULT_TAG_IDS,
   CDN_URL,
@@ -23,16 +23,76 @@ import {
   type LatestChapterDto,
   type PageListDto,
   type SeriesDto,
+  type SearchMetadata,
+  type TriStateSelection,
+  type TriStateValue,
 } from "./models";
 
-// ---------------------------------------------------------------------------
-// field helpers
-// ---------------------------------------------------------------------------
+export interface ContentFilters {
+  allowAllContent: boolean;
+  hiddenGenreIds: Set<number>;
+}
 
-// The site addresses a series as `{id}-{slugified title}` (e.g.
-// "17630-flower-of-allure"). The reader endpoints hang on bare numeric ids,
-// so the slugged form must be used everywhere a series id is sent.
-export function slugify(text: string): string {
+export const getContentFilters = (): ContentFilters => ({
+  allowAllContent: getContentPreference() === "all",
+  hiddenGenreIds: new Set(getHiddenGenreIds().map(Number)),
+});
+
+export const getSelectedIds = (
+  selection: TriStateSelection | undefined,
+  state: TriStateValue,
+): string[] =>
+  Object.entries(selection ?? {})
+    .filter(([, value]) => value === state)
+    .map(([id]) => id);
+
+export const isGenreVisible = (tagId: string, filters: ContentFilters): boolean => {
+  const numericId = Number(tagId);
+  if (filters.hiddenGenreIds.has(numericId)) return false;
+  if (filters.allowAllContent) return true;
+  return !ADULT_TAG_IDS.has(numericId) && !MATURE_TAG_IDS.has(numericId);
+};
+
+const matchesSingleValue = (
+  value: number | null | undefined,
+  selection: TriStateSelection | undefined,
+): boolean => {
+  const id = value == null ? undefined : String(value);
+  const included = getSelectedIds(selection, "included");
+  const excluded = new Set(getSelectedIds(selection, "excluded"));
+  if (id !== undefined && excluded.has(id)) return false;
+  return included.length === 0 || (id !== undefined && included.includes(id));
+};
+
+const matchesTags = (tags: Set<number>, metadata: SearchMetadata | undefined): boolean => {
+  const included = getSelectedIds(metadata?.tags, "included").map(Number);
+  const excluded = getSelectedIds(metadata?.tags, "excluded").map(Number);
+  if (excluded.some((id) => tags.has(id))) return false;
+  if (included.length === 0) return true;
+  return metadata?.tagMatchMode === "or"
+    ? included.some((id) => tags.has(id))
+    : included.every((id) => tags.has(id));
+};
+
+export const seriesMatchesFilters = (
+  series: SeriesDto,
+  metadata: SearchMetadata | undefined,
+  filters: ContentFilters,
+): boolean => {
+  if (!filters.allowAllContent && deriveContentRating(series) !== ContentRating.EVERYONE) {
+    return false;
+  }
+  const tags = new Set(series.tags ?? []);
+  if ([...filters.hiddenGenreIds].some((id) => tags.has(id))) return false;
+  if (!matchesSingleValue(series.type, metadata?.types)) return false;
+  if (!matchesSingleValue(series.status, metadata?.statuses)) return false;
+  return matchesTags(tags, metadata);
+};
+
+export const hasImage = (item: DiscoverSectionItem): boolean =>
+  "imageUrl" in item && item.imageUrl.length > 0;
+
+export const slugify = (text: string): string => {
   return Application.decodeHTMLEntities(text)
     .toLowerCase()
     .normalize("NFKD")
@@ -40,48 +100,55 @@ export function slugify(text: string): string {
     .replace(/['’‘"“”]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-}
+};
 
-export function buildSlugId(id: number, title: string): string {
+export const buildSlugId = (id: number, title: string): string => {
   const slug = slugify(title);
   return slug.length > 0 ? `${id}-${slug}` : `${id}-series`;
-}
-
-/** Extract the numeric prefix from a (possibly slugged) manga id. */
-export function numericSeriesId(mangaId: string): string {
+};
+export const numericSeriesId = (mangaId: string): string => {
   return mangaId.match(/^\d+/)?.[0] ?? mangaId;
-}
+};
 
-/** Cover filenames are relative to the CDN `covers/` folder. */
-export function buildCoverUrl(cover?: string | null): string {
+export const buildChapterId = (
+  seriesId: string,
+  chapterId: number | string,
+  groupId?: number | string | null,
+): string => `${seriesId}:${chapterId}:${groupId ?? 0}`;
+
+export const parseChapterId = (
+  value: string,
+): { seriesId: string; chapterId: string; groupId: string } => {
+  const [seriesId, chapterId, groupId] = value.split(":");
+  if (!seriesId || !chapterId || groupId === undefined) {
+    throw new Error(`Invalid Scans.GG chapter id: ${value}`);
+  }
+  return { seriesId, chapterId, groupId };
+};
+export const buildCoverUrl = (cover?: string | null): string => {
   if (!cover) return "";
-  // Some payloads already carry an absolute URL; leave those untouched.
   if (/^https?:\/\//i.test(cover)) return cover;
   return `${CDN_URL}/covers/${cover}`;
-}
-
-/** "75.00" / 75 → "75"; keeps a meaningful fraction like "10.5". */
-export function formatChapterNumber(raw: number | string): string {
+};
+export const formatChapterNumber = (raw: number | string): string => {
   const n = typeof raw === "number" ? raw : Number.parseFloat(raw);
   return Number.isFinite(n) ? String(n) : String(raw);
-}
+};
 
-export function chapterNumberValue(raw: number | string): number {
+export const chapterNumberValue = (raw: number | string): number => {
   const n = typeof raw === "number" ? raw : Number.parseFloat(raw);
   return Number.isFinite(n) ? n : 0;
-}
+};
 
-// The API serves timestamps as "yyyy-MM-dd HH:mm:ss" in UTC. Normalise to an
-// ISO string so every engine parses it as UTC rather than local time.
-export function parseDate(value?: string | null): Date | undefined {
+export const parseDate = (value?: string | null): Date | undefined => {
   if (!value) return undefined;
   const iso = value.includes("T") ? value : value.replace(" ", "T");
   const withZone = /[zZ]|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso}Z`;
   const date = new Date(withZone);
   return Number.isNaN(date.getTime()) ? undefined : date;
-}
+};
 
-function stripHtml(html?: string | null): string {
+const stripHtml = (html?: string | null): string => {
   if (!html) return "";
   return Application.decodeHTMLEntities(
     html
@@ -90,31 +157,28 @@ function stripHtml(html?: string | null): string {
       .replace(/<[^>]+>/g, "")
       .trim(),
   );
-}
+};
 
-// Rate a title from the site's own `content_rating` tier combined with its
-// tags, keeping whichever is stricter. Paperback has no separate suggestive
-// tier, so Scans.GG tiers 2–3 map to MATURE and tier 4 maps to ADULT.
-export function deriveContentRating(
+export const deriveContentRating = (
   series: Pick<SeriesDto, "tags" | "content_rating">,
-): ContentRating {
+): ContentRating => {
   const tier = series.content_rating ?? 0;
   const tags = series.tags;
   if (tier >= 4 || tags?.some((id) => ADULT_TAG_IDS.has(id))) return ContentRating.ADULT;
   if (tier >= 2 || tags?.some((id) => MATURE_TAG_IDS.has(id))) return ContentRating.MATURE;
   return ContentRating.EVERYONE;
-}
+};
 
-function tagNames(tags?: number[] | null): string[] {
+const tagNames = (tags?: number[] | null): string[] => {
   return (tags ?? []).map((id) => TAGS_MAP[id]).filter((name): name is string => Boolean(name));
-}
+};
 
-function creatorNames(creators?: string[] | null): string | undefined {
+const creatorNames = (creators?: string[] | null): string | undefined => {
   const names = [...new Set((creators ?? []).map((name) => name.trim()).filter(Boolean))];
   return names.length > 0 ? Application.decodeHTMLEntities(names.join(", ")) : undefined;
-}
+};
 
-function scanlationTeam(chapter?: LatestChapterDto | null): string | undefined {
+const scanlationTeam = (chapter?: LatestChapterDto | null): string | undefined => {
   if (!chapter) return undefined;
   const names = [chapter.group?.title, ...(chapter.collab_groups ?? []).map((group) => group.title)]
     .map((name) => name?.trim())
@@ -123,14 +187,14 @@ function scanlationTeam(chapter?: LatestChapterDto | null): string | undefined {
   return uniqueNames.length > 0
     ? Application.decodeHTMLEntities(uniqueNames.join(", "))
     : undefined;
-}
+};
 
-function formatViews(value?: number | null): string | undefined {
+const formatViews = (value?: number | null): string | undefined => {
   if (value == null || !Number.isFinite(value) || value < 0) return undefined;
   return Math.trunc(value).toLocaleString("en-US");
-}
+};
 
-function featuredInfoItems(series: SeriesDto): FeaturedCarouselItem["infoItems"] {
+const featuredInfoItems = (series: SeriesDto): FeaturedCarouselItem["infoItems"] => {
   const views = formatViews(series.popular_views ?? series.views);
   const group = scanlationTeam(series.chapters?.[0]);
   const items = [
@@ -141,28 +205,24 @@ function featuredInfoItems(series: SeriesDto): FeaturedCarouselItem["infoItems"]
   return (
     items.length === 1 ? [items[0]] : [items[0], items[1]]
   ) as FeaturedCarouselItem["infoItems"];
-}
+};
 
-function toPaperbackRating(series: Pick<SeriesDto, "rating" | "rating_count">): number | undefined {
+const toPaperbackRating = (
+  series: Pick<SeriesDto, "rating" | "rating_count">,
+): number | undefined => {
   if (series.rating_count == null || series.rating_count <= 0) return undefined;
   if (series.rating == null || !Number.isFinite(series.rating)) return undefined;
   return Math.min(1, Math.max(0, series.rating / 5));
-}
+};
 
-// Prefer the series type (Manga/Manhwa/…) as the card subtitle; fall back to
-// the publication status when the type is missing.
-function cardSubtitle(series: SeriesDto): string | undefined {
+const cardSubtitle = (series: SeriesDto): string | undefined => {
   const type = series.type != null ? TYPE_NAMES[series.type] : undefined;
   if (type) return type;
   const status = mapStatus(series.status);
   return status !== "Unknown" ? status : undefined;
-}
+};
 
-// ---------------------------------------------------------------------------
-// listing parsers
-// ---------------------------------------------------------------------------
-
-export function toSearchResultItem(series: SeriesDto): SearchResultItem {
+export const toSearchResultItem = (series: SeriesDto): SearchResultItem => {
   return {
     mangaId: buildSlugId(series.id, series.title),
     title: Application.decodeHTMLEntities(series.title),
@@ -170,9 +230,9 @@ export function toSearchResultItem(series: SeriesDto): SearchResultItem {
     subtitle: cardSubtitle(series),
     contentRating: deriveContentRating(series),
   };
-}
+};
 
-export function toFeaturedItem(series: SeriesDto): DiscoverSectionItem {
+export const toFeaturedItem = (series: SeriesDto): DiscoverSectionItem => {
   return {
     type: "featuredCarouselItem",
     mangaId: buildSlugId(series.id, series.title),
@@ -183,9 +243,9 @@ export function toFeaturedItem(series: SeriesDto): DiscoverSectionItem {
     infoItems: featuredInfoItems(series),
     contentRating: deriveContentRating(series),
   };
-}
+};
 
-export function toProminentItem(series: SeriesDto): DiscoverSectionItem {
+export const toProminentItem = (series: SeriesDto): DiscoverSectionItem => {
   return {
     type: "prominentCarouselItem",
     mangaId: buildSlugId(series.id, series.title),
@@ -194,9 +254,9 @@ export function toProminentItem(series: SeriesDto): DiscoverSectionItem {
     subtitle: cardSubtitle(series),
     contentRating: deriveContentRating(series),
   };
-}
+};
 
-export function toSimpleItem(series: SeriesDto): DiscoverSectionItem {
+export const toSimpleItem = (series: SeriesDto): DiscoverSectionItem => {
   return {
     type: "simpleCarouselItem",
     mangaId: buildSlugId(series.id, series.title),
@@ -205,11 +265,9 @@ export function toSimpleItem(series: SeriesDto): DiscoverSectionItem {
     subtitle: cardSubtitle(series),
     contentRating: deriveContentRating(series),
   };
-}
+};
 
-// A latest-feed series carries its newest chapter, so it can render as a proper
-// chapter-update card (falling back to a simple card when the chapter is absent).
-export function toLatestItem(series: SeriesDto): DiscoverSectionItem {
+export const toLatestItem = (series: SeriesDto): DiscoverSectionItem => {
   const latest = series.chapters?.[0];
   if (!latest?.id) return toSimpleItem(series);
   const chapter = latest.number != null ? `Ch. ${formatChapterNumber(latest.number)}` : undefined;
@@ -217,24 +275,16 @@ export function toLatestItem(series: SeriesDto): DiscoverSectionItem {
   return {
     type: "chapterUpdatesCarouselItem",
     mangaId: buildSlugId(series.id, series.title),
-    chapterId: String(latest.id),
+    chapterId: buildChapterId(String(series.id), latest.id, latest.group_id),
     title: Application.decodeHTMLEntities(series.title),
     imageUrl: buildCoverUrl(series.cover),
     subtitle: [chapter, team].filter(Boolean).join(" | ") || undefined,
     publishDate: parseDate(latest.updated_at ?? latest.created_at),
     contentRating: deriveContentRating(series),
   };
-}
+};
 
-// ---------------------------------------------------------------------------
-// manga details
-// ---------------------------------------------------------------------------
-
-// `requestedMangaId` keeps the returned id identical to what the app asked
-// for (library entries saved under an older id format must not be re-keyed);
-// the canonical slugged id is carried in additionalInfo for the reader path.
-export function parseMangaDetails(series: SeriesDto, requestedMangaId?: string): SourceManga {
-  // Merge the type name, numeric tags and free-text themes into one tag set.
+export const parseMangaDetails = (series: SeriesDto): SourceManga => {
   const typeName = series.type != null ? TYPE_NAMES[series.type] : undefined;
   const names = [
     ...(typeName ? [typeName] : []),
@@ -260,7 +310,7 @@ export function parseMangaDetails(series: SeriesDto, requestedMangaId?: string):
   const slugId = buildSlugId(series.id, series.title);
 
   return {
-    mangaId: requestedMangaId ?? slugId,
+    mangaId: slugId,
     mangaInfo: {
       primaryTitle: Application.decodeHTMLEntities(series.title),
       secondaryTitles,
@@ -272,32 +322,23 @@ export function parseMangaDetails(series: SeriesDto, requestedMangaId?: string):
       rating: toPaperbackRating(series),
       contentRating: deriveContentRating(series),
       tagGroups: tags.length > 0 ? [{ id: "tags", title: "Tags", tags }] : [],
-      additionalInfo: { slugId },
       shareUrl: `${getDomain()}/series/${slugId}`,
     },
   };
-}
+};
 
-// ---------------------------------------------------------------------------
-// chapters
-// ---------------------------------------------------------------------------
-
-// Keep the chapter's real title separate from its scanlation group. Paperback
-// renders `version` as the group label and uses it to distinguish releases of
-// the same chapter number, matching sources such as Comix.
-function buildChapterTitle(chapter: ChapterDto): string | undefined {
+const buildChapterTitle = (chapter: ChapterDto): string | undefined => {
   const title = chapter.title?.trim();
   return title ? Application.decodeHTMLEntities(title) : undefined;
-}
+};
 
-export function parseChapterList(
+export const parseChapterList = (
   chapters: ChapterDto[],
   sourceManga: SourceManga,
   seriesSlugId: string,
-): Chapter[] {
-  // Newest first from the API; index gives a stable, descending sort key.
+): Chapter[] => {
   return chapters.map((chapter, index) => ({
-    chapterId: String(chapter.id),
+    chapterId: buildChapterId(seriesSlugId, chapter.id, chapter.group_id),
     sourceManga,
     title: buildChapterTitle(chapter),
     version: scanlationTeam(chapter) ?? "Unknown",
@@ -306,37 +347,25 @@ export function parseChapterList(
     langCode: "en",
     sortingIndex: chapters.length - index,
     publishDate: parseDate(chapter.created_at),
-    additionalInfo: {
-      seriesId: seriesSlugId,
-      groupId: String(chapter.group_id ?? 0),
-    },
   }));
-}
+};
 
-// ---------------------------------------------------------------------------
-// pages
-// ---------------------------------------------------------------------------
-
-export function parseChapterPages(data: PageListDto, chapter: Chapter): string[] {
+export const parseChapterPages = (data: PageListDto, chapterId: string): string[] => {
   const chapterData = data.chapter;
-  const chapterId = chapterData?.id ?? Number(chapter.chapterId);
+  const pageChapterId = chapterData?.id ?? Number(chapterId);
   const pages = [...(chapterData?.pages ?? [])]
     .sort((a, b) => a.position - b.position)
-    .map((page) => `${CDN_URL}/pages/${chapterId}/${page.path}`)
+    .map((page) => `${CDN_URL}/pages/${pageChapterId}/${page.path}`)
     .filter((url) => url.length > 0);
 
   if (pages.length === 0) {
-    throw new Error(`No pages returned for chapter ${chapter.chapterId}.`);
+    throw new Error(`No pages returned for chapter ${chapterId}.`);
   }
 
   return pages;
-}
+};
 
-// The reader page embeds its API responses in the Nuxt payload script. Page
-// entries serialize as {"position": <index>, "path": <index>} objects whose
-// values live flat in the same array, so they can be lifted out directly
-// without replaying the whole payload graph.
-export function parseReaderPagePaths(html: string): string[] {
+export const parseReaderPagePaths = (html: string): string[] => {
   const match = html.match(/<script[^>]+id="__NUXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
   if (!match?.[1]) return [];
 
@@ -364,4 +393,4 @@ export function parseReaderPagePaths(html: string): string[] {
   }
 
   return pages.sort((a, b) => a.position - b.position).map((page) => page.path);
-}
+};

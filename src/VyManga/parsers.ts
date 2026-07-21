@@ -23,6 +23,7 @@ import {
   CHAPTER_FALLBACK_SELECTOR,
   CHAPTER_SELECTOR,
   DESC_SELECTOR,
+  GENRES_KEY,
   GENRE_LINK_SELECTOR,
   GENRE_SELECTOR,
   PAGE_SELECTOR,
@@ -32,6 +33,16 @@ import {
   type MangaCard,
   type OptionItem,
 } from "./models";
+
+export const getStoredGenres = (): OptionItem[] => {
+  const raw = Application.getState(GENRES_KEY) as string | undefined;
+  if (raw === undefined) return [];
+  try {
+    return JSON.parse(raw) as OptionItem[];
+  } catch {
+    return [];
+  }
+};
 
 const MONTHS: Record<string, number> = {
   jan: 0,
@@ -60,39 +71,31 @@ const MONTHS: Record<string, number> = {
   december: 11,
 };
 
-// ---------------------------------------------------------------------------
-// id / url / image helpers
-// ---------------------------------------------------------------------------
-
-export function safeDecode(id: string): string {
+export const safeDecode = (id: string): string => {
   try {
     return decodeURIComponent(id);
   } catch {
     return id;
   }
-}
+};
 
-// The manga id is just the `/manga/<slug>` slug, so the details/chapters URL is
-// rebuilt as `${base}/manga/<slug>`. Storing the bare slug (rather than the full
-// "manga/<slug>" path) keeps it out of a URL path-component encoder that would
-// escape the slash and break the route.
-export function extractMangaId(href: string): string | undefined {
+export const extractMangaId = (href: string): string | undefined => {
   const match = href.match(/\/manga\/([a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])(?:\/|\?|#|$)/);
   if (match?.[1]) return match[1];
   const simple = href.match(/\/manga\/([a-zA-Z0-9-]+)/);
   if (simple?.[1] && simple[1].replace(/-/g, "").length >= 1) return simple[1];
   return undefined;
-}
+};
 
-function absoluteUrl(base: string, src: string): string {
+const absoluteUrl = (base: string, src: string): string => {
   const s = (src || "").trim();
   if (!s) return "";
   if (s.startsWith("http")) return s;
   if (s.startsWith("//")) return `https:${s}`;
   return s.startsWith("/") ? `${base}${s}` : `${base}/${s}`;
-}
+};
 
-function imgAttr(base: string, img: Cheerio<AnyNode>): string {
+const imgAttr = (base: string, img: Cheerio<AnyNode>): string => {
   if (!img || img.length === 0) return "";
   const src =
     img.attr("data-src") ||
@@ -101,13 +104,9 @@ function imgAttr(base: string, img: Cheerio<AnyNode>): string {
     img.attr("src") ||
     "";
   return absoluteUrl(base, src);
-}
+};
 
-// ---------------------------------------------------------------------------
-// listing / discover cards
-// ---------------------------------------------------------------------------
-
-export function parseCard($: CheerioAPI, base: string, element: AnyNode): MangaCard | undefined {
+export const parseCard = ($: CheerioAPI, base: string, element: AnyNode): MangaCard | undefined => {
   const unit = $(element);
   const link = unit.find(CARD_LINK_SELECTOR).first();
   const href = (link.attr("href") || "").trim();
@@ -121,8 +120,6 @@ export function parseCard($: CheerioAPI, base: string, element: AnyNode): MangaC
   );
   if (!title) return undefined;
 
-  // The cover may sit on the <img> (lazy data-src) or as a background-image on
-  // the wrapper div.
   const img = unit.find(CARD_IMAGE_SELECTOR).first();
   let imageUrl = imgAttr(base, img);
   if (!imageUrl) {
@@ -138,9 +135,9 @@ export function parseCard($: CheerioAPI, base: string, element: AnyNode): MangaC
     imageUrl,
     subtitle: latest || undefined,
   };
-}
+};
 
-export function parseCards($: CheerioAPI, base: string): MangaCard[] {
+export const parseCards = ($: CheerioAPI, base: string): MangaCard[] => {
   const cards: MangaCard[] = [];
   const seen = new Set<string>();
   for (const element of $(".comic-item").toArray()) {
@@ -151,19 +148,14 @@ export function parseCards($: CheerioAPI, base: string): MangaCard[] {
     }
   }
   return cards;
-}
+};
 
-// ---------------------------------------------------------------------------
-// genres (scraped from the site-wide /genre/<slug> navigation)
-// ---------------------------------------------------------------------------
-
-export function parseGenres($: CheerioAPI): OptionItem[] {
+export const parseGenres = ($: CheerioAPI): OptionItem[] => {
   const genres: OptionItem[] = [];
   const seen = new Set<string>();
   for (const element of $(GENRE_LINK_SELECTOR).toArray()) {
     const anchor = $(element);
     const id = (anchor.attr("href") || "").match(/\/genre\/([a-z0-9-]+)/i)?.[1]?.toLowerCase();
-    // The nav prints multi-line labels ("Shounen\nType"), so collapse whitespace.
     const name = Application.decodeHTMLEntities(anchor.text().replace(/\s+/g, " ").trim());
     if (!id || id === "all" || !name || seen.has(id)) continue;
     seen.add(id);
@@ -171,28 +163,24 @@ export function parseGenres($: CheerioAPI): OptionItem[] {
   }
   genres.sort((a, b) => a.value.localeCompare(b.value));
   return genres;
-}
+};
 
-// ---------------------------------------------------------------------------
-// details
-// ---------------------------------------------------------------------------
-
-function collectText($: CheerioAPI, selector: string): string[] {
+const collectText = ($: CheerioAPI, selector: string): string[] => {
   const out: string[] = [];
   $(selector).each((_, el) => {
     const t = $(el).text().trim();
     if (t && t !== "-" && t.toLowerCase() !== "n/a" && t.toLowerCase() !== "updating") out.push(t);
   });
   return out;
-}
+};
 
-export function parseMangaDetails(
+export const parseMangaDetails = (
   $: CheerioAPI,
   base: string,
   mangaId: string,
   shareUrl: string,
   defaultRating: ContentRating,
-): SourceManga {
+): SourceManga => {
   const primaryTitle = Application.decodeHTMLEntities(
     $(TITLE_SELECTOR).first().text().trim() || safeDecode(mangaId),
   );
@@ -241,20 +229,18 @@ export function parseMangaDetails(
       shareUrl,
     },
   };
-}
+};
 
-// The genre id used by the search filter is the numeric value at the end of the
-// details genre link; fall back to a slug so a tapped tag still searches.
-function genreIdFromAnchor(href: string, title: string): string {
+const genreIdFromAnchor = (href: string, title: string): string => {
   const cleaned = href.replace(/[?#].*$/, "").replace(/\/+$/, "");
   const last = cleaned.split("/").pop() || "";
   if (/^\d+$/.test(last)) return last;
   const query = href.match(/genre(?:\[\])?=(\d+)/);
   if (query) return query[1];
   return title.toLowerCase().replace(/\s+/g, "-");
-}
+};
 
-function parseStatus(status: string): string {
+const parseStatus = (status: string): string => {
   const s = (status || "").toLowerCase().trim();
   if (!s) return "Unknown";
   if (s.includes("complet") || s.includes("finish")) return "Completed";
@@ -262,15 +248,9 @@ function parseStatus(status: string): string {
   if (s.includes("hiatus") || s.includes("pause")) return "Hiatus";
   if (s.includes("cancel") || s.includes("drop")) return "Cancelled";
   return "Unknown";
-}
+};
 
-// ---------------------------------------------------------------------------
-// chapters
-// ---------------------------------------------------------------------------
-
-export function parseChapters($: CheerioAPI, base: string, sourceManga: SourceManga): Chapter[] {
-  // Multi-chapter titles use a.list-chapter; single-chapter titles only have the
-  // id-anchored button, so fall back to it when the list is empty.
+export const parseChapters = ($: CheerioAPI, base: string, sourceManga: SourceManga): Chapter[] => {
   let elements = $(CHAPTER_SELECTOR).toArray();
   if (elements.length === 0) elements = $(CHAPTER_FALLBACK_SELECTOR).toArray();
 
@@ -281,9 +261,6 @@ export function parseChapters($: CheerioAPI, base: string, sourceManga: SourceMa
     const href = (el.attr("href") || el.find("a").first().attr("href") || "").trim();
     if (!href) continue;
 
-    // Chapters redirect through an external reader whose per-chapter token lives
-    // in the query string, so keep the full absolute URL as the id — stripping
-    // the query would collapse every chapter to the same path.
     const chapterId = absoluteUrl(base, href);
     if (!chapterId || seen.has(chapterId)) continue;
     seen.add(chapterId);
@@ -311,23 +288,18 @@ export function parseChapters($: CheerioAPI, base: string, sourceManga: SourceMa
     ...chapter,
     sortingIndex: chapters.length - index,
   }));
-}
+};
 
-function parseChapterNumber(name: string): number {
+const parseChapterNumber = (name: string): number => {
   const m = name.match(/chapter[.\s-]*(\d+(?:\.\d+)?)/i) ?? name.match(/(\d+(?:\.\d+)?)/);
   return m ? parseFloat(m[1]) : 0;
-}
+};
 
-// ---------------------------------------------------------------------------
-// pages
-// ---------------------------------------------------------------------------
-
-export function parseChapterPages($: CheerioAPI, base: string): string[] {
+export const parseChapterPages = ($: CheerioAPI, base: string): string[] => {
   const pages: string[] = [];
   const seen = new Set<string>();
   for (const element of $(PAGE_SELECTOR).toArray()) {
     const image = imgAttr(base, $(element));
-    // Skip the reader's non-page images (loading placeholder, logos, avatars).
     if (!image || seen.has(image) || /loading\.gif|\/(logo|icon|avatar|banner)/i.test(image)) {
       continue;
     }
@@ -335,16 +307,9 @@ export function parseChapterPages($: CheerioAPI, base: string): string[] {
     pages.push(image);
   }
   return pages;
-}
+};
 
-// ---------------------------------------------------------------------------
-// dates
-// ---------------------------------------------------------------------------
-
-// Handles the chapter-list absolute format ("Jan 05, 2024") and the relative
-// times ("2 days ago", "5 hours ago") deterministically across engines
-// (JavaScriptCore on iOS is stricter than V8 about date strings).
-export function parseDate(text: string): Date {
+export const parseDate = (text: string): Date => {
   const trimmed = (text || "").trim();
   if (!trimmed) return new Date();
 
@@ -380,4 +345,4 @@ export function parseDate(text: string): Date {
 
   const direct = new Date(trimmed);
   return isNaN(direct.getTime()) ? new Date() : direct;
-}
+};

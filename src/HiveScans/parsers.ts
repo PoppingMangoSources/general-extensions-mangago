@@ -19,34 +19,34 @@ import {
   type HiveScansPost,
 } from "./models";
 
-export function encodeMangaId(slug: string): string {
+export const encodeMangaId = (slug: string): string => {
   return encodeURIComponent(slug).replace(
     /[!'()*]/g,
     (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
   );
-}
+};
 
-export function decodeMangaId(value: string): string {
+export const decodeMangaId = (value: string): string => {
   try {
     return decodeURIComponent(value);
   } catch {
     return value;
   }
-}
+};
 
-export function normalizeSearchTerm(term: string): string {
+export const normalizeSearchTerm = (term: string): string => {
   return term
     .trim()
     .replace(/[‘’]/g, "'")
     .replace(/[“”]/g, '"')
     .replace(/\s+/g, " ");
-}
+};
 
-export function isNovel(post: Pick<HiveScansPost, "isNovel" | "seriesType">): boolean {
+export const isNovel = (post: Pick<HiveScansPost, "isNovel" | "seriesType">): boolean => {
   return post.isNovel === true || (post.seriesType ?? "").toUpperCase() === "NOVEL";
-}
+};
 
-export function mapStatus(status?: string | null): string {
+export const mapStatus = (status?: string | null): string => {
   switch ((status ?? "").toUpperCase()) {
     case "ONGOING":
     case "COMING_SOON":
@@ -63,9 +63,9 @@ export function mapStatus(status?: string | null): string {
     default:
       return "Unknown";
   }
-}
+};
 
-export function formatSeriesSubtitle(type?: string | null, status?: string | null): string {
+export const formatSeriesSubtitle = (type?: string | null, status?: string | null): string => {
   return [type, status]
     .filter((value): value is string => Boolean(value))
     .map((value) =>
@@ -75,16 +75,16 @@ export function formatSeriesSubtitle(type?: string | null, status?: string | nul
         .replace(/\b\w/g, (char) => char.toUpperCase()),
     )
     .join(" • ");
-}
+};
 
-function cleanField(value?: string | null): string | undefined {
+const cleanField = (value?: string | null): string | undefined => {
   if (!value) return undefined;
   const trimmed = value.trim();
   if (!trimmed || trimmed === "-" || trimmed.toLowerCase() === "n/a") return undefined;
   return trimmed;
-}
+};
 
-function normalizeCreatorName(value?: string | null): string | undefined {
+const normalizeCreatorName = (value?: string | null): string | undefined => {
   const cleaned = cleanField(value);
   if (!cleaned) return undefined;
 
@@ -99,9 +99,9 @@ function normalizeCreatorName(value?: string | null): string | undefined {
   }
 
   return normalized;
-}
+};
 
-export function contentRatingForGenres(genreNames: string[]): ContentRating {
+export const contentRatingForGenres = (genreNames: string[]): ContentRating => {
   const normalized = genreNames.map((name) => name.trim().toLowerCase());
   if (
     normalized.some(
@@ -114,18 +114,18 @@ export function contentRatingForGenres(genreNames: string[]): ContentRating {
     return ContentRating.MATURE;
   }
   return ContentRating.EVERYONE;
-}
+};
 
-function contentRatingForPost(post: Pick<HiveScansPost, "genres">): ContentRating {
+const contentRatingForPost = (post: Pick<HiveScansPost, "genres">): ContentRating => {
   return contentRatingForGenres((post.genres ?? []).map((genre) => genre.name));
-}
+};
 
-function toPaperbackRating(value?: number | null): number | undefined {
+const toPaperbackRating = (value?: number | null): number | undefined => {
   if (value == null || !Number.isFinite(value)) return undefined;
   return Math.min(1, Math.max(0, value / 10));
-}
+};
 
-function stripHtml(html: string): string {
+const stripHtml = (html: string): string => {
   if (!html) return "";
   return Application.decodeHTMLEntities(
     html
@@ -134,14 +134,14 @@ function stripHtml(html: string): string {
       .replace(/<[^>]+>/g, "")
       .trim(),
   );
-}
+};
 
-function toXhtml(fragment: string): string {
+const toXhtml = (fragment: string): string => {
   const body = cheerio.load(fragment, null, false).html({ xml: true });
   return `<html xmlns="http://www.w3.org/1999/xhtml"><head></head><body>${body}</body></html>`;
-}
+};
 
-function seriesTypeTag(seriesType?: string | null): string | undefined {
+const seriesTypeTag = (seriesType?: string | null): string | undefined => {
   switch ((seriesType ?? "").toUpperCase()) {
     case "MANGA":
       return "Manga";
@@ -154,9 +154,9 @@ function seriesTypeTag(seriesType?: string | null): string | undefined {
     default:
       return undefined;
   }
-}
+};
 
-export function parseSearchResults(posts: HiveScansPost[]): SearchResultItem[] {
+export const parseSearchResults = (posts: HiveScansPost[]): SearchResultItem[] => {
   return posts.map((post) => ({
     mangaId: encodeMangaId(post.slug),
     title: Application.decodeHTMLEntities(post.postTitle),
@@ -164,9 +164,9 @@ export function parseSearchResults(posts: HiveScansPost[]): SearchResultItem[] {
     subtitle: formatSeriesSubtitle(post.seriesType, post.seriesStatus) || undefined,
     contentRating: contentRatingForPost(post),
   }));
-}
+};
 
-export function toFeaturedItems(posts: HiveScansPost[]): DiscoverSectionItem[] {
+export const toFeaturedItems = (posts: HiveScansPost[]): DiscoverSectionItem[] => {
   return posts
     .filter((post) => !isNovel(post))
     .map((post) => {
@@ -197,13 +197,13 @@ export function toFeaturedItems(posts: HiveScansPost[]): DiscoverSectionItem[] {
         contentRating: contentRatingForPost(post),
       };
     });
-}
+};
 
-export function toHotReleaseItems(posts: HiveScansPost[]): DiscoverSectionItem[] {
+export const toHotReleaseItems = (posts: HiveScansPost[]): DiscoverSectionItem[] => {
   return posts
     .filter((post) => !isNovel(post))
     .map((post) => {
-      const latestChapter = post.chapters?.[0];
+      const latestChapter = post.chapters?.find((chapter) => chapter.isAccessible === true);
       const subtitle = [
         latestChapter ? `Ch. ${latestChapter.number}` : undefined,
         post.averageRating == null ? undefined : `★ ${post.averageRating}`,
@@ -220,9 +220,9 @@ export function toHotReleaseItems(posts: HiveScansPost[]): DiscoverSectionItem[]
         contentRating: contentRatingForPost(post),
       };
     });
-}
+};
 
-export function toNovelItems(posts: HiveScansPost[]): DiscoverSectionItem[] {
+export const toNovelItems = (posts: HiveScansPost[]): DiscoverSectionItem[] => {
   return posts.filter(isNovel).map((post) => {
     const latestChapter = post.chapters?.find((chapter) => chapter.isAccessible === true);
     const subtitle = [
@@ -241,9 +241,9 @@ export function toNovelItems(posts: HiveScansPost[]): DiscoverSectionItem[] {
       contentRating: contentRatingForPost(post),
     };
   });
-}
+};
 
-export function toLatestUpdateItems(posts: HiveScansPost[]): DiscoverSectionItem[] {
+export const toLatestUpdateItems = (posts: HiveScansPost[]): DiscoverSectionItem[] => {
   return posts
     .filter((post) => !isNovel(post))
     .flatMap((post): DiscoverSectionItem[] => {
@@ -273,9 +273,9 @@ export function toLatestUpdateItems(posts: HiveScansPost[]): DiscoverSectionItem
         },
       ];
     });
-}
+};
 
-export function parseMangaDetails(post: HiveScansPost): SourceManga {
+export const parseMangaDetails = (post: HiveScansPost): SourceManga => {
   const primaryTitle = Application.decodeHTMLEntities(post.postTitle);
   const genreNames = [
     seriesTypeTag(post.seriesType),
@@ -315,23 +315,23 @@ export function parseMangaDetails(post: HiveScansPost): SourceManga {
       shareUrl: `${DOMAIN}/series/${post.slug}`,
     },
   };
-}
+};
 
-function chapterNumber(chapter: HiveScansChapter): number {
+const chapterNumber = (chapter: HiveScansChapter): number => {
   return typeof chapter.number === "number"
     ? chapter.number
     : parseFloat(String(chapter.number)) || 0;
-}
+};
 
-function isChapterLocked(chapter: HiveScansChapter): boolean {
+const isChapterLocked = (chapter: HiveScansChapter): boolean => {
   return chapter.isLocked === true || chapter.isPermanentlyLocked === true;
-}
+};
 
-export function parseChapterList(
+export const parseChapterList = (
   chapters: HiveScansChapter[],
   sourceManga: SourceManga,
   showLocked: boolean,
-): Chapter[] {
+): Chapter[] => {
   const visible = chapters.filter((chapter) => {
     if (chapter.chapterStatus && chapter.chapterStatus !== "PUBLIC") return false;
     return chapter.isAccessible === true || (showLocked && isChapterLocked(chapter));
@@ -358,9 +358,12 @@ export function parseChapterList(
       publishDate: new Date(chapter.createdAt),
     };
   });
-}
+};
 
-export function parseChapterDetails(data: HiveScansChapterData, chapter: Chapter): ChapterDetails {
+export const parseChapterDetails = (
+  data: HiveScansChapterData,
+  chapter: Chapter,
+): ChapterDetails => {
   if (data.isShortLinkLocked) throw new Error("Chapter locked (short link).");
   if (data.isLockedByCoins) throw new Error("Chapter locked — coins required to unlock.");
   if (data.isPermanentlyLocked) throw new Error("Chapter permanently locked.");
@@ -389,4 +392,4 @@ export function parseChapterDetails(data: HiveScansChapterData, chapter: Chapter
     mangaId: chapter.sourceManga.mangaId,
     pages,
   };
-}
+};

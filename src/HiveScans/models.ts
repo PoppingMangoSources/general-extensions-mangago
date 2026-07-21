@@ -6,7 +6,6 @@ import type { SortingOption } from "@paperback/types";
 export const DOMAIN = "https://hivetoons.org";
 export const API_URL = "https://api.hivetoons.org/api";
 export const PAGE_SIZE = 18;
-export const GENRES_CACHE_TTL = 60 * 60 * 1000;
 
 export const SECTION_POPULAR = "popular";
 export const SECTION_NOVELS = "novels";

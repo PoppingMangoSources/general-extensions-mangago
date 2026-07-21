@@ -13,12 +13,49 @@ import type { Cheerio, CheerioAPI } from "cheerio";
 import type { Element } from "domhandler";
 
 import { getUsePostIds } from "./forms";
-import type { MangaStreamGeneric } from "./main";
-import { type MangaStreamDiscoverSection, type MangaStreamSearchResultItem } from "./models";
-import { convertDate } from "./utils";
+import {
+  type MangaStreamDiscoverSection,
+  type MangaStreamParserContext,
+  type MangaStreamSearchResultItem,
+  type Months,
+} from "./models";
+
+const convertDate = (dateString: string, source: MangaStreamParserContext): Date => {
+  const normalized = dateString.toLowerCase();
+  const months: Months = source.dateMonths;
+
+  for (const [key, value] of Object.entries(months)) {
+    if (!normalized.includes(value.toLowerCase())) continue;
+    const date = new Date(normalized.replace(value, key));
+    if (!Number.isNaN(date.getTime())) return date;
+  }
+
+  throw new Error(`Failed to parse chapter date: ${dateString}`);
+};
+
+export const getIncludedTagBySection = (section: string, tags: string[]): string =>
+  (tags.find((tag) => tag.startsWith(`${section}_`))?.replace(`${section}_`, "") ?? "").replace(
+    " ",
+    "+",
+  );
+
+export const getFilterTagsBySection = (
+  section: string,
+  tags: string[],
+  included: boolean,
+  supportsExclusion = false,
+): string[] => {
+  if (!included && !supportsExclusion) return [];
+  return tags
+    .filter((tag) => tag.startsWith(`${section}_`))
+    .map((tag) => {
+      const id = tag.replace(`${section}_`, "");
+      return included ? id : encodeURI(`-${id}`);
+    });
+};
 
 export class MangaStreamParser {
-  parseMangaDetails($: CheerioAPI, mangaId: string, source: MangaStreamGeneric): SourceManga {
+  parseMangaDetails($: CheerioAPI, mangaId: string, source: MangaStreamParserContext): SourceManga {
     const titles: string[] = [];
     titles.push($("h1.entry-title").text().trim());
 
@@ -111,19 +148,21 @@ export class MangaStreamParser {
     };
   }
 
-  parseChapterList($: CheerioAPI, sourceManga: SourceManga, source: MangaStreamGeneric): Chapter[] {
+  parseChapterList(
+    $: CheerioAPI,
+    sourceManga: SourceManga,
+    source: MangaStreamParserContext,
+  ): Chapter[] {
     const chapters: Chapter[] = [];
     let sortingIndex = 0;
     let language = source.language;
 
-    // Usually for Manhwa sites
     if (sourceManga.mangaId.toUpperCase().endsWith("-RAW") && source.language == "🇬🇧")
       language = "🇰🇷";
 
     for (const chapter of $("li", "div#chapterlist").toArray()) {
       const title = $("span.chapternum", chapter).text().trim().replace(/\s+/g, " ");
       const date = convertDate($("span.chapterdate", chapter).text().trim(), source);
-      // Set data-num attribute as id
       const id = (chapter.attribs["data-num"] ?? "").replaceAll(" ", "-");
       const chapterNumberRegex = id.match(/(\d+\.?\d?)+/);
       let chapterNumber = 0;
@@ -212,7 +251,6 @@ export class MangaStreamParser {
     }
 
     for (const index of scriptObj.sources) {
-      // Check all sources, if empty continue.
       if (index?.images.length == 0) continue;
       index.images.map((p: string) => pages.push(encodeURI(p.trim())));
     }
@@ -288,13 +326,12 @@ export class MangaStreamParser {
   async parseHomeSection(
     $: CheerioAPI,
     section: MangaStreamDiscoverSection,
-    source: MangaStreamGeneric,
+    source: MangaStreamParserContext,
   ): Promise<DiscoverSectionItem[]> {
     const items: DiscoverSectionItem[] = [];
 
     const mangas = section.selectorFunc($);
     if (!mangas.length) {
-      console.log(`Unable to parse valid ${section.title} section!`);
       return items;
     }
 
@@ -315,9 +352,6 @@ export class MangaStreamParser {
         : slug;
 
       if (!mangaId || !title) {
-        console.log(
-          `Failed to parse homepage sections for ${source.domain} title (${title}) mangaId (${mangaId})`,
-        );
         continue;
       }
       let result: DiscoverSectionItem;

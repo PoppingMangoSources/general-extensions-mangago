@@ -7,21 +7,16 @@ import { MangaStreamSettings } from "./generic/forms";
 
 const BASE_URL_KEY = "rokaricomics.baseUrlOverride";
 
-// These sites rotate domains often; let readers point at the new one without
-// waiting for an extension update.
-export function getBaseUrlOverride(): string | undefined {
+export const getBaseUrlOverride = (): string | undefined => {
   const value = Application.getState(BASE_URL_KEY);
   if (typeof value === "string") {
     const trimmed = value.trim().replace(/\/+$/, "");
     if (trimmed.length > 0) return trimmed;
   }
   return undefined;
-}
+};
 
-// Normalise before persisting: a scheme-less value would make every
-// `new URL(domain)` in the extension throw and brick the source. Returns the
-// stored value, or undefined when the input was unusable.
-function setBaseUrlOverride(value: string): string | undefined {
+const setBaseUrlOverride = (value: string): string | undefined => {
   let trimmed = value.trim().replace(/\/+$/, "");
   if (trimmed.length === 0) {
     Application.setState("", BASE_URL_KEY);
@@ -35,9 +30,8 @@ function setBaseUrlOverride(value: string): string | undefined {
   }
   Application.setState(trimmed, BASE_URL_KEY);
   return trimmed;
-}
+};
 
-// Adds a "Base URL" override on top of the shared MangaStream settings.
 export class RokariComicsSettings extends MangaStreamSettings {
   private readonly defaultBaseUrl: string;
   private baseUrlOverride: string;
@@ -81,10 +75,8 @@ export class RokariComicsSettings extends MangaStreamSettings {
 
   async updateOverride(value: string): Promise<void> {
     const stored = setBaseUrlOverride(value);
-    // Keep the previous value when the input couldn't be parsed as a URL.
     if (stored !== undefined) {
       this.baseUrlOverride = stored;
-      // Cached discover content belongs to the old domain.
       Application.invalidateDiscoverSections();
     }
     this.reloadForm();

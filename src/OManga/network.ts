@@ -4,13 +4,40 @@
 import {
   CloudflareError,
   PaperbackInterceptor,
+  URL,
   type Request,
   type Response,
 } from "@paperback/types";
 
-import { getDomain } from "./models";
+import { type CatalogQuery, type CatalogResponse, getDomain } from "./models";
 
 const IMAGE_EXTENSION_REGEX = /\.(jpe?g|png|webp|gif|avif)(\?|#|$)/i;
+
+export const buildCatalogUrl = (query: CatalogQuery): string => {
+  const url = new URL(getDomain()).addPathComponent("api").addPathComponent("catalog");
+  for (const [key, value] of Object.entries(query)) {
+    if (value === undefined) continue;
+    const values = (Array.isArray(value) ? value : [value]).filter(Boolean);
+    if (values.length > 0) url.setQueryItem(key, values);
+  }
+  return url.toString();
+};
+
+export const fetchCatalog = async (query: CatalogQuery): Promise<CatalogResponse> => {
+  const url = buildCatalogUrl(query);
+  const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error(`Catalog request failed with status ${response.status}: ${url}`);
+  }
+
+  try {
+    const result = JSON.parse(Application.arrayBufferToUTF8String(buffer)) as CatalogResponse;
+    if (!Array.isArray(result.items)) throw new Error("Catalog response has no items array");
+    return result;
+  } catch (error) {
+    throw new Error("Failed to parse the catalog response", { cause: error });
+  }
+};
 
 export class OMangaInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
@@ -20,8 +47,6 @@ export class OMangaInterceptor extends PaperbackInterceptor {
       ...request,
       headers: {
         ...request.headers,
-        // Covers and pages live on a separate image host that checks the
-        // Referer; site documents want a plain navigation accept.
         referer: `${getDomain()}/`,
         "user-agent": await Application.getDefaultUserAgent(),
         accept:
@@ -39,9 +64,6 @@ export class OMangaInterceptor extends PaperbackInterceptor {
     response: Response,
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
-    // Always challenge against the homepage so simultaneous failures collapse
-    // into a single bypass prompt instead of one per URL. A bare 403 only
-    // counts for the site itself — the image host has its own failure modes.
     const challenged =
       response.headers?.["cf-mitigated"] === "challenge" ||
       (response.status === 403 && request.url.startsWith(getDomain()));
@@ -68,12 +90,6 @@ export const fetchHtmlPage = async (url: string): Promise<string> => {
 
   return Application.arrayBufferToUTF8String(buffer);
 };
-
-/**
- * GET a page's bare data payload — the same stream the site's own client-side
- * navigation requests. A fraction of the full page's size, so it's the fast
- * path; callers fall back to the full page if the payload comes up short.
- */
 export const fetchFlightPayload = async (
   url: string,
   headers: Record<string, string> = {},
@@ -92,7 +108,6 @@ export const fetchFlightPayload = async (
 };
 
 export const buildSeriesNavigationHeaders = (slug: string): Record<string, string> => {
-  // Refetch only the leaf page; shared layouts otherwise dominate short series payloads.
   const page = ["__PAGE__", {}, null, "refetch"];
   const tab = [["tab", "", "oc", null], { children: page }, null, null, 4];
   const series = [["slug", slug, "d", null], { children: tab }, null, null, 8];

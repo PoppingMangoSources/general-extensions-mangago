@@ -3,6 +3,7 @@
 
 import {
   BasicRateLimiter,
+  CloudflareError,
   ContentRating,
   CookieStorageInterceptor,
   DiscoverSectionType,
@@ -31,6 +32,7 @@ import {
   CHAPTERS_PER_PAGE,
   DOMAIN,
   LOCK_SUFFIX,
+  SORTING_OPTIONS,
   type AjaxChapterResponse,
   type ComicCard,
   type Genre,
@@ -54,13 +56,6 @@ import {
 } from "./parsers";
 import type RinkoComicsConfig from "./pbconfig";
 
-const SORTING_OPTIONS: SortingOption[] = [
-  { id: "newest", label: "Newest First" },
-  { id: "oldest", label: "Oldest First" },
-  { id: "az", label: "A-Z" },
-  { id: "za", label: "Z-A" },
-];
-
 export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsConfig> {
   globalRateLimiter = new BasicRateLimiter("rateLimiter", {
     numberOfRequests: 3,
@@ -72,9 +67,8 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
     storage: "stateManager",
   });
 
-  // Genres are scraped from the archive page filter; cache them for the
-  // lifetime of the session to avoid refetching on every search form open.
   private genresList: Genre[] = [];
+  private genresPromise?: Promise<Genre[]>;
 
   async initialise(): Promise<void> {
     this.globalRateLimiter.registerInterceptor();
@@ -85,10 +79,6 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
   async getSettingsForm(): Promise<Form> {
     return new RinkoComicsSettingsForm();
   }
-
-  // ----------------------------------------------------------------
-  // Discover sections
-  // ----------------------------------------------------------------
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
@@ -164,10 +154,6 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
     return { items, metadata: undefined };
   }
 
-  // ----------------------------------------------------------------
-  // Search
-  // ----------------------------------------------------------------
-
   async getSortingOptions(): Promise<SortingOption[]> {
     return SORTING_OPTIONS;
   }
@@ -183,7 +169,6 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
   ): Promise<PagedResults<SearchResultItem>> {
     const titleQuery = (query.title || "").trim();
 
-    // Let users paste a comic link into search to open it directly.
     const pasted = await this.resolveUrlQuery(titleQuery);
     if (pasted) return pasted;
 
@@ -214,7 +199,6 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
     };
   }
 
-  // Resolves a pasted `rinkocomics.com` comic link to a single result.
   private async resolveUrlQuery(
     query: string,
   ): Promise<PagedResults<SearchResultItem> | undefined> {
@@ -235,14 +219,11 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
         ],
         metadata: undefined,
       };
-    } catch {
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
       return undefined;
     }
   }
-
-  // ----------------------------------------------------------------
-  // Manga details & chapters
-  // ----------------------------------------------------------------
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
     const $ = await this.fetchCheerio({ url: this.mangaUrl(mangaId), method: "GET" });
@@ -262,7 +243,6 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
 
     addAll(parseChapterElements($, $(CHAPTER_SELECTOR), sourceManga, hideLocked));
 
-    // The theme lazy-loads the rest of the chapter list through admin-ajax.
     const loadMoreBtn = $("#loadMoreChaptersBtn").first();
     const comicId = (loadMoreBtn.attr("data-comic-id") || "").trim();
     const nonce = extractNonce($) || "";
@@ -280,7 +260,6 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
         if (items.length === 0) break;
         addAll(items);
         offset += CHAPTERS_PER_PAGE;
-        // Guard against a server that keeps returning the same page.
         if (chapters.size === before) break;
       }
     }
@@ -296,15 +275,13 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
     return parseChapterDetails($, chapter);
   }
 
-  // ----------------------------------------------------------------
-  // Cloudflare
-  // ----------------------------------------------------------------
-
   async cloudflareBypassCompleted(
     _request: Request,
     cookies: Cookie[],
     _localStorage: Record<string, string>,
   ): Promise<void> {
+    this.genresList = [];
+    this.genresPromise = undefined;
     for (const cookie of cookies) {
       if (
         cookie.name.startsWith("cf") ||
@@ -315,10 +292,6 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
       }
     }
   }
-
-  // ----------------------------------------------------------------
-  // Helpers
-  // ----------------------------------------------------------------
 
   private comicsUrl(page: number): URL {
     return new URL(DOMAIN).setPath(page <= 1 ? "/comic/" : `/comic/page/${page}/`);
@@ -338,9 +311,21 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
 
   private async getGenres(): Promise<Genre[]> {
     if (this.genresList.length > 0) return this.genresList;
-    const $ = await this.fetchCheerio({ url: this.comicsUrl(1).toString(), method: "GET" });
-    this.cacheGenres($);
-    return this.genresList;
+    if (this.genresPromise) return this.genresPromise;
+    const request = this.fetchCheerio({
+      url: this.comicsUrl(1).toString(),
+      method: "GET",
+    })
+      .then(($) => {
+        this.cacheGenres($);
+        return this.genresList;
+      })
+      .catch((error: unknown) => {
+        if (this.genresPromise === request) this.genresPromise = undefined;
+        throw error;
+      });
+    this.genresPromise = request;
+    return request;
   }
 
   private cacheGenres($: cheerio.CheerioAPI): void {
@@ -372,13 +357,15 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
       },
       body,
     });
-    if (response.status !== 200) return [];
+    if (response.status !== 200) {
+      throw new Error(`Chapter request failed with status ${response.status}`);
+    }
 
     let parsed: AjaxChapterResponse;
     try {
       parsed = JSON.parse(Application.arrayBufferToUTF8String(data)) as AjaxChapterResponse;
-    } catch {
-      return [];
+    } catch (error) {
+      throw new Error("Failed to parse the chapter response", { cause: error });
     }
 
     if (parsed.success !== true) return [];
@@ -393,6 +380,9 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
     const [response, data] = await Application.scheduleRequest(request);
     if (response.status === 404) {
       throw new Error(`Content not found: ${request.url}`);
+    }
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`Request failed with status ${response.status}: ${request.url}`);
     }
     return cheerio.load(Application.arrayBufferToUTF8String(data), {
       xml: {

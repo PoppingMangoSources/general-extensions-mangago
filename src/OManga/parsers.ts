@@ -24,8 +24,6 @@ import type {
 
 const FLIGHT_CHUNK_REGEX = /self\.__next_f\.push\(\[1,"((?:[^"\\]|\\.)*)"\]\)/g;
 
-// Pages embed their data as a streamed payload of script-pushed string
-// fragments; a bare payload response (no fragments) is already the stream.
 export const decodeFlightPayload = (html: string): string => {
   const parts: string[] = [];
   let match: RegExpExecArray | null;
@@ -33,14 +31,11 @@ export const decodeFlightPayload = (html: string): string => {
   while ((match = FLIGHT_CHUNK_REGEX.exec(html)) !== null) {
     try {
       parts.push(JSON.parse(`"${match[1]}"`) as string);
-    } catch {
-      // Fragments that fail to unescape carry no JSON of ours.
-    }
+    } catch {}
   }
   return parts.length > 0 ? parts.join("") : html;
 };
 
-// String-aware balanced scan, so braces inside values don't break the depth.
 const extractBalancedJson = (text: string, start: number): string | undefined => {
   const open = text[start];
   const close = open === "{" ? "}" : open === "[" ? "]" : undefined;
@@ -83,12 +78,9 @@ const parseJsonAt = <T>(payload: string, anchor: string, offset = 0): T | undefi
 const filterValidCatalogItems = (items: CatalogItem[] | undefined): CatalogItem[] =>
   (items ?? []).filter((item) => Boolean(item.slug) && Boolean(item.title));
 
-export const parseCatalogItems = (html: string): CatalogItem[] =>
-  filterValidCatalogItems(
-    parseJsonAt(decodeFlightPayload(html), '"initialItems":[', '"initialItems":'.length),
-  );
+export const parseCatalogItems = (items: CatalogItem[]): CatalogItem[] =>
+  filterValidCatalogItems(items);
 
-// Listing cards carry no age rating; genres are the only content signal.
 export const getContentRatingForGenres = (genres: string[] | undefined): ContentRating => {
   const lower = (genres ?? []).map((genre) => genre.toLowerCase());
   if (["hentai", "adult", "smut", "lolicon", "shotacon"].some((genre) => lower.includes(genre))) {
@@ -137,13 +129,11 @@ export const toSimpleCarouselItem = (item: CatalogItem): DiscoverSectionItem => 
   };
 };
 
-// The front page's top strip — the first series array on the page.
 export const parseHomeCarousel = (html: string): CatalogItem[] =>
   filterValidCatalogItems(
     parseJsonAt(decodeFlightPayload(html), '"items":[{"id"', '"items":'.length),
   );
 
-// A titled homepage data row ("Popular This Week", "Most liked") by heading.
 export const parseHomeSection = (html: string, title: string): CatalogItem[] => {
   const payload = decodeFlightPayload(html);
   const heading = payload.indexOf(`{"title":"${title}","moreHref"`);
@@ -159,7 +149,6 @@ export const parseHomeSection = (html: string, title: string): CatalogItem[] => 
   }
 };
 
-// Card subtitle the way the site writes it: "Manhwa 2023".
 export const toHomeCarouselItem = (item: CatalogItem): DiscoverSectionItem => ({
   type: "simpleCarouselItem",
   mangaId: item.slug,
@@ -170,7 +159,6 @@ export const toHomeCarouselItem = (item: CatalogItem): DiscoverSectionItem => ({
   metadata: undefined,
 });
 
-// The payload row `<id>:[…]` a "$L<id>" placeholder points at.
 const resolveLazyRow = (payload: string, id: string): string | undefined => {
   const marker = payload.match(new RegExp(`(?:^|\\n)${id}:`));
   if (marker?.index === undefined) return undefined;
@@ -213,9 +201,6 @@ const parseLinkCards = (fragment: string): HomeLinkCard[] => {
   return cards;
 };
 
-// Element-rendered rows (New Season, Best Ongoings): cards are streamed inline
-// or deferred as "$L<id>" placeholder rows. Walked in document order — these
-// rows are rankings, so resolved placeholders must keep their position.
 export const parseHomeLinkSection = (
   html: string,
   heading: string,
@@ -240,7 +225,6 @@ export const parseHomeLinkSection = (
       const end = i + 1 < tokens.length ? (tokens[i + 1].index ?? blob.length) : blob.length;
       cards.push(...parseLinkCards(blob.slice(start, end)));
     } else {
-      // A placeholder row holding just a card body has no link and adds nothing.
       const row = resolveLazyRow(payload, token[2]);
       if (row) cards.push(...parseLinkCards(row));
     }
@@ -254,14 +238,12 @@ export const parseHomeLinkSection = (
   });
 };
 
-// "$D2026-07-14T02:23:00.772Z" → Date (the serializer prefixes dates with $D).
 const parsePayloadDate = (value?: string | null): Date | undefined => {
   if (!value) return undefined;
   const parsed = new Date(value.replace(/^\$D/, ""));
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 };
 
-// The homepage Updates feed, one card per series (its newest release).
 export const parseHomeUpdates = (html: string): DiscoverSectionItem[] => {
   const payload = decodeFlightPayload(html);
   const updates = parseJsonAt<HomeUpdate[]>(payload, '"updates":[', '"updates":'.length) ?? [];
@@ -296,7 +278,6 @@ export const parseSeriesProps = (html: string, slug: string): SeriesProps => {
   return props;
 };
 
-// Cover from the og:image meta — the series props carry no poster.
 export const parseCoverUrl = (html: string): string =>
   html.match(/property="og:image"\s+content="([^"]+)"/)?.[1] ??
   html.match(/"og:image","content":"([^"]+)"/)?.[1] ??
@@ -306,7 +287,6 @@ const contentRatingForSeries = (props: SeriesProps): ContentRating => {
   const age = (props.ageRating ?? "").trim();
   if (age === "18+" || age === "21+") return ContentRating.ADULT;
   if (age === "15+" || age === "16+") return ContentRating.MATURE;
-  // "For all"/"12+" trusts the label unless an adult genre says otherwise.
   const fromGenres = getContentRatingForGenres(props.genres);
   return fromGenres === ContentRating.ADULT ? fromGenres : ContentRating.EVERYONE;
 };
@@ -351,7 +331,6 @@ const toChapter = (
   allVersions: boolean,
 ): Chapter => {
   const teamName = entry.team?.name ?? entry.translator ?? undefined;
-  // Known publisher/platform teams (Tapas, WebToon, VIZ, …) get the star.
   const version =
     teamName && isOfficialTeam(teamName, entry.team?.slug) ? `★ ${teamName}` : teamName;
   const teamSuffix =
@@ -363,7 +342,6 @@ const toChapter = (
     langCode: "en",
     chapNum: entry.number,
     title: entry.title?.trim() ?? "",
-    // The site tracks no real volumes — 0 avoids the "Volume TBA" placeholder.
     volume: 0,
     version,
     sortingIndex: entry.number,
@@ -371,9 +349,6 @@ const toChapter = (
   };
 };
 
-// The reader addresses uploads as `chapter/<number>?team=<slug>` (the site's
-// own links), so every team's upload gets its own entry; with the all-versions
-// setting off, first listed per number wins — the site's default.
 export const parseChapters = (html: string, sourceManga: SourceManga): Chapter[] => {
   const props = parseSeriesProps(html, sourceManga.mangaId);
   const allVersions = getShowAllVersions();

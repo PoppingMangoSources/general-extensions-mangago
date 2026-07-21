@@ -4,11 +4,13 @@
 import {
   CloudflareError,
   PaperbackInterceptor,
+  URL,
   type Request,
   type Response,
+  type Tag,
 } from "@paperback/types";
 
-import { DOMAIN } from "./models";
+import { API_URL, DOMAIN, type HiveScansGenre } from "./models";
 
 const IMAGE_EXTENSION_REGEX = /\.(jpe?g|png|webp|gif|avif|bmp|svg)(\?|#|$)/i;
 
@@ -50,7 +52,7 @@ export class HiveScansInterceptor extends PaperbackInterceptor {
   }
 }
 
-export async function fetchJSON<T>(request: Request): Promise<T> {
+export const fetchJSON = async <T>(request: Request): Promise<T> => {
   const [response, buffer] = await Application.scheduleRequest(request);
 
   if (response.status === 404) {
@@ -66,6 +68,12 @@ export async function fetchJSON<T>(request: Request): Promise<T> {
     return JSON.parse(data) as T;
   } catch (error: unknown) {
     const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to parse JSON from ${request.url}: ${reason}`);
+    throw new Error(`Failed to parse JSON from ${request.url}: ${reason}`, { cause: error });
   }
-}
+};
+
+export const fetchGenres = async (): Promise<Tag[]> => {
+  const url = new URL(API_URL).addPathComponent("genres").toString();
+  const genres = await fetchJSON<HiveScansGenre[]>({ url, method: "GET" });
+  return genres.map((genre) => ({ id: genre.id.toString(), title: genre.name.trim() }));
+};

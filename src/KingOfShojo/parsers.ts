@@ -4,6 +4,7 @@
 import {
   ContentRating,
   type Chapter,
+  type FeaturedCarouselItem,
   type SourceManga,
   type Tag,
   type TagSection,
@@ -34,6 +35,17 @@ import {
   type OptionItem,
 } from "./models";
 
+export const buildInfoItems = (
+  rating?: string,
+  status?: string,
+): FeaturedCarouselItem["infoItems"] => {
+  const items: { symbol: string; text: string }[] = [];
+  if (rating) items.push({ symbol: "star.fill", text: rating });
+  if (status && status !== "Unknown") items.push({ symbol: "book.closed", text: status });
+  if (items.length === 0) return undefined;
+  return items.length === 1 ? [items[0]] : [items[0], items[1]];
+};
+
 const MONTHS: Record<string, number> = {
   jan: 0,
   january: 0,
@@ -61,31 +73,23 @@ const MONTHS: Record<string, number> = {
   december: 11,
 };
 
-// ---------------------------------------------------------------------------
-// id / url / image helpers
-// ---------------------------------------------------------------------------
-
-// Paperback only permits IDs matching alphanumerics + `._-@()[]%?#+=/&:`.
-// The `u` flag makes the replacer see whole code points, so astral characters
-// (e.g. emoji in a slug) don't reach encodeURIComponent as lone surrogates.
-function toSafeId(slug: string): string {
+const toSafeId = (slug: string): string => {
   return slug.replace(/[^A-Za-z0-9._\-@()[\]%?#+=/&:]/gu, (c) => {
     const enc = encodeURIComponent(c);
     if (enc !== c) return enc;
     return "%" + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
   });
-}
+};
 
-function safeDecode(id: string): string {
+const safeDecode = (id: string): string => {
   try {
     return decodeURIComponent(id);
   } catch {
     return id;
   }
-}
+};
 
-// The manga slug: the segment right after `/manga/`.
-export function parseMangaId(href: string): string {
+export const parseMangaId = (href: string): string => {
   const cleaned = href.replace(/[?#].*$/, "").replace(/\/+$/, "");
   const marker = `/${MANGA_DIR}/`;
   const idx = cleaned.indexOf(marker);
@@ -94,27 +98,25 @@ export function parseMangaId(href: string): string {
       ? cleaned.slice(idx + marker.length).split("/")[0]
       : (cleaned.split("/").pop() ?? "");
   return toSafeId(slug);
-}
+};
 
-// Chapters keep the full domain-relative path so they can be requested verbatim
-// (chapter URLs are flat: `{baseUrl}/{chapter-slug}/`).
-function parseChapterId(href: string): string {
+const parseChapterId = (href: string): string => {
   const cleaned = href
     .replace(/^(?:https?:)?\/\/[^/]+/i, "")
     .replace(/[?#].*$/, "")
     .replace(/^\/+|\/+$/g, "");
   return toSafeId(cleaned);
-}
+};
 
-function absoluteUrl(base: string, src: string): string {
+const absoluteUrl = (base: string, src: string): string => {
   const s = (src || "").trim();
   if (!s) return "";
   if (s.startsWith("http")) return s;
   if (s.startsWith("//")) return `https:${s}`;
   return s.startsWith("/") ? `${base}${s}` : `${base}/${s}`;
-}
+};
 
-function imgAttr(base: string, img: Cheerio<AnyNode>): string {
+const imgAttr = (base: string, img: Cheerio<AnyNode>): string => {
   if (!img || img.length === 0) return "";
   let src = img.attr("data-lazy-src") || img.attr("data-src") || img.attr("data-cfsrc") || "";
   if (!src) {
@@ -130,13 +132,9 @@ function imgAttr(base: string, img: Cheerio<AnyNode>): string {
   }
   if (!src) src = img.attr("src") || "";
   return absoluteUrl(base, src);
-}
+};
 
-// ---------------------------------------------------------------------------
-// card parsers (browse/search + discover widgets share the `.bsx` card)
-// ---------------------------------------------------------------------------
-
-function cardTitle($: CheerioAPI, unit: Cheerio<AnyNode>, link: Cheerio<AnyNode>): string {
+const cardTitle = ($: CheerioAPI, unit: Cheerio<AnyNode>, link: Cheerio<AnyNode>): string => {
   const img = unit.find("img").first();
   const raw =
     unit.find(".bigor .tt a, .tt").first().text().trim() ||
@@ -144,9 +142,9 @@ function cardTitle($: CheerioAPI, unit: Cheerio<AnyNode>, link: Cheerio<AnyNode>
     link.attr("title") ||
     link.text();
   return Application.decodeHTMLEntities((raw || "").trim());
-}
+};
 
-function parseCard($: CheerioAPI, base: string, element: AnyNode): MangaCard | undefined {
+const parseCard = ($: CheerioAPI, base: string, element: AnyNode): MangaCard | undefined => {
   const unit = $(element);
   const link = unit.is("a") ? unit : unit.find("a").first();
   const href = (link.attr("href") || "").trim();
@@ -169,9 +167,9 @@ function parseCard($: CheerioAPI, base: string, element: AnyNode): MangaCard | u
     subtitle,
     rating: rating || undefined,
   };
-}
+};
 
-export function parseCards($: CheerioAPI, base: string, selector: string): MangaCard[] {
+export const parseCards = ($: CheerioAPI, base: string, selector: string): MangaCard[] => {
   const cards: MangaCard[] = [];
   const seen = new Set<string>();
   for (const element of $(selector).toArray()) {
@@ -182,14 +180,13 @@ export function parseCards($: CheerioAPI, base: string, selector: string): Manga
     }
   }
   return cards;
-}
+};
 
-// Finds a homepage widget by its heading text and returns its container.
-function widgetByHeading($: CheerioAPI, heading: string): Cheerio<AnyNode> {
+const widgetByHeading = ($: CheerioAPI, heading: string): Cheerio<AnyNode> => {
   return $(`.releases:contains("${heading}")`).first().closest(".bixbox, .section");
-}
+};
 
-export function parsePopularToday($: CheerioAPI, base: string): MangaCard[] {
+export const parsePopularToday = ($: CheerioAPI, base: string): MangaCard[] => {
   const scope = widgetByHeading($, "Popular Today");
   return dedupeCards(
     scope
@@ -197,9 +194,9 @@ export function parsePopularToday($: CheerioAPI, base: string): MangaCard[] {
       .toArray()
       .map((el) => parseCard($, base, el)),
   );
-}
+};
 
-export function parseRecommendation($: CheerioAPI, base: string): MangaCard[] {
+export const parseRecommendation = ($: CheerioAPI, base: string): MangaCard[] => {
   const scope = widgetByHeading($, "Recommendation");
   return dedupeCards(
     scope
@@ -207,16 +204,14 @@ export function parseRecommendation($: CheerioAPI, base: string): MangaCard[] {
       .toArray()
       .map((el) => parseCard($, base, el)),
   );
-}
+};
 
-// "Popular Series" — the ranked wpop widget. `rangeClass` selects the tab
-// (wpop-weekly | wpop-monthly | wpop-alltime); all three ship in the HTML.
-export function parsePopularSeries(
+export const parsePopularSeries = (
   $: CheerioAPI,
   base: string,
   rangeClass = "wpop-weekly",
   showAdult = true,
-): MangaCard[] {
+): MangaCard[] => {
   const scope = widgetByHeading($, "Popular Series");
   const cards: MangaCard[] = [];
   const seen = new Set<string>();
@@ -238,8 +233,6 @@ export function parsePopularSeries(
     );
     if (!title) continue;
 
-    // Popular Series rows list their genres inline, so honor the adult toggle
-    // right here — the only discover widget where a per-card signal exists.
     const isAdult = li
       .find('a[href*="/genres/"]')
       .toArray()
@@ -258,10 +251,9 @@ export function parsePopularSeries(
     });
   }
   return cards;
-}
+};
 
-// "Latest Update" — cards carry their newest chapter (link + relative time).
-export function parseLatestUpdate($: CheerioAPI, base: string): LatestCard[] {
+export const parseLatestUpdate = ($: CheerioAPI, base: string): LatestCard[] => {
   const scope = widgetByHeading($, "Latest Update");
   const cards: LatestCard[] = [];
   const seen = new Set<string>();
@@ -284,9 +276,9 @@ export function parseLatestUpdate($: CheerioAPI, base: string): LatestCard[] {
     });
   }
   return cards;
-}
+};
 
-function dedupeCards(cards: (MangaCard | undefined)[]): MangaCard[] {
+const dedupeCards = (cards: (MangaCard | undefined)[]): MangaCard[] => {
   const out: MangaCard[] = [];
   const seen = new Set<string>();
   for (const card of cards) {
@@ -296,13 +288,9 @@ function dedupeCards(cards: (MangaCard | undefined)[]): MangaCard[] {
     }
   }
   return out;
-}
+};
 
-// ---------------------------------------------------------------------------
-// genres (browse-page filter checkboxes)
-// ---------------------------------------------------------------------------
-
-export function parseGenreFilter($: CheerioAPI): OptionItem[] {
+export const parseGenreFilter = ($: CheerioAPI): OptionItem[] => {
   const genres: OptionItem[] = [];
   const seen = new Set<string>();
   for (const element of $(GENRE_FILTER_SELECTOR).toArray()) {
@@ -314,28 +302,24 @@ export function parseGenreFilter($: CheerioAPI): OptionItem[] {
     genres.push({ id, value: name });
   }
   return genres;
-}
+};
 
-// ---------------------------------------------------------------------------
-// details
-// ---------------------------------------------------------------------------
-
-function collectText($: CheerioAPI, scope: Cheerio<AnyNode>, selector: string): string[] {
+const collectText = ($: CheerioAPI, scope: Cheerio<AnyNode>, selector: string): string[] => {
   const out: string[] = [];
   scope.find(selector).each((_, el) => {
     const t = $(el).text().trim();
     if (t && t !== "-" && t.toLowerCase() !== "n/a") out.push(t);
   });
   return out;
-}
+};
 
-export function parseMangaDetails(
+export const parseMangaDetails = (
   $: CheerioAPI,
   base: string,
   mangaId: string,
   shareUrl: string,
   contentRating: ContentRating,
-): SourceManga {
+): SourceManga => {
   const details = $(DETAILS_SCOPE).first();
   const scope = details.length > 0 ? details : $("html");
 
@@ -376,7 +360,6 @@ export function parseMangaDetails(
   const tagGroups: TagSection[] =
     genreTags.length > 0 ? [{ id: "genres", title: "Genres", tags: genreTags }] : [];
 
-  // Adult-tagged titles report ADULT so Paperback's own content filter applies.
   const effectiveRating = genreTags.some((tag) =>
     ADULT_GENRE_NAMES.has(tag.title.trim().toLowerCase()),
   )
@@ -400,9 +383,9 @@ export function parseMangaDetails(
       shareUrl,
     },
   };
-}
+};
 
-function parseStatus(status: string): string {
+const parseStatus = (status: string): string => {
   const s = (status || "").toLowerCase().trim();
   if (!s) return "Unknown";
   if (s.includes("complet") || s.includes("finished") || s.includes("tamat")) return "Completed";
@@ -416,13 +399,9 @@ function parseStatus(status: string): string {
   if (s.includes("hiatus") || s.includes("hold") || s.includes("pause")) return "Hiatus";
   if (s.includes("cancel") || s.includes("drop") || s.includes("discontin")) return "Cancelled";
   return "Unknown";
-}
+};
 
-// ---------------------------------------------------------------------------
-// chapters
-// ---------------------------------------------------------------------------
-
-export function parseChapters($: CheerioAPI, sourceManga: SourceManga): Chapter[] {
+export const parseChapters = ($: CheerioAPI, sourceManga: SourceManga): Chapter[] => {
   const chapters: Chapter[] = [];
   for (const element of $(CHAPTER_SELECTOR).toArray()) {
     const el = $(element);
@@ -453,25 +432,20 @@ export function parseChapters($: CheerioAPI, sourceManga: SourceManga): Chapter[
     ...chapter,
     sortingIndex: chapters.length - index,
   }));
-}
+};
 
-function parseChapterNumber(name: string): number {
+const parseChapterNumber = (name: string): number => {
   const m = name.match(/chapter[.\s-]*(\d+(?:\.\d+)?)/i) ?? name.match(/(\d+(?:\.\d+)?)/);
   return m ? parseFloat(m[1]) : 0;
-}
+};
 
-// ---------------------------------------------------------------------------
-// pages
-// ---------------------------------------------------------------------------
-
-export function parseChapterPages($: CheerioAPI, base: string): string[] {
+export const parseChapterPages = ($: CheerioAPI, base: string): string[] => {
   const pages: string[] = [];
   for (const element of $(PAGE_SELECTOR).toArray()) {
     const image = imgAttr(base, $(element));
     if (image) pages.push(image);
   }
 
-  // Fallback: some readers embed the image list as JSON (ts_reader).
   if (pages.length === 0) {
     const html = $.root().html() || "";
     const match = html.match(IMAGE_LIST_REGEX);
@@ -483,30 +457,16 @@ export function parseChapterPages($: CheerioAPI, base: string): string[] {
             if (u) pages.push(absoluteUrl(base, u));
           }
         }
-      } catch {
-        // ignore malformed JSON
-      }
+      } catch {}
     }
   }
 
   return [...new Set(pages)];
-}
+};
 
-// The CDN serves each page as a full-resolution ~1.3 MB JPEG; a chapter is
-// ~20 MB, and downloading that many large files in parallel stalls until the
-// app cancels them. Route pages through wsrv.nl, which resizes + WebP-compresses
-// arbitrary image URLs on the fly (~150 KB per page). The source is placed last
-// with wsrv's `ssl:` https shorthand so the proxied URL still ends in the
-// original image extension — that keeps it classified as an image request and
-// out of the rate limiter. "original" is a no-op; unrecognised modes get the
-// data-saver profile (matching the setting's default).
-export function proxyImage(url: string, mode: string): string {
+export const proxyImage = (url: string, mode: string): string => {
   if (mode === "original") return url;
   const match = url.match(/^https?:\/\/(.+)$/i);
-  // Skip non-http urls, already-proxied urls, anything with a query/hash that
-  // would break the unencoded trailing url parameter, and extensionless urls
-  // (their proxied form would escape both image classifications). The extension
-  // set mirrors BasicRateLimiter's image regex.
   if (
     !match ||
     /\/\/wsrv\.nl\//i.test(url) ||
@@ -515,29 +475,14 @@ export function proxyImage(url: string, mode: string): string {
   ) {
     return url;
   }
-  // A literal `&` in the source path would truncate the wsrv parameters.
   const source = match[1].replace(/&/g, "%26");
-  // "fast" is the legacy persisted id for the higher-quality profile.
   const hq = mode === "quality" || mode === "fast";
   const width = hq ? 1080 : 720;
   const quality = hq ? 80 : 65;
-  // No output= override: keep each image's own format. Forcing webp 400s on
-  // ultra-tall strips (WebP caps at 16383px per side; these JPEG strips exceed
-  // it even at reduced width, while JPEG allows up to 65535px).
-  // default= makes the proxy redirect to the original image whenever it can't
-  // fetch or process it (origin DNS hiccups, timeouts, oversized images), so a
-  // proxy failure degrades to a full-size page instead of a blank one.
   return `https://wsrv.nl/?w=${width}&q=${quality}&we&default=ssl:${source}&url=ssl:${source}`;
-}
+};
 
-// ---------------------------------------------------------------------------
-// dates
-// ---------------------------------------------------------------------------
-
-// Handles both the chapter-list format ("January 5, 2024") and the homepage
-// relative times ("10 minutes", "5 days ago"), deterministically across
-// engines (JavaScriptCore on iOS is stricter than V8 about date strings).
-function parseDate(text: string): Date {
+const parseDate = (text: string): Date => {
   const trimmed = (text || "").trim();
   if (!trimmed) return new Date();
 
@@ -573,4 +518,4 @@ function parseDate(text: string): Date {
 
   const direct = new Date(trimmed);
   return isNaN(direct.getTime()) ? new Date() : direct;
-}
+};

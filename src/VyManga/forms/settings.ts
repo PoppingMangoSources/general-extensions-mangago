@@ -5,20 +5,18 @@ import { ButtonRow, Form, InputRow, LabelRow, Section } from "@paperback/types";
 
 const BASE_URL_KEY = "vymanga.baseUrlOverride";
 
-// This site rotates domains (vymanga.com / vyvymanga.net); let readers point at
-// the current one without waiting for an extension update.
-export function getBaseUrlOverride(): string | undefined {
+export const getBaseUrlOverride = (): string | undefined => {
   const value = Application.getState(BASE_URL_KEY);
   if (typeof value === "string") {
     const trimmed = value.trim().replace(/\/+$/, "");
     if (trimmed.length > 0) return trimmed;
   }
   return undefined;
-}
+};
 
-function setBaseUrlOverride(value: string): void {
+const setBaseUrlOverride = (value: string): void => {
   Application.setState(value.trim().replace(/\/+$/, ""), BASE_URL_KEY);
-}
+};
 
 export class VyMangaSettingsForm extends Form {
   private override: string;

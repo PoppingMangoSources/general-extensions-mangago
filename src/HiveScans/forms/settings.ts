@@ -5,9 +5,9 @@ import { Form, Section, ToggleRow } from "@paperback/types";
 
 const SHOW_LOCKED_KEY = "show_locked_chapters";
 
-export function getShowLockedChapters(): boolean {
+export const getShowLockedChapters = (): boolean => {
   return (Application.getState(SHOW_LOCKED_KEY) ?? false) as boolean;
-}
+};
 
 export class HiveScansSettingsForm extends Form {
   override getSections() {

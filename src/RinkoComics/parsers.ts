@@ -48,61 +48,49 @@ const MONTHS: Record<string, number> = {
   december: 11,
 };
 
-// ---------------------------------------------------------------------------
-// URL / id helpers
-// ---------------------------------------------------------------------------
-
-// Paperback only permits IDs matching alphanumerics + `._-@()[]%?#+=/&:`.
-export function toSafeId(slug: string): string {
+export const toSafeId = (slug: string): string => {
   return slug.replace(/[^A-Za-z0-9._\-@()[\]%?#+=/&:]/g, (c) => {
     const enc = encodeURIComponent(c);
     if (enc !== c) return enc;
     return "%" + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
   });
-}
+};
 
-export function safeDecode(id: string): string {
+export const safeDecode = (id: string): string => {
   try {
     return decodeURIComponent(id);
   } catch {
     return id;
   }
-}
+};
 
-// Turns a comic/chapter href into a stable, domain-relative id.
-export function parsePath(href: string): string {
+export const parsePath = (href: string): string => {
   const cleaned = href.replace(/[?#].*$/, "").replace(/\/+$/, "");
   const slug = cleaned.startsWith("http")
     ? cleaned.replace(/^https?:\/\/[^/]+\//, "")
     : cleaned.replace(/^\/+/, "");
   return toSafeId(slug);
-}
+};
 
-// Resolves a (possibly protocol-relative or root-relative) asset url.
-export function absoluteUrl(src: string): string {
+export const absoluteUrl = (src: string): string => {
   const s = (src || "").trim();
   if (!s) return "";
   if (s.startsWith("http")) return s;
   if (s.startsWith("//")) return `https:${s}`;
   return s.startsWith("/") ? `${DOMAIN}${s}` : `${DOMAIN}/${s}`;
-}
+};
 
-function imageFromElement($: CheerioAPI, img: Cheerio<AnyNode>): string {
+const imageFromElement = ($: CheerioAPI, img: Cheerio<AnyNode>): string => {
   const src = img.attr("data-src") || img.attr("data-lazy-src") || img.attr("src") || "";
   return absoluteUrl(src);
-}
+};
 
-export function extractNonce($: CheerioAPI): string | undefined {
+export const extractNonce = ($: CheerioAPI): string | undefined => {
   const match = $.html().match(NONCE_REGEX);
   return match ? match[1] : undefined;
-}
+};
 
-// ---------------------------------------------------------------------------
-// Listing parsers
-// ---------------------------------------------------------------------------
-
-// Pinned comics on the home page (used for the featured discover section).
-export function parsePinnedCards($: CheerioAPI): ComicCard[] {
+export const parsePinnedCards = ($: CheerioAPI): ComicCard[] => {
   const cards: ComicCard[] = [];
   const seen = new Set<string>();
 
@@ -128,10 +116,9 @@ export function parsePinnedCards($: CheerioAPI): ComicCard[] {
   }
 
   return cards;
-}
+};
 
-// Comic cards from the `/comic/` archive (search + latest discover section).
-export function parseComicCards($: CheerioAPI): ComicCard[] {
+export const parseComicCards = ($: CheerioAPI): ComicCard[] => {
   const cards: ComicCard[] = [];
   const seen = new Set<string>();
 
@@ -156,13 +143,13 @@ export function parseComicCards($: CheerioAPI): ComicCard[] {
   }
 
   return cards;
-}
+};
 
-export function hasNextPage($: CheerioAPI): boolean {
+export const hasNextPage = ($: CheerioAPI): boolean => {
   return $(".ac-pagination a.next").length > 0;
-}
+};
 
-export function parseGenres($: CheerioAPI): Genre[] {
+export const parseGenres = ($: CheerioAPI): Genre[] => {
   const genres: Genre[] = [];
   const seen = new Set<string>();
 
@@ -178,27 +165,23 @@ export function parseGenres($: CheerioAPI): Genre[] {
   }
 
   return genres;
-}
+};
 
-export function genresToTagSection(genres: Genre[]): TagSection {
+export const genresToTagSection = (genres: Genre[]): TagSection => {
   const tags: Tag[] = genres.map((genre) => ({ id: genre.slug, title: genre.name }));
   return { id: "genres", title: "Genres", tags };
-}
+};
 
-// ---------------------------------------------------------------------------
-// Manga details
-// ---------------------------------------------------------------------------
-
-function parseStatus(status: string): string {
+const parseStatus = (status: string): string => {
   const s = (status || "").trim().toLowerCase();
   if (s.includes("ongoing")) return "Ongoing";
   if (s.includes("completed")) return "Completed";
   if (s.includes("hiatus")) return "Hiatus";
   if (s.includes("cancel")) return "Cancelled";
   return "Unknown";
-}
+};
 
-export function parseMangaDetails($: CheerioAPI, mangaId: string): SourceManga {
+export const parseMangaDetails = ($: CheerioAPI, mangaId: string): SourceManga => {
   const primaryTitle = Application.decodeHTMLEntities(
     $(".comic-info-upper h1").first().text().trim() ||
       $("h1").first().text().trim() ||
@@ -242,23 +225,17 @@ export function parseMangaDetails($: CheerioAPI, mangaId: string): SourceManga {
       shareUrl: `${DOMAIN}/${safeDecode(mangaId).replace(/^\/+/, "")}`,
     },
   };
-}
+};
 
-// ---------------------------------------------------------------------------
-// Chapters
-// ---------------------------------------------------------------------------
-
-function parseChapterNumber(name: string): number {
+const parseChapterNumber = (name: string): number => {
   const m = name.match(/(\d+(?:\.\d+)?)/);
   return m ? parseFloat(m[1]) : 0;
-}
+};
 
-function parseDate(text: string): Date {
+const parseDate = (text: string): Date => {
   const trimmed = (text || "").trim();
   if (!trimmed) return new Date(0);
 
-  // Handles "Jan 5, 2024" and "January 5, 2024" deterministically across
-  // engines (JavaScriptCore on iOS is stricter than V8 about date strings).
   const match = trimmed.match(/([A-Za-z]+)\.?\s+(\d{1,2}),?\s+(\d{4})/);
   if (match) {
     const month = MONTHS[match[1].toLowerCase()];
@@ -269,26 +246,23 @@ function parseDate(text: string): Date {
 
   const parsed = Date.parse(trimmed);
   return isNaN(parsed) ? new Date(0) : new Date(parsed);
-}
+};
 
-function isLocked($: CheerioAPI, el: Cheerio<AnyNode>): boolean {
+const isLocked = ($: CheerioAPI, el: Cheerio<AnyNode>): boolean => {
   const reason = (el.attr("data-reason") || "").toLowerCase();
   if (reason && reason !== "free") return true;
   if (el.hasClass("locked-chapter")) return true;
   const href = el.find("a").first().attr("href") || "";
   if (!href || href === "#") return true;
   return el.find(".chapter_price").length > 0;
-}
+};
 
-// Parses a batch of `li.chapter` elements. `hideLocked` drops paid chapters
-// entirely; otherwise they are prefixed with a lock glyph and tagged so
-// getChapterDetails can refuse them early.
-export function parseChapterElements(
+export const parseChapterElements = (
   $: CheerioAPI,
   elements: Cheerio<AnyNode>,
   sourceManga: SourceManga,
   hideLocked: boolean,
-): Chapter[] {
+): Chapter[] => {
   const chapters: Chapter[] = [];
 
   elements.each((_, element) => {
@@ -324,24 +298,18 @@ export function parseChapterElements(
   });
 
   return chapters;
-}
+};
 
-// Assigns sorting indices so Paperback renders chapters newest-first even when
-// a chapter's number can't be parsed. The list arrives newest-first.
-export function finalizeChapters(chapters: Chapter[]): Chapter[] {
+export const finalizeChapters = (chapters: Chapter[]): Chapter[] => {
   const total = chapters.length;
   return chapters.map((chapter, index) => ({
     ...chapter,
     chapNum: chapter.chapNum || total - index,
     sortingIndex: total - index,
   }));
-}
+};
 
-// ---------------------------------------------------------------------------
-// Pages
-// ---------------------------------------------------------------------------
-
-export function parseChapterDetails($: CheerioAPI, chapter: Chapter): ChapterDetails {
+export const parseChapterDetails = ($: CheerioAPI, chapter: Chapter): ChapterDetails => {
   const pages: string[] = [];
   for (const element of $("img.chapter-image").toArray()) {
     const el = $(element);
@@ -358,4 +326,4 @@ export function parseChapterDetails($: CheerioAPI, chapter: Chapter): ChapterDet
     mangaId: chapter.sourceManga.mangaId,
     pages,
   };
-}
+};

@@ -22,17 +22,13 @@ import {
   type SourceManga,
   type TagSection,
 } from "@paperback/types";
-import {
-  SearchFilterForm,
-  type SearchFilter,
-  type SearchFilterValue,
-} from "@paperback/types/lib/compat/0.8";
 import * as cheerio from "cheerio";
 import { type AnyNode } from "domhandler";
 
 import type { basePbConfig } from "./config";
-import { getUsePostIds, MangaStreamSettings } from "./forms";
+import { getUsePostIds, MangaStreamAdvancedSearchForm, MangaStreamSettings } from "./forms";
 import {
+  type MangaStreamFilterMetadata,
   type MangaStreamDiscoverSection,
   type MangaStreamSearchMetadata,
   type MangaStreamSlug,
@@ -40,8 +36,7 @@ import {
   type StatusTypes,
 } from "./models";
 import { MangaStreamInterceptor } from "./network";
-import { MangaStreamParser } from "./parsers";
-import { getFilterTagsBySection, getIncludedTagBySection } from "./utils";
+import { getFilterTagsBySection, getIncludedTagBySection, MangaStreamParser } from "./parsers";
 
 export abstract class MangaStreamGeneric implements ExtensionImpl<typeof basePbConfig> {
   abstract domain: string;
@@ -119,32 +114,8 @@ export abstract class MangaStreamGeneric implements ExtensionImpl<typeof basePbC
     this.configureSections();
   }
 
-  async getSearchFilters(): Promise<SearchFilter[]> {
-    const filters: SearchFilter[] = [];
-    try {
-      for (const tags of await this.getSearchTags()) {
-        filters.push({
-          type: "multiselect",
-          options: tags.tags.map((x) => ({
-            id: x.id,
-            value: x.title,
-          })),
-          id: tags.id,
-          allowExclusion: false,
-          title: tags.title,
-          value: {},
-          allowEmptySelection: true,
-          maximum: undefined,
-        });
-      }
-    } catch (e) {
-      console.log(e);
-    }
-    return filters;
-  }
-
   globalRateLimiter = new BasicRateLimiter("ratelimiter", {
-    numberOfRequests: 20,
+    numberOfRequests: 10,
     bufferInterval: 1,
     ignoreImages: true,
   });
@@ -156,7 +127,7 @@ export abstract class MangaStreamGeneric implements ExtensionImpl<typeof basePbC
   async initialise(): Promise<void> {
     this.globalRateLimiter.registerInterceptor();
     this.cookieStorageInterceptor.registerInterceptor();
-    this.interceptor = this.interceptor ?? new MangaStreamInterceptor("main", this.domain);
+    this.interceptor = this.interceptor ?? new MangaStreamInterceptor("main", () => this.domain);
     this.interceptor.registerInterceptor();
   }
 
@@ -170,20 +141,19 @@ export abstract class MangaStreamGeneric implements ExtensionImpl<typeof basePbC
       method: "GET",
     };
 
-    const [_response, buffer] = await Application.scheduleRequest(request);
+    const [, buffer] = await Application.scheduleRequest(request);
     const $ = cheerio.load(Application.arrayBufferToUTF8String(buffer));
     tags = this.parser.parseTags($);
     Application.setState(tags, "tags");
     return tags;
   }
 
-  async getAdvancedSearchForm(query: SearchQuery<SearchFilterValue[]>) {
-    // TODO: Replace compat wrapper with proper search form implementation
-    return new SearchFilterForm(query.metadata, this.getSearchFilters());
+  async getAdvancedSearchForm(query: SearchQuery<MangaStreamFilterMetadata>) {
+    return new MangaStreamAdvancedSearchForm(query, await this.getSearchTags());
   }
 
   async getSearchResults(
-    query: SearchQuery<SearchFilterValue[]>,
+    query: SearchQuery<MangaStreamFilterMetadata>,
     metadata: MangaStreamSearchMetadata | undefined,
   ): Promise<PagedResults<SearchResultItem>> {
     const page: number = metadata?.page ?? 1;
@@ -199,11 +169,9 @@ export abstract class MangaStreamGeneric implements ExtensionImpl<typeof basePbC
       );
     } else {
       const includedTags: string[] = [];
-      for (const filter of query?.metadata ?? []) {
-        const tags = (filter.value ?? {}) as Record<string, "included" | "excluded">;
-        for (const tag of Object.entries(tags)) {
-          includedTags.push(tag[0]);
-        }
+      for (const tags of Object.values(query.metadata ?? {})) {
+        if (!tags || typeof tags !== "object") continue;
+        includedTags.push(...Object.keys(tags));
       }
       urlBuilder = urlBuilder
         .setQueryItem("genre", getFilterTagsBySection("genres", includedTags, true))
@@ -216,7 +184,7 @@ export abstract class MangaStreamGeneric implements ExtensionImpl<typeof basePbC
       url: urlBuilder.toString(),
       method: "GET",
     };
-    const [_response, buffer] = await Application.scheduleRequest(request);
+    const [, buffer] = await Application.scheduleRequest(request);
     const $ = cheerio.load(Application.arrayBufferToUTF8String(buffer));
     const results = this.parser.parseSearchResults($);
 
@@ -253,7 +221,7 @@ export abstract class MangaStreamGeneric implements ExtensionImpl<typeof basePbC
         : `${this.domain}/${this.directoryPath}/${mangaId}/`,
       method: "GET",
     };
-    const [_response, buffer] = await Application.scheduleRequest(request);
+    const [, buffer] = await Application.scheduleRequest(request);
     const $ = cheerio.load(Application.arrayBufferToUTF8String(buffer));
 
     return this.parser.parseMangaDetails($, mangaId, this);
@@ -266,14 +234,12 @@ export abstract class MangaStreamGeneric implements ExtensionImpl<typeof basePbC
       method: "GET",
     };
 
-    // const response = await this.requestManager.schedule(request, 1)
-    const [_response, buffer] = await Application.scheduleRequest(request);
+    const [, buffer] = await Application.scheduleRequest(request);
     const $ = cheerio.load(Application.arrayBufferToUTF8String(buffer));
 
     return this.parser.parseChapterList($, sourceManga, this);
   }
   async getChapterDetails(chap: Chapter): Promise<ChapterDetails> {
-    // Request the manga page
     const request = {
       url: getUsePostIds()
         ? `${this.domain}/?p=${chap.sourceManga.mangaId}/`
@@ -281,7 +247,7 @@ export abstract class MangaStreamGeneric implements ExtensionImpl<typeof basePbC
       method: "GET",
     };
 
-    const [_, buffer] = await Application.scheduleRequest(request);
+    const [, buffer] = await Application.scheduleRequest(request);
     const $ = cheerio.load(Application.arrayBufferToUTF8String(buffer));
 
     const chapters = $("div#chapterlist").find("li").toArray();
@@ -296,21 +262,19 @@ export abstract class MangaStreamGeneric implements ExtensionImpl<typeof basePbC
       throw new Error(`Unable to fetch a chapter for chapter number: ${chap.chapterId}`);
     }
 
-    // Fetch the ID (URL) of the chapter
     const id = $("a", chapter).attr("href") ?? "";
     if (!id) {
       throw new Error(`Unable to fetch id for chapter with chapter id: ${chap.chapterId}`);
     }
-    // Request the chapter page
-    const _request: Request = {
+    const chapterRequest: Request = {
       url: id,
       method: "GET",
     };
 
-    const [_response, _buffer] = await Application.scheduleRequest(_request);
-    const _$ = cheerio.load(Application.arrayBufferToUTF8String(_buffer));
+    const [, chapterBuffer] = await Application.scheduleRequest(chapterRequest);
+    const chapterPage = cheerio.load(Application.arrayBufferToUTF8String(chapterBuffer));
 
-    return this.parser.parseChapterDetails(_$, chap);
+    return this.parser.parseChapterDetails(chapterPage, chap);
   }
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
@@ -335,7 +299,7 @@ export abstract class MangaStreamGeneric implements ExtensionImpl<typeof basePbC
       method: "GET",
     };
 
-    const [_response, buffer] = await Application.scheduleRequest(request);
+    const [, buffer] = await Application.scheduleRequest(request);
     const $ = cheerio.load(Application.arrayBufferToUTF8String(buffer));
     let s: MangaStreamDiscoverSection;
     switch (section.id) {
@@ -398,14 +362,12 @@ export abstract class MangaStreamGeneric implements ExtensionImpl<typeof basePbC
       method: "GET",
     };
 
-    const [_, buffer] = await Application.scheduleRequest(request);
+    const [, buffer] = await Application.scheduleRequest(request);
     const $ = cheerio.load(Application.arrayBufferToUTF8String(buffer));
 
     let parseSlug: string;
-    // Step 1: Try to get slug from og-url
     parseSlug = String($('meta[property="og:url"]').attr("content"));
 
-    // Step 2: Try to get slug from canonical
     if (!parseSlug.includes(this.domain)) {
       parseSlug = String($('link[rel="canonical"]').attr("href"));
     }
@@ -426,43 +388,28 @@ export abstract class MangaStreamGeneric implements ExtensionImpl<typeof basePbC
   }
 
   async convertSlugToPostId(slug: string, path: string): Promise<string> {
-    // Credit to the MadaraDex team
     const headRequest = {
       url: `${this.domain}/${path}/${slug}/`,
       method: "HEAD",
     };
-    const [headResponse, __] = await Application.scheduleRequest(headRequest);
-
-    let postId: string;
-
-    const postIdRegex = headResponse?.headers.Link?.match(/\?p=(\d+)/);
-    if (postIdRegex?.[1]) {
-      postId = postIdRegex[1];
-    } else {
-      postId = "";
-    }
-
-    if (postId || !isNaN(Number(postId))) {
-      return postId?.toString();
-    }
+    const [headResponse] = await Application.scheduleRequest(headRequest);
+    const headerPostId = headResponse.headers.Link?.match(/\?p=(\d+)/)?.[1];
+    if (headerPostId) return headerPostId;
 
     const request = {
       url: `${this.domain}/${path}/${slug}/`,
       method: "GET",
     };
 
-    const [_, buffer] = await Application.scheduleRequest(request);
+    const [, buffer] = await Application.scheduleRequest(request);
     const $ = cheerio.load(Application.arrayBufferToUTF8String(buffer));
 
-    // Step 1: Try to get postId from shortlink
     let postIdNum = Number($('link[rel="shortlink"]')?.attr("href")?.split("/?p=")[1]);
 
-    // Step 2: If no number has been found, try to parse from data-id
     if (isNaN(postIdNum)) {
       postIdNum = Number($("div.bookmark").attr("data-id"));
     }
 
-    // Step 3: If no number has been found, try to parse from manga script
     if (isNaN(postIdNum)) {
       const page = $.root().html();
       const match = page?.match(/postID.*\D(\d+)/);

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import type { DiscoverSection, SearchResultItem } from "@paperback/types";
+import type { ContentRating, DiscoverSection, SearchResultItem } from "@paperback/types";
 import type { BasicAcceptedElems, Cheerio, CheerioAPI } from "cheerio";
 import type { AnyNode } from "domhandler";
 
@@ -25,8 +25,29 @@ export interface StatusTypes {
   COMPLETED: string;
 }
 
+export interface MangaStreamParserContext {
+  contentRating: ContentRating;
+  dateMonths: Months;
+  language: string;
+  mangaSelectorAlternativeTitles: string;
+  mangaSelectorArtist: string;
+  mangaSelectorAuthor: string;
+  mangaSelectorStatus: string;
+  mangaStatusTypes: StatusTypes;
+  mangaTagSelectorBox: string;
+  slugToPostId(slug: string, path: string): Promise<string>;
+}
+
 export type MangaStreamSearchMetadata = {
   page?: number;
+};
+
+export type MangaStreamFilterMetadata = {
+  genres?: Record<string, "included" | "excluded">;
+  status?: Record<string, "included" | "excluded">;
+  type?: Record<string, "included" | "excluded">;
+  order?: Record<string, "included" | "excluded">;
+  rokariRange?: string;
 };
 
 export interface MangaStreamSearchResultItem extends SearchResultItem {

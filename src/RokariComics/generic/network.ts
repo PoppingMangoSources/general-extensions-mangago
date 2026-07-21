@@ -9,24 +9,26 @@ import {
 } from "@paperback/types";
 
 export class MangaStreamInterceptor extends PaperbackInterceptor {
-  domain: string;
-
-  constructor(id: string, domain: string) {
+  constructor(id: string, getDomain: () => string) {
     super(id);
-    this.domain = domain;
+    this.getDomain = getDomain;
   }
 
-  override async interceptRequest(request: Request): Promise<Request> {
-    request.headers = {
-      ...request.headers,
-      "user-agent": await Application.getDefaultUserAgent(),
-      referer: `${this.domain}/`,
-      ...((request.url.includes("wordpress.com") || request.url.includes("wp.com")) && {
-        Accept: "image/avif,image/webp,*/*",
-      }),
-    };
+  private readonly getDomain: () => string;
 
-    return request;
+  override async interceptRequest(request: Request): Promise<Request> {
+    const domain = this.getDomain();
+    return {
+      ...request,
+      headers: {
+        ...request.headers,
+        "user-agent": await Application.getDefaultUserAgent(),
+        referer: `${domain}/`,
+        ...((request.url.includes("wordpress.com") || request.url.includes("wp.com")) && {
+          accept: "image/avif,image/webp,*/*",
+        }),
+      },
+    };
   }
 
   override async interceptResponse(
@@ -36,13 +38,14 @@ export class MangaStreamInterceptor extends PaperbackInterceptor {
   ): Promise<ArrayBuffer> {
     const cfMitigated = response.headers?.["cf-mitigated"];
     if (cfMitigated === "challenge") {
+      const domain = this.getDomain();
       throw new CloudflareError(
         {
-          url: this.domain,
-          method: "GET",
+          url: request.url,
+          method: request.method ?? "GET",
           headers: {
-            referer: `${this.domain}/`,
-            origin: `${this.domain}/`,
+            referer: `${domain}/`,
+            origin: domain,
             "user-agent": await Application.getDefaultUserAgent(),
           },
         },
