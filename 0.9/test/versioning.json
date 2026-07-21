@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-21T01:55:07.851Z",
+  "buildTime": "2026-07-21T03:58:17.732Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -12,8 +12,8 @@
     {
       "name": "HiveScans",
       "description": "Extension that pulls content from hivetoons.org.",
-      "version": "1.0.0-alpha.9",
-      "icon": "icons.png",
+      "version": "1.0.0-alpha.10",
+      "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
       "capabilities": [
@@ -35,8 +35,8 @@
     {
       "name": "KingOfShojo",
       "description": "Extension that pulls content from kingofshojo.com.",
-      "version": "1.0.0-alpha.12",
-      "icon": "icons.png",
+      "version": "1.0.0-alpha.13",
+      "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
       "capabilities": [
@@ -58,7 +58,7 @@
     {
       "name": "oManga",
       "description": "Extension that pulls content from omanga.to.",
-      "version": "1.0.0-alpha.3",
+      "version": "1.0.0-alpha.4",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
@@ -81,7 +81,7 @@
     {
       "name": "OniSaga",
       "description": "Extension that pulls content from onisaga.com.",
-      "version": "1.0.0-alpha.17",
+      "version": "1.0.0-alpha.18",
       "icon": "icon.png",
       "language": "multi",
       "contentRating": "MATURE",
@@ -104,8 +104,8 @@
     {
       "name": "RinkoComics",
       "description": "Extension that pulls content from rinkocomics.com.",
-      "version": "1.0.0-alpha.4",
-      "icon": "icons.png",
+      "version": "1.0.0-alpha.5",
+      "icon": "icon.png",
       "language": "en",
       "contentRating": "SAFE",
       "capabilities": [
@@ -127,7 +127,7 @@
     {
       "name": "RokariComics",
       "description": "Extension that pulls content from rokaricomics.com.",
-      "version": "1.0.0-alpha.9",
+      "version": "1.0.0-alpha.10",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "SAFE",
@@ -150,7 +150,7 @@
     {
       "name": "Scans.GG",
       "description": "Extension that pulls content from scans.gg.",
-      "version": "1.0.0-alpha.16",
+      "version": "1.0.0-alpha.17",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
@@ -173,8 +173,8 @@
     {
       "name": "VyManga",
       "description": "Extension that pulls content from vymanga.com.",
-      "version": "1.0.0-alpha.7",
-      "icon": "icons.png",
+      "version": "1.0.0-alpha.8",
+      "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
       "capabilities": [
