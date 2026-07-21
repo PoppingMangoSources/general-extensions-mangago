@@ -158,7 +158,7 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
     }
 
     if (section.id === SECTION_UPDATES) {
-      return { items: parseHomeUpdates(await this.getHomepage()), metadata: undefined };
+      return { items: parseHomeUpdates(await this.getHomepage(true)), metadata: undefined };
     }
 
     if (section.id === SECTION_RANDOM) {
@@ -269,9 +269,9 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
       );
   }
 
-  private getHomepage(): Promise<string> {
+  private getHomepage(refresh = false): Promise<string> {
     const domain = getDomain();
-    if (this.homepageRequest?.domain === domain) {
+    if (!refresh && this.homepageRequest?.domain === domain) {
       return this.homepageRequest.page;
     }
 
