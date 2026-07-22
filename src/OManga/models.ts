@@ -60,6 +60,11 @@ const OFFICIAL_TEAMS = new Set([
   "webcomics",
   "webcomicsapp",
   "mangaup",
+  "inkrcomics",
+  "thehoursbetween",
+  "jujucat",
+  "akumakira",
+  "comikey",
   "lezhin",
   "lehzin",
 ]);
