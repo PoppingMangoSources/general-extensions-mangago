@@ -6,16 +6,18 @@ Unofficial Paperback extensions built and maintained in this repository. This so
 
 The repository's own sources are currently available from `0.9/test` while they are prepared for stable release.
 
-| Source | Website | Status |
-| --- | --- | --- |
-| [HiveScans](https://hivetoons.org) | `hivetoons.org` | Testing |
-| [KingOfShojo](https://kingofshojo.com) | `kingofshojo.com` | Testing |
-| [oManga](https://omanga.to) | `omanga.to` | Testing |
-| [OniSaga](https://onisaga.com) | `onisaga.com` | Testing |
-| [RinkoComics](https://rinkocomics.com) | `rinkocomics.com` | Testing |
-| [RokariComics](https://rokaricomics.com) | `rokaricomics.com` | Testing |
-| [Scans.GG](https://scans.gg) | `scans.gg` | Testing |
-| [VyManga](https://vymanga.com) | `vymanga.com` | Testing |
+| Source                                        | Website               |
+| --------------------------------------------- | --------------------- |
+| [HiveScans](https://hivetoons.org)            | `hivetoons.org`       |
+| [KingOfShojo](https://kingofshojo.com)        | `kingofshojo.com`     |
+| [MyReadingManga](https://myreadingmanga.info) | `myreadingmanga.info` |
+| [oManga](https://omanga.to)                   | `omanga.to`           |
+| [OniSaga](https://onisaga.com)                | `onisaga.com`         |
+| [RinkoComics](https://rinkocomics.com)        | `rinkocomics.com`     |
+| [RokariComics](https://rokaricomics.com)      | `rokaricomics.com`    |
+| [Scans.GG](https://scans.gg)                  | `scans.gg`            |
+| [ValirScans](https://valirscans.org)          | `valirscans.org`      |
+| [VyManga](https://vymanga.com)                | `vymanga.com`         |
 
 ## Installation
 
