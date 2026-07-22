@@ -60,15 +60,14 @@ export interface HomeSeries {
   Chapter?: SeasonChapter[];
 }
 
-export interface TopSeriesEntry {
+export interface FeaturedEntry {
   series_slug: string;
   title: string;
-  thumbnail?: string | null;
-  badge?: string | null;
+  banner?: string | null;
+  protagonist?: string | null;
   description?: string | null;
   author?: string | null;
   total_views?: number;
-  views?: number;
 }
 
 export interface TrendingEntry {

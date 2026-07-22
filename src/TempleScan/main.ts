@@ -33,9 +33,10 @@ import {
 import {
   fetchChapterPage,
   fetchDirectory,
+  fetchFeatured,
   fetchHomePage,
+  fetchSeriesApi,
   fetchSeriesPage,
-  fetchTopSeries,
   fetchTrending,
   TempleScanInterceptor,
 } from "./network";
@@ -43,9 +44,10 @@ import {
   parseChapterPages,
   parseChapters,
   parseDirectory,
+  parseFeatured,
   parseHomeSections,
+  parseSeriesApi,
   parseSeriesData,
-  parseTopSeries,
   parseTrending,
   toFeaturedItems,
   toSearchResultItem,
@@ -71,6 +73,7 @@ export class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfi
 
   // The browse endpoint returns the whole directory; cache it per session.
   private directoryPromise?: Promise<BrowseSeries[]>;
+  private featuredPromise?: Promise<DiscoverSectionItem[]>;
   private homePromise?: Promise<HomeSections>;
 
   async initialise(): Promise<void> {
@@ -85,6 +88,7 @@ export class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfi
     _localStorage: Record<string, string>,
   ): Promise<void> {
     this.directoryPromise = undefined;
+    this.featuredPromise = undefined;
     this.homePromise = undefined;
     for (const cookie of cookies) {
       if (
@@ -126,7 +130,7 @@ export class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfi
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
       case "featured":
-        return { items: toFeaturedItems(parseTopSeries(await fetchTopSeries())) };
+        return { items: await this.getFeaturedItems() };
       case "new-series": {
         const home = await this.getHomeSections();
         return {
@@ -213,6 +217,32 @@ export class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfi
   private getDirectory(): Promise<BrowseSeries[]> {
     this.directoryPromise ??= fetchDirectory().then(parseDirectory);
     return this.directoryPromise;
+  }
+
+  private getFeaturedItems(): Promise<DiscoverSectionItem[]> {
+    this.featuredPromise ??= fetchFeatured()
+      .then(parseFeatured)
+      .then(async (entries) =>
+        Promise.all(
+          entries.map(async (entry) => {
+            try {
+              const details = parseSeriesApi(
+                await fetchSeriesApi(entry.series_slug),
+                entry.series_slug,
+              );
+              return { ...entry, author: details.author };
+            } catch {
+              return entry;
+            }
+          }),
+        ),
+      )
+      .then(toFeaturedItems)
+      .catch((error: unknown) => {
+        this.featuredPromise = undefined;
+        throw error;
+      });
+    return this.featuredPromise;
   }
 
   // New Series and Latest Updates share the homepage; dedupe the fetch

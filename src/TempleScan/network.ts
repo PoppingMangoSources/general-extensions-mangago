@@ -70,6 +70,8 @@ const fetchApi = async (path: string): Promise<string> => {
   return Application.arrayBufferToUTF8String(buffer);
 };
 
-export const fetchTrending = (): Promise<string> => fetchApi("/trending");
+export const fetchFeatured = (): Promise<string> => fetchApi("/banners");
 
-export const fetchTopSeries = (): Promise<string> => fetchApi("/topSeries");
+export const fetchTrending = (): Promise<string> => fetchApi("/topSeries");
+
+export const fetchSeriesApi = (mangaId: string): Promise<string> => fetchApi(`/comic/${mangaId}`);

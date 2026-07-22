@@ -14,10 +14,10 @@ import {
 import {
   DOMAIN,
   type BrowseSeries,
+  type FeaturedEntry,
   type HomeSeries,
   type SeasonChapter,
   type SeriesData,
-  type TopSeriesEntry,
   type TrendingEntry,
   type TrendingRange,
   type TrendingResponse,
@@ -304,40 +304,45 @@ export const toUpdateItems = (updates: HomeSeries[]): DiscoverSectionItem[] =>
     ];
   });
 
-// The featured endpoint may wrap its list; accept a bare array or the first
-// array of series entries inside the response object.
-export const parseTopSeries = (response: string): TopSeriesEntry[] => {
-  let parsed: unknown;
+export const parseFeatured = (response: string): FeaturedEntry[] => {
+  let parsed: FeaturedEntry[];
   try {
-    parsed = JSON.parse(response);
+    parsed = JSON.parse(response) as FeaturedEntry[];
   } catch (error) {
     throw new Error("Temple Scan: could not parse the featured list", { cause: error });
   }
-  const candidates = Array.isArray(parsed)
-    ? [parsed]
-    : Object.values(parsed as Record<string, unknown>).filter(Array.isArray);
-  for (const candidate of candidates) {
-    if (candidate.length > 0 && candidate[0]?.series_slug && candidate[0]?.title) {
-      return candidate as TopSeriesEntry[];
-    }
+  if (!Array.isArray(parsed)) {
+    throw new Error("Temple Scan: the featured response is not a list");
   }
-  return [];
+  return parsed.filter((entry) => entry.series_slug && entry.title);
 };
 
-export const toFeaturedItems = (entries: TopSeriesEntry[]): DiscoverSectionItem[] =>
-  entries.map((entry) => {
-    const views = entry.total_views ?? entry.views;
-    return {
-      type: "featuredCarouselItem",
-      mangaId: entry.series_slug,
-      title: entry.title,
-      imageUrl: entry.thumbnail ?? "",
-      supertitle: entry.author ?? undefined,
-      summary: cleanDescription(entry.description ?? "") || undefined,
-      infoItems: views ? [{ symbol: "eye.fill", text: formatCount(views) }] : undefined,
-      contentRating: ContentRating.ADULT,
-    };
-  });
+export const parseSeriesApi = (response: string, mangaId: string): SeriesData => {
+  let parsed: SeriesData;
+  try {
+    parsed = JSON.parse(response) as SeriesData;
+  } catch (error) {
+    throw new Error(`Temple Scan: could not parse details for ${mangaId}`, { cause: error });
+  }
+  if (!parsed || typeof parsed !== "object" || !parsed.title) {
+    throw new Error(`Temple Scan: no API details found for ${mangaId}`);
+  }
+  return parsed;
+};
+
+export const toFeaturedItems = (entries: FeaturedEntry[]): DiscoverSectionItem[] =>
+  entries.map((entry) => ({
+    type: "featuredCarouselItem",
+    mangaId: entry.series_slug,
+    title: entry.title,
+    imageUrl: entry.banner ?? entry.protagonist ?? "",
+    supertitle: entry.author ?? undefined,
+    summary: cleanDescription(entry.description ?? "") || undefined,
+    infoItems: entry.total_views
+      ? [{ symbol: "eye.fill", text: formatCount(entry.total_views) }]
+      : undefined,
+    contentRating: ContentRating.ADULT,
+  }));
 
 export const toSearchResultItem = (series: BrowseSeries): SearchResultItem => ({
   mangaId: series.series_slug,
