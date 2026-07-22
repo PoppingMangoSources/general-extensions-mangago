@@ -59,18 +59,27 @@ export const toMangaId = (href: string): string =>
     .replace(/[?#].*$/, "")
     .replace(/\/+$/, "");
 
-export const parseListing = ($: CheerioAPI, languageClasses: string[]): MangaCard[] => {
+export interface ListingFilter {
+  languages?: string[];
+  excludeClasses?: string[];
+}
+
+export const parseListing = ($: CheerioAPI, filter: ListingFilter = {}): MangaCard[] => {
   const cards: MangaCard[] = [];
   const seen = new Set<string>();
+  const languages = filter.languages ?? [];
+  const excluded = new Set(filter.excludeClasses ?? []);
 
   for (const element of $("article, div.post, div.item, ul.wpp-list li").toArray()) {
     const article = $(element);
     const classes = article.attr("class") ?? "";
     if (classes.includes("category-video")) continue;
+    const classList = classes.split(/\s+/);
+    if (classList.some((name) => excluded.has(name))) continue;
     if (
-      languageClasses.length > 0 &&
+      languages.length > 0 &&
       classes.includes("lang-") &&
-      !languageClasses.some((language) => classes.includes(`lang-${language}`))
+      !languages.some((language) => classList.includes(`lang-${language}`))
     ) {
       continue;
     }

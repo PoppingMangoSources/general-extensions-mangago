@@ -9,7 +9,7 @@ import {
 } from "@paperback/types";
 import * as cheerio from "cheerio";
 
-import { DOMAIN, LANGUAGES, type SearchMetadata } from "./models";
+import { DOMAIN, LANGUAGES, TAXONOMIES, type SearchMetadata } from "./models";
 
 export class MyReadingMangaInterceptor extends PaperbackInterceptor {
   private challengeThrownAt = 0;
@@ -77,16 +77,12 @@ export const fetchSearchPage = (
   filters?: SearchMetadata,
 ): Promise<cheerio.CheerioAPI> => {
   const params = [`s=${encodeURIComponent(query.trim())}`, `ep_sort=${sort || "date"}`];
-  const taxonomyParams: [string, string | undefined][] = [
-    ["ep_filter_genre", filters?.genre],
-    ["ep_filter_category", filters?.category],
-    ["ep_filter_post_tag", filters?.tag],
-    ["ep_filter_artist", filters?.artist],
-    ["ep_filter_pairing", filters?.pairing],
-    ["ep_filter_status", filters?.status],
-  ];
-  for (const [param, value] of taxonomyParams) {
-    if (value) params.push(`${param}=${encodeURIComponent(value)}`);
+  for (const taxonomy of TAXONOMIES) {
+    const record = filters?.[taxonomy.key] ?? {};
+    const included = Object.keys(record).filter((slug) => record[slug] === "included");
+    if (included.length > 0) {
+      params.push(`${taxonomy.param}=${encodeURIComponent(included.join(","))}`);
+    }
   }
   const language = LANGUAGES.find((lang) => lang.code === filters?.language);
   if (language) params.push(`ep_filter_lang=${language.name}`);

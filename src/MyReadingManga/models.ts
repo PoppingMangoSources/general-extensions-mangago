@@ -26,15 +26,54 @@ export type FilterTaxonomies = Record<string, FilterOption[]>;
 
 export type PageMetadata = { page: number };
 
+// Selection state consumed by `TriStateSelectRow`: include or exclude per id.
+export type TriState = Record<string, "included" | "excluded">;
+
 export interface SearchMetadata extends JSONObject {
-  genre?: string;
-  category?: string;
-  tag?: string;
-  artist?: string;
-  pairing?: string;
-  status?: string;
+  genres?: TriState;
+  categories?: TriState;
+  tags?: TriState;
+  artists?: TriState;
+  pairings?: TriState;
+  statuses?: TriState;
   language?: string;
 }
+
+// Search metadata key → sidebar taxonomy id, the site's search facet
+// parameter, its display title, and the taxonomy class prefix WordPress
+// stamps on listing cards (used for exclusions).
+export const TAXONOMIES = [
+  { key: "genres", id: "genre", title: "Genre", param: "ep_filter_genre", classPrefix: "genre" },
+  {
+    key: "categories",
+    id: "category",
+    title: "Category",
+    param: "ep_filter_category",
+    classPrefix: "category",
+  },
+  { key: "tags", id: "tag", title: "Tag", param: "ep_filter_post_tag", classPrefix: "tag" },
+  {
+    key: "artists",
+    id: "artist",
+    title: "Circle / Artist",
+    param: "ep_filter_artist",
+    classPrefix: "artist",
+  },
+  {
+    key: "pairings",
+    id: "pairing",
+    title: "Pairing",
+    param: "ep_filter_pairing",
+    classPrefix: "pairing",
+  },
+  {
+    key: "statuses",
+    id: "status",
+    title: "Status",
+    param: "ep_filter_status",
+    classPrefix: "status",
+  },
+] as const;
 
 // Site languages: the display name is what `ep_filter_lang` accepts, the
 // class is how listing cards are tagged, and the code is the ISO langCode.

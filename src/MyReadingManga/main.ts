@@ -22,14 +22,17 @@ import {
 } from "@paperback/types";
 
 import {
+  getHiddenGenres,
+  getHiddenTags,
+  getOrderedSections,
   getPreferredLanguages,
   MyReadingMangaAdvancedSearchForm,
   MyReadingMangaSettingsForm,
 } from "./forms";
 import {
-  DISCOVER_SECTIONS,
   LISTING_PATHS,
   SORTING_OPTIONS,
+  TAXONOMIES,
   type FilterTaxonomies,
   type PageMetadata,
   type SearchMetadata,
@@ -91,7 +94,17 @@ export class MyReadingMangaExtension implements ExtensionImpl<typeof MyReadingMa
   }
 
   async getSettingsForm(): Promise<Form> {
-    return new MyReadingMangaSettingsForm();
+    // Hide rows still render (empty) if the taxonomy scrape is unavailable.
+    const taxonomies = await this.getTaxonomies().catch(() => ({}) as FilterTaxonomies);
+    return new MyReadingMangaSettingsForm(taxonomies);
+  }
+
+  // Source-wide hidden genres/tags expressed as WordPress card classes.
+  private hiddenClasses(): string[] {
+    return [
+      ...getHiddenGenres().map((slug) => `genre-${slug}`),
+      ...getHiddenTags().map((slug) => `tag-${slug}`),
+    ];
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
@@ -110,7 +123,7 @@ export class MyReadingMangaExtension implements ExtensionImpl<typeof MyReadingMa
   }
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
-    return DISCOVER_SECTIONS;
+    return getOrderedSections();
   }
 
   async getDiscoverSectionItems(
@@ -123,7 +136,10 @@ export class MyReadingMangaExtension implements ExtensionImpl<typeof MyReadingMa
 
     const page = metadata?.page ?? 1;
     const $ = await fetchListingPage(LISTING_PATHS[section.id] ?? "/", page);
-    const cards = parseListing($, getPreferredLanguages());
+    const cards = parseListing($, {
+      languages: getPreferredLanguages(),
+      excludeClasses: this.hiddenClasses(),
+    });
     const items: DiscoverSectionItem[] = cards.map((card) =>
       section.id === "popular"
         ? {
@@ -154,7 +170,7 @@ export class MyReadingMangaExtension implements ExtensionImpl<typeof MyReadingMa
       name: genre.title,
       searchQuery: {
         title: "",
-        metadata: { genre: genre.id } satisfies SearchMetadata,
+        metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
       },
     }));
     return { items };
@@ -171,7 +187,15 @@ export class MyReadingMangaExtension implements ExtensionImpl<typeof MyReadingMa
   ): Promise<PagedResults<SearchResultItem>> {
     const page = metadata?.page ?? 1;
     const $ = await fetchSearchPage(page, query.title, sortingOption?.id, query.metadata);
-    const items: SearchResultItem[] = parseListing($, []).map((card) => ({
+    // Facet params only include; excluded terms are dropped by card class.
+    const excludeClasses = [...this.hiddenClasses()];
+    for (const taxonomy of TAXONOMIES) {
+      const record = query.metadata?.[taxonomy.key] ?? {};
+      for (const slug of Object.keys(record)) {
+        if (record[slug] === "excluded") excludeClasses.push(`${taxonomy.classPrefix}-${slug}`);
+      }
+    }
+    const items: SearchResultItem[] = parseListing($, { excludeClasses }).map((card) => ({
       mangaId: card.mangaId,
       title: card.title,
       imageUrl: card.imageUrl,
