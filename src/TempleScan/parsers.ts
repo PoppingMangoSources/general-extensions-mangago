@@ -335,7 +335,7 @@ export const toFeaturedItems = (entries: FeaturedEntry[]): DiscoverSectionItem[]
     type: "featuredCarouselItem",
     mangaId: entry.series_slug,
     title: entry.title,
-    imageUrl: entry.banner ?? entry.protagonist ?? "",
+    imageUrl: entry.thumbnail ?? entry.protagonist ?? entry.banner ?? "",
     supertitle: entry.author ?? undefined,
     summary: cleanDescription(entry.description ?? "") || undefined,
     infoItems: entry.total_views

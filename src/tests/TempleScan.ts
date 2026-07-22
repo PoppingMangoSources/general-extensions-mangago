@@ -2,12 +2,29 @@ import { type TestLogger } from "@paperback/types";
 import { expect } from "chai";
 
 import { TempleScan } from "../TempleScan/main.js";
+import { toFeaturedItems } from "../TempleScan/parsers.js";
 import sourceInfo from "../TempleScan/pbconfig.js";
 import { TestSuite, registerDefaultTests } from "./suite.js";
 
 export async function runTests(logger: TestLogger) {
   const suite = new TestSuite("TempleScan tests", logger);
   registerDefaultTests(suite, TempleScan, sourceInfo);
+
+  suite.test("featured cards prefer portrait covers", () => {
+    const [item] = toFeaturedItems([
+      {
+        series_slug: "cover-test",
+        title: "Cover Test",
+        thumbnail: "https://example.com/cover.webp",
+        banner: "https://example.com/banner.webp",
+      },
+    ]);
+
+    expect(item).to.include({
+      type: "featuredCarouselItem",
+      imageUrl: "https://example.com/cover.webp",
+    });
+  });
 
   suite.test("discover sections match the site", async () => {
     const sections = await TempleScan.getDiscoverSections();

@@ -230,7 +230,11 @@ export class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfi
                 await fetchSeriesApi(entry.series_slug),
                 entry.series_slug,
               );
-              return { ...entry, author: details.author };
+              return {
+                ...entry,
+                author: details.author,
+                thumbnail: details.thumbnail,
+              };
             } catch {
               return entry;
             }

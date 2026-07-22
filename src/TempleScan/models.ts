@@ -63,6 +63,7 @@ export interface HomeSeries {
 export interface FeaturedEntry {
   series_slug: string;
   title: string;
+  thumbnail?: string | null;
   banner?: string | null;
   protagonist?: string | null;
   description?: string | null;
