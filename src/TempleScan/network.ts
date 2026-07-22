@@ -73,5 +73,3 @@ const fetchApi = async (path: string): Promise<string> => {
 export const fetchFeatured = (): Promise<string> => fetchApi("/banners");
 
 export const fetchTrending = (): Promise<string> => fetchApi("/topSeries");
-
-export const fetchSeriesApi = (mangaId: string): Promise<string> => fetchApi(`/comic/${mangaId}`);

@@ -13,6 +13,7 @@ import {
 
 import {
   DOMAIN,
+  FEATURED_COVER_OVERRIDES,
   type BrowseSeries,
   type FeaturedEntry,
   type HomeSeries,
@@ -317,17 +318,15 @@ export const parseFeatured = (response: string): FeaturedEntry[] => {
   return parsed.filter((entry) => entry.series_slug && entry.title);
 };
 
-export const parseSeriesApi = (response: string, mangaId: string): SeriesData => {
-  let parsed: SeriesData;
-  try {
-    parsed = JSON.parse(response) as SeriesData;
-  } catch (error) {
-    throw new Error(`Temple Scan: could not parse details for ${mangaId}`, { cause: error });
-  }
-  if (!parsed || typeof parsed !== "object" || !parsed.title) {
-    throw new Error(`Temple Scan: no API details found for ${mangaId}`);
-  }
-  return parsed;
+export const withFeaturedCovers = (
+  entries: FeaturedEntry[],
+  directory: BrowseSeries[],
+): FeaturedEntry[] => {
+  const covers = new Map(directory.map((series) => [series.series_slug, series.thumbnail]));
+  return entries.map((entry) => ({
+    ...entry,
+    thumbnail: FEATURED_COVER_OVERRIDES[entry.series_slug] ?? covers.get(entry.series_slug),
+  }));
 };
 
 export const toFeaturedItems = (entries: FeaturedEntry[]): DiscoverSectionItem[] =>
@@ -335,7 +334,7 @@ export const toFeaturedItems = (entries: FeaturedEntry[]): DiscoverSectionItem[]
     type: "featuredCarouselItem",
     mangaId: entry.series_slug,
     title: entry.title,
-    imageUrl: entry.thumbnail ?? entry.protagonist ?? entry.banner ?? "",
+    imageUrl: entry.thumbnail ?? entry.protagonist ?? "",
     supertitle: entry.author ?? undefined,
     summary: cleanDescription(entry.description ?? "") || undefined,
     infoItems: entry.total_views

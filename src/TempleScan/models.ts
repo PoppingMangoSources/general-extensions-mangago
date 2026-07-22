@@ -71,6 +71,13 @@ export interface FeaturedEntry {
   total_views?: number;
 }
 
+export const FEATURED_COVER_OVERRIDES: Record<string, string> = {
+  "i-thought-its-a-common-possession":
+    "https://uploads.mangadex.org/covers/aa4774a1-1ffc-4bc4-88f5-042a6d329f7b/6df6427d-ef1d-48b2-a88c-ae00abaf67ab.jpg.512.jpg",
+  "the-law-of-being-friends-with-a-male":
+    "https://uploads.mangadex.org/covers/ba63a244-df02-4661-8acc-878243d26d53/25425ecd-26ba-48d0-95f5-62e9385b30e9.jpg.512.jpg",
+};
+
 export interface TrendingEntry {
   series_slug: string;
   title: string;

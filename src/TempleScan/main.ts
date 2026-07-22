@@ -35,7 +35,6 @@ import {
   fetchDirectory,
   fetchFeatured,
   fetchHomePage,
-  fetchSeriesApi,
   fetchSeriesPage,
   fetchTrending,
   TempleScanInterceptor,
@@ -46,7 +45,6 @@ import {
   parseDirectory,
   parseFeatured,
   parseHomeSections,
-  parseSeriesApi,
   parseSeriesData,
   parseTrending,
   toFeaturedItems,
@@ -54,6 +52,7 @@ import {
   toSourceManga,
   toTrendingItems,
   toUpdateItems,
+  withFeaturedCovers,
   type HomeSections,
 } from "./parsers";
 import type TempleScanConfig from "./pbconfig";
@@ -220,27 +219,8 @@ export class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfi
   }
 
   private getFeaturedItems(): Promise<DiscoverSectionItem[]> {
-    this.featuredPromise ??= fetchFeatured()
-      .then(parseFeatured)
-      .then(async (entries) =>
-        Promise.all(
-          entries.map(async (entry) => {
-            try {
-              const details = parseSeriesApi(
-                await fetchSeriesApi(entry.series_slug),
-                entry.series_slug,
-              );
-              return {
-                ...entry,
-                author: details.author,
-                thumbnail: details.thumbnail,
-              };
-            } catch {
-              return entry;
-            }
-          }),
-        ),
-      )
+    this.featuredPromise ??= Promise.all([fetchFeatured().then(parseFeatured), this.getDirectory()])
+      .then(([entries, directory]) => withFeaturedCovers(entries, directory))
       .then(toFeaturedItems)
       .catch((error: unknown) => {
         this.featuredPromise = undefined;
