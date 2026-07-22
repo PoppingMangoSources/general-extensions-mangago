@@ -12,6 +12,12 @@ import * as cheerio from "cheerio";
 import { DOMAIN, LANGUAGES, type SearchMetadata } from "./models";
 
 export class MyReadingMangaInterceptor extends PaperbackInterceptor {
+  private challengeThrownAt = 0;
+
+  clearChallenge(): void {
+    this.challengeThrownAt = 0;
+  }
+
   override async interceptRequest(request: Request): Promise<Request> {
     return {
       ...request,
@@ -29,9 +35,16 @@ export class MyReadingMangaInterceptor extends PaperbackInterceptor {
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
     if (response.headers?.["cf-mitigated"] === "challenge" || response.status === 403) {
+      // Discover fires every section at once; queue a single bypass request
+      // per challenge episode instead of one per concurrent fetch.
+      const now = Date.now();
+      if (now - this.challengeThrownAt < 60_000) {
+        throw new Error("Cloudflare bypass pending — complete it and refresh.");
+      }
+      this.challengeThrownAt = now;
       throw new CloudflareError({
-        url: request.url,
-        method: request.method ?? "GET",
+        url: `${DOMAIN}/`,
+        method: "GET",
         headers: {
           "user-agent": await Application.getDefaultUserAgent(),
         },

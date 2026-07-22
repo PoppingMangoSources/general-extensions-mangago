@@ -78,6 +78,7 @@ export class MyReadingMangaExtension implements ExtensionImpl<typeof MyReadingMa
     _localStorage: Record<string, string>,
   ): Promise<void> {
     this.taxonomiesPromise = undefined;
+    this.mainInterceptor.clearChallenge();
     for (const cookie of cookies) {
       if (
         cookie.name.startsWith("cf") ||
