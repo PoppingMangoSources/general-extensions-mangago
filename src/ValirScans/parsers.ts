@@ -209,6 +209,7 @@ export const parseChapters = (
       langCode: "en",
       chapNum: chapter.number,
       title: chapterTitle(chapter),
+      volume: 0,
       publishDate: chapter.publishedAt ? new Date(chapter.publishedAt) : undefined,
       sortingIndex: index,
     }));
@@ -220,11 +221,25 @@ const fixVoidElements = (html: string): string =>
 
 export const parseChapterDetails = (html: string, chapter: Chapter): ChapterDetails => {
   const payload = decodeFlightPayload(html);
-  const data = extractByMarker<ValirChapterData>(payload, '"chapter":').find((candidate) =>
-    Array.isArray(candidate.pages),
+  const data = extractByMarker<ValirChapterData>(payload, '"chapter":').find(
+    (candidate) => Array.isArray(candidate.pages) || typeof candidate.content === "string",
   );
   if (!data) {
     throw new Error(`ValirScans: no chapter data found for chapter ${chapter.chapterId}`);
+  }
+
+  // Novels ship their prose in `content`; comics ship image `pages`. Prefer
+  // the text body so a novel that also carries placeholder page entries still
+  // reads as a novel.
+  const content = data.content?.trim();
+  if (content) {
+    const body = fixVoidElements(content.replaceAll("&nbsp;", " "));
+    return {
+      id: chapter.chapterId,
+      mangaId: chapter.sourceManga.mangaId,
+      type: "html",
+      html: `<html xmlns="http://www.w3.org/1999/xhtml"><head></head><body>${body}</body></html>`,
+    };
   }
 
   const pages = (data.pages ?? [])
@@ -234,16 +249,6 @@ export const parseChapterDetails = (html: string, chapter: Chapter): ChapterDeta
     .filter((url) => url.length > 0);
   if (pages.length > 0) {
     return { id: chapter.chapterId, mangaId: chapter.sourceManga.mangaId, pages };
-  }
-
-  if (data.content) {
-    const body = fixVoidElements(data.content.replaceAll("&nbsp;", " "));
-    return {
-      id: chapter.chapterId,
-      mangaId: chapter.sourceManga.mangaId,
-      type: "html",
-      html: `<html xmlns="http://www.w3.org/1999/xhtml"><head></head><body>${body}</body></html>`,
-    };
   }
 
   throw new Error(
