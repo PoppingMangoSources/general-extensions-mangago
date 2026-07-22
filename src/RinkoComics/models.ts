@@ -10,7 +10,8 @@ export const LOCK_PREFIX = "🔒 ";
 
 export const CHAPTERS_PER_PAGE = 10;
 
-export const CHAPTER_SELECTOR = "li.chapter";
+// Comic pages list chapters as `li.chapter`; novel pages as `a.chapter-item`.
+export const CHAPTER_SELECTOR = "li.chapter, a.chapter-item";
 
 export const SORTING_OPTIONS = [
   { id: "newest", label: "Newest First" },

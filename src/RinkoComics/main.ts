@@ -51,8 +51,11 @@ import {
   parseGenres,
   parseMangaDetails,
   parsePath,
-  parsePinnedCards,
   safeDecode,
+  toHotItems,
+  toLatestItems,
+  toNovelItems,
+  toPinnedItems,
 } from "./parsers";
 import type RinkoComicsConfig from "./pbconfig";
 
@@ -69,6 +72,7 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
 
   private genresList: Genre[] = [];
   private genresPromise?: Promise<Genre[]>;
+  private homePromise?: Promise<cheerio.CheerioAPI>;
 
   async initialise(): Promise<void> {
     this.globalRateLimiter.registerInterceptor();
@@ -82,62 +86,43 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
-      { id: "pinned", title: "Pinned Comics", type: DiscoverSectionType.featured },
-      { id: "latest", title: "Latest Updates", type: DiscoverSectionType.simpleCarousel },
+      { id: "hot", title: "Hot This Week", type: DiscoverSectionType.featured },
+      { id: "pinned", title: "Editor's Choice", type: DiscoverSectionType.prominentCarousel },
+      { id: "latest", title: "Latest Releases", type: DiscoverSectionType.chapterUpdates },
+      { id: "novels", title: "Latest Novels", type: DiscoverSectionType.prominentCarousel },
       { id: "genres", title: "Genres", type: DiscoverSectionType.genres },
     ];
   }
 
   async getDiscoverSectionItems(
     section: DiscoverSection,
-    metadata: PageMetadata | undefined,
+    _metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
+    if (section.id === "genres") {
+      return this.getGenresSection();
+    }
+    const $ = await this.getHomePage();
     switch (section.id) {
+      case "hot":
+        return { items: toHotItems($) };
       case "pinned":
-        return this.getPinnedSection();
+        return { items: toPinnedItems($) };
       case "latest":
-        return this.getLatestSection(metadata);
-      case "genres":
-        return this.getGenresSection();
+        return { items: toLatestItems($) };
+      case "novels":
+        return { items: toNovelItems($) };
       default:
-        return { items: [], metadata: undefined };
+        return { items: [] };
     }
   }
 
-  private async getPinnedSection(): Promise<PagedResults<DiscoverSectionItem>> {
-    const $ = await this.fetchCheerio({ url: `${DOMAIN}/`, method: "GET" });
-    const items: DiscoverSectionItem[] = parsePinnedCards($).map((card) => ({
-      type: "featuredCarouselItem",
-      mangaId: card.mangaId,
-      imageUrl: card.imageUrl,
-      title: card.title,
-      contentRating: ContentRating.EVERYONE,
-      metadata: undefined,
-    }));
-    return { items, metadata: undefined };
-  }
-
-  private async getLatestSection(
-    metadata: PageMetadata | undefined,
-  ): Promise<PagedResults<DiscoverSectionItem>> {
-    const page = metadata?.page ?? 1;
-    const url = this.comicsUrl(page).setQueryItem("sort", "newest").toString();
-    const $ = await this.fetchCheerio({ url, method: "GET" });
-
-    this.cacheGenres($);
-    const items: DiscoverSectionItem[] = parseComicCards($).map((card) => ({
-      type: "simpleCarouselItem",
-      mangaId: card.mangaId,
-      imageUrl: card.imageUrl,
-      title: card.title,
-      contentRating: ContentRating.EVERYONE,
-      metadata: undefined,
-    }));
-
-    return {
-      items,
-      metadata: hasNextPage($) ? { page: page + 1 } : undefined,
-    };
+  // The four homepage sections share one document; dedupe the fetch within a
+  // refresh burst while still loading fresh data on the next refresh.
+  private getHomePage(): Promise<cheerio.CheerioAPI> {
+    this.homePromise ??= this.fetchCheerio({ url: `${DOMAIN}/`, method: "GET" }).finally(() => {
+      this.homePromise = undefined;
+    });
+    return this.homePromise;
   }
 
   private async getGenresSection(): Promise<PagedResults<DiscoverSectionItem>> {
