@@ -14,13 +14,23 @@ import {
 } from "@paperback/types";
 
 import {
-  DOMAIN,
+  getBaseUrl,
+  type FilterOption,
   type HomeSections,
   type ValirChapterData,
   type ValirChapterItem,
   type ValirSeries,
   type ValirSeriesPage,
 } from "./models";
+
+// Paperback rejects IDs containing characters outside its allowed set (an
+// apostrophe in a tag slug crashes the app), so scrub anything unsupported.
+const sanitizeId = (value: string): string =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9._\-@()[\]%?#+=/&:]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
 
 // ValirScans is a Next.js App Router site: page data ships as an RSC flight
 // stream whose JSON is embedded inside escaped JS string literals. Undo the
@@ -76,7 +86,7 @@ const toMangaId = (series: ValirSeries): string =>
 const toAbsoluteUrl = (path: string | null | undefined): string => {
   if (!path) return "";
   if (path.startsWith("http")) return path;
-  return `${DOMAIN}${path.startsWith("/") ? "" : "/"}${path}`;
+  return `${getBaseUrl()}${path.startsWith("/") ? "" : "/"}${path}`;
 };
 
 const toContentRating = (series: ValirSeries): ContentRating =>
@@ -125,6 +135,25 @@ export interface BrowsePage {
   hasMore: boolean;
 }
 
+export interface FilterTaxonomy {
+  genres: FilterOption[];
+  tags: FilterOption[];
+}
+
+// The browse page's filter component receives the full genre and tag lists as
+// flat `{ id, name, slug }` records; series cards nest genres differently, so
+// matching on top-level name+slug isolates the taxonomy lists.
+export const parseFilterTaxonomy = (html: string): FilterTaxonomy => {
+  const payload = decodeFlightPayload(html);
+  const pick = (key: string): FilterOption[] =>
+    (
+      extractByMarker<{ name?: string; slug?: string }[]>(payload, `"${key}":`)
+        .filter((list) => Array.isArray(list) && !!list[0]?.name && !!list[0]?.slug)
+        .sort((a, b) => b.length - a.length)[0] ?? []
+    ).flatMap((entry) => (entry.name && entry.slug ? [{ id: entry.slug, title: entry.name }] : []));
+  return { genres: pick("genres"), tags: pick("tags") };
+};
+
 export const parseBrowsePage = (html: string): BrowsePage => {
   const payload = decodeFlightPayload(html);
   const series = extractByMarker<ValirSeries[]>(payload, '"initialSeries":')[0];
@@ -159,11 +188,11 @@ export const parseMangaDetails = (page: ValirSeriesPage, mangaId: string): Sourc
     const genre = entry.genre ?? entry;
     const title = genre.name ?? (genre.slug ? toTitleCase(genre.slug) : undefined);
     if (!title) return [];
-    return [{ id: genre.slug ?? title.toLowerCase().replaceAll(" ", "-"), title }];
+    return [{ id: sanitizeId(genre.slug ?? title), title }];
   });
   const tags: Tag[] = (series.tags ?? [])
-    .filter((tag): tag is { name: string } => !!tag.name)
-    .map((tag) => ({ id: tag.name.toLowerCase().replaceAll(" ", "-"), title: tag.name }));
+    .filter((tag): tag is { name: string; slug?: string } => !!tag.name)
+    .map((tag) => ({ id: sanitizeId(tag.slug ?? tag.name), title: tag.name }));
 
   const tagGroups: TagSection[] = [];
   if (genres.length > 0) tagGroups.push({ id: "genres", title: "Genres", tags: genres });
@@ -184,7 +213,7 @@ export const parseMangaDetails = (page: ValirSeriesPage, mangaId: string): Sourc
       artist: series.artist ?? undefined,
       rating: series.rating ? Math.min(1, Math.max(0, series.rating / 10)) : undefined,
       tagGroups: tagGroups.length > 0 ? tagGroups : undefined,
-      shareUrl: `${DOMAIN}/series/${mangaId}`,
+      shareUrl: `${getBaseUrl()}/series/${mangaId}`,
     },
   };
 };
@@ -219,6 +248,24 @@ export const parseChapters = (
 const fixVoidElements = (html: string): string =>
   html.replace(/<(br|hr|img|input|meta|link)((?:[^>"']|"[^"]*"|'[^']*')*?)\/?>/gi, "<$1$2 />");
 
+// Novel prose is emitted as a Next.js flight text chunk referenced by a
+// pointer (e.g. `"content":"$1b"` → row `1b:T<hexlen>,<utf8 bytes>`). Resolve
+// the pointer and slice exactly the chunk's byte length out of the stream.
+const resolveContentRef = (payload: string, ref: string): string | undefined => {
+  const header = new RegExp(`(?:^|\\n)${ref.slice(1)}:T([0-9a-f]+),`).exec(payload);
+  if (!header) return undefined;
+  const byteLength = parseInt(header[1], 16);
+  const start = header.index + header[0].length;
+  let bytes = 0;
+  let end = start;
+  while (end < payload.length && bytes < byteLength) {
+    const code = payload.codePointAt(end) ?? 0;
+    bytes += code <= 0x7f ? 1 : code <= 0x7ff ? 2 : code <= 0xffff ? 3 : 4;
+    end += code > 0xffff ? 2 : 1;
+  }
+  return payload.slice(start, end);
+};
+
 export const parseChapterDetails = (html: string, chapter: Chapter): ChapterDetails => {
   const payload = decodeFlightPayload(html);
   const data = extractByMarker<ValirChapterData>(payload, '"chapter":').find(
@@ -231,7 +278,10 @@ export const parseChapterDetails = (html: string, chapter: Chapter): ChapterDeta
   // Novels ship their prose in `content`; comics ship image `pages`. Prefer
   // the text body so a novel that also carries placeholder page entries still
   // reads as a novel.
-  const content = data.content?.trim();
+  let content = data.content?.trim();
+  if (content?.startsWith("$")) {
+    content = resolveContentRef(payload, content)?.trim();
+  }
   if (content) {
     const body = fixVoidElements(content.replaceAll("&nbsp;", " "));
     return {

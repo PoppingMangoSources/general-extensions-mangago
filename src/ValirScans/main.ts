@@ -4,6 +4,7 @@
 import {
   BasicRateLimiter,
   CookieStorageInterceptor,
+  type AdvancedSearchForm,
   type Chapter,
   type ChapterDetails,
   type Cookie,
@@ -11,7 +12,6 @@ import {
   type DiscoverSectionItem,
   type ExtensionImpl,
   type Form,
-  type Metadata,
   type PagedResults,
   type Request,
   type SearchQuery,
@@ -20,8 +20,15 @@ import {
   type SourceManga,
 } from "@paperback/types";
 
-import { getShowPaidChapters, ValirScansSettingsForm } from "./forms";
-import { DISCOVER_SECTIONS, SORTING_OPTIONS, type HomeSections, type PageMetadata } from "./models";
+import { getShowPaidChapters, ValirScansAdvancedSearchForm, ValirScansSettingsForm } from "./forms";
+import {
+  DISCOVER_SECTIONS,
+  GENRES,
+  SORTING_OPTIONS,
+  type HomeSections,
+  type PageMetadata,
+  type SearchMetadata,
+} from "./models";
 import {
   fetchBrowsePage,
   fetchChapterPage,
@@ -33,6 +40,7 @@ import {
   parseBrowsePage,
   parseChapterDetails,
   parseChapters,
+  parseFilterTaxonomy,
   parseHomeSections,
   parseMangaDetails,
   parseSeriesPage,
@@ -40,6 +48,7 @@ import {
   toChapterUpdateItems,
   toFeaturedItems,
   toSearchResultItem,
+  type FilterTaxonomy,
 } from "./parsers";
 import type ValirScansConfig from "./pbconfig";
 
@@ -58,6 +67,9 @@ export class ValirScansExtension implements ExtensionImpl<typeof ValirScansConfi
 
   private homePromise?: Promise<HomeSections>;
 
+  // Genre/tag taxonomy for the advanced search form, fetched once per session.
+  private taxonomyPromise?: Promise<FilterTaxonomy>;
+
   async initialise(): Promise<void> {
     this.mainRateLimiter.registerInterceptor();
     this.cookieStorageInterceptor.registerInterceptor();
@@ -70,6 +82,7 @@ export class ValirScansExtension implements ExtensionImpl<typeof ValirScansConfi
     _localStorage: Record<string, string>,
   ): Promise<void> {
     this.homePromise = undefined;
+    this.taxonomyPromise = undefined;
     for (const cookie of cookies) {
       if (
         cookie.name.startsWith("cf") ||
@@ -141,21 +154,43 @@ export class ValirScansExtension implements ExtensionImpl<typeof ValirScansConfi
     }
   }
 
+  async getAdvancedSearchForm(
+    searchQuery: SearchQuery<SearchMetadata>,
+  ): Promise<AdvancedSearchForm> {
+    const taxonomy = await this.getTaxonomy();
+    return new ValirScansAdvancedSearchForm(searchQuery, taxonomy.genres, taxonomy.tags);
+  }
+
   async getSearchResults(
-    query: SearchQuery<Metadata>,
+    query: SearchQuery<SearchMetadata>,
     metadata: PageMetadata | undefined,
     sortingOption?: SortingOption,
   ): Promise<PagedResults<SearchResultItem>> {
     const page = metadata?.page ?? 1;
-    const browse = parseBrowsePage(await fetchBrowsePage(page, query.title, sortingOption?.id));
+    const browse = parseBrowsePage(
+      await fetchBrowsePage(page, query.title, sortingOption?.id, query.metadata),
+    );
     return {
       items: browse.series.map(toSearchResultItem),
       metadata: browse.hasMore ? { page: page + 1 } : undefined,
     };
   }
 
-  async getSortingOptions(_query: SearchQuery<Metadata>): Promise<SortingOption[]> {
+  async getSortingOptions(_query: SearchQuery<SearchMetadata>): Promise<SortingOption[]> {
     return SORTING_OPTIONS;
+  }
+
+  private getTaxonomy(): Promise<FilterTaxonomy> {
+    this.taxonomyPromise ??= fetchBrowsePage(1)
+      .then(parseFilterTaxonomy)
+      .then((taxonomy) => (taxonomy.genres.length > 0 ? taxonomy : { ...taxonomy, genres: GENRES }))
+      .catch((error: unknown) => {
+        // Drop the failed memo so the next form open retries, then let the
+        // error (e.g. a Cloudflare challenge) reach the app.
+        this.taxonomyPromise = undefined;
+        throw error;
+      });
+    return this.taxonomyPromise;
   }
 
   // Every homepage discover section is fed by the same document; sharing one

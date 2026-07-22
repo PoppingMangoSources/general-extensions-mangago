@@ -4,11 +4,12 @@
 import {
   CloudflareError,
   PaperbackInterceptor,
+  URL,
   type Request,
   type Response,
 } from "@paperback/types";
 
-import { DOMAIN } from "./models";
+import { getBaseUrl, type SearchMetadata } from "./models";
 
 export class ValirScansInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
@@ -16,7 +17,7 @@ export class ValirScansInterceptor extends PaperbackInterceptor {
       ...request,
       headers: {
         ...request.headers,
-        referer: `${DOMAIN}/`,
+        referer: `${getBaseUrl()}/`,
         "user-agent": await Application.getDefaultUserAgent(),
       },
     };
@@ -40,26 +41,40 @@ export class ValirScansInterceptor extends PaperbackInterceptor {
   }
 }
 
-const fetchPage = async (url: string): Promise<string> => {
-  const [, buffer] = await Application.scheduleRequest({ url, method: "GET" });
+const fetchPage = async (url: string, rsc = false): Promise<string> => {
+  const [, buffer] = await Application.scheduleRequest({
+    url,
+    method: "GET",
+    headers: rsc ? { rsc: "1" } : undefined,
+  });
   return Application.arrayBufferToUTF8String(buffer);
 };
 
-export const fetchHomePage = (): Promise<string> => fetchPage(`${DOMAIN}/`);
+export const fetchHomePage = (): Promise<string> => fetchPage(`${getBaseUrl()}/`);
 
-export const fetchBrowsePage = (page: number, query?: string, sort?: string): Promise<string> => {
-  const params = [`page=${page}`];
-  if (query) {
-    params.push(`q=${encodeURIComponent(query.trim())}`);
-  }
+export const fetchBrowsePage = (
+  page: number,
+  query?: string,
+  sort?: string,
+  filters?: SearchMetadata,
+): Promise<string> => {
+  const url = new URL(`${getBaseUrl()}/series`).setQueryItem("page", page.toString());
+  if (query?.trim()) url.setQueryItem("q", query.trim());
   if (sort) {
-    params.push(`sort=${encodeURIComponent(sort)}`, "order=desc");
+    url.setQueryItem("sort", sort).setQueryItem("order", "desc");
   }
-  return fetchPage(`${DOMAIN}/series?${params.join("&")}`);
+  if (filters?.genres?.length) url.setQueryItem("genre", filters.genres);
+  if (filters?.tags?.length) url.setQueryItem("tag", filters.tags);
+  if (filters?.type) url.setQueryItem("type", filters.type);
+  if (filters?.status) url.setQueryItem("status", filters.status);
+  if (filters?.origin) url.setQueryItem("origin", filters.origin);
+  return fetchPage(url.toString());
 };
 
 export const fetchSeriesPage = (mangaId: string, page = 1): Promise<string> =>
-  fetchPage(`${DOMAIN}/series/${mangaId}${page > 1 ? `?page=${page}` : ""}`);
+  fetchPage(`${getBaseUrl()}/series/${mangaId}${page > 1 ? `?page=${page}` : ""}`);
 
+// The reader route serves its data as a Next.js RSC flight stream; the `rsc`
+// header returns that stream directly instead of the full HTML shell.
 export const fetchChapterPage = (mangaId: string, chapterId: string): Promise<string> =>
-  fetchPage(`${DOMAIN}/series/${mangaId}/chapter/${chapterId}`);
+  fetchPage(`${getBaseUrl()}/series/${mangaId}/chapter/${chapterId}`, true);
