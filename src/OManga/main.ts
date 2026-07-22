@@ -314,7 +314,6 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
           title: item.title,
           imageUrl: item.poster,
           supertitle: item.type ?? "",
-          summary: (item.genres ?? []).slice(0, 4).join(" · "),
           infoItems: item.year ? [{ symbol: "calendar", text: String(item.year) }] : undefined,
           contentRating: getContentRatingForGenres(item.genres),
           metadata: undefined,

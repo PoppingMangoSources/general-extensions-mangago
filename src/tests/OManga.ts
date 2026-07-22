@@ -11,6 +11,40 @@ import { TestSuite, registerDefaultTests } from "./suite.js";
 export async function runTests(logger: TestLogger) {
   const suite = new TestSuite("oManga tests", logger);
 
+  suite.test("Popular returns all 17 homepage titles without genre summaries", async () => {
+    const sections = await OManga.getDiscoverSections();
+    const popular = sections.find((section) => section.title === "Popular");
+    if (!popular) throw new Error("Popular section is missing");
+
+    const popularItems = Array.from({ length: 17 }, (_, index) => ({
+      id: index + 1,
+      title: `Popular ${index + 1}`,
+      slug: `popular-${index + 1}`,
+      poster: `https://example.com/popular-${index + 1}.webp`,
+      type: "Manhwa",
+      year: 2026,
+      genres: ["Action", "Fantasy"],
+    }));
+    const payload = `{"title":"Popular This Week","moreHref":"/manga","items":${JSON.stringify(popularItems)}}`;
+    const extension = new OMangaExtension();
+    Object.defineProperty(extension, "homepageRequest", {
+      value: { domain: getDomain(), page: Promise.resolve(payload) },
+      writable: true,
+    });
+
+    const results = await extension.getDiscoverSectionItems(popular, undefined);
+    expect(results.items).to.have.length(17);
+    expect(results.items[0]).to.include({
+      type: "featuredCarouselItem",
+      mangaId: "popular-1",
+    });
+    expect(results.items[16]).to.include({
+      type: "featuredCarouselItem",
+      mangaId: "popular-17",
+    });
+    expect(results.items.every((item) => !("summary" in item))).to.equal(true);
+  });
+
   suite.test("Popular Today follows the trend section with prominent cards", async () => {
     const sections = await OManga.getDiscoverSections();
     const trendIndex = sections.findIndex((section) => section.title === "In the Trend");
