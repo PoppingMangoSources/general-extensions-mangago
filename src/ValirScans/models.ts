@@ -120,7 +120,7 @@ export interface SearchMetadata extends JSONObject {
 
 export const SORTING_OPTIONS: SortingOption[] = [
   { id: "updated", label: "Recently Updated" },
-  { id: "bookmarked", label: "Most Bookmarked" },
+  { id: "popular", label: "Most Bookmarked" },
   { id: "views", label: "Most Viewed" },
   { id: "longest", label: "Longest" },
   { id: "trending", label: "Trending" },
