@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-22T10:34:11.522Z",
+  "buildTime": "2026-07-22T11:15:01.883Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -54,6 +54,29 @@
         }
       ],
       "id": "KingOfShojo"
+    },
+    {
+      "name": "MyReadingManga",
+      "description": "Extension that pulls content from myreadingmanga.info.",
+      "version": "1.0.0-alpha.1",
+      "icon": "icon.png",
+      "language": "multi",
+      "contentRating": "ADULT",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "PoppingMango",
+          "github": "https://github.com/PoppingMango"
+        }
+      ],
+      "id": "MyReadingManga"
     },
     {
       "name": "oManga",
