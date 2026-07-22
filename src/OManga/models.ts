@@ -8,6 +8,7 @@ export const FEATURED_HERO_LIMIT = 8;
 
 export const SECTION_POPULAR = "popular";
 export const SECTION_TREND = "trend";
+export const SECTION_POPULAR_TODAY = "popular_today";
 export const SECTION_UPDATES = "updates";
 export const SECTION_TOP_SERIES = "top_series";
 export const SECTION_NEW_SEASON = "new_season";

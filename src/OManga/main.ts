@@ -38,6 +38,7 @@ import {
   SECTION_MOST_LIKED,
   SECTION_NEW_SEASON,
   SECTION_POPULAR,
+  SECTION_POPULAR_TODAY,
   SECTION_TREND,
   SECTION_TOP_SERIES,
   SECTION_UPDATES,
@@ -121,6 +122,11 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
         type: DiscoverSectionType.prominentCarousel,
       },
       { id: SECTION_TREND, title: "In the Trend", type: DiscoverSectionType.simpleCarousel },
+      {
+        id: SECTION_POPULAR_TODAY,
+        title: "Popular Today",
+        type: DiscoverSectionType.prominentCarousel,
+      },
       { id: SECTION_GENRES, title: "Genres", type: DiscoverSectionType.genres },
     ];
   }
@@ -224,6 +230,29 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
       }
     }
 
+    if (section.id === SECTION_POPULAR_TODAY) {
+      const cards = parseHomeLinkSection(
+        await this.getHomepage(),
+        "Popular Today",
+        '"hl-col-items"',
+      );
+      if (cards.length > 0) {
+        return {
+          items: cards.map(
+            (card, index): DiscoverSectionItem => ({
+              type: "prominentCarouselItem",
+              mangaId: card.slug,
+              title: card.title,
+              imageUrl: card.cover,
+              subtitle: `#${index + 1}`,
+              metadata: undefined,
+            }),
+          ),
+          metadata: undefined,
+        };
+      }
+    }
+
     if (section.id === SECTION_BEST_ONGOING) {
       const cards = parseHomeLinkSection(await this.getHomepage(), "Best Ongoings", '"grid gap-2');
       if (cards.length > 0) {
@@ -246,21 +275,25 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
     const query: CatalogQuery =
       section.id === SECTION_BEST_ONGOING
         ? { sort: "rating", order: "desc", status: "Ongoing" }
-        : {
-            sort:
-              section.id === SECTION_NEW_SEASON
-                ? "by_date"
-                : section.id === SECTION_TREND
-                  ? "by_views"
-                  : section.id === SECTION_MOST_LIKED
-                    ? "votes"
-                    : "real_views",
-            order: "desc",
-          };
+        : section.id === SECTION_POPULAR_TODAY
+          ? { sort: "votes", order: "desc" }
+          : {
+              sort:
+                section.id === SECTION_NEW_SEASON
+                  ? "by_date"
+                  : section.id === SECTION_TREND
+                    ? "by_views"
+                    : section.id === SECTION_MOST_LIKED
+                      ? "votes"
+                      : "real_views",
+              order: "desc",
+            };
 
     const { items, nextMetadata } = await this.fetchCatalogPage(query, metadata);
     const toCarouselItem =
-      section.id === SECTION_BEST_ONGOING ? toProminentCarouselItem : toSimpleCarouselItem;
+      section.id === SECTION_BEST_ONGOING || section.id === SECTION_POPULAR_TODAY
+        ? toProminentCarouselItem
+        : toSimpleCarouselItem;
 
     return {
       items: items

@@ -76,6 +76,34 @@ const parseJsonAt = <T>(payload: string, anchor: string, offset = 0): T | undefi
   }
 };
 
+const resolveFlightTextReference = (
+  payload: string,
+  value: string | undefined,
+): string | undefined => {
+  const reference = value?.match(/^\$([0-9a-f]+)$/i)?.[1];
+  if (!reference) return value;
+
+  const marker = payload.match(new RegExp(`(?:^|\\n)${reference}:T([0-9a-f]+),`, "i"));
+  if (marker?.index === undefined) return value;
+
+  const byteLength = Number.parseInt(marker[1], 16);
+  const start = marker.index + marker[0].length;
+  let bytes = 0;
+  let resolved = "";
+
+  for (const character of payload.slice(start)) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    const characterBytes =
+      codePoint <= 0x7f ? 1 : codePoint <= 0x7ff ? 2 : codePoint <= 0xffff ? 3 : 4;
+    if (bytes + characterBytes > byteLength) return value;
+    resolved += character;
+    bytes += characterBytes;
+    if (bytes === byteLength) return resolved;
+  }
+
+  return value;
+};
+
 const filterValidCatalogItems = (items: CatalogItem[] | undefined): CatalogItem[] =>
   (items ?? []).filter((item) => Boolean(item.slug) && Boolean(item.title));
 
@@ -275,11 +303,12 @@ export const parseHomeUpdates = (html: string): DiscoverSectionItem[] => {
 };
 
 export const parseSeriesProps = (html: string, slug: string): SeriesProps => {
-  const props = parseJsonAt<SeriesProps>(decodeFlightPayload(html), '{"initialTab"');
+  const payload = decodeFlightPayload(html);
+  const props = parseJsonAt<SeriesProps>(payload, '{"initialTab"');
   if (!props || !props.title) {
     throw new Error(`No series payload found for ${slug} — the page layout may have changed.`);
   }
-  return props;
+  return { ...props, description: resolveFlightTextReference(payload, props.description) };
 };
 
 export const parseCoverUrl = (html: string): string =>
