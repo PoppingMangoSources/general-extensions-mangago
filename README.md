@@ -14,6 +14,7 @@ Unofficial Paperback extensions built and maintained in this repository. This so
 | [RinkoComics](https://rinkocomics.com)        | `rinkocomics.com`     |
 | [RokariComics](https://rokaricomics.com)      | `rokaricomics.com`    |
 | [Scans.GG](https://scans.gg)                  | `scans.gg`            |
+| [Temple Scan](https://templetoons.com)        | `templetoons.com`     |
 | [ValirScans](https://valirscans.org)          | `valirscans.org`      |
 | [VyManga](https://vymanga.com)                | `vymanga.com`         |
 
