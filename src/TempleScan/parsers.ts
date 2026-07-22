@@ -17,6 +17,7 @@ import {
   type HomeSeries,
   type SeasonChapter,
   type SeriesData,
+  type TopSeriesEntry,
   type TrendingEntry,
   type TrendingRange,
   type TrendingResponse,
@@ -303,18 +304,40 @@ export const toUpdateItems = (updates: HomeSeries[]): DiscoverSectionItem[] =>
     ];
   });
 
-export const toFeaturedItem = (data: SeriesData): DiscoverSectionItem => ({
-  type: "featuredCarouselItem",
-  mangaId: data.series_slug,
-  title: data.title,
-  imageUrl: data.thumbnail ?? "",
-  supertitle: data.author ?? undefined,
-  summary: cleanDescription(data.description ?? "") || undefined,
-  infoItems: data.total_views
-    ? [{ symbol: "eye.fill", text: formatCount(data.total_views) }]
-    : undefined,
-  contentRating: ContentRating.ADULT,
-});
+// The featured endpoint may wrap its list; accept a bare array or the first
+// array of series entries inside the response object.
+export const parseTopSeries = (response: string): TopSeriesEntry[] => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(response);
+  } catch (error) {
+    throw new Error("Temple Scan: could not parse the featured list", { cause: error });
+  }
+  const candidates = Array.isArray(parsed)
+    ? [parsed]
+    : Object.values(parsed as Record<string, unknown>).filter(Array.isArray);
+  for (const candidate of candidates) {
+    if (candidate.length > 0 && candidate[0]?.series_slug && candidate[0]?.title) {
+      return candidate as TopSeriesEntry[];
+    }
+  }
+  return [];
+};
+
+export const toFeaturedItems = (entries: TopSeriesEntry[]): DiscoverSectionItem[] =>
+  entries.map((entry) => {
+    const views = entry.total_views ?? entry.views;
+    return {
+      type: "featuredCarouselItem",
+      mangaId: entry.series_slug,
+      title: entry.title,
+      imageUrl: entry.thumbnail ?? "",
+      supertitle: entry.author ?? undefined,
+      summary: cleanDescription(entry.description ?? "") || undefined,
+      infoItems: views ? [{ symbol: "eye.fill", text: formatCount(views) }] : undefined,
+      contentRating: ContentRating.ADULT,
+    };
+  });
 
 export const toSearchResultItem = (series: BrowseSeries): SearchResultItem => ({
   mangaId: series.series_slug,

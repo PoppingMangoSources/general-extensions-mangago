@@ -62,10 +62,14 @@ export const fetchSeriesPage = (mangaId: string): Promise<string> =>
 export const fetchChapterPage = (mangaId: string, chapterId: string): Promise<string> =>
   fetchRsc(`${DOMAIN}/comic/${mangaId}/${chapterId}`);
 
-export const fetchTrending = async (): Promise<string> => {
+const fetchApi = async (path: string): Promise<string> => {
   const [, buffer] = await Application.scheduleRequest({
-    url: `${API_URL}/trending`,
+    url: `${API_URL}${path}`,
     method: "GET",
   });
   return Application.arrayBufferToUTF8String(buffer);
 };
+
+export const fetchTrending = (): Promise<string> => fetchApi("/trending");
+
+export const fetchTopSeries = (): Promise<string> => fetchApi("/topSeries");

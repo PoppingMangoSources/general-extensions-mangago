@@ -60,6 +60,17 @@ export interface HomeSeries {
   Chapter?: SeasonChapter[];
 }
 
+export interface TopSeriesEntry {
+  series_slug: string;
+  title: string;
+  thumbnail?: string | null;
+  badge?: string | null;
+  description?: string | null;
+  author?: string | null;
+  total_views?: number;
+  views?: number;
+}
+
 export interface TrendingEntry {
   series_slug: string;
   title: string;

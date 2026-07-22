@@ -35,6 +35,7 @@ import {
   fetchDirectory,
   fetchHomePage,
   fetchSeriesPage,
+  fetchTopSeries,
   fetchTrending,
   TempleScanInterceptor,
 } from "./network";
@@ -44,8 +45,9 @@ import {
   parseDirectory,
   parseHomeSections,
   parseSeriesData,
+  parseTopSeries,
   parseTrending,
-  toFeaturedItem,
+  toFeaturedItems,
   toSearchResultItem,
   toSourceManga,
   toTrendingItems,
@@ -53,8 +55,6 @@ import {
   type HomeSections,
 } from "./parsers";
 import type TempleScanConfig from "./pbconfig";
-
-const FEATURED_COUNT = 6;
 
 export class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
   mainRateLimiter = new BasicRateLimiter("main", {
@@ -126,7 +126,7 @@ export class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfi
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
       case "featured":
-        return this.getFeaturedSection();
+        return { items: toFeaturedItems(parseTopSeries(await fetchTopSeries())) };
       case "new-series": {
         const home = await this.getHomeSections();
         return {
@@ -157,23 +157,6 @@ export class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfi
       default:
         return { items: [] };
     }
-  }
-
-  // The site's featured slides show the description, author and view count,
-  // which only the detail pages expose; hydrate the top-viewed titles.
-  private async getFeaturedSection(): Promise<PagedResults<DiscoverSectionItem>> {
-    const directory = await this.getDirectory();
-    const top = [...directory]
-      .sort((a, b) => (b.total_views ?? 0) - (a.total_views ?? 0))
-      .slice(0, FEATURED_COUNT);
-    const items = await Promise.all(
-      top.map(async (series) =>
-        toFeaturedItem(
-          parseSeriesData(await fetchSeriesPage(series.series_slug), series.series_slug),
-        ),
-      ),
-    );
-    return { items };
   }
 
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
