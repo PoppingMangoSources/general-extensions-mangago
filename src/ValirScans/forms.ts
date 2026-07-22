@@ -8,8 +8,8 @@ import {
   InputRow,
   LabelRow,
   Section,
-  SelectRow,
   ToggleRow,
+  TriStateSelectRow,
   type SearchQuery,
 } from "@paperback/types";
 
@@ -22,6 +22,7 @@ import {
   TYPE_OPTIONS,
   type FilterOption,
   type SearchMetadata,
+  type TriState,
 } from "./models";
 
 const SHOW_PAID_CHAPTERS_KEY = "valirscans.showPaidChapters";
@@ -108,98 +109,83 @@ export class ValirScansAdvancedSearchForm extends AdvancedSearchForm {
     return this.searchMetadata;
   }
 
+  private triStateSection(
+    id: "genres" | "tags" | "types" | "statuses" | "origins",
+    title: string,
+    items: FilterOption[],
+    handler:
+      | "handleGenresChange"
+      | "handleTagsChange"
+      | "handleTypesChange"
+      | "handleStatusesChange"
+      | "handleOriginsChange",
+  ) {
+    return Section({ id, footer: "Tap once to include, twice to exclude." }, [
+      TriStateSelectRow(id, {
+        title,
+        layout: "flow",
+        value: this.searchMetadata[id] ?? {},
+        items,
+        allowExclusion: true,
+        allowEmptySelection: true,
+        onValueChange: Application.Selector(this as ValirScansAdvancedSearchForm, handler),
+      }),
+    ]);
+  }
+
   override getSections() {
     return [
-      Section("genres", [
-        SelectRow("genres", {
-          title: "Genres",
-          layout: "flow",
-          value: this.searchMetadata.genres ?? [],
-          items: this.genres,
-          minItemCount: 0,
-          maxItemCount: this.genres.length,
+      this.triStateSection("genres", "Genres", this.genres, "handleGenresChange"),
+      this.triStateSection("tags", "Tags", this.tags, "handleTagsChange"),
+      this.triStateSection("types", "Types", TYPE_OPTIONS, "handleTypesChange"),
+      this.triStateSection("statuses", "Status", STATUS_OPTIONS, "handleStatusesChange"),
+      this.triStateSection("origins", "Origins", ORIGIN_OPTIONS, "handleOriginsChange"),
+      Section({ id: "chapter_count", footer: "Number of chapters, e.g. 20 to 100." }, [
+        InputRow("min_chapters", {
+          title: "Chapters From",
+          value: this.searchMetadata.minChapters ?? "",
           onValueChange: Application.Selector(
             this as ValirScansAdvancedSearchForm,
-            "handleGenresChange",
+            "handleMinChaptersChange",
           ),
         }),
-      ]),
-      Section("tags", [
-        SelectRow("tags", {
-          title: "Tags",
-          layout: "flow",
-          value: this.searchMetadata.tags ?? [],
-          items: this.tags,
-          minItemCount: 0,
-          maxItemCount: this.tags.length,
+        InputRow("max_chapters", {
+          title: "Chapters To",
+          value: this.searchMetadata.maxChapters ?? "",
           onValueChange: Application.Selector(
             this as ValirScansAdvancedSearchForm,
-            "handleTagsChange",
-          ),
-        }),
-      ]),
-      Section("type", [
-        SelectRow("type", {
-          title: "Type",
-          layout: "list",
-          value: [this.searchMetadata.type ?? ""],
-          items: TYPE_OPTIONS,
-          minItemCount: 1,
-          maxItemCount: 1,
-          onValueChange: Application.Selector(
-            this as ValirScansAdvancedSearchForm,
-            "handleTypeChange",
-          ),
-        }),
-      ]),
-      Section("status", [
-        SelectRow("status", {
-          title: "Status",
-          layout: "list",
-          value: [this.searchMetadata.status ?? ""],
-          items: STATUS_OPTIONS,
-          minItemCount: 1,
-          maxItemCount: 1,
-          onValueChange: Application.Selector(
-            this as ValirScansAdvancedSearchForm,
-            "handleStatusChange",
-          ),
-        }),
-      ]),
-      Section("origin", [
-        SelectRow("origin", {
-          title: "Origin",
-          layout: "list",
-          value: [this.searchMetadata.origin ?? ""],
-          items: ORIGIN_OPTIONS,
-          minItemCount: 1,
-          maxItemCount: 1,
-          onValueChange: Application.Selector(
-            this as ValirScansAdvancedSearchForm,
-            "handleOriginChange",
+            "handleMaxChaptersChange",
           ),
         }),
       ]),
     ];
   }
 
-  async handleGenresChange(value: string[]): Promise<void> {
+  async handleGenresChange(value: TriState): Promise<void> {
     this.searchMetadata.genres = value;
   }
 
-  async handleTagsChange(value: string[]): Promise<void> {
+  async handleTagsChange(value: TriState): Promise<void> {
     this.searchMetadata.tags = value;
   }
 
-  async handleTypeChange(value: string[]): Promise<void> {
-    this.searchMetadata.type = value[0] || undefined;
+  async handleTypesChange(value: TriState): Promise<void> {
+    this.searchMetadata.types = value;
   }
 
-  async handleStatusChange(value: string[]): Promise<void> {
-    this.searchMetadata.status = value[0] || undefined;
+  async handleStatusesChange(value: TriState): Promise<void> {
+    this.searchMetadata.statuses = value;
   }
 
-  async handleOriginChange(value: string[]): Promise<void> {
-    this.searchMetadata.origin = value[0] || undefined;
+  async handleOriginsChange(value: TriState): Promise<void> {
+    this.searchMetadata.origins = value;
+  }
+
+  async handleMinChaptersChange(value: string): Promise<void> {
+    this.searchMetadata.minChapters = value.replace(/\D/g, "") || undefined;
+  }
+
+  async handleMaxChaptersChange(value: string): Promise<void> {
+    this.searchMetadata.maxChapters = value.replace(/\D/g, "") || undefined;
   }
 }

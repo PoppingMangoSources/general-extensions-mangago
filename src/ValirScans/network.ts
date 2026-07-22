@@ -9,7 +9,7 @@ import {
   type Response,
 } from "@paperback/types";
 
-import { getBaseUrl, type SearchMetadata } from "./models";
+import { getBaseUrl, type SearchMetadata, type TriState } from "./models";
 
 export class ValirScansInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
@@ -52,6 +52,9 @@ const fetchPage = async (url: string, rsc = false): Promise<string> => {
 
 export const fetchHomePage = (): Promise<string> => fetchPage(`${getBaseUrl()}/`);
 
+const pickState = (record: TriState | undefined, state: "included" | "excluded"): string[] =>
+  Object.keys(record ?? {}).filter((id) => record?.[id] === state);
+
 export const fetchBrowsePage = (
   page: number,
   query?: string,
@@ -63,11 +66,23 @@ export const fetchBrowsePage = (
   if (sort) {
     url.setQueryItem("sort", sort).setQueryItem("order", "desc");
   }
-  if (filters?.genres?.length) url.setQueryItem("genre", filters.genres);
-  if (filters?.tags?.length) url.setQueryItem("tag", filters.tags);
-  if (filters?.type) url.setQueryItem("type", filters.type);
-  if (filters?.status) url.setQueryItem("status", filters.status);
-  if (filters?.origin) url.setQueryItem("origin", filters.origin);
+  const triStateParams: [string, TriState | undefined][] = [
+    ["genre", filters?.genres],
+    ["tag", filters?.tags],
+    ["type", filters?.types],
+    ["status", filters?.statuses],
+    ["origin", filters?.origins],
+  ];
+  for (const [param, record] of triStateParams) {
+    const included = pickState(record, "included");
+    const excluded = pickState(record, "excluded");
+    if (included.length > 0) url.setQueryItem(param, included);
+    if (excluded.length > 0) {
+      url.setQueryItem(`exclude${param.charAt(0).toUpperCase()}${param.slice(1)}`, excluded);
+    }
+  }
+  if (filters?.minChapters) url.setQueryItem("minChapters", filters.minChapters);
+  if (filters?.maxChapters) url.setQueryItem("maxChapters", filters.maxChapters);
   return fetchPage(url.toString());
 };
 

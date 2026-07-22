@@ -105,12 +105,17 @@ export interface FilterOption {
 
 export type PageMetadata = { page: number };
 
+// Selection state consumed by `TriStateSelectRow`: include or exclude per id.
+export type TriState = Record<string, "included" | "excluded">;
+
 export interface SearchMetadata extends JSONObject {
-  genres?: string[];
-  tags?: string[];
-  type?: string;
-  status?: string;
-  origin?: string;
+  genres?: TriState;
+  tags?: TriState;
+  types?: TriState;
+  statuses?: TriState;
+  origins?: TriState;
+  minChapters?: string;
+  maxChapters?: string;
 }
 
 export const SORTING_OPTIONS: SortingOption[] = [
@@ -123,25 +128,25 @@ export const SORTING_OPTIONS: SortingOption[] = [
   { id: "newest", label: "Newest" },
 ];
 
+// Option ids are the exact values the site's browse URL accepts
+// (e.g. ?type=Manhwa, ?status=Ongoing, ?origin=KOREAN).
 export const TYPE_OPTIONS: FilterOption[] = [
-  { id: "", title: "All" },
-  { id: "MANHWA", title: "Manhwa" },
-  { id: "MANHUA", title: "Manhua" },
-  { id: "MANGA", title: "Manga" },
-  { id: "COMIC", title: "Comic" },
-  { id: "WEB_NOVEL", title: "Novel" },
+  { id: "Manhwa", title: "Manhwa" },
+  { id: "Manhua", title: "Manhua" },
+  { id: "Manga", title: "Manga" },
+  { id: "Comic", title: "Comic" },
+  { id: "Webtoon", title: "Webtoon" },
+  { id: "Novel", title: "Novel" },
 ];
 
 export const STATUS_OPTIONS: FilterOption[] = [
-  { id: "", title: "All" },
-  { id: "ONGOING", title: "Ongoing" },
-  { id: "COMPLETED", title: "Completed" },
-  { id: "HIATUS", title: "Hiatus" },
-  { id: "CANCELLED", title: "Cancelled" },
+  { id: "Ongoing", title: "Ongoing" },
+  { id: "Completed", title: "Completed" },
+  { id: "Hiatus", title: "Hiatus" },
+  { id: "Cancelled", title: "Cancelled" },
 ];
 
 export const ORIGIN_OPTIONS: FilterOption[] = [
-  { id: "", title: "All" },
   { id: "KOREAN", title: "Korean" },
   { id: "JAPANESE", title: "Japanese" },
   { id: "CHINESE", title: "Chinese" },
