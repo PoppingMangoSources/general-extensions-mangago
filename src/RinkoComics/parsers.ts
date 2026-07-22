@@ -394,7 +394,7 @@ export const parseChapterElements = (
     const el = $(element);
     const permalink = (el.attr("data-permalink") || "").trim();
     const href = elementHref(el);
-    const rawUrl = permalink || (href !== "#" ? href : "");
+    const rawUrl = (permalink !== "#" ? permalink : "") || (href !== "#" ? href : "");
     const postId = (el.attr("data-post-id") || "").trim();
     if (!rawUrl && !postId) return;
 
@@ -403,9 +403,10 @@ export const parseChapterElements = (
 
     let name = Application.decodeHTMLEntities(
       el.find(".chapter-number").first().text().trim() ||
+        el.find(".ch-name").first().text().trim() ||
         el.find(".chapter-side-title").first().text().trim() ||
-        el.find("label").first().text().trim() ||
-        (el.attr("data-title") || "").trim(),
+        (el.attr("data-title") || "").trim() ||
+        el.find("label").first().text().trim(),
     );
     const dateText = el.find(".chapter-date").first().text().trim();
 
@@ -423,7 +424,7 @@ export const parseChapterElements = (
       title: name,
       volume: 0,
       chapNum: parseChapterNumber(name),
-      publishDate: parseDate(dateText),
+      publishDate: dateText ? parseDate(dateText) : undefined,
       langCode: "en",
     });
   });
