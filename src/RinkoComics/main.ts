@@ -224,7 +224,7 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
       }
     };
 
-    addAll(parseChapterElements($, $(CHAPTER_SELECTOR), sourceManga, false));
+    addAll(parseChapterElements($, $(CHAPTER_SELECTOR), sourceManga));
 
     const loadMoreBtn = $("#loadMoreChaptersBtn").first();
     const comicId = (loadMoreBtn.attr("data-comic-id") || "").trim();
@@ -319,7 +319,7 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
     const html = await fetchMoreChaptersHtml(comicId, offset, nonce);
     if (!html) return [];
     const $ = cheerio.load(html);
-    return parseChapterElements($, $(CHAPTER_SELECTOR), sourceManga, false);
+    return parseChapterElements($, $(CHAPTER_SELECTOR), sourceManga);
   }
 }
 

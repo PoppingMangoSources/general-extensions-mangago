@@ -389,7 +389,6 @@ export const parseChapterElements = (
   $: CheerioAPI,
   elements: Cheerio<AnyNode>,
   sourceManga: SourceManga,
-  hideLocked: boolean,
 ): Chapter[] => {
   const chapters: Chapter[] = [];
 
@@ -402,7 +401,6 @@ export const parseChapterElements = (
     if (!rawUrl && !postId) return;
 
     const locked = isLocked($, el);
-    if (locked && hideLocked) return;
 
     let name = Application.decodeHTMLEntities(
       el.find(".chapter-number").first().text().trim() ||
