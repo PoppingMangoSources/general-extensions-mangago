@@ -13,7 +13,6 @@ export const BROWSE_SORT: Record<string, string> = {
   newest: "created_at",
 };
 
-export const CARD_SELECTOR = ".comic-item";
 export const CARD_LINK_SELECTOR = "a";
 export const CARD_TITLE_SELECTOR = ".comic-title";
 export const CARD_IMAGE_SELECTOR = ".comic-image img, img.image, img.lozad";
@@ -28,7 +27,6 @@ export const ARTIST_SELECTOR = ".pre-title:contains(Artist) ~ a";
 export const GENRE_SELECTOR = ".pre-title:contains(Genres) ~ a, div.col-md-7 p a[href*=genre]";
 export const STATUS_SELECTOR =
   ".pre-title:contains(Status) ~ span:not(.space), div.col-md-7 p:contains(Status) span";
-export const RATING_SELECTOR = ".pre-title:contains(Rating), div.col-md-7 p:contains(Rating)";
 
 export const CHAPTER_SELECTOR = "a.list-chapter";
 export const CHAPTER_FALLBACK_SELECTOR = 'a[id^="chapter-"]';

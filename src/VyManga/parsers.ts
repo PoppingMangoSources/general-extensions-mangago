@@ -71,7 +71,7 @@ const MONTHS: Record<string, number> = {
   december: 11,
 };
 
-export const safeDecode = (id: string): string => {
+const safeDecode = (id: string): string => {
   try {
     return decodeURIComponent(id);
   } catch {
@@ -106,7 +106,7 @@ const imgAttr = (base: string, img: Cheerio<AnyNode>): string => {
   return absoluteUrl(base, src);
 };
 
-export const parseCard = ($: CheerioAPI, base: string, element: AnyNode): MangaCard | undefined => {
+const parseCard = ($: CheerioAPI, base: string, element: AnyNode): MangaCard | undefined => {
   const unit = $(element);
   const link = unit.find(CARD_LINK_SELECTOR).first();
   const href = (link.attr("href") || "").trim();
@@ -237,7 +237,10 @@ const genreIdFromAnchor = (href: string, title: string): string => {
   if (/^\d+$/.test(last)) return last;
   const query = href.match(/genre(?:\[\])?=(\d+)/);
   if (query) return query[1];
-  return title.toLowerCase().replace(/\s+/g, "-");
+  return title
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g, "-");
 };
 
 const parseStatus = (status: string): string => {
@@ -309,7 +312,7 @@ export const parseChapterPages = ($: CheerioAPI, base: string): string[] => {
   return pages;
 };
 
-export const parseDate = (text: string): Date => {
+const parseDate = (text: string): Date => {
   const trimmed = (text || "").trim();
   if (!trimmed) return new Date();
 
