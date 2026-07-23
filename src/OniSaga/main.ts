@@ -155,15 +155,10 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     cookies: Cookie[],
     _localStorage: Record<string, string>,
   ): Promise<void> {
-    for (const cookie of cookies) {
-      if (
-        cookie.name.startsWith("cf") ||
-        cookie.name.startsWith("_cf") ||
-        cookie.name.startsWith("__cf")
-      ) {
-        this.cookieStorageInterceptor.setCookie(cookie);
-      }
-    }
+    // Forward every cookie, not just cf*: onisaga.com is a Laravel app whose
+    // session (onisaga_session, XSRF-TOKEN) is required alongside cf_clearance,
+    // and dropping those makes every post-bypass request 403.
+    for (const cookie of cookies) this.cookieStorageInterceptor.setCookie(cookie);
 
     this.requestManager.resetAfterCloudflareBypass();
     this.browseStates.clear();
