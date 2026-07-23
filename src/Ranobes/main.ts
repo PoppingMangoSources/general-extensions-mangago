@@ -58,7 +58,7 @@ import type RanobesConfig from "./pbconfig";
 
 export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   mainRateLimiter = new BasicRateLimiter("main", {
-    numberOfRequests: 4,
+    numberOfRequests: 2,
     bufferInterval: 1,
     ignoreImages: true,
   });
