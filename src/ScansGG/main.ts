@@ -422,11 +422,21 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
     if (groupId !== "0") attempts.push(this.pagesViaApi(seriesId, chapterId, "0"));
     try {
       return toDetails(await Promise.any(attempts));
-    } catch {}
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+      // Promise.any rejects with an AggregateError; surface a challenge from
+      // any individual attempt instead of falling through to the webview.
+      if (error instanceof AggregateError) {
+        const challenge = error.errors.find((cause) => cause instanceof CloudflareError);
+        if (challenge) throw challenge;
+      }
+    }
 
     try {
       return toDetails(await this.pagesViaApi(seriesId, chapterId, groupId));
-    } catch {}
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+    }
 
     const pages = await pageListViaWebView(
       this.readerUrl(seriesId, chapterId, groupId),
