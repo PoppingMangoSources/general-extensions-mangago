@@ -35,6 +35,14 @@ export class RanobesAdvancedSearchForm extends AdvancedSearchForm {
     return this.searchMetadata;
   }
 
+  private setMetadata<K extends keyof SearchMetadata>(
+    key: K,
+    value: SearchMetadata[K] | undefined,
+  ): void {
+    if (value === undefined) delete this.searchMetadata[key];
+    else this.searchMetadata[key] = value;
+  }
+
   override getSections(): FormSectionElement<unknown>[] {
     return [
       Section({ id: "genres", footer: "Tap once to include, twice to exclude." }, [
@@ -251,119 +259,86 @@ export class RanobesAdvancedSearchForm extends AdvancedSearchForm {
   }
 
   async handleGenresChange(value: Record<string, "included" | "excluded">): Promise<void> {
-    if (Object.keys(value).length > 0) this.searchMetadata.genres = value;
-    else delete this.searchMetadata.genres;
+    this.setMetadata("genres", Object.keys(value).length ? value : undefined);
   }
 
   async handleEventsChange(value: Record<string, "included" | "excluded">): Promise<void> {
-    if (Object.keys(value).length > 0) this.searchMetadata.events = value;
-    else delete this.searchMetadata.events;
+    this.setMetadata("events", Object.keys(value).length ? value : undefined);
   }
 
   async handleLanguagesChange(value: Record<string, "included" | "excluded">): Promise<void> {
-    if (Object.keys(value).length > 0) this.searchMetadata.languages = value;
-    else delete this.searchMetadata.languages;
+    this.setMetadata("languages", Object.keys(value).length ? value : undefined);
   }
 
   async handleTranslationStatusChange(value: string[]): Promise<void> {
-    if (value[0] && value[0] !== "any") this.searchMetadata.translationStatus = value[0];
-    else delete this.searchMetadata.translationStatus;
+    this.setMetadata("translationStatus", value[0] && value[0] !== "any" ? value[0] : undefined);
   }
 
   async handleOriginalStatusChange(value: string[]): Promise<void> {
-    if (value[0] && value[0] !== "any") this.searchMetadata.originalStatus = value[0];
-    else delete this.searchMetadata.originalStatus;
+    this.setMetadata("originalStatus", value[0] && value[0] !== "any" ? value[0] : undefined);
   }
 
   async handleYearFromChange(value: string): Promise<void> {
-    const year = value.replace(/\D/g, "");
-    if (year) this.searchMetadata.yearFrom = year;
-    else delete this.searchMetadata.yearFrom;
+    this.setMetadata("yearFrom", value.replace(/\D/g, "") || undefined);
   }
 
   async handleYearToChange(value: string): Promise<void> {
-    const year = value.replace(/\D/g, "");
-    if (year) this.searchMetadata.yearTo = year;
-    else delete this.searchMetadata.yearTo;
+    this.setMetadata("yearTo", value.replace(/\D/g, "") || undefined);
   }
 
   async handleChaptersFromChange(value: string): Promise<void> {
-    const chapters = value.replace(/\D/g, "");
-    if (chapters) this.searchMetadata.chaptersFrom = chapters;
-    else delete this.searchMetadata.chaptersFrom;
+    this.setMetadata("chaptersFrom", value.replace(/\D/g, "") || undefined);
   }
 
   async handleChaptersToChange(value: string): Promise<void> {
-    const chapters = value.replace(/\D/g, "");
-    if (chapters) this.searchMetadata.chaptersTo = chapters;
-    else delete this.searchMetadata.chaptersTo;
+    this.setMetadata("chaptersTo", value.replace(/\D/g, "") || undefined);
   }
 
   async handleRatingsFromChange(value: string): Promise<void> {
-    const ratings = value.replace(/\D/g, "");
-    if (ratings) this.searchMetadata.ratingsFrom = ratings;
-    else delete this.searchMetadata.ratingsFrom;
+    this.setMetadata("ratingsFrom", value.replace(/\D/g, "") || undefined);
   }
 
   async handleRatingsToChange(value: string): Promise<void> {
-    const ratings = value.replace(/\D/g, "");
-    if (ratings) this.searchMetadata.ratingsTo = ratings;
-    else delete this.searchMetadata.ratingsTo;
+    this.setMetadata("ratingsTo", value.replace(/\D/g, "") || undefined);
   }
 
   async handleAuthorsChange(value: string): Promise<void> {
-    const authors = value.trim();
-    if (authors) this.searchMetadata.authors = authors;
-    else delete this.searchMetadata.authors;
+    this.setMetadata("authors", value.trim() || undefined);
   }
 
   async handleExcludedAuthorsChange(value: string): Promise<void> {
-    const authors = value.trim();
-    if (authors) this.searchMetadata.excludedAuthors = authors;
-    else delete this.searchMetadata.excludedAuthors;
+    this.setMetadata("excludedAuthors", value.trim() || undefined);
   }
 
   async handleTranslatorsChange(value: string): Promise<void> {
-    const translators = value.trim();
-    if (translators) this.searchMetadata.translators = translators;
-    else delete this.searchMetadata.translators;
+    this.setMetadata("translators", value.trim() || undefined);
   }
 
   async handleExcludedTranslatorsChange(value: string): Promise<void> {
-    const translators = value.trim();
-    if (translators) this.searchMetadata.excludedTranslators = translators;
-    else delete this.searchMetadata.excludedTranslators;
+    this.setMetadata("excludedTranslators", value.trim() || undefined);
   }
 
   async handlePublishersChange(value: string): Promise<void> {
-    const publishers = value.trim();
-    if (publishers) this.searchMetadata.publishers = publishers;
-    else delete this.searchMetadata.publishers;
+    this.setMetadata("publishers", value.trim() || undefined);
   }
 
   async handleExcludedPublishersChange(value: string): Promise<void> {
-    const publishers = value.trim();
-    if (publishers) this.searchMetadata.excludedPublishers = publishers;
-    else delete this.searchMetadata.excludedPublishers;
+    this.setMetadata("excludedPublishers", value.trim() || undefined);
   }
 
   async handleOnlyTranslatedChange(value: boolean): Promise<void> {
-    if (value) this.searchMetadata.onlyTranslated = true;
-    else delete this.searchMetadata.onlyTranslated;
+    this.setMetadata("onlyTranslated", value || undefined);
   }
 
   async handleMtlFilesChange(value: boolean): Promise<void> {
-    if (value) this.searchMetadata.mtlFiles = true;
-    else delete this.searchMetadata.mtlFiles;
+    this.setMetadata("mtlFiles", value || undefined);
   }
 
   async handleMtlReaderChange(value: boolean): Promise<void> {
-    if (value) this.searchMetadata.mtlReader = true;
-    else delete this.searchMetadata.mtlReader;
+    this.setMetadata("mtlReader", value || undefined);
   }
 
   async handleAiTranslatedChange(value: boolean): Promise<void> {
-    if (value) this.searchMetadata.aiTranslated = true;
-    else delete this.searchMetadata.aiTranslated;
+    this.setMetadata("aiTranslated", value || undefined);
   }
 }

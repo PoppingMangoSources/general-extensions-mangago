@@ -149,7 +149,7 @@ export interface FilterTaxonomy {
   events: OptionItem[];
 }
 
-export type ListingType = "stories" | "updates" | "rankings" | "all";
+export type ListingType = "stories" | "updates" | "rankings";
 
 export interface RanobesListing {
   mangaId: string;
@@ -199,5 +199,3 @@ export const ORIGINAL_STATUS_OPTIONS: OptionItem[] = [
   { id: "Hiatus", title: "Hiatus" },
   { id: "Dropped", title: "Dropped" },
 ];
-
-export const VOID_TAGS = "area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr";

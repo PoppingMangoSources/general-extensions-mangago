@@ -30,9 +30,14 @@ import {
   type RanobesListing,
   type SearchMetadata,
 } from "./models";
-import { fetchChapterListPage, fetchHtml, fetchListingPage } from "./network";
 import {
   buildSearchPath,
+  fetchChapterListPage,
+  fetchChapterSearch,
+  fetchHtml,
+  fetchListingPage,
+} from "./network";
+import {
   extractNovelId,
   isLastListingPage,
   parseChapterDetails,
@@ -117,6 +122,11 @@ const toSearchResult = (listing: RanobesListing): SearchResultItem => ({
   contentRating: parseContentRating(listing.genres ?? []),
 });
 
+const requireItems = <T>(items: T[], section: string): T[] => {
+  if (!items.length) throw new Error(`Ranobes: ${section} returned no supported listings.`);
+  return items;
+};
+
 export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   mainRateLimiter = new BasicRateLimiter("main", {
     numberOfRequests: 5,
@@ -142,17 +152,23 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     switch (section.id) {
       case SECTIONS.FEATURED:
         return {
-          items: parseListings(cheerio.load(await fetchHtml(DOMAIN)), "stories").map(
-            toFeaturedItem,
+          items: requireItems(
+            parseListings(cheerio.load(await fetchHtml(`${DOMAIN}/`)), "stories").map(
+              toFeaturedItem,
+            ),
+            section.title,
           ),
         };
       case SECTIONS.LATEST: {
         const $ = cheerio.load(await fetchListingPage("/updates/", page));
         return {
-          items: parseListings($, "updates").flatMap((listing) => {
-            const item = toChapterUpdateItem(listing);
-            return item ? [item] : [];
-          }),
+          items: requireItems(
+            parseListings($, "updates").flatMap((listing) => {
+              const item = toChapterUpdateItem(listing);
+              return item ? [item] : [];
+            }),
+            section.title,
+          ),
           metadata: isLastListingPage($) ? undefined : { page: page + 1 },
         };
       }
@@ -183,7 +199,7 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     const path = buildSearchPath(query.title, query.metadata, sortingOption) ?? "/novels/";
     const $ = cheerio.load(await fetchListingPage(path, page));
     return {
-      items: parseListings($).map(toSearchResult),
+      items: parseListings($, "stories").map(toSearchResult),
       metadata: isLastListingPage($) ? undefined : { page: page + 1 },
     };
   }
@@ -200,6 +216,13 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     const novelId = extractNovelId(sourceManga.mangaId);
     const firstPage = parseChapterPage(cheerio.load(await fetchChapterListPage(novelId)));
     const pageCount = Math.max(1, firstPage.pages_count ?? 1);
+    if (pageCount === 1) return parseChapters([firstPage], sourceManga);
+
+    const searchPage = await fetchChapterSearch(novelId);
+    if (firstPage.count_all !== undefined && searchPage.chapters?.length === firstPage.count_all) {
+      return parseChapters([searchPage], sourceManga);
+    }
+
     const remainingPages = await Promise.all(
       Array.from({ length: pageCount - 1 }, (_, index) =>
         fetchChapterListPage(novelId, index + 2).then((html) =>
@@ -221,8 +244,11 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const $ = cheerio.load(await fetchListingPage(path, page));
     return {
-      items: parseListings($, "rankings").map((listing, index) =>
-        toRankingItem(listing, index + (page - 1) * PAGE_SIZE + 1, useRating),
+      items: requireItems(
+        parseListings($, "rankings").map((listing, index) =>
+          toRankingItem(listing, index + (page - 1) * PAGE_SIZE + 1, useRating),
+        ),
+        path,
       ),
       metadata: isLastListingPage($) ? undefined : { page: page + 1 },
     };
@@ -230,7 +256,14 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
 
   private async getFilterTaxonomy(): Promise<FilterTaxonomy> {
     const cached = Application.getState(FILTER_TAXONOMY_STATE) as FilterTaxonomy | undefined;
-    if (cached) return cached;
+    const validId = (id: string) => /^[A-Za-z0-9_]+$/.test(id);
+    if (
+      cached?.genres.length &&
+      cached.events.length &&
+      [...cached.genres, ...cached.events].every(({ id }) => validId(id))
+    ) {
+      return cached;
+    }
 
     const taxonomy = parseFilterTaxonomy(cheerio.load(await fetchListingPage("/tags/events/")));
     Application.setState(taxonomy, FILTER_TAXONOMY_STATE);

@@ -3,8 +3,9 @@ import { expect } from "chai";
 import * as cheerio from "cheerio";
 
 import { Ranobes } from "../Ranobes/main.js";
+import { FILTER_TAXONOMY_STATE } from "../Ranobes/models.js";
+import { buildSearchPath, toFilterOptionId } from "../Ranobes/network.js";
 import {
-  buildSearchPath,
   isLastListingPage,
   parseChapterDetails,
   parseChapterPage,
@@ -12,7 +13,6 @@ import {
   parseFilterTaxonomy,
   parseListings,
   parseMangaDetails,
-  toFilterOptionId,
 } from "../Ranobes/parsers.js";
 import sourceInfo from "../Ranobes/pbconfig.js";
 import { TestSuite, registerDefaultTests } from "./suite.js";
@@ -43,6 +43,56 @@ export async function runTests(logger: TestLogger) {
       "Most Rated Novels",
       "All Time Popular",
     ]);
+  });
+
+  suite.test("live Discover sections return cards", async () => {
+    const sections = await Ranobes.getDiscoverSections();
+    for (const section of sections) {
+      const result = await Ranobes.getDiscoverSectionItems(section, undefined);
+      expect(result.items.length, section.title).to.be.greaterThan(0);
+      for (const item of result.items) {
+        if ("mangaId" in item) {
+          expect(item.mangaId, section.title).to.match(/^https:\/\/ranobes\.net\//);
+          expect(item.title, section.title).not.to.equal("");
+        }
+      }
+    }
+  });
+
+  suite.test("live chapter loading is complete and newest-first", async () => {
+    const sourceManga = await Ranobes.getMangaDetails(
+      "https://ranobes.net/novels/1207185-the-sword-illuminates-the-great-wilderness.html",
+    );
+    const chapters = await Ranobes.getChapters(sourceManga);
+    expect(chapters.length).to.be.greaterThan(25);
+    expect(chapters[0].chapNum).to.be.greaterThan(chapters.at(-1)?.chapNum ?? 0);
+    expect(chapters.map((chapter) => chapter.sortingIndex)).to.deep.equal(
+      chapters.map((_, index) => index),
+    );
+    const details = await Ranobes.getChapterDetails(chapters[0]);
+    expect(details.type).to.equal("html");
+    expect(details.type === "html" ? details.html.length : 0).to.be.greaterThan(100);
+  });
+
+  suite.test("live text search returns novel cards", async () => {
+    const result = await Ranobes.getSearchResults({ title: "Radiant Blade" }, undefined, {
+      id: "rating",
+      label: "Rating",
+    });
+    expect(result.items.length).to.be.greaterThan(0);
+    expect(result.items.some((item) => item.title.includes("Radiant Blade"))).to.equal(true);
+  });
+
+  suite.test("live advanced search replaces invalid cached option IDs", async () => {
+    Application.setState(
+      {
+        genres: [{ id: "Gender Bender", title: "Gender Bender" }],
+        events: [{ id: "Girl's%20Love", title: "Girl's Love" }],
+      },
+      FILTER_TAXONOMY_STATE,
+    );
+    const form = await Ranobes.getAdvancedSearchForm({ title: "" });
+    expect(form.getSections()).to.have.length(11);
   });
 
   suite.test("advanced search IDs are valid and reversible", async () => {

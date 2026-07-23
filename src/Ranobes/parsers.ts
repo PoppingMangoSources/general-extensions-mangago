@@ -5,7 +5,6 @@ import {
   ContentRating,
   type Chapter,
   type ChapterDetails,
-  type SortingOption,
   type SourceManga,
   type Tag,
   type TagSection,
@@ -16,14 +15,12 @@ import type { AnyNode } from "domhandler";
 import {
   DOMAIN,
   GENRES,
-  SORT_ORDERS,
-  VOID_TAGS,
   type FilterTaxonomy,
   type ListingType,
   type RanobesChapterPage,
   type RanobesListing,
-  type SearchMetadata,
 } from "./models";
+import { toFilterOptionId } from "./network";
 
 const absoluteUrl = (value: string): string => {
   const url = value.trim();
@@ -94,20 +91,15 @@ const parseRelativeDate = (value: string): Date | undefined => {
   if (text.includes("less than a minute") || text === "just now") return new Date();
 
   const count = Number(text.match(/\d+/)?.[0] ?? 0);
-  const unit = text.includes("minute")
-    ? 60_000
-    : text.includes("hour")
-      ? 3_600_000
-      : text.includes("day")
-        ? 86_400_000
-        : text.includes("week")
-          ? 604_800_000
-          : text.includes("month")
-            ? 2_629_800_000
-            : text.includes("year")
-              ? 31_557_600_000
-              : undefined;
-  if (unit) return new Date(Date.now() - count * unit);
+  const unit = [
+    ["minute", 60_000],
+    ["hour", 3_600_000],
+    ["day", 86_400_000],
+    ["week", 604_800_000],
+    ["month", 2_629_800_000],
+    ["year", 31_557_600_000],
+  ].find(([name]) => text.includes(String(name)))?.[1];
+  if (typeof unit === "number") return new Date(Date.now() - count * unit);
 
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? undefined : date;
@@ -127,20 +119,6 @@ export const extractNovelId = (mangaId: string): string => {
   return match[1];
 };
 
-export const toFilterOptionId = (title: string): string =>
-  `filter_${Array.from(title)
-    .map((character) => character.codePointAt(0)?.toString(36))
-    .join("_")}`;
-
-const titleFromFilterOptionId = (id: string): string => {
-  if (!id.startsWith("filter_")) return id;
-  const codePoints = id
-    .slice(7)
-    .split("_")
-    .map((value) => Number.parseInt(value, 36));
-  return codePoints.every(Number.isFinite) ? String.fromCodePoint(...codePoints) : id;
-};
-
 export const parseFilterTaxonomy = ($: cheerio.CheerioAPI): FilterTaxonomy => {
   const events = $(".cat_block a[href*='/tags/events/'] h3")
     .toArray()
@@ -150,57 +128,6 @@ export const parseFilterTaxonomy = ($: cheerio.CheerioAPI): FilterTaxonomy => {
     genres: GENRES.map((title) => ({ id: toFilterOptionId(title), title })),
     events: [...new Set(events)].map((title) => ({ id: toFilterOptionId(title), title })),
   };
-};
-
-export const buildSearchPath = (
-  title: string,
-  metadata: SearchMetadata | undefined,
-  sortingOption: SortingOption | undefined,
-): string | undefined => {
-  const segments: string[] = [];
-  const add = (key: string, value: string | undefined) => {
-    if (value) segments.push(`${key}=${encodeURIComponent(value).replace(/%20/g, "+")}`);
-  };
-  const selected = (
-    values: Record<string, "included" | "excluded"> | undefined,
-    state: "included" | "excluded",
-  ): string =>
-    Object.entries(values ?? {})
-      .filter(([, value]) => value === state)
-      .map(([id]) => titleFromFilterOptionId(id))
-      .join(",");
-
-  add("l.title", title.trim());
-  add("n.genre", selected(metadata?.genres, "included"));
-  add("v.genre", selected(metadata?.genres, "excluded"));
-  add("n.events", selected(metadata?.events, "included"));
-  add("v.events", selected(metadata?.events, "excluded"));
-  add("b.languages", selected(metadata?.languages, "included"));
-  add("v.languages", selected(metadata?.languages, "excluded"));
-  add("f.year", metadata?.yearFrom);
-  add("t.year", metadata?.yearTo);
-  add("status-trs", metadata?.translationStatus);
-  add("status-end", metadata?.originalStatus);
-  add("f.chap-num", metadata?.chaptersFrom);
-  add("t.chap-num", metadata?.chaptersTo);
-  add("f.pvotenum", metadata?.ratingsFrom);
-  add("t.pvotenum", metadata?.ratingsTo);
-  add("n.authors", metadata?.authors);
-  add("v.authors", metadata?.excludedAuthors);
-  add("n.translater", metadata?.translators);
-  add("v.translater", metadata?.excludedTranslators);
-  add("n.l.tags", metadata?.publishers);
-  add("!m.tags", metadata?.excludedPublishers);
-  if (metadata?.onlyTranslated) add("g.translater", "1");
-  if (metadata?.mtlFiles || metadata?.mtlReader) add("g.mtl_files", "1");
-  if (metadata?.aiTranslated) {
-    add("b.mtl-ai-translator", "DeepSeek,LLaMA 4,Gemini Flash,Mistral");
-  }
-
-  const sorting = SORT_ORDERS.find(({ id }) => id === sortingOption?.id);
-  add("sort", sorting && "sort" in sorting ? sorting.sort : undefined);
-  add("order", sorting && "order" in sorting ? sorting.order : undefined);
-  return segments.length ? `/f/${segments.join("/")}/` : undefined;
 };
 
 export const parseContentRating = (genres: string[]): ContentRating => {
@@ -214,47 +141,29 @@ export const parseContentRating = (genres: string[]): ContentRating => {
   return ContentRating.EVERYONE;
 };
 
-const parseStory = (
+const parseNovelCard = (
   $: cheerio.CheerioAPI,
   card: cheerio.Cheerio<AnyNode>,
+  ranking: boolean,
 ): RanobesListing | undefined => {
   const link = card.find("h2.title a").first();
   const mangaId = absoluteUrl(link.attr("href") ?? "");
   const title = cleanText(link.text());
-  const imageUrl = parseImageUrl(card.find("figure.cover").first());
-  if (!mangaId || !title || !imageUrl) return undefined;
+  if (!mangaId || !title) return undefined;
 
   return {
     mangaId,
     title,
-    imageUrl,
+    imageUrl: parseImageUrl(card.find(ranking ? "figure.fit-cover img" : "figure.cover").first()),
     description: cleanText(
-      card.find(".cont-in > div[style*='color'], .moreless__short").first().text(),
+      card
+        .find(ranking ? ".moreless__short" : ".cont-in > div[style*='color']")
+        .first()
+        .text(),
     ),
     ...parseRating(card),
     views: parseViews(card),
-    genres: parseGenres($, card, ".r-rate .grey a, .rank-story-genre a"),
-  };
-};
-
-const parseRanking = (
-  $: cheerio.CheerioAPI,
-  card: cheerio.Cheerio<AnyNode>,
-): RanobesListing | undefined => {
-  const link = card.find("h2.title a").first();
-  const mangaId = absoluteUrl(link.attr("href") ?? "");
-  const title = cleanText(link.text());
-  const imageUrl = parseImageUrl(card.find("figure.fit-cover img").first());
-  if (!mangaId || !title || !imageUrl) return undefined;
-
-  return {
-    mangaId,
-    title,
-    imageUrl,
-    description: cleanText(card.find(".moreless__short").first().text()),
-    ...parseRating(card),
-    views: parseViews(card),
-    genres: parseGenres($, card, ".rank-story-genre a"),
+    genres: parseGenres($, card, ranking ? ".rank-story-genre a" : ".r-rate .grey a"),
   };
 };
 
@@ -275,38 +184,23 @@ const parseUpdate = (card: cheerio.Cheerio<AnyNode>): RanobesListing | undefined
   };
 };
 
-export const parseListings = (
-  $: cheerio.CheerioAPI,
-  type: ListingType = "all",
-): RanobesListing[] => {
+export const parseListings = ($: cheerio.CheerioAPI, type: ListingType): RanobesListing[] => {
+  const listings: RanobesListing[] = [];
   if (type === "updates") {
-    return $("div.block.story_line.story_line-img")
-      .toArray()
-      .flatMap((element) => {
-        const listing = parseUpdate($(element));
-        return listing ? [listing] : [];
-      });
+    for (const element of $("div.block.story_line.story_line-img").toArray()) {
+      const listing = parseUpdate($(element));
+      if (listing) listings.push(listing);
+    }
+    return listings;
   }
 
-  const stories =
-    type === "rankings"
-      ? []
-      : $("article.block.story.shortstory")
-          .toArray()
-          .flatMap((element) => {
-            const listing = parseStory($, $(element));
-            return listing ? [listing] : [];
-          });
-  const rankings =
-    type === "stories"
-      ? []
-      : $("article.rank-story")
-          .toArray()
-          .flatMap((element) => {
-            const listing = parseRanking($, $(element));
-            return listing ? [listing] : [];
-          });
-  return [...stories, ...rankings];
+  const ranking = type === "rankings";
+  const selector = ranking ? "article.rank-story" : "article.block.story.shortstory";
+  for (const element of $(selector).toArray()) {
+    const listing = parseNovelCard($, $(element), ranking);
+    if (listing) listings.push(listing);
+  }
+  return listings;
 };
 
 export const isLastListingPage = ($: cheerio.CheerioAPI): boolean =>
@@ -338,24 +232,16 @@ export const parseMangaDetails = ($: cheerio.CheerioAPI, mangaId: string): Sourc
     .toArray()
     .map((element) => cleanText($(element).text()))
     .filter(Boolean);
-  const authors = $(".r-fullstory-spec li")
-    .filter((_, element) => $(element).text().trim().startsWith("Authors:"))
+  const specs = $(".r-fullstory-spec li");
+  const spec = (label: string) =>
+    specs.filter((_, element) => $(element).text().toLowerCase().includes(label));
+  const authors = spec("authors:")
     .find("a")
     .toArray()
     .map((element) => cleanText($(element).text()))
     .filter(Boolean);
-  const language = $(".r-fullstory-spec li")
-    .filter((_, element) => $(element).text().trim().startsWith("Language:"))
-    .find("a")
-    .first()
-    .text()
-    .trim();
-  const status = $(".r-fullstory-spec li")
-    .filter((_, element) => $(element).text().toLowerCase().includes("status in coo"))
-    .find("a")
-    .first()
-    .text()
-    .trim();
+  const language = cleanText(spec("language:").find("a").first().text());
+  const status = cleanText(spec("status in coo").find("a").first().text());
   const rating = Number($("#mc-fs-rate .rate-stat-num .bold").first().text());
   const views = parseCount($(".r-fullstory-spec li[title^='Unique views'] .grey").first().text());
   const tags: Tag[] = genres.map((name) => ({ id: toFilterOptionId(name), title: name }));
@@ -440,8 +326,9 @@ const toXhtml = (fragment: string): string => {
     .replace(/\s+epub:[\w-]+=(["'])(.*?)\1/gi, "")
     .replace(/\s+xmlns:[\w-]+=(["'])(.*?)\1/gi, "")
     .replace(/\s+on[\w-]+=(["'])(.*?)\1/gi, "")
-    .replace(new RegExp(`<(${VOID_TAGS})(\\s[^>]*?)?>`, "gi"), (match, tag, attrs = "") =>
-      match.endsWith("/>") ? match : `<${tag}${attrs} />`,
+    .replace(
+      /<(area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)(\s[^>]*?)?>/gi,
+      (match, tag, attrs = "") => (match.endsWith("/>") ? match : `<${tag}${attrs} />`),
     );
   return `<html xmlns="http://www.w3.org/1999/xhtml"><head></head><body>${body}</body></html>`;
 };
