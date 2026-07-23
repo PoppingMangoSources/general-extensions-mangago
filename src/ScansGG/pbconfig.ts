@@ -6,7 +6,7 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "Scans.GG",
   description: "Extension that pulls content from scans.gg.",
-  version: "1.0.0-alpha.18",
+  version: "1.0.0-alpha.19",
   icon: "icon.png",
   language: "en",
   contentRating: ContentRating.MATURE,

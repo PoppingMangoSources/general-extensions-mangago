@@ -153,10 +153,11 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
     }
 
     if (section.id === SECTIONS.POPULAR) {
+      // Built from the monthly-popular listing alone; content rating still
+      // comes from each series' own tags, so adult filtering is unaffected.
       const monthly = await this.fetchPopularSeries("monthly", undefined, contentFilters);
-      const enriched = await this.enrichPopularChapters(monthly.slice(0, TOP_MANGA_SIZE));
       return {
-        items: enriched.map(toFeaturedItem).filter(hasImage),
+        items: monthly.slice(0, TOP_MANGA_SIZE).map(toFeaturedItem).filter(hasImage),
         metadata: undefined,
       };
     }
@@ -292,29 +293,6 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
           Boolean(series.cover) && seriesMatchesFilters(series, searchMetadata, contentFilters),
       )
       .slice(0, SERIES_PAGE_SIZE);
-  }
-
-  private async enrichPopularChapters(seriesList: SeriesDto[]): Promise<SeriesDto[]> {
-    return Promise.all(
-      seriesList.map(async (series) => {
-        if (series.chapters?.[0]?.group?.title) return series;
-        try {
-          const response = await fetchApi<ChapterDto[]>("chapters", {
-            series_id: series.id,
-            page: 1,
-            limit: 1,
-            sort: "date",
-            group_details: true,
-            collab_groups_details: true,
-          });
-          const latest = response.data?.[0];
-          return latest ? { ...series, chapters: [latest] } : series;
-        } catch (error) {
-          if (error instanceof CloudflareError) throw error;
-          return series;
-        }
-      }),
-    );
   }
 
   private async fetchFilteredLatestSeries(
