@@ -23,6 +23,27 @@ import type {
   TopSeriesCountry,
 } from "./models";
 
+export const toLinkCardSimpleItem = (card: HomeLinkCard): DiscoverSectionItem => ({
+  type: "simpleCarouselItem",
+  mangaId: card.slug,
+  title: card.title,
+  imageUrl: card.cover,
+  subtitle: [card.type, card.year].filter(Boolean).join(" "),
+  metadata: undefined,
+});
+
+export const toLinkCardProminentItem = (
+  card: HomeLinkCard,
+  index: number,
+): DiscoverSectionItem => ({
+  type: "prominentCarouselItem",
+  mangaId: card.slug,
+  title: card.title,
+  imageUrl: card.cover,
+  subtitle: `#${index + 1}`,
+  metadata: undefined,
+});
+
 const FLIGHT_CHUNK_REGEX = /self\.__next_f\.push\(\[1,"((?:[^"\\]|\\.)*)"\]\)/g;
 
 export const decodeFlightPayload = (html: string): string => {

@@ -1,13 +1,12 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import type { ExtensionInfo } from "@paperback/types";
-import { ContentRating, SourceIntents } from "@paperback/types";
+import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/types";
 
 export default {
   name: "oManga",
   description: "Extension that pulls content from omanga.to.",
-  version: "1.0.0-alpha.13",
+  version: "1.0.0-alpha.14",
   icon: "icon.png",
   language: "en",
   contentRating: ContentRating.ADULT,
@@ -19,10 +18,5 @@ export default {
     SourceIntents.SETTINGS_FORM_PROVIDING,
   ],
   badges: [],
-  developers: [
-    {
-      name: "PoppingMango",
-      github: "https://github.com/PoppingMango",
-    },
-  ],
+  developers: [{ name: "PopMango", github: "https://github.com/PoppingMangoSources" }],
 } satisfies ExtensionInfo;

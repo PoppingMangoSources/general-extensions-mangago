@@ -31,7 +31,6 @@ import {
   FEATURED_HERO_LIMIT,
   GENRE_OPTIONS,
   getDomain,
-  type HomeLinkCard,
   type PageMetadata,
   resolveOptionValues,
   SECTIONS,
@@ -59,29 +58,13 @@ import {
   parseHomeUpdates,
   parseMangaDetails,
   toHomeCarouselItem,
+  toLinkCardProminentItem,
+  toLinkCardSimpleItem,
   toProminentCarouselItem,
   toSearchResultItem,
   toSimpleCarouselItem,
 } from "./parsers";
 import type OMangaConfig from "./pbconfig";
-
-const toLinkCardSimpleItem = (card: HomeLinkCard): DiscoverSectionItem => ({
-  type: "simpleCarouselItem",
-  mangaId: card.slug,
-  title: card.title,
-  imageUrl: card.cover,
-  subtitle: [card.type, card.year].filter(Boolean).join(" "),
-  metadata: undefined,
-});
-
-const toLinkCardProminentItem = (card: HomeLinkCard, index: number): DiscoverSectionItem => ({
-  type: "prominentCarouselItem",
-  mangaId: card.slug,
-  title: card.title,
-  imageUrl: card.cover,
-  subtitle: `#${index + 1}`,
-  metadata: undefined,
-});
 
 export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
   private rateLimiter = new BasicRateLimiter("rateLimiter", {
@@ -108,7 +91,11 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
     _localStorage: Record<string, string>,
   ): Promise<void> {
     for (const cookie of cookies) {
-      if (cookie.name.startsWith("cf") || cookie.name.startsWith("__cf")) {
+      if (
+        cookie.name.startsWith("cf") ||
+        cookie.name.startsWith("_cf") ||
+        cookie.name.startsWith("__cf")
+      ) {
         this.cookieStorageInterceptor.setCookie(cookie);
       }
     }
