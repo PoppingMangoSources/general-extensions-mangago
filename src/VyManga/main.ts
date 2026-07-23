@@ -231,6 +231,12 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
     query: string,
   ): Promise<PagedResults<SearchResultItem> | undefined> {
     if (!/^https?:\/\//i.test(query)) return undefined;
+    const host = query.match(/^https?:\/\/([^/]+)/i)?.[1]?.toLowerCase();
+    const baseHost = this.baseUrl
+      .replace(/^https?:\/\//i, "")
+      .split("/")[0]
+      .toLowerCase();
+    if (!host || host !== baseHost) return undefined;
     const mangaId = extractMangaId(query);
     if (!mangaId) return undefined;
 
