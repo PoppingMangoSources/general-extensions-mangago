@@ -14,7 +14,9 @@ import {
 
 import {
   ADULT_RATING_GENRES,
+  AGGREGATOR_ICON,
   DOMAIN,
+  NATIVE_VERSION,
   type ChapterContentResponse,
   type Novel,
   type NovelSource,
@@ -255,6 +257,7 @@ export const parseChapters = (novel: Novel, sourceManga: SourceManga): Chapter[]
       langCode: "en",
       chapNum: number,
       title: title || `Chapter ${number}`,
+      version: NATIVE_VERSION,
       volume: 0,
       sortingIndex: index,
     };
@@ -276,7 +279,7 @@ export const parseSourceChapters = (
       langCode: "en",
       chapNum,
       title: title || `Chapter ${chapNum}`,
-      version: source.label ?? undefined,
+      version: `${AGGREGATOR_ICON} ${source.label ?? source.id}`,
       volume: 0,
       sortingIndex: index,
     };

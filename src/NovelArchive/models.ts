@@ -5,6 +5,9 @@ export const DOMAIN = "https://novelarchive.cc";
 export const API_URL = "https://novelarchive.cc/api";
 export const PAGE_SIZE = 24;
 
+export const NATIVE_VERSION = "📖 NovelArchive";
+export const AGGREGATOR_ICON = "🌐";
+
 export const SECTIONS = {
   TRENDING: "trending",
   POPULAR: "popular",
