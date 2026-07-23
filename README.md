@@ -28,7 +28,7 @@ After installing the repository, refresh it in Paperback to receive source updat
 
 ## Support
 
-Report source problems through Inkdex's discord in the OTHER-REPOS channel [issues] where my support chat is. Include the affected source, the page or title that failed, and screenshots or request details when possible.
+Report source problems through Inkdex's discord in the OTHER-REPOS channel: [issues] where my support chat is. Include the affected source, the page or title that failed, and screenshots or request details when possible.
 
 These extensions are not affiliated with Paperback or any supported website. All site names and logos belong to their respective owners.
 
