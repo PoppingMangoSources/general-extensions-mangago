@@ -66,7 +66,7 @@ const pickGenreValues = (genres: TriState | undefined, state: "included" | "excl
 
 export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> {
   private rateLimiter = new BasicRateLimiter("rateLimiter", {
-    numberOfRequests: 20,
+    numberOfRequests: 15,
     bufferInterval: 10,
     ignoreImages: true,
   });
