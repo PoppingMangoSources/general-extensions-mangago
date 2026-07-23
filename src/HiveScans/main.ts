@@ -126,7 +126,6 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
         .addPathComponent("query")
         .setQueryItem("page", "1")
         .setQueryItem("perPage", PAGE_SIZE.toString())
-        .setQueryItem("searchTerm", "")
         .setQueryItem("orderBy", "totalViews")
         .toString();
       const data = await fetchJSON<HiveScansSearchResponse>({ url, method: "GET" });
@@ -141,7 +140,6 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
         .addPathComponent("query")
         .setQueryItem("page", "1")
         .setQueryItem("perPage", "4")
-        .setQueryItem("searchTerm", "")
         .setQueryItem("seriesType", "NOVEL")
         .setQueryItem("orderBy", "totalViews")
         .setQueryItem("orderDirection", "desc")
@@ -159,7 +157,6 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
       .addPathComponent("posts")
       .setQueryItem("page", page.toString())
       .setQueryItem("perPage", PAGE_SIZE.toString())
-      .setQueryItem("searchTerm", "")
       .setQueryItem("tag", section.id)
       .toString();
 
