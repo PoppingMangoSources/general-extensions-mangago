@@ -27,12 +27,10 @@ import {
 
 // Paperback rejects IDs containing characters outside its allowed set (an
 // apostrophe in a tag slug crashes the app), so scrub anything unsupported.
+const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
+
 const sanitizeId = (value: string): string =>
-  value
-    .toLowerCase()
-    .replace(/[^a-z0-9._\-@()[\]%?#+=/&:]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
+  value.toLowerCase().replace(SAFE_ID_REGEX, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 
 // ValirScans is a Next.js App Router site: page data ships as an RSC flight
 // stream whose JSON is embedded inside escaped JS string literals. Undo the

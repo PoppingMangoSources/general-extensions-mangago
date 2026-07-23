@@ -155,7 +155,15 @@ const genres = await (this.genresPromise ??= fetchGenres());
 
 ## 6. IDs & Sanitization
 
-- **One shared `sanitizeId`** applied at **every** id-producing call site. Allowed charset: `a-zA-Z0-9._-@()[]%?#+=/&`. Case-preserving, global (`/g`). (both)
+- **Sanitize every id at every id-producing call site.** Paperback rejects ids containing characters outside its allowed set, and an unsanitized character (e.g. an apostrophe in a tag slug) crashes the app. Sources are self-contained, so each defines the same canonical constant rather than importing a shared module: (both)
+
+  ```ts
+  // Paperback rejects ids containing characters outside this set.
+  const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
+  ```
+
+  Keep this constant byte-identical across sources — case-preserving, global (`/g`), no Unicode (`u`) flag. Two sanctioned replacement modes over this one charset: **dash-replace** (`.replace(SAFE_ID_REGEX, "-")`, most sources) or **preserve-by-encoding** (a callback that returns `encodeURIComponent(c)` when it differs, else `"-"` — keeps more of the original, used by KingOfShojo/RinkoComics). Pick one per source and keep it stable — changing an id format breaks users' saved library entries. This is distinct from a **narrow slugifier** (`[^a-z0-9]+ → "-"`, used for human-readable tag/team slugs in OManga/OniSaga/ScansGG) — a different purpose, not the id sanitizer.
+
 - **IDs must be unique and self-sufficient** — carry everything needed to re-fetch (e.g. keep the absolute mirror URL in the id) rather than stashing values in `additionalInfo`. Never derive a `chapterId` from a non-unique bare number.
 - Encode/decode each id exactly once. Normalize URL-derived `chapterId`s — a stray leading slash wipes saved reading progress.
 - No legacy-migration / self-healing re-resolution loops for old id formats in new sources.

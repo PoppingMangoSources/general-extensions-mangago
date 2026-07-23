@@ -16,13 +16,11 @@ import { DOMAIN, LANGUAGES, type FilterTaxonomies, type MangaCard } from "./mode
 
 const IMAGE_EXTENSION = /\.(jpg|jpeg|png|webp|gif|avif)/i;
 
-// Paperback rejects IDs with characters outside its allowed set.
+// Paperback rejects ids containing characters outside its allowed set.
+const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
+
 const sanitizeId = (value: string): string =>
-  value
-    .toLowerCase()
-    .replace(/[^a-z0-9._\-@()[\]%?#+=/&:]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
+  value.toLowerCase().replace(SAFE_ID_REGEX, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 
 // Entry titles embed the circle/author and language, e.g.
 // "[Author] Title [Eng] (Update)"; strip both for the display title.

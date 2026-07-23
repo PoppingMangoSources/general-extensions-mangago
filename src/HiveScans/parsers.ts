@@ -19,6 +19,9 @@ import {
   type HiveScansPost,
 } from "./models";
 
+// Paperback rejects ids containing characters outside this set.
+const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
+
 export const encodeMangaId = (slug: string): string => {
   return encodeURIComponent(slug).replace(
     /[!'()*]/g,
@@ -276,7 +279,7 @@ export const parseMangaDetails = (post: HiveScansPost): SourceManga => {
   }
 
   const tags: Tag[] = uniqueGenres.map((name) => ({
-    id: name.toLowerCase().replace(/[^a-z0-9._\-@()[\]%?#+=/&:]/g, "-"),
+    id: name.toLowerCase().replace(SAFE_ID_REGEX, "-"),
     title: name,
   }));
 

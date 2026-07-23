@@ -140,12 +140,11 @@ export const parseSeriesData = (payload: string, mangaId: string): SeriesData =>
   return data;
 };
 
+// Paperback rejects ids containing characters outside this set.
+const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
+
 const sanitizeId = (value: string): string =>
-  value
-    .toLowerCase()
-    .replace(/[^a-z0-9._\-@()[\]%?#+=/&:]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
+  value.toLowerCase().replace(SAFE_ID_REGEX, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 
 const stripHtml = (html: string): string =>
   Application.decodeHTMLEntities(

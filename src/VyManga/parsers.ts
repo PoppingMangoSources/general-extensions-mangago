@@ -231,16 +231,16 @@ export const parseMangaDetails = (
   };
 };
 
+// Paperback rejects ids containing characters outside this set.
+const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
+
 const genreIdFromAnchor = (href: string, title: string): string => {
   const cleaned = href.replace(/[?#].*$/, "").replace(/\/+$/, "");
   const last = cleaned.split("/").pop() || "";
   if (/^\d+$/.test(last)) return last;
   const query = href.match(/genre(?:\[\])?=(\d+)/);
   if (query) return query[1];
-  return title
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g, "-");
+  return title.toLowerCase().replace(/\s+/g, "-").replace(SAFE_ID_REGEX, "-");
 };
 
 const parseStatus = (status: string): string => {
