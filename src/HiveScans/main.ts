@@ -27,11 +27,7 @@ import { getShowLockedChapters, HiveScansSettingsForm } from "./forms/settings";
 import {
   API_URL,
   PAGE_SIZE,
-  SECTION_GENRES,
-  SECTION_HOT,
-  SECTION_NEW,
-  SECTION_NOVELS,
-  SECTION_POPULAR,
+  SECTIONS,
   SORTING_OPTIONS,
   type HiveScansChapterResponse,
   type HiveScansPostDetailsResponse,
@@ -53,9 +49,8 @@ import {
   parseMangaDetails,
   parseSearchResults,
   toFeaturedItems,
-  toHotReleaseItems,
   toLatestUpdateItems,
-  toNovelItems,
+  toProminentItems,
 } from "./parsers";
 import type HiveScansConfig from "./pbconfig";
 
@@ -99,11 +94,11 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
-      { id: SECTION_POPULAR, title: "Popular", type: DiscoverSectionType.featured },
-      { id: SECTION_NOVELS, title: "Top Novels", type: DiscoverSectionType.prominentCarousel },
-      { id: SECTION_HOT, title: "Hot Releases", type: DiscoverSectionType.prominentCarousel },
-      { id: SECTION_NEW, title: "Latest Updates", type: DiscoverSectionType.chapterUpdates },
-      { id: SECTION_GENRES, title: "Genres", type: DiscoverSectionType.genres },
+      { id: SECTIONS.POPULAR, title: "Popular", type: DiscoverSectionType.featured },
+      { id: SECTIONS.NOVELS, title: "Top Novels", type: DiscoverSectionType.prominentCarousel },
+      { id: SECTIONS.HOT, title: "Hot Releases", type: DiscoverSectionType.prominentCarousel },
+      { id: SECTIONS.NEW, title: "Latest Updates", type: DiscoverSectionType.chapterUpdates },
+      { id: SECTIONS.GENRES, title: "Genres", type: DiscoverSectionType.genres },
     ];
   }
 
@@ -111,10 +106,8 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
     section: DiscoverSection,
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    if (section.id === SECTION_GENRES) {
-      const genres = await (this.genresPromise ??= fetchGenres().then((items) =>
-        items.map((item) => ({ id: item.id, value: item.title })),
-      ));
+    if (section.id === SECTIONS.GENRES) {
+      const genres = await this.getGenreOptions();
       const items: DiscoverSectionItem[] = genres.map((genre) => ({
         type: "genresCarouselItem",
         name: genre.value,
@@ -128,7 +121,7 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
       return { items, metadata: undefined };
     }
 
-    if (section.id === SECTION_POPULAR) {
+    if (section.id === SECTIONS.POPULAR) {
       const url = new URL(API_URL)
         .addPathComponent("query")
         .setQueryItem("page", "1")
@@ -144,7 +137,7 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
       return { items: toFeaturedItems(details), metadata: undefined };
     }
 
-    if (section.id === SECTION_NOVELS) {
+    if (section.id === SECTIONS.NOVELS) {
       const url = new URL(API_URL)
         .addPathComponent("query")
         .setQueryItem("page", "1")
@@ -155,10 +148,10 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
         .setQueryItem("orderDirection", "desc")
         .toString();
       const data = await fetchJSON<HiveScansSearchResponse>({ url, method: "GET" });
-      return { items: toNovelItems(data.posts ?? []), metadata: undefined };
+      return { items: toProminentItems(data.posts ?? [], true), metadata: undefined };
     }
 
-    if (section.id !== SECTION_HOT && section.id !== SECTION_NEW) {
+    if (section.id !== SECTIONS.HOT && section.id !== SECTIONS.NEW) {
       return { items: [], metadata: undefined };
     }
 
@@ -173,8 +166,8 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
 
     const data = await fetchJSON<HiveScansSearchResponse>({ url, method: "GET" });
     const items =
-      section.id === SECTION_HOT
-        ? toHotReleaseItems(data.posts ?? [])
+      section.id === SECTIONS.HOT
+        ? toProminentItems(data.posts ?? [], false)
         : toLatestUpdateItems(data.posts ?? []);
 
     const hasNextPage = data.totalCount > page * PAGE_SIZE;
@@ -186,10 +179,14 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
   }
 
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
-    const genres = await (this.genresPromise ??= fetchGenres().then((items) =>
+    return new HiveScansAdvancedSearchForm(query, await this.getGenreOptions());
+  }
+
+  private getGenreOptions(): Promise<OptionItem[]> {
+    this.genresPromise ??= fetchGenres().then((items) =>
       items.map((item) => ({ id: item.id, value: item.title })),
-    ));
-    return new HiveScansAdvancedSearchForm(query, genres);
+    );
+    return this.genresPromise;
   }
 
   async getSearchResults(

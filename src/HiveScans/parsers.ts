@@ -46,7 +46,7 @@ export const isNovel = (post: Pick<HiveScansPost, "isNovel" | "seriesType">): bo
   return post.isNovel === true || (post.seriesType ?? "").toUpperCase() === "NOVEL";
 };
 
-export const mapStatus = (status?: string | null): string => {
+const mapStatus = (status?: string | null): string => {
   switch ((status ?? "").toUpperCase()) {
     case "ONGOING":
     case "COMING_SOON":
@@ -65,7 +65,7 @@ export const mapStatus = (status?: string | null): string => {
   }
 };
 
-export const formatSeriesSubtitle = (type?: string | null, status?: string | null): string => {
+const formatSeriesSubtitle = (type?: string | null, status?: string | null): string => {
   return [type, status]
     .filter((value): value is string => Boolean(value))
     .map((value) =>
@@ -199,9 +199,12 @@ export const toFeaturedItems = (posts: HiveScansPost[]): DiscoverSectionItem[] =
     });
 };
 
-export const toHotReleaseItems = (posts: HiveScansPost[]): DiscoverSectionItem[] => {
+export const toProminentItems = (
+  posts: HiveScansPost[],
+  novels: boolean,
+): DiscoverSectionItem[] => {
   return posts
-    .filter((post) => !isNovel(post))
+    .filter((post) => isNovel(post) === novels)
     .map((post) => {
       const latestChapter = post.chapters?.find((chapter) => chapter.isAccessible === true);
       const subtitle = [
@@ -220,27 +223,6 @@ export const toHotReleaseItems = (posts: HiveScansPost[]): DiscoverSectionItem[]
         contentRating: contentRatingForPost(post),
       };
     });
-};
-
-export const toNovelItems = (posts: HiveScansPost[]): DiscoverSectionItem[] => {
-  return posts.filter(isNovel).map((post) => {
-    const latestChapter = post.chapters?.find((chapter) => chapter.isAccessible === true);
-    const subtitle = [
-      latestChapter ? `Ch. ${latestChapter.number}` : undefined,
-      post.averageRating == null ? undefined : `★ ${post.averageRating}`,
-    ]
-      .filter((value): value is string => Boolean(value))
-      .join(" • ");
-
-    return {
-      type: "prominentCarouselItem",
-      mangaId: encodeMangaId(post.slug),
-      title: Application.decodeHTMLEntities(post.postTitle),
-      imageUrl: post.featuredImage ?? "",
-      subtitle: subtitle || formatSeriesSubtitle(post.seriesType, post.seriesStatus) || undefined,
-      contentRating: contentRatingForPost(post),
-    };
-  });
 };
 
 export const toLatestUpdateItems = (posts: HiveScansPost[]): DiscoverSectionItem[] => {
@@ -294,7 +276,7 @@ export const parseMangaDetails = (post: HiveScansPost): SourceManga => {
   }
 
   const tags: Tag[] = uniqueGenres.map((name) => ({
-    id: name.toLowerCase().replace(/\s+/g, "-"),
+    id: name.toLowerCase().replace(/[^a-z0-9._\-@()[\]%?#+=/&:]/g, "-"),
     title: name,
   }));
 

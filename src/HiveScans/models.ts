@@ -7,11 +7,13 @@ export const DOMAIN = "https://hivetoons.org";
 export const API_URL = "https://api.hivetoons.org/api";
 export const PAGE_SIZE = 18;
 
-export const SECTION_POPULAR = "popular";
-export const SECTION_NOVELS = "novels";
-export const SECTION_HOT = "hot";
-export const SECTION_NEW = "new";
-export const SECTION_GENRES = "genres";
+export const SECTIONS = {
+  POPULAR: "popular",
+  NOVELS: "novels",
+  HOT: "hot",
+  NEW: "new",
+  GENRES: "genres",
+} as const;
 
 export type PageMetadata = {
   page?: number;
@@ -70,12 +72,8 @@ export interface HiveScansChapter {
   isPermanentlyLocked?: boolean;
 }
 
-export interface HiveScansPostDetails extends HiveScansPost {
-  chapters: HiveScansChapter[];
-}
-
 export interface HiveScansPostDetailsResponse {
-  post: HiveScansPostDetails;
+  post: HiveScansPost;
 }
 
 export interface HiveScansPageImage {
