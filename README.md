@@ -22,7 +22,7 @@ The repository's own sources are currently available from `0.9/test` while they 
 
 ## Installation
 
-- [Add the testing repository to Paperback][test-installation]
+- [Add the Popmango repository to Paperback][test-installation]
 
 After installing the repository, refresh it in Paperback to receive source updates.
 
