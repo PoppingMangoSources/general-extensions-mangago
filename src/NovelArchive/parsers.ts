@@ -94,7 +94,7 @@ export const toFeaturedItems = (
     const views = viewsOf(novel);
     const viewsInfo =
       views === undefined ? undefined : { symbol: "eye.fill", text: formatCount(views) };
-    const rankInfo = { symbol: "number", text: `#${index + 1}` };
+    const rankInfo = { symbol: "flame.fill", text: `#${index + 1}` };
     const infoItems =
       variant === "trending"
         ? viewsInfo
@@ -147,13 +147,19 @@ export const toCardItems = (
 export const toChapterUpdateItems = (novels: Novel[]): DiscoverSectionItem[] =>
   novels.map((novel) => {
     const date = novel.updated_at ? new Date(novel.updated_at) : undefined;
+    const subtitle = [
+      novel.total_chapters ? `Ch. ${novel.total_chapters}` : undefined,
+      genreList(novel)[0],
+    ]
+      .filter((part): part is string => Boolean(part))
+      .join(" • ");
     return {
       type: "chapterUpdatesCarouselItem",
       mangaId: String(novel.id),
       chapterId: String(novel.total_chapters ?? ""),
       imageUrl: coverOf(novel),
       title: novel.title,
-      subtitle: genreLabel(novel),
+      subtitle: subtitle || undefined,
       publishDate: date && !Number.isNaN(date.getTime()) ? date : undefined,
       contentRating: contentRatingForNovel(novel),
     };
@@ -177,11 +183,11 @@ export const toSearchResultItem = (novel: Novel): SearchResultItem => {
 };
 
 export const parseMangaDetails = (novel: Novel): SourceManga => {
-  const primaryTitle = novel.title;
-  const seen = new Set([primaryTitle.trim().toLowerCase()]);
+  const primaryTitle = (novel.title ?? "").trim() || "Untitled";
+  const seen = new Set([primaryTitle.toLowerCase()]);
   const secondaryTitles: string[] = [];
   for (const alias of novel.associated_names ?? []) {
-    const title = alias.trim();
+    const title = (alias ?? "").trim();
     const key = title.toLowerCase();
     if (!title || seen.has(key)) continue;
     seen.add(key);
@@ -220,16 +226,27 @@ export const parseMangaDetails = (novel: Novel): SourceManga => {
   };
 };
 
+const CHAPTER_LEAD = /^\s*(?:chapter|chap\.?|ch\.?|episode|ep\.?)?\s*(\d+(?:\.\d+)?)\s*[-:–.]?\s*/i;
+
 export const parseChapters = (novel: Novel, sourceManga: SourceManga): Chapter[] =>
-  (novel.chapter_names ?? []).map((name, index) => ({
-    chapterId: String(index + 1),
-    sourceManga,
-    langCode: "en",
-    chapNum: index + 1,
-    title: name.trim() || `Chapter ${index + 1}`,
-    volume: 0,
-    sortingIndex: index,
-  }));
+  (novel.chapter_names ?? []).map((rawName, index) => {
+    const name = (rawName ?? "").trim();
+    const match = name.match(CHAPTER_LEAD);
+    const parsed = match ? parseFloat(match[1]) : NaN;
+    const chapNum = Number.isFinite(parsed) ? parsed : index + 1;
+    const title = (match ? name.slice(match[0].length) : name)
+      .replace(/^\d+(?:\.\d+)?\s*[-:–.]\s*/, "")
+      .trim();
+    return {
+      chapterId: String(index + 1),
+      sourceManga,
+      langCode: "en",
+      chapNum,
+      title: title || `Chapter ${chapNum}`,
+      volume: 0,
+      sortingIndex: index,
+    };
+  });
 
 export const parseChapterDetails = (
   response: ChapterContentResponse,

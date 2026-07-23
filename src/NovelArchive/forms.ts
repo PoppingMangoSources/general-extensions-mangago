@@ -15,7 +15,6 @@ import {
 import {
   GENRE_MATCH_OPTIONS,
   GENRES,
-  SORT_OPTIONS,
   STATUS_OPTIONS,
   type OptionItem,
   type SearchMetadata,
@@ -64,12 +63,10 @@ export class NovelArchiveSettingsForm extends Form {
 }
 
 export class NovelArchiveAdvancedSearchForm extends AdvancedSearchForm {
-  private sort: string[];
   private status: string[];
   private genreMatch: string[];
   private genres: TriState;
 
-  private readonly sortOptions: Tag[] = toTags(SORT_OPTIONS);
   private readonly statusOptions: Tag[] = toTags(STATUS_OPTIONS);
   private readonly genreMatchOptions: Tag[] = toTags(GENRE_MATCH_OPTIONS);
   private readonly genreOptions: Tag[] = toTags(GENRES);
@@ -77,28 +74,13 @@ export class NovelArchiveAdvancedSearchForm extends AdvancedSearchForm {
   constructor(searchQuery: SearchQuery<SearchMetadata>) {
     super();
     const meta = searchQuery.metadata ?? {};
-    this.sort = meta.sort ?? [];
     this.status = meta.status ?? [];
-    this.genreMatch = meta.genreMatch ?? [];
+    this.genreMatch = meta.genreMatch ?? ["all"];
     this.genres = { ...meta.genres };
   }
 
   override getSections() {
     return [
-      Section("sort", [
-        SelectRow("sort", {
-          title: "Sort",
-          layout: "flow",
-          value: this.sort,
-          items: this.sortOptions,
-          minItemCount: 0,
-          maxItemCount: 1,
-          onValueChange: Application.Selector(
-            this as NovelArchiveAdvancedSearchForm,
-            "handleSortChange",
-          ),
-        }),
-      ]),
       Section("status", [
         SelectRow("status", {
           title: "Status",
@@ -110,20 +92,6 @@ export class NovelArchiveAdvancedSearchForm extends AdvancedSearchForm {
           onValueChange: Application.Selector(
             this as NovelArchiveAdvancedSearchForm,
             "handleStatusChange",
-          ),
-        }),
-      ]),
-      Section("genre_match", [
-        SelectRow("genre_match", {
-          title: "Genre Match",
-          layout: "flow",
-          value: this.genreMatch,
-          items: this.genreMatchOptions,
-          minItemCount: 0,
-          maxItemCount: 1,
-          onValueChange: Application.Selector(
-            this as NovelArchiveAdvancedSearchForm,
-            "handleGenreMatchChange",
           ),
         }),
       ]),
@@ -140,12 +108,20 @@ export class NovelArchiveAdvancedSearchForm extends AdvancedSearchForm {
             "handleGenresChange",
           ),
         }),
+        SelectRow("genre_match", {
+          title: "Match",
+          layout: "flow",
+          value: this.genreMatch,
+          items: this.genreMatchOptions,
+          minItemCount: 1,
+          maxItemCount: 1,
+          onValueChange: Application.Selector(
+            this as NovelArchiveAdvancedSearchForm,
+            "handleGenreMatchChange",
+          ),
+        }),
       ]),
     ];
-  }
-
-  async handleSortChange(value: string[]): Promise<void> {
-    this.sort = value;
   }
 
   async handleStatusChange(value: string[]): Promise<void> {
@@ -162,7 +138,6 @@ export class NovelArchiveAdvancedSearchForm extends AdvancedSearchForm {
 
   override getSearchQueryMetadata(): SearchMetadata {
     const result: SearchMetadata = {};
-    if (this.sort.length > 0) result.sort = this.sort;
     if (this.status.length > 0) result.status = this.status;
     if (this.genreMatch.length > 0) result.genreMatch = this.genreMatch;
     if (Object.keys(this.genres).length > 0) result.genres = this.genres;

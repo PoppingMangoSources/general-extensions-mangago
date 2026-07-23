@@ -12,6 +12,7 @@ export const SECTIONS = {
   EDITORS: "editors",
   TOP_RATED: "top-rated",
   MOST_CHAPTERS: "most-chapters",
+  GENRES: "genres",
 } as const;
 
 export const ADULT_EXCLUSIONS = [
@@ -47,7 +48,6 @@ export type PageMetadata = { page?: number };
 export type TriState = Record<string, "included" | "excluded">;
 
 export type SearchMetadata = {
-  sort?: string[];
   status?: string[];
   genreMatch?: string[];
   genres?: TriState;

@@ -15,6 +15,7 @@ import {
   type PagedResults,
   type SearchQuery,
   type SearchResultItem,
+  type SortingOption,
   type SourceManga,
 } from "@paperback/types";
 
@@ -29,6 +30,7 @@ import {
   GENRES,
   PAGE_SIZE,
   SECTIONS,
+  SORT_OPTIONS,
   type ChapterContentResponse,
   type Novel,
   type NovelListResponse,
@@ -84,7 +86,12 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
         title: "Most Chapters",
         type: DiscoverSectionType.simpleCarousel,
       },
+      { id: SECTIONS.GENRES, title: "Genres", type: DiscoverSectionType.genres },
     ];
+  }
+
+  async getSortingOptions(): Promise<SortingOption[]> {
+    return SORT_OPTIONS.map((option) => ({ id: option.id, label: option.value }));
   }
 
   async getDiscoverSectionItems(
@@ -97,7 +104,7 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
       case SECTIONS.EDITORS:
         return this.getFeaturedItems(`${API_URL}/novels/editors-choice?limit=15`, "editors");
       case SECTIONS.LATEST: {
-        const novels = await this.fetchNovelArray(`${API_URL}/novels/recently-updated?limit=8`);
+        const novels = await this.fetchNovelArray(`${API_URL}/novels/recently-updated?limit=30`);
         return { items: toChapterUpdateItems(novels), metadata: undefined };
       }
       case SECTIONS.POPULAR:
@@ -106,6 +113,8 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
         return this.getCardItems("rating", "rating", metadata);
       case SECTIONS.MOST_CHAPTERS:
         return this.getCardItems("chapters", "chapters", metadata);
+      case SECTIONS.GENRES:
+        return { items: this.genreCarouselItems(), metadata: undefined };
       default:
         return { items: [], metadata: undefined };
     }
@@ -132,6 +141,21 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
     };
   }
 
+  private genreCarouselItems(): DiscoverSectionItem[] {
+    const hideAdult = getHideAdultContent();
+    return GENRES.filter(
+      (genre) => !hideAdult || !ADULT_EXCLUSIONS.includes(genre.value.toLowerCase()),
+    ).map((genre) => ({
+      type: "genresCarouselItem",
+      name: genre.value,
+      searchQuery: {
+        title: "",
+        metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
+      },
+      metadata: undefined,
+    }));
+  }
+
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
     return new NovelArchiveAdvancedSearchForm(query);
   }
@@ -139,6 +163,7 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
   async getSearchResults(
     query: SearchQuery<SearchMetadata>,
     metadata: PageMetadata | undefined,
+    sortingOption?: SortingOption,
   ): Promise<PagedResults<SearchResultItem>> {
     const pasted = await this.resolveUrlQuery(query.title ?? "");
     if (pasted) return pasted;
@@ -150,7 +175,7 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
     const url = this.buildNovelsUrl({
       page,
       search: search || undefined,
-      sort: meta?.sort?.[0],
+      sort: sortingOption?.id,
       status: meta?.status?.[0],
       genreMatch: meta?.genreMatch?.[0],
       genresInclude: pickGenreValues(meta?.genres, "included"),
@@ -202,8 +227,9 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
     return parseChapterDetails(data, chapter);
   }
 
-  private fetchNovel(id: string): Promise<Novel> {
-    return fetchJSON<Novel>(`${API_URL}/novels/${id}`);
+  private async fetchNovel(id: string): Promise<Novel> {
+    const data = await fetchJSON<Novel | { novel: Novel }>(`${API_URL}/novels/${id}`);
+    return "novel" in data && data.novel ? data.novel : (data as Novel);
   }
 
   private async fetchNovelArray(url: string): Promise<Novel[]> {
