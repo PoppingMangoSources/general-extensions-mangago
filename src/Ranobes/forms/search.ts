@@ -258,87 +258,110 @@ export class RanobesAdvancedSearchForm extends AdvancedSearchForm {
     ];
   }
 
+  private async triStateChange(
+    key: keyof SearchMetadata,
+    value: Record<string, "included" | "excluded">,
+  ): Promise<void> {
+    this.setMetadata(key, Object.keys(value).length ? value : undefined);
+  }
+
+  private async statusChange(key: keyof SearchMetadata, value: string[]): Promise<void> {
+    this.setMetadata(key, value[0] && value[0] !== "any" ? value[0] : undefined);
+  }
+
+  private async digitOnlyChange(key: keyof SearchMetadata, value: string): Promise<void> {
+    this.setMetadata(key, value.replace(/\D/g, "") || undefined);
+  }
+
+  private async trimChange(key: keyof SearchMetadata, value: string): Promise<void> {
+    this.setMetadata(key, value.trim() || undefined);
+  }
+
+  private async booleanChange(key: keyof SearchMetadata, value: boolean): Promise<void> {
+    this.setMetadata(key, value || undefined);
+  }
+
   async handleGenresChange(value: Record<string, "included" | "excluded">): Promise<void> {
-    this.setMetadata("genres", Object.keys(value).length ? value : undefined);
+    return this.triStateChange("genres", value);
   }
 
   async handleEventsChange(value: Record<string, "included" | "excluded">): Promise<void> {
-    this.setMetadata("events", Object.keys(value).length ? value : undefined);
+    return this.triStateChange("events", value);
   }
 
   async handleLanguagesChange(value: Record<string, "included" | "excluded">): Promise<void> {
-    this.setMetadata("languages", Object.keys(value).length ? value : undefined);
+    return this.triStateChange("languages", value);
   }
 
   async handleTranslationStatusChange(value: string[]): Promise<void> {
-    this.setMetadata("translationStatus", value[0] && value[0] !== "any" ? value[0] : undefined);
+    return this.statusChange("translationStatus", value);
   }
 
   async handleOriginalStatusChange(value: string[]): Promise<void> {
-    this.setMetadata("originalStatus", value[0] && value[0] !== "any" ? value[0] : undefined);
+    return this.statusChange("originalStatus", value);
   }
 
   async handleYearFromChange(value: string): Promise<void> {
-    this.setMetadata("yearFrom", value.replace(/\D/g, "") || undefined);
+    return this.digitOnlyChange("yearFrom", value);
   }
 
   async handleYearToChange(value: string): Promise<void> {
-    this.setMetadata("yearTo", value.replace(/\D/g, "") || undefined);
+    return this.digitOnlyChange("yearTo", value);
   }
 
   async handleChaptersFromChange(value: string): Promise<void> {
-    this.setMetadata("chaptersFrom", value.replace(/\D/g, "") || undefined);
+    return this.digitOnlyChange("chaptersFrom", value);
   }
 
   async handleChaptersToChange(value: string): Promise<void> {
-    this.setMetadata("chaptersTo", value.replace(/\D/g, "") || undefined);
+    return this.digitOnlyChange("chaptersTo", value);
   }
 
   async handleRatingsFromChange(value: string): Promise<void> {
-    this.setMetadata("ratingsFrom", value.replace(/\D/g, "") || undefined);
+    return this.digitOnlyChange("ratingsFrom", value);
   }
 
   async handleRatingsToChange(value: string): Promise<void> {
-    this.setMetadata("ratingsTo", value.replace(/\D/g, "") || undefined);
+    return this.digitOnlyChange("ratingsTo", value);
   }
 
   async handleAuthorsChange(value: string): Promise<void> {
-    this.setMetadata("authors", value.trim() || undefined);
+    return this.trimChange("authors", value);
   }
 
   async handleExcludedAuthorsChange(value: string): Promise<void> {
-    this.setMetadata("excludedAuthors", value.trim() || undefined);
+    return this.trimChange("excludedAuthors", value);
   }
 
   async handleTranslatorsChange(value: string): Promise<void> {
-    this.setMetadata("translators", value.trim() || undefined);
+    return this.trimChange("translators", value);
   }
 
   async handleExcludedTranslatorsChange(value: string): Promise<void> {
-    this.setMetadata("excludedTranslators", value.trim() || undefined);
+    return this.trimChange("excludedTranslators", value);
   }
 
   async handlePublishersChange(value: string): Promise<void> {
-    this.setMetadata("publishers", value.trim() || undefined);
+    return this.trimChange("publishers", value);
   }
 
   async handleExcludedPublishersChange(value: string): Promise<void> {
-    this.setMetadata("excludedPublishers", value.trim() || undefined);
+    return this.trimChange("excludedPublishers", value);
   }
 
   async handleOnlyTranslatedChange(value: boolean): Promise<void> {
-    this.setMetadata("onlyTranslated", value || undefined);
+    return this.booleanChange("onlyTranslated", value);
   }
 
   async handleMtlFilesChange(value: boolean): Promise<void> {
-    this.setMetadata("mtlFiles", value || undefined);
+    return this.booleanChange("mtlFiles", value);
   }
 
   async handleMtlReaderChange(value: boolean): Promise<void> {
-    this.setMetadata("mtlReader", value || undefined);
+    return this.booleanChange("mtlReader", value);
   }
 
   async handleAiTranslatedChange(value: boolean): Promise<void> {
-    this.setMetadata("aiTranslated", value || undefined);
+    return this.booleanChange("aiTranslated", value);
   }
 }
