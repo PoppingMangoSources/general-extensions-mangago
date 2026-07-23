@@ -104,7 +104,7 @@ export const toFeaturedItems = (
     const views = viewsOf(novel);
     const viewsInfo =
       views === undefined ? undefined : { symbol: "eye.fill", text: formatCount(views) };
-    const rankInfo = { symbol: "flame.fill", text: `#${index + 1}` };
+    const rankInfo = { symbol: "flame.fill", text: `${index + 1}` };
     const infoItems =
       variant === "trending"
         ? viewsInfo

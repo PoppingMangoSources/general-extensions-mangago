@@ -66,8 +66,8 @@ const pickGenreValues = (genres: TriState | undefined, state: "included" | "excl
 
 export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> {
   private rateLimiter = new BasicRateLimiter("rateLimiter", {
-    numberOfRequests: 4,
-    bufferInterval: 1,
+    numberOfRequests: 20,
+    bufferInterval: 10,
     ignoreImages: true,
   });
   private interceptor = new NovelArchiveInterceptor("main");
@@ -225,15 +225,15 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
     const id = sourceManga.mangaId;
-    const novel = await this.fetchNovel(id);
-    const chapters = parseChapters(novel, sourceManga);
+    const [novel, sources] = await Promise.all([this.fetchNovel(id), this.fetchSources(id)]);
 
-    for (const source of await this.fetchSources(id)) {
-      const entries = await this.fetchSourceChapters(id, source.id);
-      chapters.push(...parseSourceChapters(source, entries, sourceManga));
-    }
+    const perSource = await Promise.all(
+      sources.map(async (source) =>
+        parseSourceChapters(source, await this.fetchSourceChapters(id, source.id), sourceManga),
+      ),
+    );
 
-    return chapters;
+    return [...parseChapters(novel, sourceManga), ...perSource.flat()];
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
