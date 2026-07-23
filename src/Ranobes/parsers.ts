@@ -64,9 +64,11 @@ const parseRating = (card: cheerio.Cheerio<AnyNode>): { rating?: number; ratingC
 };
 
 const parseViews = (card: cheerio.Cheerio<AnyNode>): number | undefined => {
-  const title = card.find(".meta_author").attr("title") ?? "";
-  const views = title.match(/views:\s*([\d\s]+)/i)?.[1];
-  if (views) return parseCount(views);
+  for (const node of card.find(".meta_author").toArray()) {
+    const title = node.type === "tag" ? (node.attribs.title ?? "") : "";
+    const views = title.match(/views:\s*([\d\s]+)/i)?.[1];
+    if (views) return parseCount(views);
+  }
 
   const stats = card.find(".rank-story-data").first();
   return stats.find(".fa-eye").length

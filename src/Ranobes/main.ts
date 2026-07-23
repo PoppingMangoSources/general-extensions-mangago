@@ -117,12 +117,17 @@ const toRankingItem = (
   contentRating: parseContentRating(listing.genres ?? []),
 });
 
-const toSimpleItem = (listing: RanobesListing): DiscoverSectionItem => ({
-  type: "simpleCarouselItem",
+const toCompletedItem = (listing: RanobesListing): DiscoverSectionItem => ({
+  type: "prominentCarouselItem",
   mangaId: listing.mangaId,
   title: listing.title,
   imageUrl: listing.imageUrl,
-  subtitle: listing.rating !== undefined ? `★ ${listing.rating.toFixed(1)}` : undefined,
+  subtitle:
+    listing.views !== undefined
+      ? `${formatCount(listing.views)} views`
+      : listing.rating !== undefined
+        ? `★ ${listing.rating.toFixed(1)}`
+        : undefined,
   contentRating: parseContentRating(listing.genres ?? []),
 });
 
@@ -205,7 +210,7 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
       case SECTIONS.COMPLETED: {
         const $ = cheerio.load(await fetchListingPage("/tags/status-trs/Completed/", page));
         return {
-          items: parseListings($, "stories").map(toSimpleItem),
+          items: parseListings($, "stories").map(toCompletedItem),
           metadata: isLastListingPage($) ? undefined : { page: page + 1 },
         };
       }

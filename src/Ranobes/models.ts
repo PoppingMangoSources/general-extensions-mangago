@@ -33,7 +33,7 @@ export const DISCOVER_SECTIONS: DiscoverSection[] = [
     title: "All Time Popular",
     type: DiscoverSectionType.prominentCarousel,
   },
-  { id: SECTIONS.COMPLETED, title: "Completed", type: DiscoverSectionType.simpleCarousel },
+  { id: SECTIONS.COMPLETED, title: "Completed", type: DiscoverSectionType.prominentCarousel },
 ];
 
 export const SORT_ORDERS = [
