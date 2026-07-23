@@ -81,6 +81,12 @@ export const buildSearchPath = (
 };
 
 export class RanobesInterceptor extends PaperbackInterceptor {
+  private challengeThrownAt = 0;
+
+  clearChallenge(): void {
+    this.challengeThrownAt = 0;
+  }
+
   override async interceptRequest(request: Request): Promise<Request> {
     return {
       ...request,
@@ -104,9 +110,21 @@ export class RanobesInterceptor extends PaperbackInterceptor {
       response.status === 403 ||
       /(?:Just a moment|Security check|vb_challenge)/i.test(body)
     ) {
+      // The app queues one bypass entry per thrown CloudflareError, so with
+      // every Discover section challenged at once an unconditional throw
+      // queues six prompts. Throw a single CloudflareError per challenge
+      // episode — pointed at the homepage, which serves the gate — and give
+      // the other concurrent fetches a short pending error instead.
+      // cloudflareBypassCompleted calls clearChallenge() so the refresh after
+      // a bypass re-arms detection immediately.
+      const now = Date.now();
+      if (now - this.challengeThrownAt < 60_000) {
+        throw new Error("Cloudflare bypass pending — complete it and refresh.");
+      }
+      this.challengeThrownAt = now;
       throw new CloudflareError({
-        url: request.url,
-        method: request.method ?? "GET",
+        url: `${DOMAIN}/`,
+        method: "GET",
         headers: { "user-agent": await Application.getDefaultUserAgent() },
       });
     }
