@@ -16,6 +16,7 @@ The repository's own sources are currently available from `0.9/test` while they 
 | [RinkoComics](https://rinkocomics.com)        | `rinkocomics.com`     |
 | [RokariComics](https://rokaricomics.com)      | `rokaricomics.com`    |
 | [Scans.GG](https://scans.gg)                  | `scans.gg`            |
+| [Temple Scan](https://templetoons.com)        | `templetoons.com`     |
 | [ValirScans](https://valirscans.org)          | `valirscans.org`      |
 | [VyManga](https://vymanga.com)                | `vymanga.com`         |
 
