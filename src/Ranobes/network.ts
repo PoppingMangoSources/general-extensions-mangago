@@ -81,6 +81,8 @@ export const buildSearchPath = (
 };
 
 export class RanobesInterceptor extends PaperbackInterceptor {
+  private challengeThrownAt = 0;
+
   override async interceptRequest(request: Request): Promise<Request> {
     return {
       ...request,
@@ -99,17 +101,26 @@ export class RanobesInterceptor extends PaperbackInterceptor {
   ): Promise<ArrayBuffer> {
     const contentType = response.headers?.["content-type"] ?? "";
     const body = contentType.includes("text/html") ? Application.arrayBufferToUTF8String(data) : "";
-    if (
+    const server = response.headers?.["server"] ?? "";
+    const challenged =
       response.headers?.["cf-mitigated"] === "challenge" ||
-      /(?:vb_challenge|cf-turnstile|<title>Just a moment)/i.test(body)
-    ) {
-      throw new CloudflareError({
-        url: request.url,
-        method: request.method ?? "GET",
-        headers: { "user-agent": await Application.getDefaultUserAgent() },
-      });
+      // DDoS-Guard (and the vBulletin gate) serve their interstitial as a 403.
+      (response.status === 403 && /ddos-guard/i.test(server)) ||
+      /(?:vb_challenge|cf-turnstile|ddos-guard|<title>\s*(?:Just a moment|DDoS-Guard))/i.test(body);
+    if (!challenged) return data;
+
+    // Chapter and discovery fan-out fire many requests at once; open a single
+    // bypass per challenge episode instead of one per concurrent fetch.
+    const now = Date.now();
+    if (now - this.challengeThrownAt < 60_000) {
+      throw new Error("Ranobes: bypass pending — complete the browser check and refresh.");
     }
-    return data;
+    this.challengeThrownAt = now;
+    throw new CloudflareError({
+      url: request.url,
+      method: request.method ?? "GET",
+      headers: { "user-agent": await Application.getDefaultUserAgent() },
+    });
   }
 }
 
