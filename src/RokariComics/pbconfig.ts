@@ -7,7 +7,7 @@ const pbConfig = {
   ...basePbConfig,
   name: "RokariComics",
   description: "Extension that pulls content from rokaricomics.com.",
-  version: "1.0.0-alpha.10",
+  version: "1.0.0-alpha.11",
 };
 
 export default pbConfig;

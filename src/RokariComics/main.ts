@@ -324,7 +324,7 @@ class RokariComicsExtension extends MangaStreamGeneric {
     }
 
     const urlBuilder = new URL(this.domain)
-      .setQueryItem("s", encodeURIComponent((query.title ?? "").replace(/[’–][a-z]*/g, "")))
+      .setQueryItem("s", (query.title ?? "").replace(/[’–][a-z]*/g, ""))
       .setQueryItem("page", page.toString());
 
     const status = getIncludedTagBySection("status", includedTags);
