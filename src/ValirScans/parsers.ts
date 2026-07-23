@@ -43,8 +43,23 @@ const decodeFlightPayload = (html: string): string =>
 
 const sliceBalanced = (payload: string, start: number): string | undefined => {
   let depth = 0;
+  let inString = false;
+  let escaped = false;
   for (let index = start; index < payload.length; index++) {
     const char = payload[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
     if (char === "{" || char === "[") {
       depth++;
     } else if (char === "}" || char === "]") {
@@ -142,7 +157,9 @@ export const parseFilterTaxonomy = (html: string): FilterTaxonomy => {
       extractByMarker<{ name?: string; slug?: string }[]>(payload, `"${key}":`)
         .filter((list) => Array.isArray(list) && !!list[0]?.name && !!list[0]?.slug)
         .sort((a, b) => b.length - a.length)[0] ?? []
-    ).flatMap((entry) => (entry.name && entry.slug ? [{ id: entry.slug, title: entry.name }] : []));
+    ).flatMap((entry) =>
+      entry.name && entry.slug ? [{ id: sanitizeId(entry.slug), title: entry.name }] : [],
+    );
   return { genres: pick("genres"), tags: pick("tags") };
 };
 
