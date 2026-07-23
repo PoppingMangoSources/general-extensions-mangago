@@ -53,13 +53,13 @@ const imageFrom = (img: Cheerio<AnyNode>): string => {
 // image lives at the unsuffixed URL.
 const stripThumbnailSize = (src: string): string => src.replace(/-\d+x\d+(\.\w+)$/, "$1");
 
-export const toMangaId = (href: string): string =>
+const toMangaId = (href: string): string =>
   href
     .replace(/^https?:\/\/[^/]+\//, "")
     .replace(/[?#].*$/, "")
     .replace(/\/+$/, "");
 
-export interface ListingFilter {
+interface ListingFilter {
   languages?: string[];
   excludeClasses?: string[];
 }

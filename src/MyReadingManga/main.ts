@@ -3,6 +3,7 @@
 
 import {
   BasicRateLimiter,
+  CloudflareError,
   ContentRating,
   CookieStorageInterceptor,
   type AdvancedSearchForm,
@@ -94,8 +95,12 @@ export class MyReadingMangaExtension implements ExtensionImpl<typeof MyReadingMa
   }
 
   async getSettingsForm(): Promise<Form> {
-    // Hide rows still render (empty) if the taxonomy scrape is unavailable.
-    const taxonomies = await this.getTaxonomies().catch(() => ({}) as FilterTaxonomies);
+    // Hide rows still render (empty) if the taxonomy scrape is unavailable,
+    // but a Cloudflare challenge must surface so the app can prompt a bypass.
+    const taxonomies = await this.getTaxonomies().catch((error: unknown) => {
+      if (error instanceof CloudflareError) throw error;
+      return {} as FilterTaxonomies;
+    });
     return new MyReadingMangaSettingsForm(taxonomies);
   }
 
@@ -135,7 +140,9 @@ export class MyReadingMangaExtension implements ExtensionImpl<typeof MyReadingMa
     }
 
     const page = metadata?.page ?? 1;
-    const $ = await fetchListingPage(LISTING_PATHS[section.id] ?? "/", page);
+    // Safe cast: "genres" returned above and every other section id served by
+    // getDiscoverSections is a LISTING_PATHS key.
+    const $ = await fetchListingPage(LISTING_PATHS[section.id as keyof typeof LISTING_PATHS], page);
     const cards = parseListing($, {
       languages: getPreferredLanguages(),
       excludeClasses: this.hiddenClasses(),
@@ -188,7 +195,7 @@ export class MyReadingMangaExtension implements ExtensionImpl<typeof MyReadingMa
     const page = metadata?.page ?? 1;
     const $ = await fetchSearchPage(page, query.title, sortingOption?.id, query.metadata);
     // Facet params only include; excluded terms are dropped by card class.
-    const excludeClasses = [...this.hiddenClasses()];
+    const excludeClasses = this.hiddenClasses();
     for (const taxonomy of TAXONOMIES) {
       const record = query.metadata?.[taxonomy.key] ?? {};
       for (const slug of Object.keys(record)) {

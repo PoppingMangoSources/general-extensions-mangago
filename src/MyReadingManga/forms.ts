@@ -242,14 +242,6 @@ export class MyReadingMangaAdvancedSearchForm extends AdvancedSearchForm {
   ) {
     super();
     this.searchMetadata = searchQuery.metadata ?? {};
-    // One change handler per taxonomy, addressable by selector name.
-    for (const taxonomy of TAXONOMIES) {
-      (this as Record<string, unknown>)[`update_${taxonomy.key}`] = async (
-        value: TriState,
-      ): Promise<void> => {
-        this.searchMetadata[taxonomy.key] = value;
-      };
-    }
   }
 
   override getSearchQueryMetadata(): SearchMetadata {
@@ -274,6 +266,16 @@ export class MyReadingMangaAdvancedSearchForm extends AdvancedSearchForm {
       ]),
     ];
 
+    // One typed change handler per taxonomy row.
+    const handlers = {
+      genres: "updateGenres",
+      categories: "updateCategories",
+      tags: "updateTags",
+      artists: "updateArtists",
+      pairings: "updatePairings",
+      statuses: "updateStatuses",
+    } as const satisfies Record<(typeof TAXONOMIES)[number]["key"], string>;
+
     for (const taxonomy of TAXONOMIES) {
       const options = this.taxonomies[taxonomy.id] ?? [];
       if (options.length === 0) continue;
@@ -288,13 +290,43 @@ export class MyReadingMangaAdvancedSearchForm extends AdvancedSearchForm {
             allowEmptySelection: true,
             onValueChange: Application.Selector(
               this as MyReadingMangaAdvancedSearchForm,
-              `update_${taxonomy.key}` as never,
+              handlers[taxonomy.key],
             ),
           }),
         ]),
       );
     }
     return sections;
+  }
+
+  // Empty selections are stored as undefined so the metadata stays sparse;
+  // downstream consumers treat a missing record and an empty one identically.
+  private static toSparse(value: TriState): TriState | undefined {
+    return Object.keys(value).length === 0 ? undefined : value;
+  }
+
+  async updateGenres(value: TriState): Promise<void> {
+    this.searchMetadata.genres = MyReadingMangaAdvancedSearchForm.toSparse(value);
+  }
+
+  async updateCategories(value: TriState): Promise<void> {
+    this.searchMetadata.categories = MyReadingMangaAdvancedSearchForm.toSparse(value);
+  }
+
+  async updateTags(value: TriState): Promise<void> {
+    this.searchMetadata.tags = MyReadingMangaAdvancedSearchForm.toSparse(value);
+  }
+
+  async updateArtists(value: TriState): Promise<void> {
+    this.searchMetadata.artists = MyReadingMangaAdvancedSearchForm.toSparse(value);
+  }
+
+  async updatePairings(value: TriState): Promise<void> {
+    this.searchMetadata.pairings = MyReadingMangaAdvancedSearchForm.toSparse(value);
+  }
+
+  async updateStatuses(value: TriState): Promise<void> {
+    this.searchMetadata.statuses = MyReadingMangaAdvancedSearchForm.toSparse(value);
   }
 
   async handleLanguageChange(value: string[]): Promise<void> {

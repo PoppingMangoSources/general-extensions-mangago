@@ -97,13 +97,13 @@ export const SORTING_OPTIONS: SortingOption[] = [
 ];
 
 // Listing paths mirror the site's browse entries; all paginate via /page/N/.
-export const LISTING_PATHS: Record<string, string> = {
+export const LISTING_PATHS = {
   latest: "/",
   popular: "/popular/",
   manga: "/yaoi-manga/",
   bara: "/genre/bara/",
   random: "/?ep_sort=rand&s=",
-};
+} as const;
 
 export const DISCOVER_SECTIONS: DiscoverSection[] = [
   { id: "popular", title: "Popular", type: DiscoverSectionType.featured },
