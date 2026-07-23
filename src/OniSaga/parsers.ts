@@ -6,14 +6,13 @@ import {
   DiscoverSectionType,
   type Chapter,
   type FeaturedCarouselItem,
-  type SearchResultItem,
   type SourceManga,
   type TagSection,
 } from "@paperback/types";
 import { load, type Cheerio, type CheerioAPI } from "cheerio";
-import { type Element } from "domhandler";
+import type { AnyNode } from "domhandler";
 
-import { DOMAIN, GENRES, LANGUAGES } from "./models";
+import { DOMAIN, GENRES, LANGUAGES, type LivewireState } from "./models";
 
 export const straightenQuotes = (value: string): string =>
   value.replace(/[‘’‛]/g, "'").replace(/[“”]/g, '"');
@@ -23,7 +22,7 @@ export const mangaIdFromHref = (href: string): string => {
   return (path.split("/manga/")[1] ?? "").split(/[?#]/)[0].replace(/^\/+|\/+$/g, "");
 };
 
-export const chapterIdFromHref = (href: string): string => {
+const chapterIdFromHref = (href: string): string => {
   const path = href.startsWith("http") ? href.replace(/^https?:\/\/[^/]+/, "") : href;
   return path.startsWith("/") ? path : `/${path}`;
 };
@@ -53,14 +52,6 @@ export const discoverSectionType = (id: string): DiscoverSectionType => {
       return DiscoverSectionType.simpleCarousel;
   }
 };
-
-export const toSearchItems = (cards: MangaCard[]): SearchResultItem[] =>
-  cards.map((card) => ({
-    mangaId: card.mangaId,
-    title: card.title,
-    imageUrl: card.imageUrl,
-    contentRating: card.contentRating,
-  }));
 
 export const topMangaInfoItems = (item: TopMangaItem): FeaturedCarouselItem["infoItems"] => {
   const pills: { symbol: string; text: string }[] = [];
@@ -113,7 +104,7 @@ const lastSrcsetUrl = (srcset: string): string => {
   return urls[urls.length - 1] ?? "";
 };
 
-const resolveImageUrl = ($el: Cheerio<Element>): string => {
+const resolveImageUrl = ($el: Cheerio<AnyNode>): string => {
   const direct = $el.attr("data-src") || $el.attr("data-lazy-src") || $el.attr("src") || "";
   if (direct && !direct.startsWith("data:")) return resolveUrl(direct);
 
@@ -185,7 +176,7 @@ export const parseMangaCards = ($: CheerioAPI, showNsfw: boolean): MangaCard[] =
   return cards;
 };
 
-export const CARD_PARSE_CAP = 100;
+const CARD_PARSE_CAP = 100;
 
 export const parseMangaCardsFromHtml = (
   html: string,
@@ -234,7 +225,7 @@ const ratingValue = (text: string): string | undefined => {
   return text.match(/\d+(?:\.\d+)?/)?.[0];
 };
 
-const hasAdultMarker = (el: Cheerio<Element>): boolean => {
+const hasAdultMarker = (el: Cheerio<AnyNode>): boolean => {
   return el.find("span:contains('18+')").length > 0;
 };
 
@@ -313,6 +304,55 @@ export const componentHtmlByName = ($: CheerioAPI, componentName: string): strin
     }
   });
   return html;
+};
+
+export const extractLivewireState = (
+  $: CheerioAPI,
+  componentName: string,
+): LivewireState | undefined => {
+  const token =
+    $("meta[name=csrf-token]").attr("content")?.trim() ||
+    $("input[name=_token]").attr("value")?.trim();
+  if (!token) return undefined;
+
+  let snapshot: string | undefined;
+  $("[wire\\:snapshot]").each((_, el) => {
+    if (snapshot) return;
+    const value = $(el).attr("wire:snapshot");
+    if (value && value.includes(componentName)) {
+      snapshot = value;
+    }
+  });
+
+  if (!snapshot) return undefined;
+  return { token, snapshot };
+};
+
+const decodeEntities = (value: string): string => {
+  return value
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+};
+
+export const extractLivewireStateFromHtml = (
+  html: string,
+  componentName: string,
+): LivewireState | undefined => {
+  const token =
+    html.match(/<meta name="csrf-token" content="([^"]+)"/)?.[1] ??
+    html.match(/name="_token"\s+value="([^"]+)"/)?.[1];
+  if (!token) return undefined;
+
+  const snapshotRegex = /wire:snapshot="([^"]+)"/g;
+  for (const match of html.matchAll(snapshotRegex)) {
+    if (match[1].includes(componentName)) {
+      return { token, snapshot: decodeEntities(match[1]) };
+    }
+  }
+  return undefined;
 };
 
 const HOME_RAIL_HEADINGS = ["Most Popular", "Latest Mangas", "Fan Favorites", "Top Rated"];
@@ -465,7 +505,7 @@ const detailsDate = (details: string[]): string => {
   );
 };
 
-export const parseChapterDate = (value: string): Date => {
+const parseChapterDate = (value: string): Date => {
   const date = value.toLowerCase().trim();
   const now = new Date();
   if (!date) return now;

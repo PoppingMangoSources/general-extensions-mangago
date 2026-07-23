@@ -40,27 +40,39 @@ import {
   BROWSE_STATE_CACHE_MAX,
   BROWSE_STATE_TTL,
   DEFAULT_SORT,
+  defaultUpdates,
   DOMAIN,
   FEATURED_LIMIT,
   GENRES,
   HOME_TTL,
+  HOST,
   IMPORT_POLL_FAST_COUNT,
   IMPORT_POLL_FAST_SECONDS,
   IMPORT_POLL_SLOW_SECONDS,
   READER_MAX_ATTEMPTS,
   SORT_OPTIONS,
   TOP_MANGA_TTL,
+  type DiscoverMetadata,
   type LivewireResponse,
   type LivewireState,
   type OniSagaSearchMetadata,
   type PostFilterUpdates,
 } from "./models";
-import { OniSagaInterceptor, OniSagaPageRateLimiter } from "./network";
+import {
+  buildBrowseRequest,
+  buildLoadMoreChaptersRequest,
+  buildSectionToggleRequest,
+  livewireHeaders,
+  OniSagaInterceptor,
+  OniSagaPageRateLimiter,
+} from "./network";
 import {
   buildStatSubtitle,
   componentHtmlByName,
   countPages,
   discoverSectionType,
+  extractLivewireState,
+  extractLivewireStateFromHtml,
   extractPageOrders,
   extractReaderToken,
   hasNextPageFromHtml,
@@ -73,7 +85,6 @@ import {
   parseMangaDetails,
   parseJson,
   parseTopManga,
-  toSearchItems,
   topMangaInfoItems,
   topMangaSubtitle,
   straightenQuotes,
@@ -81,15 +92,6 @@ import {
   type TopMangaItem,
 } from "./parsers";
 import type OniSagaConfig from "./pbconfig";
-import {
-  buildBrowseRequest,
-  buildLoadMoreChaptersRequest,
-  buildSectionToggleRequest,
-  defaultUpdates,
-  extractLivewireState,
-  extractLivewireStateFromHtml,
-  livewireHeaders,
-} from "./utils/livewire";
 
 export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
@@ -187,7 +189,7 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
 
   async getDiscoverSectionItems(
     section: DiscoverSection,
-    metadata: { page?: number; collectedIds?: string[] } | undefined,
+    metadata: DiscoverMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
       case "top_manga":
@@ -216,7 +218,7 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
 
   private async browseDiscover(
     sort: string,
-    metadata: { page?: number; collectedIds?: string[] } | undefined,
+    metadata: DiscoverMetadata | undefined,
     map: (card: MangaCard) => DiscoverSectionItem,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const page = metadata?.page ?? 1;
@@ -325,7 +327,7 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   // Mangas" grid (no 10MB+ /browse download); deeper pages fall back to the
   // Livewire browse path.
   private async fetchLatest(
-    metadata: { page?: number; collectedIds?: string[] } | undefined,
+    metadata: DiscoverMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const map = (card: MangaCard): DiscoverSectionItem => ({
       type: "simpleCarouselItem",
@@ -435,7 +437,12 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     const { cards, hasNext } = await this.fetchBrowse(baseUrl, updates, page);
 
     return {
-      items: toSearchItems(cards),
+      items: cards.map((card) => ({
+        mangaId: card.mangaId,
+        title: card.title,
+        imageUrl: card.imageUrl,
+        contentRating: card.contentRating,
+      })),
       metadata: hasNext ? { page: page + 1 } : undefined,
     };
   }
@@ -468,7 +475,7 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     // Only resolve links that actually point at this source's site; a pasted
     // foreign URL must not be fetched with this source's headers.
     const host = rawUrl.match(/^https?:\/\/([^/]+)/i)?.[1]?.toLowerCase();
-    if (!host || (host !== "onisaga.com" && !host.endsWith(".onisaga.com"))) return undefined;
+    if (!host || (host !== HOST && !host.endsWith(`.${HOST}`))) return undefined;
 
     // Reader URLs embed the manga slug directly (/read/<slug>/<chapter>).
     const mangaId = mangaIdFromHref(rawUrl) || (rawUrl.match(/\/read\/([^/]+)/)?.[1] ?? "");
@@ -685,7 +692,6 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     baseUrl: string,
     updates: PostFilterUpdates,
     page: number,
-    showNsfw: boolean = getShowNsfw(),
   ): Promise<{ cards: MangaCard[]; hasNext: boolean }> {
     const state = await this.resolveBrowseState(baseUrl);
     if (!state) return { cards: [], hasNext: false };
@@ -706,7 +712,7 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
 
     // Never cheerio-load the whole response: a filtered browse render can be
     // 15 MB, which freezes the device. Slice cards off the raw string instead.
-    const { cards, rawCount, truncated } = parseMangaCardsFromHtml(html, showNsfw);
+    const { cards, rawCount, truncated } = parseMangaCardsFromHtml(html, getShowNsfw());
     // The browse component paginates server-side (~24 cards/page), and its
     // "next" control markup varies, so the button regex alone would often miss
     // it — leaving search stuck on the first page. Treat a full page as "there's
@@ -770,12 +776,8 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   }
 
   async fetchCheerio(request: Request): Promise<cheerio.CheerioAPI> {
-    const [response, data] = await Application.scheduleRequest(request);
-    if (response.status === 404) throw new Error(`Content not found: ${request.url}`);
-    if (response.status < 200 || response.status >= 300) {
-      throw new Error(`Request failed with status ${response.status}: ${request.url}`);
-    }
-    return cheerio.load(Application.arrayBufferToUTF8String(data));
+    const [$] = await this.fetchCheerioWithFinalUrl(request);
+    return $;
   }
 
   // Like fetchCheerio, but also returns the response's final (post-redirect) URL

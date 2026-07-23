@@ -2,6 +2,7 @@
 /* Copyright © 2026 Inkdex */
 
 export const DOMAIN = "https://onisaga.com";
+export const HOST = DOMAIN.replace(/^https?:\/\//, "");
 export const FEATURED_LIMIT = 10;
 export const BROWSE_PAGE_SIZE = 24;
 export const IMPORT_POLL_FAST_SECONDS = 3;
@@ -214,9 +215,12 @@ export const GENRES: Option[] = [
   { id: "71", title: "Yuri" },
 ];
 
-export type OniSagaSearchMetadata = {
+export type DiscoverMetadata = {
   page?: number;
   collectedIds?: string[];
+};
+
+export type OniSagaSearchMetadata = {
   type?: string;
   status?: string;
   sort?: string;
@@ -238,6 +242,20 @@ export interface PostFilterUpdates {
   genre: string[];
   excludeGenre: string[];
 }
+
+export const defaultUpdates = (): PostFilterUpdates => {
+  return {
+    platform: "",
+    status: "",
+    sort: DEFAULT_SORT,
+    min_chapters: "",
+    group: null,
+    release_start: null,
+    release_end: null,
+    genre: [],
+    excludeGenre: [],
+  };
+};
 
 export interface LivewireCall {
   type: "call";

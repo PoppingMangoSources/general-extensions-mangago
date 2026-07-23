@@ -10,11 +10,76 @@ import {
 
 import { getPageDelaySeconds } from "./forms";
 import {
+  DEFAULT_SORT,
   DOMAIN,
   PAGE_BUDGET_BLOCKED_UNTIL_KEY,
   PAGE_BUDGET_HISTORY_KEY,
+  type BrowseLivewireRequest,
+  type ChapterLivewireRequest,
+  type LivewireCall,
+  type LivewireState,
   type PageApiResponse,
+  type PostFilterUpdates,
+  type ToggleLivewireRequest,
 } from "./models";
+
+export const livewireHeaders = (referer: string): Record<string, string> => {
+  return {
+    "X-Livewire": "",
+    Accept: "application/json",
+    "X-Requested-With": "XMLHttpRequest",
+    "Content-Type": "application/json",
+    Origin: DOMAIN,
+    Referer: referer,
+  };
+};
+
+export const buildSectionToggleRequest = (
+  state: LivewireState,
+  method: string,
+  value: string,
+): ToggleLivewireRequest => {
+  return {
+    _token: state.token,
+    components: [
+      {
+        snapshot: state.snapshot,
+        updates: {},
+        calls: [{ type: "call", path: "", method, params: [value] }],
+      },
+    ],
+  };
+};
+
+export const buildBrowseRequest = (
+  state: LivewireState,
+  updates: PostFilterUpdates,
+  page: number,
+): BrowseLivewireRequest => {
+  const calls: LivewireCall[] = [
+    { type: "call", path: "", method: "updateSort", params: [updates.sort || DEFAULT_SORT] },
+    { type: "call", path: "", method: "updatePlatform", params: [updates.platform] },
+    { type: "call", path: "", method: "gotoPage", params: [page] },
+  ];
+
+  return {
+    _token: state.token,
+    components: [{ snapshot: state.snapshot, updates, calls }],
+  };
+};
+
+export const buildLoadMoreChaptersRequest = (state: LivewireState): ChapterLivewireRequest => {
+  return {
+    _token: state.token,
+    components: [
+      {
+        snapshot: state.snapshot,
+        updates: { chaptersLoaded: 3000, volumesLoaded: 3000 },
+        calls: [],
+      },
+    ],
+  };
+};
 
 // Matches a reader page-API url and captures the chapter id and page order,
 // e.g. https://onisaga.com/api/chapter/3718181/page/0 -> ["3718181", "0"].

@@ -41,7 +41,7 @@ import {
   type OniSagaSearchMetadata,
 } from "./models";
 
-export const getPageDelayId = (): string => {
+const getPageDelayId = (): string => {
   const stored = Application.getState(PAGE_DELAY_KEY) as string | undefined;
   if (stored && PAGE_DELAY_OPTIONS.some((option) => option.id === stored)) return stored;
   return PAGE_DELAY_DEFAULT;
@@ -81,7 +81,7 @@ export const getDedupeChapters = (): boolean => {
   return (Application.getState(DEDUPE_CHAPTERS_KEY) as boolean | undefined) ?? true;
 };
 
-export const getDeletedSections = (): DiscoverSectionDef[] => {
+const getDeletedSections = (): DiscoverSectionDef[] => {
   return (Application.getState(SECTIONS_DELETED_KEY) as DiscoverSectionDef[] | undefined) ?? [];
 };
 
@@ -107,7 +107,7 @@ const resetSections = (): void => {
 
 const toTags = (options: Option[]): Tag[] => options.map((o) => ({ id: o.id, title: o.title }));
 
-export class OniSagaSectionsForm extends Form {
+class OniSagaSectionsForm extends Form {
   override getSections() {
     const deleted = getDeletedSections();
 
