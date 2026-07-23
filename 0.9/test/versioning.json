@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-23T21:24:43.121Z",
+  "buildTime": "2026-07-23T21:42:50.055Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -127,7 +127,7 @@
     {
       "name": "Ranobes",
       "description": "Extension that pulls light novels from ranobes.net.",
-      "version": "1.0.0-alpha.20",
+      "version": "1.0.0-alpha.21",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
@@ -195,7 +195,7 @@
     {
       "name": "Scans.GG",
       "description": "Extension that pulls content from scans.gg.",
-      "version": "1.0.0-alpha.21",
+      "version": "1.0.0-alpha.22",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
