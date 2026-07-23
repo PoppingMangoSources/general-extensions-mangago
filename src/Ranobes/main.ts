@@ -170,7 +170,6 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     _localStorage: Record<string, string>,
   ): Promise<void> {
     this.taxonomyPromise = undefined;
-    this.requestManager.clearChallenge();
     for (const cookie of cookies) {
       if (cookie.domain.includes("ranobes.net")) this.cookieStorage.setCookie(cookie);
     }
