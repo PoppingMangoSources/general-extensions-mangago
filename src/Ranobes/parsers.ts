@@ -301,6 +301,9 @@ export const parseChapters = (pages: RanobesChapterPage[], sourceManga: SourceMa
     .filter(
       (entry, index, values) =>
         values.findIndex((candidate) => candidate.id === entry.id) === index,
+    )
+    .sort(
+      (left, right) => parseChapterTitle(right.title).number - parseChapterTitle(left.title).number,
     );
   if (!entries.length) throw new Error(`Ranobes: no chapters found for ${sourceManga.mangaId}`);
 

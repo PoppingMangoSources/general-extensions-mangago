@@ -5,7 +5,6 @@ import { DiscoverSectionType, type DiscoverSection, type JSONObject } from "@pap
 
 export const DOMAIN = "https://ranobes.net";
 export const PAGE_SIZE = 20;
-export const FILTER_TAXONOMY_STATE = "ranobes-filter-taxonomy";
 
 export const SECTIONS = {
   FEATURED: "featured",

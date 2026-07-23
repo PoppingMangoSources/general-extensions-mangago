@@ -1,22 +1,28 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import type { Response, SortingOption } from "@paperback/types";
+import {
+  CloudflareError,
+  PaperbackInterceptor,
+  type Request,
+  type Response,
+  type SortingOption,
+} from "@paperback/types";
 
 import { DOMAIN, SORT_ORDERS, type RanobesChapterPage, type SearchMetadata } from "./models";
 
 export const toFilterOptionId = (title: string): string =>
-  `filter_${Array.from(title)
-    .map((character) => character.codePointAt(0)?.toString(36))
-    .join("_")}`;
+  encodeURIComponent(title).replace(
+    /[!'()*~]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
 
 const filterTitle = (id: string): string => {
-  if (!id.startsWith("filter_")) return id;
-  const codePoints = id
-    .slice(7)
-    .split("_")
-    .map((value) => Number.parseInt(value, 36));
-  return codePoints.every(Number.isFinite) ? String.fromCodePoint(...codePoints) : id;
+  try {
+    return decodeURIComponent(id);
+  } catch {
+    return id;
+  }
 };
 
 export const buildSearchPath = (
@@ -70,10 +76,38 @@ export const buildSearchPath = (
   return segments.length ? `/f/${segments.join("/")}/` : undefined;
 };
 
-const requestHeaders = async (): Promise<Record<string, string>> => ({
-  referer: `${DOMAIN}/`,
-  "user-agent": await Application.getDefaultUserAgent(),
-});
+export class RanobesInterceptor extends PaperbackInterceptor {
+  override async interceptRequest(request: Request): Promise<Request> {
+    return {
+      ...request,
+      headers: {
+        ...request.headers,
+        referer: `${DOMAIN}/`,
+        "user-agent": await Application.getDefaultUserAgent(),
+      },
+    };
+  }
+
+  override async interceptResponse(
+    request: Request,
+    response: Response,
+    data: ArrayBuffer,
+  ): Promise<ArrayBuffer> {
+    const contentType = response.headers?.["content-type"] ?? "";
+    const body = contentType.includes("text/html") ? Application.arrayBufferToUTF8String(data) : "";
+    if (
+      response.headers?.["cf-mitigated"] === "challenge" ||
+      /(?:vb_challenge|cf-turnstile|<title>Just a moment)/i.test(body)
+    ) {
+      throw new CloudflareError({
+        url: request.url,
+        method: request.method ?? "GET",
+        headers: { "user-agent": await Application.getDefaultUserAgent() },
+      });
+    }
+    return data;
+  }
+}
 
 const responseText = (response: Response, buffer: ArrayBuffer, url: string): string => {
   if (response.status < 200 || response.status >= 300) {
@@ -88,7 +122,6 @@ export const fetchHtml = async (url: string): Promise<string> => {
   const [response, buffer] = await Application.scheduleRequest({
     url,
     method: "GET",
-    headers: await requestHeaders(),
   });
   return responseText(response, buffer, url);
 };
@@ -105,7 +138,6 @@ export const fetchChapterSearch = async (novelId: string): Promise<RanobesChapte
     url,
     method: "POST",
     headers: {
-      ...(await requestHeaders()),
       "content-type": "application/x-www-form-urlencoded",
     },
     body: `search=Chapter&book_id=${encodeURIComponent(novelId)}`,
