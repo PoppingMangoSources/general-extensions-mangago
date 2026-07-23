@@ -1,12 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import {
-  DiscoverSectionType,
-  type DiscoverSection,
-  type JSONObject,
-  type SortingOption,
-} from "@paperback/types";
+import { DiscoverSectionType, type DiscoverSection, type JSONObject } from "@paperback/types";
 
 export const DOMAIN = "https://ranobes.net";
 export const PAGE_SIZE = 20;
@@ -82,12 +77,7 @@ export const SORT_ORDERS = [
   },
 ] as const;
 
-export const SORTING_OPTIONS: SortingOption[] = SORT_ORDERS.map(({ id, label }) => ({
-  id,
-  label,
-}));
-
-export const GENRE_TITLES = [
+export const GENRES = [
   "Action",
   "Adult",
   "Adventure",
@@ -159,11 +149,16 @@ export interface FilterTaxonomy {
   events: OptionItem[];
 }
 
-export interface RanobesCard {
+export type ListingType = "stories" | "updates" | "rankings" | "all";
+
+export interface RanobesListing {
   mangaId: string;
   title: string;
   imageUrl: string;
   description?: string;
+  chapterId?: string;
+  chapterTitle?: string;
+  publishDate?: Date;
   rating?: number;
   ratingCount?: number;
   views?: number;

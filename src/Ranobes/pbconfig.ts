@@ -6,13 +6,12 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "Ranobes",
   description: "Extension that pulls light novels from ranobes.net.",
-  version: "1.0.0-alpha.3",
+  version: "1.0.0-alpha.4",
   icon: "icon.png",
   language: "en",
   contentRating: ContentRating.ADULT,
   capabilities: [
     SourceIntents.CHAPTER_PROVIDING,
-    SourceIntents.CLOUDFLARE_BYPASS_PROVIDING,
     SourceIntents.DISCOVER_SECTION_PROVIDING,
     SourceIntents.SEARCH_RESULT_PROVIDING,
   ],

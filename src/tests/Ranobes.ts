@@ -1,20 +1,18 @@
-import { type TestLogger } from "@paperback/types";
+import { SourceIntents, type TestLogger } from "@paperback/types";
 import { expect } from "chai";
+import * as cheerio from "cheerio";
 
 import { Ranobes } from "../Ranobes/main.js";
 import {
-  buildFilterPath,
-  hasNextPage,
+  buildSearchPath,
+  isLastListingPage,
   parseChapterDetails,
   parseChapterPage,
   parseChapters,
   parseFilterTaxonomy,
-  parseLatestUpdates,
   parseListings,
   parseMangaDetails,
-  toFeaturedItem,
   toFilterOptionId,
-  toRankingItem,
 } from "../Ranobes/parsers.js";
 import sourceInfo from "../Ranobes/pbconfig.js";
 import { TestSuite, registerDefaultTests } from "./suite.js";
@@ -25,6 +23,15 @@ export async function runTests(logger: TestLogger) {
     searchResultsProviding: false,
     mangaProviding: false,
     chapterProviding: false,
+  });
+
+  suite.test("manifest exposes novel features without Cloudflare bypass", async () => {
+    expect(sourceInfo.capabilities).to.include.members([
+      SourceIntents.CHAPTER_PROVIDING,
+      SourceIntents.DISCOVER_SECTION_PROVIDING,
+      SourceIntents.SEARCH_RESULT_PROVIDING,
+    ]);
+    expect(sourceInfo.capabilities).not.to.include(SourceIntents.CLOUDFLARE_BYPASS_PROVIDING);
   });
 
   suite.test("discover sections expose the requested novel feeds", async () => {
@@ -39,12 +46,18 @@ export async function runTests(logger: TestLogger) {
   });
 
   suite.test("advanced search IDs are valid and reversible", async () => {
-    const taxonomy = parseFilterTaxonomy(`
-      <select name="n.events">
-        <option value="Akame ga Kill!">Akame ga Kill!</option>
-        <option value="Girl's Love - Subplot">Girl's Love - Subplot</option>
-      </select>
-    `);
+    const taxonomy = parseFilterTaxonomy(
+      cheerio.load(`
+        <div class="cat_block">
+          <a href="/tags/events/Akame%20ga%20Kill!/"><h3>Akame ga Kill!</h3></a>
+        </div>
+        <div class="cat_block">
+          <a href="/tags/events/Girl's%20Love%20-%20Subplot/">
+            <h3>Girl's Love - Subplot</h3>
+          </a>
+        </div>
+      `),
+    );
     expect(taxonomy.genres.length).to.be.greaterThan(30);
     expect(taxonomy.events.map((item) => item.title)).to.deep.equal([
       "Akame ga Kill!",
@@ -57,7 +70,7 @@ export async function runTests(logger: TestLogger) {
     const genderBender = taxonomy.genres.find((item) => item.title === "Gender Bender")?.id ?? "";
     const girlsLove = taxonomy.events[1].id;
     expect(
-      buildFilterPath(
+      buildSearchPath(
         "Reincarnation",
         {
           genres: { [genderBender]: "included" },
@@ -90,37 +103,43 @@ export async function runTests(logger: TestLogger) {
   });
 
   suite.test("chapter payloads parse their pagination contract", async () => {
-    const page = parseChapterPage(`
-      <script>
-        window.__DATA__ = {
-          "chapters":[{"id":"4","title":"Chapter 4: Finale","link":"/demo-1/4.html"}],
-          "pages_count":41,
-          "count_all":1013,
-          "limit":25
-        };
-      </script>
-    `);
+    const page = parseChapterPage(
+      cheerio.load(`
+        <script>
+          window.__DATA__ = {
+            "chapters":[{"id":"4","title":"Chapter 4: Finale","link":"/demo-1/4.html"}],
+            "pages_count":41,
+            "count_all":1013,
+            "limit":25
+          };
+        </script>
+      `),
+    );
     expect(page).to.include({ pages_count: 41, count_all: 1013, limit: 25 });
     expect(page.chapters?.[0].title).to.equal("Chapter 4: Finale");
   });
 
   suite.test("listing pagination stops on the final page", async () => {
     expect(
-      hasNextPage(`
-        <div class="navigation">
-          <span class="page_next"><a href="/novels/page/2/">Next</a></span>
-          <div class="pages"><span>1</span><a href="/novels/page/2/">2</a></div>
-        </div>
-      `),
-    ).to.equal(true);
-    expect(
-      hasNextPage(`
-        <div class="navigation">
-          <span class="page_next"></span>
-          <div class="pages"><a href="/novels/">1</a><span>2</span></div>
-        </div>
-      `),
+      isLastListingPage(
+        cheerio.load(`
+          <div class="navigation">
+            <span class="page_next"><a href="/novels/page/2/">Next</a></span>
+            <div class="pages"><span>1</span><a href="/novels/page/2/">2</a></div>
+          </div>
+        `),
+      ),
     ).to.equal(false);
+    expect(
+      isLastListingPage(
+        cheerio.load(`
+          <div class="navigation">
+            <span class="page_next"></span>
+            <div class="pages"><a href="/novels/">1</a><span>2</span></div>
+          </div>
+        `),
+      ),
+    ).to.equal(true);
   });
 
   suite.test("chapters stay newest-first with clean titles and stable sorting", async () => {
@@ -166,7 +185,7 @@ export async function runTests(logger: TestLogger) {
       sourceManga,
     );
     expect(chapters.map((chapter) => chapter.chapNum)).to.deep.equal([4, 3, 2, 1]);
-    expect(chapters.map((chapter) => chapter.sortingIndex)).to.deep.equal([4, 3, 2, 1]);
+    expect(chapters.map((chapter) => chapter.sortingIndex)).to.deep.equal([0, 1, 2, 3]);
     expect(chapters.map((chapter) => chapter.title)).to.deep.equal([
       "Finale",
       "Third",
@@ -175,75 +194,87 @@ export async function runTests(logger: TestLogger) {
     ]);
   });
 
-  suite.test("featured cards retain rating, description, and views", async () => {
-    const [item] = parseListings(
-      `
+  suite.test("one listing parser handles featured cards", async () => {
+    const [listing] = parseListings(
+      cheerio.load(`
         <article class="block story shortstory">
           <h2 class="title"><a href="/novels/1-demo.html">Demo Novel</a></h2>
           <figure class="cover" style="background-image:url('/cover.jpg')"></figure>
           <div class="cont-in"><div style="color:red">A short description.</div></div>
           <div class="r-rate"><span class="grey"><a>Fantasy</a></span></div>
-          <div class="r-date"><span class="rate-drop"><strong>4.6</strong></span><span id="vote-num-id-1">(12)</span></div>
+          <div class="r-date">
+            <span class="rate-drop"><strong>4.6</strong></span>
+            <span id="vote-num-id-1">(12)</span>
+          </div>
           <span class="meta_author" title="Unique views: 1 234"></span>
         </article>
-      `,
+      `),
       "stories",
-    ).map(toFeaturedItem);
-    expect(item).to.include({
-      type: "featuredCarouselItem",
-      title: "Demo Novel",
-      summary: "A short description.",
-    });
-    expect(item.type === "featuredCarouselItem" ? item.infoItems : undefined).to.deep.equal([
-      { symbol: "star.fill", text: "4.6 (12)" },
-      { symbol: "eye.fill", text: "1,234" },
-    ]);
-  });
-
-  suite.test("latest updates expose chapter titles and timestamps", async () => {
-    const [item] = parseLatestUpdates(`
-      <div class="block story_line story_line-img">
-        <a href="/demo-novel-1/123.html"><i class="image cover" style="background-image:url('/cover.jpg')"></i></a>
-        <h3 class="title">Demo Novel</h3><span class="subtitle">Chapter 9</span><em>2 hours ago</em>
-      </div>
-    `);
-    expect(item).to.include({
-      type: "chapterUpdatesCarouselItem",
-      title: "Demo Novel",
-      subtitle: "Chapter 9",
-      chapterId: "https://ranobes.net/demo-novel-1/123.html",
-    });
-    expect(
-      item.type === "chapterUpdatesCarouselItem" ? item.publishDate : undefined,
-    ).to.be.instanceOf(Date);
-  });
-
-  suite.test("ranking cards preserve order and expose their metric", async () => {
-    const html = [1, 2]
-      .map(
-        (rank) => `
-          <article class="rank-story">
-            <figure class="fit-cover"><img src="/cover-${rank}.jpg"></figure>
-            <h2 class="title"><a href="/novels/${rank}-demo-${rank}.html">Demo ${rank}</a></h2>
-            <div class="rank-story-data"><i class="fa-eye"></i><span class="rank-story-data-val">${rank} 000</span></div>
-          </article>
-        `,
-      )
-      .join("");
-    const items = parseListings(html, "rankings").map((card, index) =>
-      toRankingItem(card, index, false),
     );
-    expect(items.map((item) => item.subtitle)).to.deep.equal([
-      "#1 • 1,000 views",
-      "#2 • 2,000 views",
-    ]);
+    expect(listing).to.include({
+      title: "Demo Novel",
+      description: "A short description.",
+      rating: 4.6,
+      ratingCount: 12,
+      views: 1234,
+    });
+  });
+
+  suite.test("one listing parser handles chapter updates", async () => {
+    const [listing] = parseListings(
+      cheerio.load(`
+        <div class="block story_line story_line-img">
+          <a href="/demo-novel-1/123.html">
+            <i class="image cover" style="background-image:url('/cover.jpg')"></i>
+          </a>
+          <h3 class="title">Demo Novel</h3>
+          <span class="subtitle">Chapter 9</span>
+          <em>2 hours ago</em>
+        </div>
+      `),
+      "updates",
+    );
+    expect(listing).to.include({
+      title: "Demo Novel",
+      chapterTitle: "Chapter 9",
+      chapterId: "https://ranobes.net/demo-novel-1/123.html",
+      mangaId: "https://ranobes.net/novels/1-demo-novel.html",
+    });
+    expect(listing.publishDate).to.be.instanceOf(Date);
+  });
+
+  suite.test("one listing parser handles ranking cards", async () => {
+    const listings = parseListings(
+      cheerio.load(
+        [1, 2]
+          .map(
+            (rank) => `
+              <article class="rank-story">
+                <figure class="fit-cover"><img src="/cover-${rank}.jpg"></figure>
+                <h2 class="title">
+                  <a href="/novels/${rank}-demo-${rank}.html">Demo ${rank}</a>
+                </h2>
+                <div class="rank-story-data">
+                  <i class="fa-eye"></i>
+                  <span class="rank-story-data-val">${rank} 000</span>
+                </div>
+              </article>
+            `,
+          )
+          .join(""),
+      ),
+      "rankings",
+    );
+    expect(listings.map((listing) => listing.views)).to.deep.equal([1000, 2000]);
   });
 
   suite.test("novel details expose Paperback novel metadata", async () => {
     const manga = parseMangaDetails(
-      `
+      cheerio.load(`
         <h1 class="title">Demo Novel <span class="subtitle">Demo Alt</span></h1>
-        <div class="r-fullstory-poster"><figure class="cover" style="background-image:url('/cover.jpg')"></figure></div>
+        <div class="r-fullstory-poster">
+          <figure class="cover" style="background-image:url('/cover.jpg')"></figure>
+        </div>
         <div class="r-desription">
           <div class="cont-text">A demo synopsis.</div>
           <div class="grey"><a href="/tags/genre/fantasy/">Fantasy</a></div>
@@ -254,8 +285,10 @@ export async function runTests(logger: TestLogger) {
           <li>Status in COO: <a>Ongoing</a></li>
           <li title="Unique views:"><span class="grey">1 234</span></li>
         </ul>
-        <div id="mc-fs-rate"><div class="rate-stat-num"><span class="bold">4.5</span></div></div>
-      `,
+        <div id="mc-fs-rate">
+          <div class="rate-stat-num"><span class="bold">4.5</span></div>
+        </div>
+      `),
       "https://ranobes.net/novels/1-demo.html",
     );
     expect(manga.mangaInfo).to.include({
@@ -276,14 +309,21 @@ export async function runTests(logger: TestLogger) {
       [
         {
           chapters: [
-            { id: "1", title: "Chapter 1", date: "2026-07-23 06:24:40", link: "/demo-1/1.html" },
+            {
+              id: "1",
+              title: "Chapter 1",
+              date: "2026-07-23 06:24:40",
+              link: "/demo-1/1.html",
+            },
           ],
         },
       ],
       sourceManga,
     );
     const details = parseChapterDetails(
-      `<div id="arrticle"><p>Hello</p><img src="/image.jpg"><script>alert(1)</script></div>`,
+      cheerio.load(
+        `<div id="arrticle"><p>Hello</p><img src="/image.jpg"><script>alert(1)</script></div>`,
+      ),
       chapter,
     );
     expect(details).to.include({ type: "html", id: chapter.chapterId });

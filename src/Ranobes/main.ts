@@ -3,21 +3,19 @@
 
 import {
   BasicRateLimiter,
-  CookieStorageInterceptor,
   type AdvancedSearchForm,
   type Chapter,
   type ChapterDetails,
-  type Cookie,
   type DiscoverSection,
   type DiscoverSectionItem,
   type ExtensionImpl,
   type PagedResults,
-  type Request,
   type SearchQuery,
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
 } from "@paperback/types";
+import * as cheerio from "cheerio";
 
 import { RanobesAdvancedSearchForm } from "./forms/search";
 import {
@@ -26,28 +24,98 @@ import {
   FILTER_TAXONOMY_STATE,
   PAGE_SIZE,
   SECTIONS,
-  SORTING_OPTIONS,
+  SORT_ORDERS,
   type FilterTaxonomy,
   type PageMetadata,
+  type RanobesListing,
   type SearchMetadata,
 } from "./models";
-import { fetchChapterListPage, fetchListingPage, fetchPage, RanobesInterceptor } from "./network";
+import { fetchChapterListPage, fetchHtml, fetchListingPage } from "./network";
 import {
-  buildFilterPath,
+  buildSearchPath,
   extractNovelId,
-  hasNextPage,
+  isLastListingPage,
   parseChapterDetails,
   parseChapterPage,
   parseChapters,
+  parseContentRating,
   parseFilterTaxonomy,
-  parseLatestUpdates,
   parseListings,
   parseMangaDetails,
-  parseSearchResults,
-  toFeaturedItem,
-  toRankingItem,
 } from "./parsers";
 import type RanobesConfig from "./pbconfig";
+
+const formatCount = (value: number): string => value.toLocaleString("en-US");
+
+const toFeaturedItem = (listing: RanobesListing): DiscoverSectionItem => ({
+  type: "featuredCarouselItem",
+  mangaId: listing.mangaId,
+  title: listing.title,
+  imageUrl: listing.imageUrl,
+  summary: listing.description,
+  infoItems:
+    listing.rating !== undefined && listing.views !== undefined
+      ? [
+          {
+            symbol: "star.fill",
+            text: `${listing.rating.toFixed(1)}${
+              listing.ratingCount ? ` (${listing.ratingCount})` : ""
+            }`,
+          },
+          { symbol: "eye.fill", text: formatCount(listing.views) },
+        ]
+      : listing.rating !== undefined
+        ? [
+            {
+              symbol: "star.fill",
+              text: `${listing.rating.toFixed(1)}${
+                listing.ratingCount ? ` (${listing.ratingCount})` : ""
+              }`,
+            },
+          ]
+        : listing.views !== undefined
+          ? [{ symbol: "eye.fill", text: formatCount(listing.views) }]
+          : undefined,
+  contentRating: parseContentRating(listing.genres ?? []),
+});
+
+const toChapterUpdateItem = (listing: RanobesListing): DiscoverSectionItem | undefined => {
+  if (!listing.chapterId) return undefined;
+  return {
+    type: "chapterUpdatesCarouselItem",
+    mangaId: listing.mangaId,
+    chapterId: listing.chapterId,
+    title: listing.title,
+    imageUrl: listing.imageUrl,
+    subtitle: listing.chapterTitle || undefined,
+    publishDate: listing.publishDate,
+  };
+};
+
+const toRankingItem = (
+  listing: RanobesListing,
+  rank: number,
+  useRating: boolean,
+): DiscoverSectionItem => ({
+  type: "prominentCarouselItem",
+  mangaId: listing.mangaId,
+  title: listing.title,
+  imageUrl: listing.imageUrl,
+  subtitle: useRating
+    ? `#${rank} • ★ ${listing.rating?.toFixed(1) ?? "—"}${
+        listing.ratingCount ? ` (${listing.ratingCount})` : ""
+      }`
+    : `#${rank} • ${formatCount(listing.views ?? 0)} views`,
+  contentRating: parseContentRating(listing.genres ?? []),
+});
+
+const toSearchResult = (listing: RanobesListing): SearchResultItem => ({
+  mangaId: listing.mangaId,
+  title: listing.title,
+  imageUrl: listing.imageUrl,
+  subtitle: listing.rating !== undefined ? `★ ${listing.rating.toFixed(1)}` : undefined,
+  contentRating: parseContentRating(listing.genres ?? []),
+});
 
 export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   mainRateLimiter = new BasicRateLimiter("main", {
@@ -56,29 +124,10 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     ignoreImages: true,
   });
 
-  mainInterceptor = new RanobesInterceptor("main");
-
-  cookieStorageInterceptor = new CookieStorageInterceptor({
-    storage: "stateManager",
-  });
-
   private taxonomyPromise?: Promise<FilterTaxonomy>;
 
   async initialise(): Promise<void> {
     this.mainRateLimiter.registerInterceptor();
-    this.cookieStorageInterceptor.registerInterceptor();
-    this.mainInterceptor.registerInterceptor();
-  }
-
-  async cloudflareBypassCompleted(
-    _request: Request,
-    cookies: Cookie[],
-    _localStorage: Record<string, string>,
-  ): Promise<void> {
-    this.taxonomyPromise = undefined;
-    for (const cookie of cookies) {
-      this.cookieStorageInterceptor.setCookie(cookie);
-    }
   }
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
@@ -93,13 +142,18 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     switch (section.id) {
       case SECTIONS.FEATURED:
         return {
-          items: parseListings(await fetchPage(`${DOMAIN}/`), "stories").map(toFeaturedItem),
+          items: parseListings(cheerio.load(await fetchHtml(DOMAIN)), "stories").map(
+            toFeaturedItem,
+          ),
         };
       case SECTIONS.LATEST: {
-        const html = await fetchListingPage("/updates/", page);
+        const $ = cheerio.load(await fetchListingPage("/updates/", page));
         return {
-          items: parseLatestUpdates(html),
-          metadata: hasNextPage(html) ? { page: page + 1 } : undefined,
+          items: parseListings($, "updates").flatMap((listing) => {
+            const item = toChapterUpdateItem(listing);
+            return item ? [item] : [];
+          }),
+          metadata: isLastListingPage($) ? undefined : { page: page + 1 },
         };
       }
       case SECTIONS.MOST_VIEWED:
@@ -114,8 +168,10 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   }
 
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
-    this.taxonomyPromise ??= this.getFilterTaxonomy();
-    return new RanobesAdvancedSearchForm(query, await this.taxonomyPromise);
+    return new RanobesAdvancedSearchForm(
+      query,
+      await (this.taxonomyPromise ??= this.getFilterTaxonomy()),
+    );
   }
 
   async getSearchResults(
@@ -124,39 +180,38 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     sortingOption?: SortingOption,
   ): Promise<PagedResults<SearchResultItem>> {
     const page = metadata?.page ?? 1;
-    const title = query.title.trim();
-    const filterPath = buildFilterPath(title, query.metadata, sortingOption);
-    const html = filterPath
-      ? await fetchListingPage(filterPath, page)
-      : await fetchListingPage("/novels/", page);
+    const path = buildSearchPath(query.title, query.metadata, sortingOption) ?? "/novels/";
+    const $ = cheerio.load(await fetchListingPage(path, page));
     return {
-      items: parseSearchResults(html),
-      metadata: hasNextPage(html) ? { page: page + 1 } : undefined,
+      items: parseListings($).map(toSearchResult),
+      metadata: isLastListingPage($) ? undefined : { page: page + 1 },
     };
   }
 
-  async getSortingOptions(_query: SearchQuery<SearchMetadata>): Promise<SortingOption[]> {
-    return SORTING_OPTIONS;
+  async getSortingOptions(): Promise<SortingOption[]> {
+    return SORT_ORDERS.map(({ id, label }) => ({ id, label }));
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
-    return parseMangaDetails(await fetchPage(mangaId), mangaId);
+    return parseMangaDetails(cheerio.load(await fetchHtml(mangaId)), mangaId);
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
     const novelId = extractNovelId(sourceManga.mangaId);
-    const firstPage = parseChapterPage(await fetchChapterListPage(novelId));
+    const firstPage = parseChapterPage(cheerio.load(await fetchChapterListPage(novelId)));
     const pageCount = Math.max(1, firstPage.pages_count ?? 1);
-    const laterPages = await Promise.all(
+    const remainingPages = await Promise.all(
       Array.from({ length: pageCount - 1 }, (_, index) =>
-        fetchChapterListPage(novelId, index + 2).then(parseChapterPage),
+        fetchChapterListPage(novelId, index + 2).then((html) =>
+          parseChapterPage(cheerio.load(html)),
+        ),
       ),
     );
-    return parseChapters([firstPage, ...laterPages], sourceManga);
+    return parseChapters([firstPage, ...remainingPages], sourceManga);
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    return parseChapterDetails(await fetchPage(chapter.chapterId), chapter);
+    return parseChapterDetails(cheerio.load(await fetchHtml(chapter.chapterId)), chapter);
   }
 
   private async getRankingItems(
@@ -164,19 +219,20 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     page: number,
     useRating: boolean,
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    const html = await fetchListingPage(path, page);
+    const $ = cheerio.load(await fetchListingPage(path, page));
     return {
-      items: parseListings(html, "rankings").map((card, index) =>
-        toRankingItem(card, index + (page - 1) * PAGE_SIZE, useRating),
+      items: parseListings($, "rankings").map((listing, index) =>
+        toRankingItem(listing, index + (page - 1) * PAGE_SIZE + 1, useRating),
       ),
-      metadata: hasNextPage(html) ? { page: page + 1 } : undefined,
+      metadata: isLastListingPage($) ? undefined : { page: page + 1 },
     };
   }
 
   private async getFilterTaxonomy(): Promise<FilterTaxonomy> {
     const cached = Application.getState(FILTER_TAXONOMY_STATE) as FilterTaxonomy | undefined;
-    if (cached?.events.length) return cached;
-    const taxonomy = parseFilterTaxonomy(await fetchListingPage("/novels/"));
+    if (cached) return cached;
+
+    const taxonomy = parseFilterTaxonomy(cheerio.load(await fetchListingPage("/tags/events/")));
     Application.setState(taxonomy, FILTER_TAXONOMY_STATE);
     return taxonomy;
   }
