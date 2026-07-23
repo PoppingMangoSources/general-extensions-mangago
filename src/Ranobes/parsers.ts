@@ -14,14 +14,20 @@ import {
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
-import { DOMAIN, type RanobesCard, type RanobesChapterPage } from "./models";
+import {
+  DOMAIN,
+  VOID_TAGS,
+  type FilterTaxonomy,
+  type RanobesCard,
+  type RanobesChapterPage,
+} from "./models";
 
 const absoluteUrl = (value: string): string => {
-  try {
-    return new globalThis.URL(value, DOMAIN).toString();
-  } catch {
-    return value;
-  }
+  const url = value.trim();
+  if (!url) return "";
+  if (/^https?:\/\//i.test(url)) return url;
+  if (url.startsWith("//")) return `https:${url}`;
+  return `${DOMAIN}${url.startsWith("/") ? "" : "/"}${url}`;
 };
 
 const cleanText = (value: string): string =>
@@ -33,7 +39,12 @@ const countFrom = (value: string): number | undefined => {
 };
 
 const imageFrom = (element: cheerio.Cheerio<AnyNode>): string => {
-  const src = element.attr("src")?.trim();
+  const src = [
+    element.attr("src"),
+    element.attr("data-src"),
+    element.attr("data-original"),
+    element.attr("data-lazy-src"),
+  ].find((value) => value?.trim() && !value.includes("data:image"));
   if (src) return absoluteUrl(src);
   const style = element.attr("style") ?? "";
   const match = style.match(/url\(['"]?([^)'"\s]+)['"]?\)/i);
@@ -57,17 +68,40 @@ const viewsFrom = (card: cheerio.Cheerio<AnyNode>): number | undefined => {
 };
 
 const novelUrlFromChapter = (href: string): string => {
-  const url = new globalThis.URL(absoluteUrl(href));
-  const match = url.pathname.match(/^\/([^/]+)-(\d+)\/\d+\.html$/i);
-  if (!match) return url.toString();
+  const url = absoluteUrl(href);
+  const path = url.replace(/^https?:\/\/[^/]+/i, "");
+  const match = path.match(/^\/([^/]+)-(\d+)\/\d+\.html$/i);
+  if (!match) return url;
   const slug = match[1].replace(/-\d+$/, "");
   return `${DOMAIN}/novels/${match[2]}-${slug}.html`;
 };
 
 const extractNovelId = (mangaId: string): string => {
-  const match = new globalThis.URL(mangaId).pathname.match(/\/novels\/(\d+)-/i);
+  const match = mangaId.match(/\/novels\/(\d+)-/i);
   if (!match) throw new Error(`Ranobes: could not identify novel ${mangaId}`);
   return match[1];
+};
+
+const toOptionId = (value: string): string =>
+  encodeURIComponent(value).replace(
+    /[!*~]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+
+export const parseFilterTaxonomy = (html: string): FilterTaxonomy => {
+  const $ = cheerio.load(html);
+  const options = (selector: string) =>
+    $(selector)
+      .first()
+      .find("option")
+      .toArray()
+      .map((element) => cleanText($(element).attr("value") ?? $(element).text()))
+      .filter(Boolean)
+      .map((title) => ({ id: toOptionId(title), title }));
+  return {
+    genres: options('select[name="n.genre"]'),
+    events: options('select[name="n.events"]'),
+  };
 };
 
 const contentRatingFromGenres = (genres: string[]): ContentRating => {
@@ -149,24 +183,30 @@ const parseRankingCard = (
   };
 };
 
-export const parseFeatured = (html: string): RanobesCard[] => {
+export const parseListings = (
+  html: string,
+  type: "stories" | "rankings" | "all" = "all",
+): RanobesCard[] => {
   const $ = cheerio.load(html);
-  return $("article.block.story.shortstory")
-    .toArray()
-    .flatMap((element) => {
-      const card = parseStoryCard($, $(element));
-      return card ? [card] : [];
-    });
-};
-
-export const parseRankings = (html: string): RanobesCard[] => {
-  const $ = cheerio.load(html);
-  return $("article.rank-story")
-    .toArray()
-    .flatMap((element) => {
-      const card = parseRankingCard($, $(element));
-      return card ? [card] : [];
-    });
+  const stories =
+    type === "rankings"
+      ? []
+      : $("article.block.story.shortstory")
+          .toArray()
+          .flatMap((element) => {
+            const card = parseStoryCard($, $(element));
+            return card ? [card] : [];
+          });
+  const rankings =
+    type === "stories"
+      ? []
+      : $("article.rank-story")
+          .toArray()
+          .flatMap((element) => {
+            const card = parseRankingCard($, $(element));
+            return card ? [card] : [];
+          });
+  return [...stories, ...rankings];
 };
 
 const parseRelativeDate = (value: string): Date | undefined => {
@@ -248,22 +288,7 @@ export const toRankingItem = (
 });
 
 export const parseSearchResults = (html: string): SearchResultItem[] => {
-  const $ = cheerio.load(html);
-  const cards = [
-    ...$("article.block.story.shortstory")
-      .toArray()
-      .flatMap((element) => {
-        const card = parseStoryCard($, $(element));
-        return card ? [card] : [];
-      }),
-    ...$("article.rank-story")
-      .toArray()
-      .flatMap((element) => {
-        const card = parseRankingCard($, $(element));
-        return card ? [card] : [];
-      }),
-  ];
-  return cards.map((card) => ({
+  return parseListings(html).map((card) => ({
     mangaId: card.mangaId,
     title: card.title,
     imageUrl: card.imageUrl,
@@ -378,7 +403,15 @@ export const parseChapters = (pages: RanobesChapterPage[], sourceManga: SourceMa
     }));
 
 const toXhtml = (fragment: string): string => {
-  const body = cheerio.load(fragment, null, false).html({ xml: true });
+  const body = cheerio
+    .load(fragment, null, false)
+    .html({ xml: true })
+    .replace(/\s+epub:[\w-]+=(["'])(.*?)\1/gi, "")
+    .replace(/\s+xmlns:[\w-]+=(["'])(.*?)\1/gi, "")
+    .replace(/\s+on[\w-]+=(["'])(.*?)\1/gi, "")
+    .replace(new RegExp(`<(${VOID_TAGS})(\\s[^>]*?)?>`, "gi"), (match, tag, attrs = "") =>
+      match.endsWith("/>") ? match : `<${tag}${attrs} />`,
+    );
   return `<html xmlns="http://www.w3.org/1999/xhtml"><head></head><body>${body}</body></html>`;
 };
 
@@ -388,6 +421,15 @@ export const parseChapterDetails = (html: string, chapter: Chapter): ChapterDeta
   if (article.length === 0)
     throw new Error(`Ranobes: no readable content found for ${chapter.chapterId}`);
   article.find("script, .free-support, .free-support-top, .free-support-bottom, .pubadx").remove();
+  article.find("img").each((_, element) => {
+    const image = $(element);
+    const src = imageFrom(image);
+    if (src) image.attr("src", src);
+    image.removeAttr("data-src");
+    image.removeAttr("data-original");
+    image.removeAttr("data-lazy-src");
+    image.removeAttr("srcset");
+  });
   const body = article.html()?.trim();
   if (!body) throw new Error(`Ranobes: empty chapter content for ${chapter.chapterId}`);
   return {

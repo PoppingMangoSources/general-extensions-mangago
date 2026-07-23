@@ -1,13 +1,13 @@
 import { type TestLogger } from "@paperback/types";
 import { expect } from "chai";
 
-import { Ranobes } from "../Ranobes/main.js";
+import { buildFilterPath, Ranobes } from "../Ranobes/main.js";
 import {
   parseChapterDetails,
   parseChapters,
-  parseFeatured,
+  parseFilterTaxonomy,
   parseLatestUpdates,
-  parseRankings,
+  parseListings,
   toFeaturedItem,
   toRankingItem,
 } from "../Ranobes/parsers.js";
@@ -37,12 +37,78 @@ export async function runTests(logger: TestLogger) {
     const sections = await Ranobes.getDiscoverSections();
     for (const section of sections) {
       const result = await Ranobes.getDiscoverSectionItems(section, undefined);
-      expect(result.items, section.title).not.empty;
+      expect(result.items.length, section.title).to.be.greaterThan(0);
+      expect(
+        result.items.every((item) => !("imageUrl" in item) || item.imageUrl.startsWith("https://")),
+        `${section.title} images`,
+      ).to.equal(true);
     }
   });
 
+  suite.test("live details, chapters, and HTML reader work end to end", async () => {
+    const manga = await Ranobes.getMangaDetails(
+      "https://ranobes.net/novels/1207185-the-sword-illuminates-the-great-wilderness.html",
+    );
+    expect(manga.mangaInfo.contentType).to.equal("novel");
+    expect(manga.mangaInfo.thumbnailUrl).to.match(/^https:\/\/ranobes\.net\//);
+
+    const chapters = await Ranobes.getChapters(manga);
+    expect(chapters.length).to.be.greaterThan(0);
+    const details = await Ranobes.getChapterDetails(chapters[0]);
+    expect(details.type).to.equal("html");
+    expect(details.type === "html" ? details.html : "").to.include("<body>");
+  });
+
+  suite.test("advanced search exposes valid IDs and all filter parameters", async () => {
+    const taxonomy = parseFilterTaxonomy(`
+      <select name="n.genre"><option value="Gender Bender">Gender Bender</option></select>
+      <select name="n.events"><option value="Akame ga Kill!">Akame ga Kill!</option></select>
+    `);
+    expect(taxonomy).to.deep.equal({
+      genres: [{ id: "Gender%20Bender", title: "Gender Bender" }],
+      events: [{ id: "Akame%20ga%20Kill%21", title: "Akame ga Kill!" }],
+    });
+    expect(
+      buildFilterPath(
+        "Reincarnation",
+        {
+          genres: { "Gender%20Bender": "included" },
+          events: { Thriller: "excluded" },
+          languages: { English: "included", Korean: "excluded" },
+          yearFrom: "1990",
+          yearTo: "2026",
+          translationStatus: "Active",
+          originalStatus: "Ongoing",
+          chaptersFrom: "50",
+          chaptersTo: "12000",
+          ratingsFrom: "1",
+          ratingsTo: "1000",
+          authors: "Get Lost",
+          excludedAuthors: "Young Master Yan",
+          translators: "CKtalon",
+          excludedTranslators: "Machine translate",
+          publishers: "Qidian",
+          excludedPublishers: "Webnovel",
+          onlyTranslated: true,
+          mtlFiles: true,
+          mtlReader: true,
+          aiTranslated: true,
+        },
+        { id: "views_desc", label: "Views" },
+      ),
+    ).to.include(
+      "/f/l.title=Reincarnation/n.genre=Gender+Bender/v.events=Thriller/b.languages=English/v.languages=Korean/",
+    );
+  });
+
+  suite.test("live advanced search loads the full taxonomy", async () => {
+    const form = await Ranobes.getAdvancedSearchForm({ title: "" });
+    expect(form.getSections().length).to.equal(11);
+  });
+
   suite.test("featured cards retain rating, description, and views", async () => {
-    const cards = parseFeatured(`
+    const cards = parseListings(
+      `
       <article class="block story shortstory">
         <h2 class="title"><a href="/novels/1-demo.html">Demo Novel</a></h2>
         <figure class="cover" style="background-image:url('/cover.jpg')"></figure>
@@ -51,7 +117,9 @@ export async function runTests(logger: TestLogger) {
         <div class="r-date"><span class="rate-drop"><strong>4.6</strong></span><span id="vote-num-id-1">(12)</span></div>
         <span class="meta_author" title="Unique views: 1 234"></span>
       </article>
-    `);
+    `,
+      "stories",
+    );
     const [item] = cards.map(toFeaturedItem);
     expect(item).to.include({
       type: "featuredCarouselItem",
@@ -94,7 +162,9 @@ export async function runTests(logger: TestLogger) {
         `,
       )
       .join("");
-    const items = parseRankings(html).map((card, index) => toRankingItem(card, index, false));
+    const items = parseListings(html, "rankings").map((card, index) =>
+      toRankingItem(card, index, false),
+    );
     expect(items.map((item) => item.subtitle)).to.deep.equal([
       "#1 • 1,000 views",
       "#2 • 2,000 views",

@@ -37,13 +37,34 @@ export type PageMetadata = { page: number };
 
 export interface SearchMetadata extends JSONObject {
   genres?: Record<string, "included" | "excluded">;
-  language?: string;
-  status?: string;
-  author?: string;
-  translator?: string;
+  events?: Record<string, "included" | "excluded">;
+  languages?: Record<string, "included" | "excluded">;
+  translationStatus?: string;
+  originalStatus?: string;
+  yearFrom?: string;
+  yearTo?: string;
+  chaptersFrom?: string;
+  chaptersTo?: string;
+  ratingsFrom?: string;
+  ratingsTo?: string;
+  authors?: string;
+  excludedAuthors?: string;
+  translators?: string;
+  excludedTranslators?: string;
+  publishers?: string;
+  excludedPublishers?: string;
+  onlyTranslated?: boolean;
+  mtlFiles?: boolean;
+  mtlReader?: boolean;
+  aiTranslated?: boolean;
 }
 
 export type OptionItem = { id: string; title: string };
+
+export interface FilterTaxonomy {
+  genres: OptionItem[];
+  events: OptionItem[];
+}
 
 export interface RanobesCard {
   mangaId: string;
@@ -69,54 +90,41 @@ export interface RanobesChapterPage {
   pages_count?: number;
 }
 
-export const GENRE_OPTIONS: OptionItem[] = [
-  "Action",
-  "Adventure",
-  "Adult",
-  "Comedy",
-  "Drama",
-  "Ecchi",
-  "Fantasy",
-  "Game",
-  "Gender Bender",
-  "Harem",
-  "Historical",
-  "Horror",
-  "Josei",
-  "Martial Arts",
-  "Mature",
-  "Mecha",
-  "Mystery",
-  "Psychological",
-  "Romance",
-  "School Life",
-  "Sci-fi",
-  "Seinen",
-  "Shoujo",
-  "Shounen",
-  "Slice of Life",
-  "Sports",
-  "Supernatural",
-  "Smut",
-  "Tragedy",
-  "Wuxia",
-  "Xianxia",
-  "Xuanhuan",
-  "Yaoi",
-].map((value) => ({ id: value, title: value }));
-
 export const LANGUAGE_OPTIONS: OptionItem[] = ["Chinese", "English", "Japanese", "Korean"].map(
-  (value) => ({ id: value, title: value }),
+  (title) => ({ id: title, title }),
 );
 
-export const STATUS_OPTIONS: OptionItem[] = [
+export const TRANSLATION_STATUS_OPTIONS: OptionItem[] = [
+  { id: "any", title: "Any" },
+  { id: "Active", title: "Active" },
+  { id: "Completed", title: "Completed" },
+  { id: "Unknown", title: "Unknown" },
+  { id: "Break", title: "Break" },
+];
+
+export const ORIGINAL_STATUS_OPTIONS: OptionItem[] = [
+  { id: "any", title: "Any" },
   { id: "Ongoing", title: "Ongoing" },
   { id: "Completed", title: "Completed" },
+  { id: "Hiatus", title: "Hiatus" },
+  { id: "Dropped", title: "Dropped" },
 ];
 
 export const SORTING_OPTIONS: SortingOption[] = [
-  { id: "views", label: "Most Viewed" },
+  { id: "default", label: "Default" },
   { id: "rating", label: "Rating" },
-  { id: "date", label: "Newest" },
-  { id: "date-asc", label: "Oldest" },
+  { id: "title_asc", label: "Title (ASC)" },
+  { id: "date_desc", label: "New Novels (DESC)" },
+  { id: "date_asc", label: "Old Novels (ASC)" },
+  { id: "comments_desc", label: "Comments: More → Less" },
+  { id: "comments_asc", label: "Comments: Less → More" },
+  { id: "views_desc", label: "Views: Most → Least" },
+  { id: "views_asc", label: "Views: Least → Most" },
+  { id: "chapters_desc", label: "Chapters: More → Less" },
+  { id: "chapters_asc", label: "Chapters: Less → More" },
+  { id: "year_desc", label: "Year: New → Old" },
+  { id: "year_asc", label: "Year: Old → New" },
+  { id: "modified_desc", label: "Recently Modified" },
 ];
+
+export const VOID_TAGS = "area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr";

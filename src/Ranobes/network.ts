@@ -23,14 +23,20 @@ export class RanobesInterceptor extends PaperbackInterceptor {
   }
 
   override async interceptResponse(
-    _request: Request,
+    request: Request,
     response: Response,
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
-    if (response.headers?.["cf-mitigated"] === "challenge" || response.status === 403) {
+    const contentType = response.headers?.["content-type"] ?? "";
+    const body = contentType.includes("text/html") ? Application.arrayBufferToUTF8String(data) : "";
+    if (
+      response.headers?.["cf-mitigated"] === "challenge" ||
+      response.status === 403 ||
+      /(?:Just a moment|Security check|vb_challenge)/i.test(body)
+    ) {
       throw new CloudflareError({
-        url: `${DOMAIN}/`,
-        method: "GET",
+        url: request.url,
+        method: request.method ?? "GET",
         headers: { "user-agent": await Application.getDefaultUserAgent() },
       });
     }
@@ -50,11 +56,6 @@ export const fetchListing = (path: string, page = 1): Promise<string> =>
 
 export const fetchChapterList = (novelId: string, page = 1): Promise<string> =>
   fetchHtml(`${DOMAIN}/chapters/${novelId}/${page > 1 ? `page/${page}/` : ""}`);
-
-export const fetchSearch = (query: string, page = 1): Promise<string> =>
-  fetchHtml(
-    `${DOMAIN}/search/${encodeURIComponent(query.trim()).replace(/%20/g, "+")}/${page > 1 ? `page/${page}/` : ""}`,
-  );
 
 export const fetchFilter = (path: string, page = 1): Promise<string> =>
   fetchHtml(`${DOMAIN}${path}${page > 1 ? `page/${page}/` : ""}`);
