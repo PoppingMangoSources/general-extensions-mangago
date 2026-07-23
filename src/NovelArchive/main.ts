@@ -167,8 +167,10 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
   private async resolveUrlQuery(
     query: string,
   ): Promise<PagedResults<SearchResultItem> | undefined> {
-    const match = query.trim().match(/^https?:\/\/(?:www\.)?novelarchive\.cc\/novel\/([^/?#]+)/i);
-    const id = match?.[1];
+    const trimmed = query.trim();
+    const id =
+      trimmed.match(/^https?:\/\/(?:www\.)?novelarchive\.cc\/novels?\/([^/?#]+)/i)?.[1] ??
+      trimmed.match(/^https?:\/\/(?:www\.)?novelarchive\.cc\/reader\?[^#]*\bnovel=([^&#]+)/i)?.[1];
     if (!id) return undefined;
 
     const manga = await this.getMangaDetails(decodeURIComponent(id));
