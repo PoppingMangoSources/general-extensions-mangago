@@ -60,6 +60,11 @@ export interface HomeSeries {
   Chapter?: SeasonChapter[];
 }
 
+export interface HomeSections {
+  newSeries: HomeSeries[];
+  updates: HomeSeries[];
+}
+
 export interface FeaturedEntry {
   series_slug: string;
   title: string;

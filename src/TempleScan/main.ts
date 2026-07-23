@@ -27,6 +27,7 @@ import {
   SORTING_OPTIONS,
   TRENDING_RANGES,
   type BrowseSeries,
+  type HomeSections,
   type PageMetadata,
   type SearchMetadata,
 } from "./models";
@@ -53,7 +54,6 @@ import {
   toTrendingItems,
   toUpdateItems,
   withFeaturedCovers,
-  type HomeSections,
 } from "./parsers";
 import type TempleScanConfig from "./pbconfig";
 
@@ -192,7 +192,7 @@ export class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfi
       const parsed = new Date(value ?? "").getTime();
       return isNaN(parsed) ? 0 : parsed;
     };
-    const sorted = [...filtered].sort((a, b) => {
+    const sorted = filtered.sort((a, b) => {
       switch (sortingOption?.id) {
         case "updated":
           return time(b.update_chapter) - time(a.update_chapter);

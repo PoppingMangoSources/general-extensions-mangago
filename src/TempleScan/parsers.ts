@@ -16,6 +16,7 @@ import {
   FEATURED_COVER_OVERRIDES,
   type BrowseSeries,
   type FeaturedEntry,
+  type HomeSections,
   type HomeSeries,
   type SeasonChapter,
   type SeriesData,
@@ -86,10 +87,10 @@ const scanByKey = <T>(
 };
 
 // Try the raw flight stream first, then the escaped-script form.
-export const extractByKey = <T>(
+const extractByKey = <T>(
   payload: string,
   key: string,
-  matches: (value: T) => boolean = () => true,
+  matches: (value: T) => boolean,
 ): T | undefined =>
   scanByKey(payload, key, matches) ?? scanByKey(decodeEscaped(payload), key, matches);
 
@@ -156,7 +157,7 @@ const stripHtml = (html: string): string =>
 
 // Descriptions sometimes end with "#tag" hashtags behind a label word
 // ("Tags:", "Keywords:", ...); strip both from the prose.
-export const cleanDescription = (raw: string): string => {
+const cleanDescription = (raw: string): string => {
   const text = raw.includes("#")
     ? raw
         .slice(0, raw.indexOf("#"))
@@ -166,7 +167,7 @@ export const cleanDescription = (raw: string): string => {
   return stripHtml(text);
 };
 
-export const formatCount = (count: number): string => {
+const formatCount = (count: number): string => {
   if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
   if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K`;
   return count.toString();
@@ -260,11 +261,6 @@ export const parseChapterPages = (payload: string, chapter: Chapter): ChapterDet
     pages,
   };
 };
-
-export interface HomeSections {
-  newSeries: HomeSeries[];
-  updates: HomeSeries[];
-}
 
 export const parseHomeSections = (payload: string): HomeSections => ({
   newSeries:
