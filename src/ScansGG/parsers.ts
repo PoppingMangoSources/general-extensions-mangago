@@ -314,10 +314,28 @@ export const parseMangaDetails = (series: SeriesDto): SourceManga => {
   };
 };
 
-const buildChapterTitle = (chapter: ChapterDto): string | undefined => {
-  const title = chapter.title?.trim();
-  return title ? Application.decodeHTMLEntities(title) : undefined;
+// Some uploads pack the release into the title as "<name> • <group>", where
+// <name> is often just a bare "Chapter N" restatement. Separate the group so it
+// shows as the scanlator, and keep the title only when it adds real information.
+const parseChapterTitle = (chapter: ChapterDto): { title?: string; group?: string } => {
+  const raw = chapter.title?.trim();
+  if (!raw) return {};
+  const bullet = raw.indexOf("•");
+  const namePart = (bullet === -1 ? raw : raw.slice(0, bullet)).trim();
+  const groupPart = bullet === -1 ? "" : raw.slice(bullet + 1).trim();
+  const numberOnly = /^(?:chapter|chap\.?|ch\.?|episode|ep\.?)?\s*[\d.]+$/i.test(namePart);
+  return {
+    title: namePart && !numberOnly ? Application.decodeHTMLEntities(namePart) : undefined,
+    group: groupPart ? Application.decodeHTMLEntities(groupPart) : undefined,
+  };
 };
+
+const buildChapterTitle = (chapter: ChapterDto): string | undefined =>
+  parseChapterTitle(chapter).title;
+
+// Prefer the structured group; fall back to the group embedded in the title.
+const chapterGroup = (chapter: ChapterDto): string | undefined =>
+  scanlationTeam(chapter) ?? parseChapterTitle(chapter).group;
 
 export const parseChapterList = (
   chapters: ChapterDto[],
@@ -328,7 +346,7 @@ export const parseChapterList = (
     chapterId: buildChapterId(seriesSlugId, chapter.id, chapter.group_id),
     sourceManga,
     title: buildChapterTitle(chapter),
-    version: scanlationTeam(chapter) ?? "Unknown",
+    version: chapterGroup(chapter) ?? "Unknown",
     chapNum: chapterNumberValue(chapter.number),
     volume: 0,
     langCode: "en",
