@@ -34,8 +34,8 @@ import {
 } from "./models";
 import {
   buildSearchPath,
+  canonicalUrl,
   fetchChapterListPage,
-  fetchChapterSearch,
   fetchHtml,
   fetchListingPage,
   RanobesInterceptor,
@@ -224,39 +224,32 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
-    return parseMangaDetails(cheerio.load(await fetchHtml(mangaId)), mangaId);
+    return parseMangaDetails(cheerio.load(await fetchHtml(canonicalUrl(mangaId))), mangaId);
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
     const novelId = extractNovelId(sourceManga.mangaId);
     const firstPage = parseChapterPage(cheerio.load(await fetchChapterListPage(novelId)));
     const pageCount = Math.max(1, firstPage.pages_count ?? 1);
-    if (pageCount === 1) return parseChapters([firstPage], sourceManga);
 
-    try {
-      const searchPage = await fetchChapterSearch(novelId);
-      if (
-        firstPage.count_all !== undefined &&
-        searchPage.chapters?.length === firstPage.count_all
-      ) {
-        return parseChapters([searchPage], sourceManga);
-      }
-    } catch {
-      // The search endpoint is an optional fast path; regular chapter pages remain authoritative.
-    }
-
-    const remainingPages = await Promise.all(
-      Array.from({ length: pageCount - 1 }, (_, index) =>
-        fetchChapterListPage(novelId, index + 2).then((html) =>
-          parseChapterPage(cheerio.load(html)),
-        ),
-      ),
-    );
+    const remainingPages =
+      pageCount > 1
+        ? await Promise.all(
+            Array.from({ length: pageCount - 1 }, (_, index) =>
+              fetchChapterListPage(novelId, index + 2).then((html) =>
+                parseChapterPage(cheerio.load(html)),
+              ),
+            ),
+          )
+        : [];
     return parseChapters([firstPage, ...remainingPages], sourceManga);
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    return parseChapterDetails(cheerio.load(await fetchHtml(chapter.chapterId)), chapter);
+    return parseChapterDetails(
+      cheerio.load(await fetchHtml(canonicalUrl(chapter.chapterId))),
+      chapter,
+    );
   }
 
   private async getRankingItems(

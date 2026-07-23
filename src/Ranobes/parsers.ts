@@ -228,10 +228,13 @@ export const parseMangaDetails = ($: cheerio.CheerioAPI, mangaId: string): Sourc
   if (!title) throw new Error(`Ranobes: no novel title found for ${mangaId}`);
 
   const secondaryTitle = cleanText($("h1.title .subtitle").first().text());
-  const genres = $(".r-desription .grey a[href*='/tags/genre/']")
-    .toArray()
-    .map((element) => cleanText($(element).text()))
-    .filter(Boolean);
+  const collect = (selector: string): string[] =>
+    $(selector)
+      .toArray()
+      .map((element) => cleanText($(element).text()))
+      .filter(Boolean);
+  const genres = collect("#mc-fs-genre .links a, .r-desription .grey a[href*='/tags/genre/']");
+  const keywords = collect("#mc-fs-keyw .links a").slice(0, 10);
   const specs = $(".r-fullstory-spec li");
   const spec = (label: string) =>
     specs.filter((_, element) => $(element).text().toLowerCase().includes(label));
@@ -244,8 +247,11 @@ export const parseMangaDetails = ($: cheerio.CheerioAPI, mangaId: string): Sourc
   const status = cleanText(spec("status in coo").find("a").first().text());
   const rating = Number($("#mc-fs-rate .rate-stat-num .bold").first().text());
   const views = parseCount($(".r-fullstory-spec li[title^='Unique views'] .grey").first().text());
-  const tags: Tag[] = genres.map((name) => ({ id: toFilterOptionId(name), title: name }));
-  const tagGroups: TagSection[] = tags.length ? [{ id: "genres", title: "Genres", tags }] : [];
+  const toTags = (names: string[]): Tag[] =>
+    names.map((name) => ({ id: toFilterOptionId(name), title: name }));
+  const tagGroups: TagSection[] = [];
+  if (genres.length) tagGroups.push({ id: "genres", title: "Genres", tags: toTags(genres) });
+  if (keywords.length) tagGroups.push({ id: "tags", title: "Tags", tags: toTags(keywords) });
 
   return {
     mangaId,
@@ -301,22 +307,21 @@ export const parseChapters = (pages: RanobesChapterPage[], sourceManga: SourceMa
     .filter(
       (entry, index, values) =>
         values.findIndex((candidate) => candidate.id === entry.id) === index,
-    )
-    .sort(
-      (left, right) => parseChapterTitle(right.title).number - parseChapterTitle(left.title).number,
     );
   if (!entries.length) throw new Error(`Ranobes: no chapters found for ${sourceManga.mangaId}`);
 
+  // The site lists chapters newest-first; keep that order and give the newest the highest index.
+  const total = entries.length;
   return entries.map((entry, index) => {
     const chapter = parseChapterTitle(entry.title);
     return {
       chapterId: absoluteUrl(entry.link),
       sourceManga,
       langCode: "en",
-      chapNum: chapter.number,
+      chapNum: chapter.number || total - index,
       ...(chapter.title ? { title: chapter.title } : {}),
       volume: 0,
-      sortingIndex: index,
+      sortingIndex: total - index,
       publishDate: entry.date ? new Date(entry.date.replace(" ", "T")) : undefined,
     };
   });

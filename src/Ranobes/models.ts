@@ -175,8 +175,6 @@ export interface RanobesChapterEntry {
 export interface RanobesChapterPage {
   chapters?: RanobesChapterEntry[];
   pages_count?: number;
-  count_all?: number;
-  limit?: number;
 }
 
 export const LANGUAGE_OPTIONS: OptionItem[] = ["Chinese", "Korean", "English", "Japanese"].map(

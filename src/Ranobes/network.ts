@@ -9,7 +9,11 @@ import {
   type SortingOption,
 } from "@paperback/types";
 
-import { DOMAIN, SORT_ORDERS, type RanobesChapterPage, type SearchMetadata } from "./models";
+import { DOMAIN, SORT_ORDERS, type SearchMetadata } from "./models";
+
+// Requests may arrive with IDs pointing at a mirror host; route them to the canonical domain.
+export const canonicalUrl = (url: string): string =>
+  url.replace(/^https?:\/\/(?:www\.)?ranobes\.[a-z.]+/i, DOMAIN);
 
 export const toFilterOptionId = (title: string): string =>
   encodeURIComponent(title).replace(
@@ -131,21 +135,3 @@ export const fetchListingPage = (path: string, page = 1): Promise<string> =>
 
 export const fetchChapterListPage = (novelId: string, page = 1): Promise<string> =>
   fetchHtml(`${DOMAIN}/chapters/${novelId}/${page > 1 ? `page/${page}/` : ""}`);
-
-export const fetchChapterSearch = async (novelId: string): Promise<RanobesChapterPage> => {
-  const url = `${DOMAIN}/engine/mods/reader/ajax.php`;
-  const [response, buffer] = await Application.scheduleRequest({
-    url,
-    method: "POST",
-    headers: {
-      "content-type": "application/x-www-form-urlencoded",
-    },
-    body: `search=Chapter&book_id=${encodeURIComponent(novelId)}`,
-  });
-  const text = responseText(response, buffer, url);
-  try {
-    return JSON.parse(text) as RanobesChapterPage;
-  } catch {
-    throw new Error(`Ranobes returned malformed chapter search data for ${novelId}`);
-  }
-};
