@@ -6,7 +6,7 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "MyReadingManga",
   description: "Extension that pulls content from myreadingmanga.info.",
-  version: "1.0.0-alpha.4",
+  version: "1.0.0-alpha.5",
   icon: "icon.png",
   language: "multi",
   contentRating: ContentRating.ADULT,
@@ -20,8 +20,8 @@ export default {
   badges: [],
   developers: [
     {
-      name: "PoppingMango",
-      github: "https://github.com/PoppingMango",
+      name: "PopMango",
+      github: "https://github.com/PoppingMangoSources",
     },
   ],
 } satisfies ExtensionInfo;

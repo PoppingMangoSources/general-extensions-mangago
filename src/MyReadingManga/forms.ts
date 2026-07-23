@@ -163,20 +163,18 @@ class SectionOrderForm extends Form {
   override getSections() {
     const deleted = getDeletedSections();
     const sections: FormSectionElement<unknown>[] = [
-      {
-        ...EditSection("order", {
-          id: "order",
-          header: "Home Sections",
-          footer: "Long press to reorder, swipe to remove.",
-          items: getOrderedSections().map(
-            (section): FormItemElement<unknown> => LabelRow(section.id, { title: section.title }),
-          ),
-        }),
+      EditSection("order", {
+        id: "order",
+        header: "Home Sections",
+        footer: "Long press to reorder, swipe to remove.",
+        items: getOrderedSections().map(
+          (section): FormItemElement<unknown> => LabelRow(section.id, { title: section.title }),
+        ),
         allowDeletion: true,
         allowReorder: true,
         onReorder: Application.Selector(this as SectionOrderForm, "rowDidReorder"),
         onDeletion: Application.Selector(this as SectionOrderForm, "rowDidDelete"),
-      } as unknown as FormSectionElement<unknown>,
+      }),
     ];
 
     if (deleted.length > 0) {
