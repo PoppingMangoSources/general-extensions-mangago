@@ -13,6 +13,7 @@ import {
 } from "@paperback/types";
 
 import {
+  AI_OPTIONS,
   GENRE_MATCH_OPTIONS,
   GENRES,
   STATUS_OPTIONS,
@@ -64,10 +65,12 @@ export class NovelArchiveSettingsForm extends Form {
 
 export class NovelArchiveAdvancedSearchForm extends AdvancedSearchForm {
   private status: string[];
+  private ai: string[];
   private genreMatch: string[];
   private genres: TriState;
 
   private readonly statusOptions: Tag[] = toTags(STATUS_OPTIONS);
+  private readonly aiOptions: Tag[] = toTags(AI_OPTIONS);
   private readonly genreMatchOptions: Tag[] = toTags(GENRE_MATCH_OPTIONS);
   private readonly genreOptions: Tag[] = toTags(GENRES);
 
@@ -75,6 +78,7 @@ export class NovelArchiveAdvancedSearchForm extends AdvancedSearchForm {
     super();
     const meta = searchQuery.metadata ?? {};
     this.status = meta.status ?? [];
+    this.ai = meta.ai ?? ["include"];
     this.genreMatch = meta.genreMatch ?? ["all"];
     this.genres = { ...meta.genres };
   }
@@ -92,6 +96,20 @@ export class NovelArchiveAdvancedSearchForm extends AdvancedSearchForm {
           onValueChange: Application.Selector(
             this as NovelArchiveAdvancedSearchForm,
             "handleStatusChange",
+          ),
+        }),
+      ]),
+      Section({ id: "ai", footer: "Filter novels written by AI." }, [
+        SelectRow("ai", {
+          title: "AI generated",
+          layout: "flow",
+          value: this.ai,
+          items: this.aiOptions,
+          minItemCount: 1,
+          maxItemCount: 1,
+          onValueChange: Application.Selector(
+            this as NovelArchiveAdvancedSearchForm,
+            "handleAiChange",
           ),
         }),
       ]),
@@ -128,6 +146,10 @@ export class NovelArchiveAdvancedSearchForm extends AdvancedSearchForm {
     this.status = value;
   }
 
+  async handleAiChange(value: string[]): Promise<void> {
+    this.ai = value;
+  }
+
   async handleGenreMatchChange(value: string[]): Promise<void> {
     this.genreMatch = value;
   }
@@ -139,6 +161,7 @@ export class NovelArchiveAdvancedSearchForm extends AdvancedSearchForm {
   override getSearchQueryMetadata(): SearchMetadata {
     const result: SearchMetadata = {};
     if (this.status.length > 0) result.status = this.status;
+    if (this.ai.length > 0) result.ai = this.ai;
     if (this.genreMatch.length > 0) result.genreMatch = this.genreMatch;
     if (Object.keys(this.genres).length > 0) result.genres = this.genres;
     return result;

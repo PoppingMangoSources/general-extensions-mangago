@@ -184,6 +184,7 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
       search: search || undefined,
       sort: sortingOption?.id,
       status: meta?.status?.[0],
+      ai: meta?.ai?.[0],
       genreMatch: meta?.genreMatch?.[0],
       genresInclude: pickGenreValues(meta?.genres, "included"),
       genresExclude: pickGenreValues(meta?.genres, "excluded"),
@@ -297,6 +298,7 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
     search?: string;
     sort?: string;
     status?: string;
+    ai?: string;
     genreMatch?: string;
     genresInclude?: string[];
     genresExclude?: string[];
@@ -305,7 +307,7 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
       .addPathComponent("novels")
       .setQueryItem("page", opts.page.toString())
       .setQueryItem("per_page", PAGE_SIZE.toString())
-      .setQueryItem("ai_generated", "include");
+      .setQueryItem("ai_generated", opts.ai ?? "include");
 
     if (opts.search) url.setQueryItem("search", opts.search);
     if (opts.sort) url.setQueryItem("sort", opts.sort);

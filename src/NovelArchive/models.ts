@@ -52,6 +52,7 @@ export type TriState = Record<string, "included" | "excluded">;
 
 export type SearchMetadata = {
   status?: string[];
+  ai?: string[];
   genreMatch?: string[];
   genres?: TriState;
 };
@@ -149,6 +150,12 @@ export const STATUS_OPTIONS: OptionItem[] = [
 export const GENRE_MATCH_OPTIONS: OptionItem[] = [
   { id: "all", value: "All" },
   { id: "any", value: "Any" },
+];
+
+export const AI_OPTIONS: OptionItem[] = [
+  { id: "include", value: "Include" },
+  { id: "exclude", value: "Exclude" },
+  { id: "only", value: "Only" },
 ];
 
 export const GENRES: OptionItem[] = [
