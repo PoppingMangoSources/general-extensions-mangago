@@ -41,7 +41,6 @@ export interface SeriesData {
   studio?: string | null;
   badge?: string | null;
   status?: string | null;
-  adult?: boolean;
   release_year?: string | number | null;
   alternative_names?: string | null;
   thumbnail?: string | null;

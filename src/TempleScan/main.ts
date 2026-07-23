@@ -214,7 +214,12 @@ export class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfi
   }
 
   private getDirectory(): Promise<BrowseSeries[]> {
-    this.directoryPromise ??= fetchDirectory().then(parseDirectory);
+    this.directoryPromise ??= fetchDirectory()
+      .then(parseDirectory)
+      .catch((error: unknown) => {
+        this.directoryPromise = undefined;
+        throw error;
+      });
     return this.directoryPromise;
   }
 

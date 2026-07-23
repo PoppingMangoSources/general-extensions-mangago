@@ -6,7 +6,7 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "Temple Scan",
   description: "Extension that pulls content from templetoons.com.",
-  version: "1.0.0-alpha.6",
+  version: "1.0.0-alpha.7",
   icon: "icon.png",
   language: "en",
   contentRating: ContentRating.ADULT,
@@ -20,8 +20,8 @@ export default {
   badges: [],
   developers: [
     {
-      name: "PoppingMango",
-      github: "https://github.com/PoppingMango",
+      name: "PopMango",
+      github: "https://github.com/PoppingMangoSources",
     },
   ],
 } satisfies ExtensionInfo;
