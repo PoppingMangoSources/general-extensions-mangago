@@ -27,19 +27,16 @@ import * as cheerio from "cheerio";
 
 import { getHideLocked, RinkoComicsAdvancedSearchForm, RinkoComicsSettingsForm } from "./forms";
 import {
-  AJAX_ENDPOINT,
   CHAPTER_SELECTOR,
-  CHAPTERS_PER_PAGE,
   DOMAIN,
   LOCK_SUFFIX,
   SORTING_OPTIONS,
-  type AjaxChapterResponse,
   type ComicCard,
   type Genre,
   type PageMetadata,
   type SearchMetadata,
 } from "./models";
-import { RinkoComicsInterceptor } from "./network";
+import { fetchCheerio, fetchMoreChaptersHtml, RinkoComicsInterceptor } from "./network";
 import {
   extractNonce,
   finalizeChapters,
@@ -70,7 +67,6 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
     storage: "stateManager",
   });
 
-  private genresList: Genre[] = [];
   private genresPromise?: Promise<Genre[]>;
   private homePromise?: Promise<cheerio.CheerioAPI>;
 
@@ -119,7 +115,7 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
   // The four homepage sections share one document; dedupe the fetch within a
   // refresh burst while still loading fresh data on the next refresh.
   private getHomePage(): Promise<cheerio.CheerioAPI> {
-    this.homePromise ??= this.fetchCheerio({ url: `${DOMAIN}/`, method: "GET" }).finally(() => {
+    this.homePromise ??= fetchCheerio({ url: `${DOMAIN}/`, method: "GET" }).finally(() => {
       this.homePromise = undefined;
     });
     return this.homePromise;
@@ -168,7 +164,7 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
 
     if (sortingOption?.id) builder.setQueryItem("sort", sortingOption.id);
 
-    const $ = await this.fetchCheerio({ url: builder.toString(), method: "GET" });
+    const $ = await fetchCheerio({ url: builder.toString(), method: "GET" });
     this.cacheGenres($);
 
     const items: SearchResultItem[] = parseComicCards($).map((card: ComicCard) => ({
@@ -211,14 +207,16 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
-    const $ = await this.fetchCheerio({ url: this.mangaUrl(mangaId), method: "GET" });
+    const $ = await fetchCheerio({ url: this.mangaUrl(mangaId), method: "GET" });
     return parseMangaDetails($, mangaId);
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
-    const $ = await this.fetchCheerio({ url: this.mangaUrl(sourceManga.mangaId), method: "GET" });
-    const hideLocked = getHideLocked();
+    const $ = await fetchCheerio({ url: this.mangaUrl(sourceManga.mangaId), method: "GET" });
 
+    // Collect every chapter (locked included) so AJAX pages made up entirely
+    // of locked chapters don't look like end-of-data; the hide-locked filter
+    // is applied once over the final list instead.
     const chapters = new Map<string, Chapter>();
     const addAll = (items: Chapter[]) => {
       for (const chapter of items) {
@@ -226,7 +224,7 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
       }
     };
 
-    addAll(parseChapterElements($, $(CHAPTER_SELECTOR), sourceManga, hideLocked));
+    addAll(parseChapterElements($, $(CHAPTER_SELECTOR), sourceManga, false));
 
     const loadMoreBtn = $("#loadMoreChaptersBtn").first();
     const comicId = (loadMoreBtn.attr("data-comic-id") || "").trim();
@@ -241,22 +239,26 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
     if (comicId && nonce) {
       for (;;) {
         const before = chapters.size;
-        const items = await this.fetchMoreChapters(comicId, offset, nonce, sourceManga, hideLocked);
+        const items = await this.fetchMoreChapters(comicId, offset, nonce, sourceManga);
         if (items.length === 0) break;
         addAll(items);
-        offset += CHAPTERS_PER_PAGE;
+        offset += items.length;
         if (chapters.size === before) break;
       }
     }
 
-    return finalizeChapters(Array.from(chapters.values()));
+    let list = Array.from(chapters.values());
+    if (getHideLocked()) {
+      list = list.filter((chapter) => !chapter.chapterId.includes(LOCK_SUFFIX));
+    }
+    return finalizeChapters(list);
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
     if (chapter.chapterId.includes(LOCK_SUFFIX)) {
       throw new Error("This chapter is locked. Use the WebView to purchase it.");
     }
-    const $ = await this.fetchCheerio({ url: this.chapterUrl(chapter.chapterId), method: "GET" });
+    const $ = await fetchCheerio({ url: this.chapterUrl(chapter.chapterId), method: "GET" });
     return parseChapterDetails($, chapter);
   }
 
@@ -265,7 +267,6 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
     cookies: Cookie[],
     _localStorage: Record<string, string>,
   ): Promise<void> {
-    this.genresList = [];
     this.genresPromise = undefined;
     for (const cookie of cookies) {
       if (
@@ -283,40 +284,30 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
   }
 
   private mangaUrl(mangaId: string): string {
-    const slug = safeDecode(mangaId);
-    if (slug.startsWith("http")) return slug;
-    return `${DOMAIN}/${slug.replace(/^\/+/, "")}`;
+    return `${DOMAIN}/${safeDecode(mangaId).replace(/^\/+/, "")}`;
   }
 
   private chapterUrl(chapterId: string): string {
-    const slug = safeDecode(chapterId.replace(LOCK_SUFFIX, ""));
-    if (slug.startsWith("http")) return slug;
-    return `${DOMAIN}/${slug.replace(/^\/+/, "")}`;
+    return `${DOMAIN}/${safeDecode(chapterId).replace(/^\/+/, "")}`;
   }
 
-  private async getGenres(): Promise<Genre[]> {
-    if (this.genresList.length > 0) return this.genresList;
-    if (this.genresPromise) return this.genresPromise;
-    const request = this.fetchCheerio({
+  private getGenres(): Promise<Genre[]> {
+    this.genresPromise ??= fetchCheerio({
       url: this.comicsUrl(1).toString(),
       method: "GET",
     })
-      .then(($) => {
-        this.cacheGenres($);
-        return this.genresList;
-      })
+      .then(($) => parseGenres($))
       .catch((error: unknown) => {
-        if (this.genresPromise === request) this.genresPromise = undefined;
+        this.genresPromise = undefined;
         throw error;
       });
-    this.genresPromise = request;
-    return request;
+    return this.genresPromise;
   }
 
   private cacheGenres($: cheerio.CheerioAPI): void {
-    if (this.genresList.length > 0) return;
+    if (this.genresPromise) return;
     const genres = parseGenres($);
-    if (genres.length > 0) this.genresList = genres;
+    if (genres.length > 0) this.genresPromise = Promise.resolve(genres);
   }
 
   private async fetchMoreChapters(
@@ -324,57 +315,11 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
     offset: number,
     nonce: string,
     sourceManga: SourceManga,
-    hideLocked: boolean,
   ): Promise<Chapter[]> {
-    const body = [
-      "action=load_more_chapters",
-      `nonce=${encodeURIComponent(nonce)}`,
-      `comic_id=${encodeURIComponent(comicId)}`,
-      `offset=${offset}`,
-    ].join("&");
-
-    const [response, data] = await Application.scheduleRequest({
-      url: AJAX_ENDPOINT,
-      method: "POST",
-      headers: {
-        "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
-        "x-requested-with": "XMLHttpRequest",
-      },
-      body,
-    });
-    if (response.status !== 200) {
-      throw new Error(`Chapter request failed with status ${response.status}`);
-    }
-
-    let parsed: AjaxChapterResponse;
-    try {
-      parsed = JSON.parse(Application.arrayBufferToUTF8String(data)) as AjaxChapterResponse;
-    } catch (error) {
-      throw new Error("Failed to parse the chapter response", { cause: error });
-    }
-
-    if (parsed.success !== true) return [];
-    const html = parsed.data?.html ?? "";
+    const html = await fetchMoreChaptersHtml(comicId, offset, nonce);
     if (!html) return [];
-
     const $ = cheerio.load(html);
-    return parseChapterElements($, $(CHAPTER_SELECTOR), sourceManga, hideLocked);
-  }
-
-  async fetchCheerio(request: Request): Promise<cheerio.CheerioAPI> {
-    const [response, data] = await Application.scheduleRequest(request);
-    if (response.status === 404) {
-      throw new Error(`Content not found: ${request.url}`);
-    }
-    if (response.status < 200 || response.status >= 300) {
-      throw new Error(`Request failed with status ${response.status}: ${request.url}`);
-    }
-    return cheerio.load(Application.arrayBufferToUTF8String(data), {
-      xml: {
-        xmlMode: false,
-        decodeEntities: false,
-      },
-    });
+    return parseChapterElements($, $(CHAPTER_SELECTOR), sourceManga, false);
   }
 }
 

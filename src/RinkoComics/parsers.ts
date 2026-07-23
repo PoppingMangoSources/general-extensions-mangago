@@ -14,14 +14,9 @@ import * as cheerio from "cheerio";
 import { type Cheerio, type CheerioAPI } from "cheerio";
 import { type AnyNode } from "domhandler";
 
-import {
-  DOMAIN,
-  LOCK_PREFIX,
-  LOCK_SUFFIX,
-  NONCE_REGEX,
-  type ComicCard,
-  type Genre,
-} from "./models";
+import { DOMAIN, LOCK_SUFFIX, type ComicCard, type Genre } from "./models";
+
+const LOCK_PREFIX = "🔒 ";
 
 const MONTHS: Record<string, number> = {
   jan: 0,
@@ -50,7 +45,7 @@ const MONTHS: Record<string, number> = {
   december: 11,
 };
 
-export const toSafeId = (slug: string): string => {
+const toSafeId = (slug: string): string => {
   return slug.replace(/[^A-Za-z0-9._\-@()[\]%?#+=/&:]/g, (c) => {
     const enc = encodeURIComponent(c);
     if (enc !== c) return enc;
@@ -74,7 +69,7 @@ export const parsePath = (href: string): string => {
   return toSafeId(slug);
 };
 
-export const absoluteUrl = (src: string): string => {
+const absoluteUrl = (src: string): string => {
   const s = (src || "").trim();
   if (!s) return "";
   if (s.startsWith("http")) return s;
@@ -88,7 +83,7 @@ const imageFromElement = ($: CheerioAPI, img: Cheerio<AnyNode>): string => {
 };
 
 export const extractNonce = ($: CheerioAPI): string | undefined => {
-  const match = $.html().match(NONCE_REGEX);
+  const match = $.html().match(/comicworld_ajax\s*=\s*\{[^}]*"nonce"\s*:\s*"([^"]+)"/);
   return match ? match[1] : undefined;
 };
 
@@ -153,15 +148,26 @@ export const toHotItems = ($: CheerioAPI): DiscoverSectionItem[] => {
   return items;
 };
 
-// "Editor's Choice": the site's pinned cards, with their chapter-count badge.
-export const toPinnedItems = ($: CheerioAPI): DiscoverSectionItem[] => {
+// Prominent-carousel cards ("Editor's Choice" pinned cards and "Latest
+// Novels") share one item shape and differ only in selectors.
+const toProminentItems = (
+  $: CheerioAPI,
+  selectors: {
+    cardSelector: string;
+    // When unset, the card element itself is the link.
+    linkSelector?: string;
+    titleSelector: string;
+    imageSelector: string;
+  },
+): DiscoverSectionItem[] => {
   const items: DiscoverSectionItem[] = [];
   const seen = new Set<string>();
-  for (const element of $("a.pinned-comic-card").toArray()) {
-    const el = $(element);
-    const mangaId = parsePath((el.attr("href") || "").trim());
+  for (const element of $(selectors.cardSelector).toArray()) {
+    const card = $(element);
+    const link = selectors.linkSelector ? card.find(selectors.linkSelector).first() : card;
+    const mangaId = parsePath((link.attr("href") || "").trim());
     const title = Application.decodeHTMLEntities(
-      el.find(".pinned-comic-title").first().text().trim(),
+      card.find(selectors.titleSelector).first().text().trim(),
     );
     if (!mangaId || !title || seen.has(mangaId)) continue;
     seen.add(mangaId);
@@ -169,13 +175,21 @@ export const toPinnedItems = ($: CheerioAPI): DiscoverSectionItem[] => {
       type: "prominentCarouselItem",
       mangaId,
       title,
-      imageUrl: imageFromElement($, el.find(".comic-thumbnail img").first()),
-      subtitle: el.find(".chapter-badge").first().text().trim() || undefined,
+      imageUrl: imageFromElement($, card.find(selectors.imageSelector).first()),
+      subtitle: card.find(".chapter-badge").first().text().trim() || undefined,
       contentRating: ContentRating.EVERYONE,
     });
   }
   return items;
 };
+
+// "Editor's Choice": the site's pinned cards, with their chapter-count badge.
+export const toPinnedItems = ($: CheerioAPI): DiscoverSectionItem[] =>
+  toProminentItems($, {
+    cardSelector: "a.pinned-comic-card",
+    titleSelector: ".pinned-comic-title",
+    imageSelector: ".comic-thumbnail img",
+  });
 
 // "Latest Releases": update cards linking the newest readable chapter.
 export const toLatestItems = ($: CheerioAPI): DiscoverSectionItem[] => {
@@ -211,24 +225,13 @@ export const toLatestItems = ($: CheerioAPI): DiscoverSectionItem[] => {
 };
 
 // "Latest Novels": novel cards with their chapter-count badge.
-export const toNovelItems = ($: CheerioAPI): DiscoverSectionItem[] => {
-  const items: DiscoverSectionItem[] = [];
-  for (const element of $(".novels-section .novel-card").toArray()) {
-    const card = $(element);
-    const mangaId = parsePath((card.find("a.novel-card-link").first().attr("href") || "").trim());
-    const title = Application.decodeHTMLEntities(card.find(".novel-title").first().text().trim());
-    if (!mangaId || !title) continue;
-    items.push({
-      type: "prominentCarouselItem",
-      mangaId,
-      title,
-      imageUrl: imageFromElement($, card.find(".novel-cover img").first()),
-      subtitle: card.find(".chapter-badge").first().text().trim() || undefined,
-      contentRating: ContentRating.EVERYONE,
-    });
-  }
-  return items;
-};
+export const toNovelItems = ($: CheerioAPI): DiscoverSectionItem[] =>
+  toProminentItems($, {
+    cardSelector: ".novels-section .novel-card",
+    linkSelector: "a.novel-card-link",
+    titleSelector: ".novel-title",
+    imageSelector: ".novel-cover img",
+  });
 
 export const parseComicCards = ($: CheerioAPI): ComicCard[] => {
   const cards: ComicCard[] = [];
