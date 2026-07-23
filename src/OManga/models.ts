@@ -6,15 +6,17 @@ import type { JSONObject } from "@paperback/types";
 export const DEFAULT_DOMAIN = "https://omanga.to";
 export const FEATURED_HERO_LIMIT = 17;
 
-export const SECTION_POPULAR = "popular";
-export const SECTION_TREND = "trend";
-export const SECTION_POPULAR_TODAY = "popular_today";
-export const SECTION_UPDATES = "updates";
-export const SECTION_TOP_SERIES = "top_series";
-export const SECTION_NEW_SEASON = "new_season";
-export const SECTION_MOST_LIKED = "most_liked";
-export const SECTION_BEST_ONGOING = "best_ongoing";
-export const SECTION_GENRES = "genres";
+export const SECTIONS = {
+  POPULAR: "popular",
+  TREND: "trend",
+  POPULAR_TODAY: "popular_today",
+  UPDATES: "updates",
+  TOP_SERIES: "top_series",
+  NEW_SEASON: "new_season",
+  MOST_LIKED: "most_liked",
+  BEST_ONGOING: "best_ongoing",
+  GENRES: "genres",
+} as const;
 
 export type CatalogQuery = Record<string, string | string[] | undefined>;
 

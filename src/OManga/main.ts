@@ -31,17 +31,10 @@ import {
   FEATURED_HERO_LIMIT,
   GENRE_OPTIONS,
   getDomain,
+  type HomeLinkCard,
   type PageMetadata,
   resolveOptionValues,
-  SECTION_BEST_ONGOING,
-  SECTION_GENRES,
-  SECTION_MOST_LIKED,
-  SECTION_NEW_SEASON,
-  SECTION_POPULAR,
-  SECTION_POPULAR_TODAY,
-  SECTION_TREND,
-  SECTION_TOP_SERIES,
-  SECTION_UPDATES,
+  SECTIONS,
   SORT_OPTIONS,
   TOP_SERIES_CHIPS,
   TYPE_OPTIONS,
@@ -71,6 +64,24 @@ import {
   toSimpleCarouselItem,
 } from "./parsers";
 import type OMangaConfig from "./pbconfig";
+
+const toLinkCardSimpleItem = (card: HomeLinkCard): DiscoverSectionItem => ({
+  type: "simpleCarouselItem",
+  mangaId: card.slug,
+  title: card.title,
+  imageUrl: card.cover,
+  subtitle: [card.type, card.year].filter(Boolean).join(" "),
+  metadata: undefined,
+});
+
+const toLinkCardProminentItem = (card: HomeLinkCard, index: number): DiscoverSectionItem => ({
+  type: "prominentCarouselItem",
+  mangaId: card.slug,
+  title: card.title,
+  imageUrl: card.cover,
+  subtitle: `#${index + 1}`,
+  metadata: undefined,
+});
 
 export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
   private rateLimiter = new BasicRateLimiter("rateLimiter", {
@@ -107,27 +118,27 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
-      { id: SECTION_POPULAR, title: "Popular", type: DiscoverSectionType.featured },
+      { id: SECTIONS.POPULAR, title: "Popular", type: DiscoverSectionType.featured },
       {
-        id: SECTION_UPDATES,
+        id: SECTIONS.UPDATES,
         title: "Latest Updates",
         type: DiscoverSectionType.chapterUpdates,
       },
-      { id: SECTION_TOP_SERIES, title: "Top Series", type: DiscoverSectionType.genres },
-      { id: SECTION_NEW_SEASON, title: "New Season", type: DiscoverSectionType.simpleCarousel },
-      { id: SECTION_MOST_LIKED, title: "Most Liked", type: DiscoverSectionType.simpleCarousel },
+      { id: SECTIONS.TOP_SERIES, title: "Top Series", type: DiscoverSectionType.genres },
+      { id: SECTIONS.NEW_SEASON, title: "New Season", type: DiscoverSectionType.simpleCarousel },
+      { id: SECTIONS.MOST_LIKED, title: "Most Liked", type: DiscoverSectionType.simpleCarousel },
       {
-        id: SECTION_BEST_ONGOING,
+        id: SECTIONS.BEST_ONGOING,
         title: "Best Ongoings",
         type: DiscoverSectionType.prominentCarousel,
       },
-      { id: SECTION_TREND, title: "In the Trend", type: DiscoverSectionType.simpleCarousel },
+      { id: SECTIONS.TREND, title: "In the Trend", type: DiscoverSectionType.simpleCarousel },
       {
-        id: SECTION_POPULAR_TODAY,
+        id: SECTIONS.POPULAR_TODAY,
         title: "Popular Today",
         type: DiscoverSectionType.prominentCarousel,
       },
-      { id: SECTION_GENRES, title: "Genres", type: DiscoverSectionType.genres },
+      { id: SECTIONS.GENRES, title: "Genres", type: DiscoverSectionType.genres },
     ];
   }
 
@@ -135,7 +146,7 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
     section: DiscoverSection,
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    if (section.id === SECTION_TOP_SERIES) {
+    if (section.id === SECTIONS.TOP_SERIES) {
       const items: DiscoverSectionItem[] = TOP_SERIES_CHIPS.map((chip) => ({
         type: "genresCarouselItem",
         name: chip.title,
@@ -152,7 +163,7 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
       return { items, metadata: undefined };
     }
 
-    if (section.id === SECTION_GENRES) {
+    if (section.id === SECTIONS.GENRES) {
       const items: DiscoverSectionItem[] = GENRE_OPTIONS.map((genre) => ({
         type: "genresCarouselItem",
         name: genre.value,
@@ -166,11 +177,11 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
       return { items, metadata: undefined };
     }
 
-    if (section.id === SECTION_UPDATES) {
+    if (section.id === SECTIONS.UPDATES) {
       return { items: parseHomeUpdates(await this.getHomepage(true)), metadata: undefined };
     }
 
-    if (section.id === SECTION_POPULAR) {
+    if (section.id === SECTIONS.POPULAR) {
       let items = parseHomeSection(await this.getHomepage(), "Popular This Week");
       if (items.length === 0) {
         items = (await this.fetchCatalogPage({ sort: "by_views", order: "desc" }, undefined)).items;
@@ -178,7 +189,7 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
       return { items: this.buildFeaturedItems(items), metadata: undefined };
     }
 
-    if (section.id === SECTION_MOST_LIKED) {
+    if (section.id === SECTIONS.MOST_LIKED) {
       const homeItems = parseHomeSection(await this.getHomepage(), "Most liked");
       if (homeItems.length > 0) {
         return {
@@ -188,26 +199,17 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
       }
     }
 
-    if (section.id === SECTION_NEW_SEASON) {
+    if (section.id === SECTIONS.NEW_SEASON) {
       const cards = parseHomeLinkSection(await this.getHomepage(), "New Season", '"hl-col-items"');
       if (cards.length > 0) {
         return {
-          items: cards.map(
-            (card): DiscoverSectionItem => ({
-              type: "simpleCarouselItem",
-              mangaId: card.slug,
-              title: card.title,
-              imageUrl: card.cover,
-              subtitle: [card.type, card.year].filter(Boolean).join(" "),
-              metadata: undefined,
-            }),
-          ),
+          items: cards.map(toLinkCardSimpleItem),
           metadata: undefined,
         };
       }
     }
 
-    if (section.id === SECTION_TREND) {
+    if (section.id === SECTIONS.TREND) {
       const cards = parseHomeLinkSection(
         await this.getHomepage(),
         "In the Trend",
@@ -215,22 +217,13 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
       );
       if (cards.length > 0) {
         return {
-          items: cards.map(
-            (card): DiscoverSectionItem => ({
-              type: "simpleCarouselItem",
-              mangaId: card.slug,
-              title: card.title,
-              imageUrl: card.cover,
-              subtitle: [card.type, card.year].filter(Boolean).join(" "),
-              metadata: undefined,
-            }),
-          ),
+          items: cards.map(toLinkCardSimpleItem),
           metadata: undefined,
         };
       }
     }
 
-    if (section.id === SECTION_POPULAR_TODAY) {
+    if (section.id === SECTIONS.POPULAR_TODAY) {
       const cards = parseHomeLinkSection(
         await this.getHomepage(),
         "Popular Today",
@@ -238,52 +231,34 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
       );
       if (cards.length > 0) {
         return {
-          items: cards.map(
-            (card, index): DiscoverSectionItem => ({
-              type: "prominentCarouselItem",
-              mangaId: card.slug,
-              title: card.title,
-              imageUrl: card.cover,
-              subtitle: `#${index + 1}`,
-              metadata: undefined,
-            }),
-          ),
+          items: cards.map(toLinkCardProminentItem),
           metadata: undefined,
         };
       }
     }
 
-    if (section.id === SECTION_BEST_ONGOING) {
+    if (section.id === SECTIONS.BEST_ONGOING) {
       const cards = parseHomeLinkSection(await this.getHomepage(), "Best Ongoings", '"grid gap-2');
       if (cards.length > 0) {
         return {
-          items: cards.map(
-            (card, index): DiscoverSectionItem => ({
-              type: "prominentCarouselItem",
-              mangaId: card.slug,
-              title: card.title,
-              imageUrl: card.cover,
-              subtitle: `#${index + 1}`,
-              metadata: undefined,
-            }),
-          ),
+          items: cards.map(toLinkCardProminentItem),
           metadata: undefined,
         };
       }
     }
 
     const query: CatalogQuery =
-      section.id === SECTION_BEST_ONGOING
+      section.id === SECTIONS.BEST_ONGOING
         ? { sort: "rating", order: "desc", status: "Ongoing" }
-        : section.id === SECTION_POPULAR_TODAY
+        : section.id === SECTIONS.POPULAR_TODAY
           ? { sort: "votes", order: "desc" }
           : {
               sort:
-                section.id === SECTION_NEW_SEASON
+                section.id === SECTIONS.NEW_SEASON
                   ? "by_date"
-                  : section.id === SECTION_TREND
+                  : section.id === SECTIONS.TREND
                     ? "by_views"
-                    : section.id === SECTION_MOST_LIKED
+                    : section.id === SECTIONS.MOST_LIKED
                       ? "votes"
                       : "real_views",
               order: "desc",
@@ -291,7 +266,7 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
 
     const { items, nextMetadata } = await this.fetchCatalogPage(query, metadata);
     const toCarouselItem =
-      section.id === SECTION_BEST_ONGOING || section.id === SECTION_POPULAR_TODAY
+      section.id === SECTIONS.BEST_ONGOING || section.id === SECTIONS.POPULAR_TODAY
         ? toProminentCarouselItem
         : toSimpleCarouselItem;
 
