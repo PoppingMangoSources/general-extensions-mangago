@@ -1,0 +1,256 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* Copyright © 2026 Inkdex */
+
+import {
+  ContentRating,
+  type Chapter,
+  type ChapterDetails,
+  type DiscoverSectionItem,
+  type FeaturedCarouselItem,
+  type SearchResultItem,
+  type SourceManga,
+  type Tag,
+} from "@paperback/types";
+
+import { ADULT_RATING_GENRES, DOMAIN, type ChapterContentResponse, type Novel } from "./models";
+
+const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
+
+const sanitizeId = (value: string): string =>
+  value.toLowerCase().replace(SAFE_ID_REGEX, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+
+const coverOf = (novel: Novel): string => {
+  const path = novel.cover_url ?? novel.image_url ?? novel.novel_image;
+  if (!path) return "";
+  return path.startsWith("http") ? path : `${DOMAIN}${path.startsWith("/") ? "" : "/"}${path}`;
+};
+
+const genreList = (novel: Novel): string[] =>
+  (novel.genres ?? "")
+    .split(",")
+    .map((genre) => genre.trim())
+    .filter((genre) => genre.length > 0);
+
+const genreLabel = (novel: Novel): string | undefined => {
+  const genres = genreList(novel);
+  return genres.length > 0 ? genres.join(", ") : undefined;
+};
+
+const viewsOf = (novel: Novel): number | undefined => {
+  const value = novel.views_number ?? novel.views;
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+};
+
+const formatCount = (count: number): string => {
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K`;
+  return count.toString();
+};
+
+const titleCase = (value: string): string =>
+  value
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+
+const statusOf = (novel: Novel): string | undefined => {
+  const status = novel.release_status ?? novel.ongoing;
+  return status ? titleCase(status.trim()) : undefined;
+};
+
+const cleanDescription = (value?: string | null): string => {
+  if (!value) return "";
+  return Application.decodeHTMLEntities(value)
+    .replace(/\s*show more\s*$/i, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .trim();
+};
+
+const ratingToUnit = (value?: number | null): number | undefined => {
+  if (value == null || !Number.isFinite(value)) return undefined;
+  return Math.min(1, Math.max(0, value / 5));
+};
+
+const contentRatingForNovel = (novel: Novel): ContentRating => {
+  const genres = genreList(novel).map((genre) => genre.toLowerCase());
+  return genres.some((genre) => ADULT_RATING_GENRES.includes(genre))
+    ? ContentRating.ADULT
+    : ContentRating.MATURE;
+};
+
+const escapeXml = (value: string): string =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+
+export const toFeaturedItems = (
+  novels: Novel[],
+  variant: "trending" | "editors",
+): DiscoverSectionItem[] =>
+  novels.map((novel, index) => {
+    const views = viewsOf(novel);
+    const viewsInfo =
+      views === undefined ? undefined : { symbol: "eye.fill", text: formatCount(views) };
+    const rankInfo = { symbol: "number", text: `#${index + 1}` };
+    const infoItems =
+      variant === "trending"
+        ? viewsInfo
+          ? [viewsInfo, rankInfo]
+          : [rankInfo]
+        : viewsInfo
+          ? [viewsInfo]
+          : undefined;
+
+    return {
+      type: "featuredCarouselItem",
+      mangaId: String(novel.id),
+      imageUrl: coverOf(novel),
+      title: novel.title,
+      supertitle:
+        variant === "trending" ? genreLabel(novel) : index % 2 === 0 ? "Staff Pick" : "Must Read",
+      summary: cleanDescription(novel.description) || undefined,
+      infoItems: infoItems as FeaturedCarouselItem["infoItems"],
+      contentRating: contentRatingForNovel(novel),
+    };
+  });
+
+export const toCardItems = (
+  novels: Novel[],
+  variant: "rating" | "chapters",
+): DiscoverSectionItem[] =>
+  novels.map((novel) => {
+    const lead =
+      variant === "chapters"
+        ? novel.total_chapters
+          ? `${novel.total_chapters} ch`
+          : undefined
+        : novel.rating != null
+          ? `★ ${novel.rating.toFixed(1)}`
+          : undefined;
+    const subtitle = [lead, genreList(novel)[0]]
+      .filter((part): part is string => Boolean(part))
+      .join(" • ");
+
+    return {
+      type: "simpleCarouselItem",
+      mangaId: String(novel.id),
+      imageUrl: coverOf(novel),
+      title: novel.title,
+      subtitle: subtitle || undefined,
+      contentRating: contentRatingForNovel(novel),
+    };
+  });
+
+export const toChapterUpdateItems = (novels: Novel[]): DiscoverSectionItem[] =>
+  novels.map((novel) => {
+    const date = novel.updated_at ? new Date(novel.updated_at) : undefined;
+    return {
+      type: "chapterUpdatesCarouselItem",
+      mangaId: String(novel.id),
+      chapterId: String(novel.total_chapters ?? ""),
+      imageUrl: coverOf(novel),
+      title: novel.title,
+      subtitle: genreLabel(novel),
+      publishDate: date && !Number.isNaN(date.getTime()) ? date : undefined,
+      contentRating: contentRatingForNovel(novel),
+    };
+  });
+
+export const toSearchResultItem = (novel: Novel): SearchResultItem => {
+  const subtitle = [
+    novel.rating != null ? `★ ${novel.rating.toFixed(1)}` : undefined,
+    genreList(novel)[0],
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(" • ");
+
+  return {
+    mangaId: String(novel.id),
+    title: novel.title,
+    imageUrl: coverOf(novel),
+    subtitle: subtitle || undefined,
+    contentRating: contentRatingForNovel(novel),
+  };
+};
+
+export const parseMangaDetails = (novel: Novel): SourceManga => {
+  const primaryTitle = novel.title;
+  const seen = new Set([primaryTitle.trim().toLowerCase()]);
+  const secondaryTitles: string[] = [];
+  for (const alias of novel.associated_names ?? []) {
+    const title = alias.trim();
+    const key = title.toLowerCase();
+    if (!title || seen.has(key)) continue;
+    seen.add(key);
+    secondaryTitles.push(title);
+  }
+
+  const tags: Tag[] = genreList(novel).map((genre) => ({ id: sanitizeId(genre), title: genre }));
+
+  const percentage = ratingToUnit(novel.rating);
+  const additionalInfo =
+    percentage === undefined
+      ? undefined
+      : {
+          rating: `${Math.round(percentage * 100)}%${
+            novel.rating_count ? ` · ${novel.rating_count} ratings` : ""
+          }`,
+        };
+
+  return {
+    mangaId: String(novel.id),
+    mangaInfo: {
+      primaryTitle,
+      secondaryTitles,
+      thumbnailUrl: coverOf(novel),
+      synopsis: cleanDescription(novel.description),
+      author: novel.author?.trim() || undefined,
+      artist: novel.author?.trim() || undefined,
+      status: statusOf(novel),
+      rating: percentage,
+      contentRating: contentRatingForNovel(novel),
+      contentType: "novel",
+      tagGroups: tags.length > 0 ? [{ id: "genres", title: "Genres", tags }] : undefined,
+      additionalInfo,
+      shareUrl: `${DOMAIN}/novel/${novel.id}`,
+    },
+  };
+};
+
+export const parseChapters = (novel: Novel, sourceManga: SourceManga): Chapter[] =>
+  (novel.chapter_names ?? []).map((name, index) => ({
+    chapterId: String(index + 1),
+    sourceManga,
+    langCode: "en",
+    chapNum: index + 1,
+    title: name.trim() || `Chapter ${index + 1}`,
+    volume: 0,
+    sortingIndex: index,
+  }));
+
+export const parseChapterDetails = (
+  response: ChapterContentResponse,
+  chapter: Chapter,
+): ChapterDetails => {
+  const content = (response.chapter?.content ?? response.content ?? "").trim();
+  if (!content) {
+    throw new Error(`No content returned for chapter ${chapter.chapterId}`);
+  }
+
+  const body = content
+    .split(/\r?\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line) => `<p>${escapeXml(line)}</p>`)
+    .join("");
+
+  return {
+    type: "html",
+    id: chapter.chapterId,
+    mangaId: chapter.sourceManga.mangaId,
+    html: `<html xmlns="http://www.w3.org/1999/xhtml"><head></head><body>${body}</body></html>`,
+  };
+};
