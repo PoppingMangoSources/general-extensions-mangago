@@ -10,35 +10,128 @@ import {
 
 export const DOMAIN = "https://ranobes.net";
 export const PAGE_SIZE = 20;
+export const FILTER_TAXONOMY_STATE = "ranobes-filter-taxonomy";
 
-export const SECTION_FEATURED = "featured";
-export const SECTION_LATEST = "latest";
-export const SECTION_MOST_VIEWED = "most-viewed";
-export const SECTION_MOST_RATED = "most-rated";
-export const SECTION_ALL_TIME = "all-time";
+export const SECTIONS = {
+  FEATURED: "featured",
+  LATEST: "latest",
+  MOST_VIEWED: "most-viewed",
+  MOST_RATED: "most-rated",
+  ALL_TIME: "all-time",
+} as const;
 
 export const DISCOVER_SECTIONS: DiscoverSection[] = [
-  { id: SECTION_FEATURED, title: "Featured", type: DiscoverSectionType.featured },
-  { id: SECTION_LATEST, title: "Latest Updates", type: DiscoverSectionType.chapterUpdates },
+  { id: SECTIONS.FEATURED, title: "Featured", type: DiscoverSectionType.featured },
+  { id: SECTIONS.LATEST, title: "Latest Updates", type: DiscoverSectionType.chapterUpdates },
   {
-    id: SECTION_MOST_VIEWED,
+    id: SECTIONS.MOST_VIEWED,
     title: "Most Viewed Novels",
     type: DiscoverSectionType.prominentCarousel,
   },
   {
-    id: SECTION_MOST_RATED,
+    id: SECTIONS.MOST_RATED,
     title: "Most Rated Novels",
     type: DiscoverSectionType.prominentCarousel,
   },
-  { id: SECTION_ALL_TIME, title: "All Time Popular", type: DiscoverSectionType.prominentCarousel },
+  {
+    id: SECTIONS.ALL_TIME,
+    title: "All Time Popular",
+    type: DiscoverSectionType.prominentCarousel,
+  },
+];
+
+export const SORT_ORDERS = [
+  { id: "default", label: "Default" },
+  { id: "rating", label: "Rating", sort: "rating", order: "desc" },
+  { id: "title_asc", label: "Title (ASC)", sort: "title", order: "asc" },
+  { id: "date_desc", label: "New Novels (DESC)", sort: "date", order: "desc" },
+  { id: "date_asc", label: "Old Novels (ASC)", sort: "date", order: "asc" },
+  {
+    id: "comments_desc",
+    label: "Comments: More → Less",
+    sort: "comm_num",
+    order: "desc",
+  },
+  {
+    id: "comments_asc",
+    label: "Comments: Less → More",
+    sort: "comm_num",
+    order: "asc",
+  },
+  { id: "views_desc", label: "Views: Most → Least", sort: "news_read", order: "desc" },
+  { id: "views_asc", label: "Views: Least → Most", sort: "news_read", order: "asc" },
+  {
+    id: "chapters_desc",
+    label: "Chapters: More → Less",
+    sort: "d.chap-num",
+    order: "desc",
+  },
+  {
+    id: "chapters_asc",
+    label: "Chapters: Less → More",
+    sort: "d.chap-num",
+    order: "asc",
+  },
+  { id: "year_desc", label: "Year: New → Old", sort: "d.year", order: "desc" },
+  { id: "year_asc", label: "Year: Old → New", sort: "d.year", order: "asc" },
+  {
+    id: "modified_desc",
+    label: "Recently Modified",
+    sort: "editdate",
+    order: "desc",
+  },
+] as const;
+
+export const SORTING_OPTIONS: SortingOption[] = SORT_ORDERS.map(({ id, label }) => ({
+  id,
+  label,
+}));
+
+export const GENRE_TITLES = [
+  "Action",
+  "Adult",
+  "Adventure",
+  "Comedy",
+  "Drama",
+  "Ecchi",
+  "Fantasy",
+  "Game",
+  "Gender Bender",
+  "Harem",
+  "Historical",
+  "Horror",
+  "Josei",
+  "Martial Arts",
+  "Mature",
+  "Mecha",
+  "Mystery",
+  "Psychological",
+  "Romance",
+  "School Life",
+  "Sci-fi",
+  "Seinen",
+  "Shoujo",
+  "Shounen",
+  "Shounen Ai",
+  "Slice of Life",
+  "Smut",
+  "Sports",
+  "Supernatural",
+  "Tragedy",
+  "Wuxia",
+  "Xianxia",
+  "Xuanhuan",
+  "Yaoi",
+  "Yuri",
 ];
 
 export type PageMetadata = { page: number };
+export type TriState = Record<string, "included" | "excluded">;
 
 export interface SearchMetadata extends JSONObject {
-  genres?: Record<string, "included" | "excluded">;
-  events?: Record<string, "included" | "excluded">;
-  languages?: Record<string, "included" | "excluded">;
+  genres?: TriState;
+  events?: TriState;
+  languages?: TriState;
   translationStatus?: string;
   originalStatus?: string;
   yearFrom?: string;
@@ -88,9 +181,11 @@ export interface RanobesChapterEntry {
 export interface RanobesChapterPage {
   chapters?: RanobesChapterEntry[];
   pages_count?: number;
+  count_all?: number;
+  limit?: number;
 }
 
-export const LANGUAGE_OPTIONS: OptionItem[] = ["Chinese", "English", "Japanese", "Korean"].map(
+export const LANGUAGE_OPTIONS: OptionItem[] = ["Chinese", "Korean", "English", "Japanese"].map(
   (title) => ({ id: title, title }),
 );
 
@@ -108,23 +203,6 @@ export const ORIGINAL_STATUS_OPTIONS: OptionItem[] = [
   { id: "Completed", title: "Completed" },
   { id: "Hiatus", title: "Hiatus" },
   { id: "Dropped", title: "Dropped" },
-];
-
-export const SORTING_OPTIONS: SortingOption[] = [
-  { id: "default", label: "Default" },
-  { id: "rating", label: "Rating" },
-  { id: "title_asc", label: "Title (ASC)" },
-  { id: "date_desc", label: "New Novels (DESC)" },
-  { id: "date_asc", label: "Old Novels (ASC)" },
-  { id: "comments_desc", label: "Comments: More → Less" },
-  { id: "comments_asc", label: "Comments: Less → More" },
-  { id: "views_desc", label: "Views: Most → Least" },
-  { id: "views_asc", label: "Views: Least → Most" },
-  { id: "chapters_desc", label: "Chapters: More → Less" },
-  { id: "chapters_asc", label: "Chapters: Less → More" },
-  { id: "year_desc", label: "Year: New → Old" },
-  { id: "year_asc", label: "Year: Old → New" },
-  { id: "modified_desc", label: "Recently Modified" },
 ];
 
 export const VOID_TAGS = "area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr";

@@ -7,6 +7,7 @@ import {
   type ChapterDetails,
   type DiscoverSectionItem,
   type SearchResultItem,
+  type SortingOption,
   type SourceManga,
   type Tag,
   type TagSection,
@@ -16,10 +17,13 @@ import type { AnyNode } from "domhandler";
 
 import {
   DOMAIN,
+  GENRE_TITLES,
+  SORT_ORDERS,
   VOID_TAGS,
   type FilterTaxonomy,
   type RanobesCard,
   type RanobesChapterPage,
+  type SearchMetadata,
 } from "./models";
 
 const absoluteUrl = (value: string): string => {
@@ -82,26 +86,79 @@ const extractNovelId = (mangaId: string): string => {
   return match[1];
 };
 
-const toOptionId = (value: string): string =>
-  encodeURIComponent(value).replace(
-    /[!*~]/g,
-    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
-  );
+export const toFilterOptionId = (title: string): string =>
+  `filter_${Array.from(title)
+    .map((character) => character.codePointAt(0)?.toString(36))
+    .join("_")}`;
+
+const titleFromFilterOptionId = (id: string): string => {
+  if (!id.startsWith("filter_")) return id;
+  const codePoints = id
+    .slice(7)
+    .split("_")
+    .map((value) => Number.parseInt(value, 36));
+  return codePoints.every(Number.isFinite) ? String.fromCodePoint(...codePoints) : id;
+};
 
 export const parseFilterTaxonomy = (html: string): FilterTaxonomy => {
   const $ = cheerio.load(html);
-  const options = (selector: string) =>
-    $(selector)
-      .first()
-      .find("option")
-      .toArray()
-      .map((element) => cleanText($(element).attr("value") ?? $(element).text()))
-      .filter(Boolean)
-      .map((title) => ({ id: toOptionId(title), title }));
+  const events = $('select[name="n.events"] option')
+    .toArray()
+    .map((element) => cleanText($(element).attr("value") ?? $(element).text()))
+    .filter(Boolean);
   return {
-    genres: options('select[name="n.genre"]'),
-    events: options('select[name="n.events"]'),
+    genres: GENRE_TITLES.map((title) => ({ id: toFilterOptionId(title), title })),
+    events: [...new Set(events)].map((title) => ({ id: toFilterOptionId(title), title })),
   };
+};
+
+export const buildFilterPath = (
+  title: string,
+  metadata: SearchMetadata | undefined,
+  sortingOption: SortingOption | undefined,
+): string | undefined => {
+  const segments: string[] = [];
+  const add = (key: string, value: string | undefined) => {
+    if (value) segments.push(`${key}=${encodeURIComponent(value).replace(/%20/g, "+")}`);
+  };
+  const selections = (
+    values: Record<string, "included" | "excluded"> | undefined,
+    state: "included" | "excluded",
+  ) =>
+    Object.entries(values ?? {})
+      .filter(([, value]) => value === state)
+      .map(([id]) => titleFromFilterOptionId(id))
+      .join(",");
+
+  add("l.title", title.trim());
+  add("n.genre", selections(metadata?.genres, "included"));
+  add("v.genre", selections(metadata?.genres, "excluded"));
+  add("n.events", selections(metadata?.events, "included"));
+  add("v.events", selections(metadata?.events, "excluded"));
+  add("b.languages", selections(metadata?.languages, "included"));
+  add("v.languages", selections(metadata?.languages, "excluded"));
+  add("f.year", metadata?.yearFrom);
+  add("t.year", metadata?.yearTo);
+  add("status-trs", metadata?.translationStatus);
+  add("status-end", metadata?.originalStatus);
+  add("f.chap-num", metadata?.chaptersFrom);
+  add("t.chap-num", metadata?.chaptersTo);
+  add("f.pvotenum", metadata?.ratingsFrom);
+  add("t.pvotenum", metadata?.ratingsTo);
+  add("n.authors", metadata?.authors);
+  add("v.authors", metadata?.excludedAuthors);
+  add("n.translater", metadata?.translators);
+  add("v.translater", metadata?.excludedTranslators);
+  add("n.l.tags", metadata?.publishers);
+  add("!m.tags", metadata?.excludedPublishers);
+  if (metadata?.onlyTranslated) add("g.translater", "1");
+  if (metadata?.mtlFiles || metadata?.mtlReader) add("g.mtl_files", "1");
+  if (metadata?.aiTranslated) add("b.mtl-ai-translator", "DeepSeek,LLaMA 4,Gemini Flash,Mistral");
+
+  const sorting = SORT_ORDERS.find((option) => option.id === sortingOption?.id);
+  add("sort", sorting && "sort" in sorting ? sorting.sort : undefined);
+  add("order", sorting && "order" in sorting ? sorting.order : undefined);
+  return segments.length > 0 ? `/f/${segments.join("/")}/` : undefined;
 };
 
 const contentRatingFromGenres = (genres: string[]): ContentRating => {
@@ -299,7 +356,7 @@ export const parseSearchResults = (html: string): SearchResultItem[] => {
 
 export const hasNextPage = (html: string): boolean => {
   const $ = cheerio.load(html);
-  return $(".navigation .page_next a, .pages a").length > 0;
+  return $(".navigation .page_next a").length > 0;
 };
 
 export const parseMangaDetails = (html: string, mangaId: string): SourceManga => {
@@ -372,35 +429,49 @@ export const parseChapterPage = (html: string): RanobesChapterPage => {
     .toArray()
     .map((element) => $(element).text())
     .find((value) => value.includes("window.__DATA__"));
-  if (!script) return {};
-  const json = script.slice(script.indexOf("{")).trim().replace(/;\s*$/, "");
+  if (!script) throw new Error("Ranobes: chapter data was not found.");
+  const start = script.indexOf("{");
+  const end = script.lastIndexOf("}");
+  if (start < 0 || end < start) throw new Error("Ranobes: chapter data was malformed.");
   try {
-    return JSON.parse(json) as RanobesChapterPage;
+    return JSON.parse(script.slice(start, end + 1)) as RanobesChapterPage;
   } catch (error) {
     throw new Error("Ranobes: could not parse the chapter list.", { cause: error });
   }
 };
 
-const chapterNumber = (title: string): number =>
-  Number(title.match(/chapter\s+(\d+(?:\.\d+)?)/i)?.[1] ?? 0);
+const chapterParts = (value: string): { number: number; title?: string } => {
+  const title = cleanText(value);
+  const match = /^chapter\s+(\d+(?:\.\d+)?)\s*(?:[:.\-–—]\s*)?(.*)$/i.exec(title);
+  if (!match) return { number: 0, title };
+  const subtitle = cleanText(match[2]);
+  return { number: Number(match[1]), title: subtitle || undefined };
+};
 
-export const parseChapters = (pages: RanobesChapterPage[], sourceManga: SourceManga): Chapter[] =>
-  pages
+export const parseChapters = (pages: RanobesChapterPage[], sourceManga: SourceManga): Chapter[] => {
+  const entries = pages
     .flatMap((page) => page.chapters ?? [])
     .filter(
       (entry, index, entries) =>
         entries.findIndex((candidate) => candidate.id === entry.id) === index,
-    )
-    .map((entry, index) => ({
+    );
+  if (entries.length === 0) {
+    throw new Error(`Ranobes: no chapters found for ${sourceManga.mangaId}`);
+  }
+  return entries.map((entry, index) => {
+    const chapter = chapterParts(entry.title);
+    return {
       chapterId: absoluteUrl(entry.link),
       sourceManga,
       langCode: "en",
-      chapNum: chapterNumber(entry.title),
-      title: cleanText(entry.title),
+      chapNum: chapter.number,
+      ...(chapter.title ? { title: chapter.title } : {}),
       volume: 0,
-      sortingIndex: index,
+      sortingIndex: entries.length - index,
       publishDate: entry.date ? new Date(entry.date.replace(" ", "T")) : undefined,
-    }));
+    };
+  });
+};
 
 const toXhtml = (fragment: string): string => {
   const body = cheerio

@@ -18,7 +18,7 @@ import {
   TRANSLATION_STATUS_OPTIONS,
   type FilterTaxonomy,
   type SearchMetadata,
-} from "./models";
+} from "../models";
 
 export class RanobesAdvancedSearchForm extends AdvancedSearchForm {
   private searchMetadata: SearchMetadata;
@@ -251,86 +251,119 @@ export class RanobesAdvancedSearchForm extends AdvancedSearchForm {
   }
 
   async handleGenresChange(value: Record<string, "included" | "excluded">): Promise<void> {
-    this.searchMetadata.genres = value;
+    if (Object.keys(value).length > 0) this.searchMetadata.genres = value;
+    else delete this.searchMetadata.genres;
   }
 
   async handleEventsChange(value: Record<string, "included" | "excluded">): Promise<void> {
-    this.searchMetadata.events = value;
+    if (Object.keys(value).length > 0) this.searchMetadata.events = value;
+    else delete this.searchMetadata.events;
   }
 
   async handleLanguagesChange(value: Record<string, "included" | "excluded">): Promise<void> {
-    this.searchMetadata.languages = value;
+    if (Object.keys(value).length > 0) this.searchMetadata.languages = value;
+    else delete this.searchMetadata.languages;
   }
 
   async handleTranslationStatusChange(value: string[]): Promise<void> {
-    this.searchMetadata.translationStatus = value[0] || "any";
+    if (value[0] && value[0] !== "any") this.searchMetadata.translationStatus = value[0];
+    else delete this.searchMetadata.translationStatus;
   }
 
   async handleOriginalStatusChange(value: string[]): Promise<void> {
-    this.searchMetadata.originalStatus = value[0] || "any";
+    if (value[0] && value[0] !== "any") this.searchMetadata.originalStatus = value[0];
+    else delete this.searchMetadata.originalStatus;
   }
 
   async handleYearFromChange(value: string): Promise<void> {
-    this.searchMetadata.yearFrom = value.replace(/\D/g, "") || undefined;
+    const year = value.replace(/\D/g, "");
+    if (year) this.searchMetadata.yearFrom = year;
+    else delete this.searchMetadata.yearFrom;
   }
 
   async handleYearToChange(value: string): Promise<void> {
-    this.searchMetadata.yearTo = value.replace(/\D/g, "") || undefined;
+    const year = value.replace(/\D/g, "");
+    if (year) this.searchMetadata.yearTo = year;
+    else delete this.searchMetadata.yearTo;
   }
 
   async handleChaptersFromChange(value: string): Promise<void> {
-    this.searchMetadata.chaptersFrom = value.replace(/\D/g, "") || undefined;
+    const chapters = value.replace(/\D/g, "");
+    if (chapters) this.searchMetadata.chaptersFrom = chapters;
+    else delete this.searchMetadata.chaptersFrom;
   }
 
   async handleChaptersToChange(value: string): Promise<void> {
-    this.searchMetadata.chaptersTo = value.replace(/\D/g, "") || undefined;
+    const chapters = value.replace(/\D/g, "");
+    if (chapters) this.searchMetadata.chaptersTo = chapters;
+    else delete this.searchMetadata.chaptersTo;
   }
 
   async handleRatingsFromChange(value: string): Promise<void> {
-    this.searchMetadata.ratingsFrom = value.replace(/\D/g, "") || undefined;
+    const ratings = value.replace(/\D/g, "");
+    if (ratings) this.searchMetadata.ratingsFrom = ratings;
+    else delete this.searchMetadata.ratingsFrom;
   }
 
   async handleRatingsToChange(value: string): Promise<void> {
-    this.searchMetadata.ratingsTo = value.replace(/\D/g, "") || undefined;
+    const ratings = value.replace(/\D/g, "");
+    if (ratings) this.searchMetadata.ratingsTo = ratings;
+    else delete this.searchMetadata.ratingsTo;
   }
 
   async handleAuthorsChange(value: string): Promise<void> {
-    this.searchMetadata.authors = value.trim() || undefined;
+    const authors = value.trim();
+    if (authors) this.searchMetadata.authors = authors;
+    else delete this.searchMetadata.authors;
   }
 
   async handleExcludedAuthorsChange(value: string): Promise<void> {
-    this.searchMetadata.excludedAuthors = value.trim() || undefined;
+    const authors = value.trim();
+    if (authors) this.searchMetadata.excludedAuthors = authors;
+    else delete this.searchMetadata.excludedAuthors;
   }
 
   async handleTranslatorsChange(value: string): Promise<void> {
-    this.searchMetadata.translators = value.trim() || undefined;
+    const translators = value.trim();
+    if (translators) this.searchMetadata.translators = translators;
+    else delete this.searchMetadata.translators;
   }
 
   async handleExcludedTranslatorsChange(value: string): Promise<void> {
-    this.searchMetadata.excludedTranslators = value.trim() || undefined;
+    const translators = value.trim();
+    if (translators) this.searchMetadata.excludedTranslators = translators;
+    else delete this.searchMetadata.excludedTranslators;
   }
 
   async handlePublishersChange(value: string): Promise<void> {
-    this.searchMetadata.publishers = value.trim() || undefined;
+    const publishers = value.trim();
+    if (publishers) this.searchMetadata.publishers = publishers;
+    else delete this.searchMetadata.publishers;
   }
 
   async handleExcludedPublishersChange(value: string): Promise<void> {
-    this.searchMetadata.excludedPublishers = value.trim() || undefined;
+    const publishers = value.trim();
+    if (publishers) this.searchMetadata.excludedPublishers = publishers;
+    else delete this.searchMetadata.excludedPublishers;
   }
 
   async handleOnlyTranslatedChange(value: boolean): Promise<void> {
-    this.searchMetadata.onlyTranslated = value;
+    if (value) this.searchMetadata.onlyTranslated = true;
+    else delete this.searchMetadata.onlyTranslated;
   }
 
   async handleMtlFilesChange(value: boolean): Promise<void> {
-    this.searchMetadata.mtlFiles = value;
+    if (value) this.searchMetadata.mtlFiles = true;
+    else delete this.searchMetadata.mtlFiles;
   }
 
   async handleMtlReaderChange(value: boolean): Promise<void> {
-    this.searchMetadata.mtlReader = value;
+    if (value) this.searchMetadata.mtlReader = true;
+    else delete this.searchMetadata.mtlReader;
   }
 
   async handleAiTranslatedChange(value: boolean): Promise<void> {
-    this.searchMetadata.aiTranslated = value;
+    if (value) this.searchMetadata.aiTranslated = true;
+    else delete this.searchMetadata.aiTranslated;
   }
 }

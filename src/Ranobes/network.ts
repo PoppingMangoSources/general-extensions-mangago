@@ -44,18 +44,13 @@ export class RanobesInterceptor extends PaperbackInterceptor {
   }
 }
 
-export const fetchHtml = async (url: string): Promise<string> => {
+export const fetchPage = async (url: string): Promise<string> => {
   const [, buffer] = await Application.scheduleRequest({ url, method: "GET" });
   return Application.arrayBufferToUTF8String(buffer);
 };
 
-export const fetchHomepage = (): Promise<string> => fetchHtml(`${DOMAIN}/`);
+export const fetchListingPage = (path: string, page = 1): Promise<string> =>
+  fetchPage(`${DOMAIN}${path}${page > 1 ? `page/${page}/` : ""}`);
 
-export const fetchListing = (path: string, page = 1): Promise<string> =>
-  fetchHtml(`${DOMAIN}${path}${page > 1 ? `page/${page}/` : ""}`);
-
-export const fetchChapterList = (novelId: string, page = 1): Promise<string> =>
-  fetchHtml(`${DOMAIN}/chapters/${novelId}/${page > 1 ? `page/${page}/` : ""}`);
-
-export const fetchFilter = (path: string, page = 1): Promise<string> =>
-  fetchHtml(`${DOMAIN}${path}${page > 1 ? `page/${page}/` : ""}`);
+export const fetchChapterListPage = (novelId: string, page = 1): Promise<string> =>
+  fetchPage(`${DOMAIN}/chapters/${novelId}/${page > 1 ? `page/${page}/` : ""}`);
