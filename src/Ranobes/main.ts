@@ -267,7 +267,7 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   }
 
   private async getFilterTaxonomy(): Promise<FilterTaxonomy> {
-    return parseFilterTaxonomy(cheerio.load(await fetchListingPage("/tags/events/")));
+    return parseFilterTaxonomy(cheerio.load(await fetchListingPage("/novels/")));
   }
 }
 

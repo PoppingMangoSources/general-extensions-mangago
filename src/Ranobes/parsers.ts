@@ -120,9 +120,9 @@ export const extractNovelId = (mangaId: string): string => {
 };
 
 export const parseFilterTaxonomy = ($: cheerio.CheerioAPI): FilterTaxonomy => {
-  const events = $(".cat_block a[href*='/tags/events/'] h3")
+  const events = $("select[name='n.events'] option")
     .toArray()
-    .map((element) => cleanText($(element).text()))
+    .map((element) => cleanText($(element).attr("value") ?? $(element).text()))
     .filter(Boolean);
   return {
     genres: GENRES.map((title) => ({ id: toFilterOptionId(title), title })),
