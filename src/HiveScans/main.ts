@@ -130,11 +130,10 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
         .setQueryItem("orderBy", "totalViews")
         .toString();
       const data = await fetchJSON<HiveScansSearchResponse>({ url, method: "GET" });
+      // Built from the query listing alone — no per-post detail fetch. Author,
+      // rating and synopsis are shown when the listing carries them.
       const posts = (data.posts ?? []).filter((post) => !isNovel(post)).slice(0, 8);
-      const details = await Promise.all(
-        posts.map(async (post) => (await this.fetchPostDetails(encodeMangaId(post.slug))).post),
-      );
-      return { items: toFeaturedItems(details), metadata: undefined };
+      return { items: toFeaturedItems(posts), metadata: undefined };
     }
 
     if (section.id === SECTIONS.NOVELS) {
