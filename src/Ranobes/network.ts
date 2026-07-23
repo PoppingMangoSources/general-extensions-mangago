@@ -99,24 +99,17 @@ export class RanobesInterceptor extends PaperbackInterceptor {
   ): Promise<ArrayBuffer> {
     const contentType = response.headers?.["content-type"] ?? "";
     const body = contentType.includes("text/html") ? Application.arrayBufferToUTF8String(data) : "";
-    const server = response.headers?.["server"] ?? "";
-    const challenged =
+    if (
       response.headers?.["cf-mitigated"] === "challenge" ||
-      // DDoS-Guard (and the vBulletin gate) serve their interstitial as a 403.
-      (response.status === 403 && /ddos-guard/i.test(server)) ||
-      /(?:vb_challenge|cf-turnstile|ddos-guard|<title>\s*(?:Just a moment|DDoS-Guard))/i.test(body);
-    if (!challenged) return data;
-
-    // A challenged response is unusable, so throw on every one — the bypass
-    // prompt must always be reachable, and swallowing it behind a plain error
-    // leaves the user with no way to open the browser check. Every error points
-    // at the homepage, so the app groups the concurrent discover fetches under a
-    // single bypass rather than one webview per request.
-    throw new CloudflareError({
-      url: `${DOMAIN}/`,
-      method: "GET",
-      headers: { "user-agent": await Application.getDefaultUserAgent() },
-    });
+      /(?:vb_challenge|cf-turnstile|<title>Just a moment)/i.test(body)
+    ) {
+      throw new CloudflareError({
+        url: request.url,
+        method: request.method ?? "GET",
+        headers: { "user-agent": await Application.getDefaultUserAgent() },
+      });
+    }
+    return data;
   }
 }
 
