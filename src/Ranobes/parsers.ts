@@ -5,6 +5,8 @@ import {
   ContentRating,
   type Chapter,
   type ChapterDetails,
+  type DiscoverSectionItem,
+  type SearchResultItem,
   type SourceManga,
   type Tag,
   type TagSection,
@@ -142,6 +144,92 @@ export const parseContentRating = (genres: string[]): ContentRating => {
   }
   return ContentRating.EVERYONE;
 };
+
+export const formatCount = (value: number): string => value.toLocaleString("en-US");
+
+export const toFeaturedItem = (listing: RanobesListing): DiscoverSectionItem => ({
+  type: "featuredCarouselItem",
+  mangaId: listing.mangaId,
+  title: listing.title,
+  imageUrl: listing.imageUrl,
+  summary: listing.description,
+  infoItems:
+    listing.rating !== undefined && listing.views !== undefined
+      ? [
+          {
+            symbol: "star.fill",
+            text: `${listing.rating.toFixed(1)}${
+              listing.ratingCount ? ` (${listing.ratingCount})` : ""
+            }`,
+          },
+          { symbol: "eye.fill", text: formatCount(listing.views) },
+        ]
+      : listing.rating !== undefined
+        ? [
+            {
+              symbol: "star.fill",
+              text: `${listing.rating.toFixed(1)}${
+                listing.ratingCount ? ` (${listing.ratingCount})` : ""
+              }`,
+            },
+          ]
+        : listing.views !== undefined
+          ? [{ symbol: "eye.fill", text: formatCount(listing.views) }]
+          : undefined,
+  contentRating: parseContentRating(listing.genres ?? []),
+});
+
+export const toChapterUpdateItem = (listing: RanobesListing): DiscoverSectionItem | undefined => {
+  if (!listing.chapterId) return undefined;
+  return {
+    type: "chapterUpdatesCarouselItem",
+    mangaId: listing.mangaId,
+    chapterId: listing.chapterId,
+    title: listing.title,
+    imageUrl: listing.imageUrl,
+    subtitle: listing.chapterTitle || undefined,
+    publishDate: listing.publishDate,
+  };
+};
+
+export const toRankingItem = (
+  listing: RanobesListing,
+  rank: number,
+  useRating: boolean,
+): DiscoverSectionItem => ({
+  type: "prominentCarouselItem",
+  mangaId: listing.mangaId,
+  title: listing.title,
+  imageUrl: listing.imageUrl,
+  subtitle: useRating
+    ? `#${rank} • ★ ${listing.rating?.toFixed(1) ?? "—"}${
+        listing.ratingCount ? ` (${listing.ratingCount})` : ""
+      }`
+    : `#${rank} • ${formatCount(listing.views ?? 0)} views`,
+  contentRating: parseContentRating(listing.genres ?? []),
+});
+
+export const toCompletedItem = (listing: RanobesListing): DiscoverSectionItem => ({
+  type: "prominentCarouselItem",
+  mangaId: listing.mangaId,
+  title: listing.title,
+  imageUrl: listing.imageUrl,
+  subtitle:
+    listing.views !== undefined
+      ? `${formatCount(listing.views)} views`
+      : listing.rating !== undefined
+        ? `★ ${listing.rating.toFixed(1)}`
+        : undefined,
+  contentRating: parseContentRating(listing.genres ?? []),
+});
+
+export const toSearchResult = (listing: RanobesListing): SearchResultItem => ({
+  mangaId: listing.mangaId,
+  title: listing.title,
+  imageUrl: listing.imageUrl,
+  subtitle: listing.rating !== undefined ? `★ ${listing.rating.toFixed(1)}` : undefined,
+  contentRating: parseContentRating(listing.genres ?? []),
+});
 
 const parseNovelCard = (
   $: cheerio.CheerioAPI,
