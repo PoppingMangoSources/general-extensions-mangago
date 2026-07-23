@@ -7,7 +7,8 @@ const pbConfig = {
   ...basePbConfig,
   name: "RokariComics",
   description: "Extension that pulls content from rokaricomics.com.",
-  version: "1.0.0-alpha.11",
+  version: "1.0.0-alpha.12",
+  developers: [{ name: "PopMango", github: "https://github.com/PoppingMangoSources" }],
 };
 
 export default pbConfig;

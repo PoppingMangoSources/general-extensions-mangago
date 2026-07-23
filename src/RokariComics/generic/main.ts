@@ -323,12 +323,23 @@ export abstract class MangaStreamGeneric implements ExtensionImpl<typeof basePbC
     return new MangaStreamSettings(this.name);
   }
 
-  async saveCloudflareBypassCookies(cookies: Cookie[]): Promise<void> {
+  async cloudflareBypassCompleted(
+    _request: Request,
+    cookies: Cookie[],
+    _localStorage: Record<string, string>,
+  ): Promise<void> {
     for (const cookie of this.cookieStorageInterceptor.cookies) {
       this.cookieStorageInterceptor.deleteCookie(cookie);
     }
     for (const cookie of cookies) {
       if (cookie.expires && cookie.expires.getTime() <= Date.now()) {
+        continue;
+      }
+      if (
+        !cookie.name.startsWith("cf") &&
+        !cookie.name.startsWith("_cf") &&
+        !cookie.name.startsWith("__cf")
+      ) {
         continue;
       }
       this.cookieStorageInterceptor.setCookie(cookie);
