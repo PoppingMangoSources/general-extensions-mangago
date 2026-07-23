@@ -14,26 +14,35 @@ import { type AnyNode } from "domhandler";
 
 import {
   ADULT_GENRE_NAMES,
-  ALT_NAME_SELECTOR,
-  ARTIST_SELECTOR,
-  AUTHOR_SELECTOR,
-  CHAPTER_DATE_SELECTOR,
-  CHAPTER_NAME_SELECTOR,
-  CHAPTER_SELECTOR,
-  DESC_SELECTOR,
-  DETAILS_SCOPE,
-  GENRE_FILTER_SELECTOR,
-  GENRE_SELECTOR,
-  IMAGE_LIST_REGEX,
   MANGA_DIR,
-  PAGE_SELECTOR,
-  STATUS_SELECTOR,
-  THUMB_SELECTOR,
-  TITLE_SELECTOR,
   type LatestCard,
   type MangaCard,
   type OptionItem,
 } from "./models";
+
+const CARD_SELECTOR = ".utao .uta .imgu, .listupd .bs .bsx, .listo .bs .bsx, .bsx";
+
+const DETAILS_SCOPE = "div.bigcontent, div.animefull, div.main-info, div.postbody";
+const TITLE_SELECTOR = "h1.entry-title, .ts-breadcrumb li:last-child span";
+const THUMB_SELECTOR = ".infomanga > div[itemprop=image] img, .thumb img";
+const DESC_SELECTOR = ".desc, .entry-content[itemprop=description]";
+const ALT_NAME_SELECTOR = ".alternative, .wd-full:contains(alt) span, .alter, .seriestualt";
+const GENRE_SELECTOR = "div.gnr a, .mgen a, .seriestugenre a";
+const AUTHOR_SELECTOR =
+  ".infotable tr:contains(Author) td:last-child, .tsinfo .imptdt:contains(Author) i, .fmed b:contains(Author)+span";
+const ARTIST_SELECTOR =
+  ".infotable tr:contains(Artist) td:last-child, .tsinfo .imptdt:contains(Artist) i, .fmed b:contains(Artist)+span";
+const STATUS_SELECTOR =
+  ".infotable tr:contains(Status) td:last-child, .tsinfo .imptdt:contains(Status) i, .fmed b:contains(Status)+span";
+
+const CHAPTER_SELECTOR =
+  "div.bxcl li, div.cl li, #chapterlist li, ul li:has(div.chbox):has(div.eph-num)";
+const CHAPTER_NAME_SELECTOR = ".lch a, .chapternum";
+const CHAPTER_DATE_SELECTOR = ".chapterdate";
+const PAGE_SELECTOR = "div#readerarea img";
+const IMAGE_LIST_REGEX = /"images"\s*:\s*(\[.*?\])/s;
+
+const GENRE_FILTER_SELECTOR = "ul.genrez li";
 
 export const buildInfoItems = (
   rating?: string,
@@ -134,7 +143,7 @@ const imgAttr = (base: string, img: Cheerio<AnyNode>): string => {
   return absoluteUrl(base, src);
 };
 
-const cardTitle = ($: CheerioAPI, unit: Cheerio<AnyNode>, link: Cheerio<AnyNode>): string => {
+const cardTitle = (unit: Cheerio<AnyNode>, link: Cheerio<AnyNode>): string => {
   const img = unit.find("img").first();
   const raw =
     unit.find(".bigor .tt a, .tt").first().text().trim() ||
@@ -153,7 +162,7 @@ const parseCard = ($: CheerioAPI, base: string, element: AnyNode): MangaCard | u
   const mangaId = parseMangaId(href);
   if (!mangaId) return undefined;
 
-  const title = cardTitle($, unit, link);
+  const title = cardTitle(unit, link);
   if (!title) return undefined;
 
   const rating = unit.find(".numscore").first().text().trim();
@@ -169,10 +178,10 @@ const parseCard = ($: CheerioAPI, base: string, element: AnyNode): MangaCard | u
   };
 };
 
-export const parseCards = ($: CheerioAPI, base: string, selector: string): MangaCard[] => {
+export const parseCards = ($: CheerioAPI, base: string): MangaCard[] => {
   const cards: MangaCard[] = [];
   const seen = new Set<string>();
-  for (const element of $(selector).toArray()) {
+  for (const element of $(CARD_SELECTOR).toArray()) {
     const card = parseCard($, base, element);
     if (card && !seen.has(card.mangaId)) {
       seen.add(card.mangaId);
@@ -186,18 +195,8 @@ const widgetByHeading = ($: CheerioAPI, heading: string): Cheerio<AnyNode> => {
   return $(`.releases:contains("${heading}")`).first().closest(".bixbox, .section");
 };
 
-export const parsePopularToday = ($: CheerioAPI, base: string): MangaCard[] => {
-  const scope = widgetByHeading($, "Popular Today");
-  return dedupeCards(
-    scope
-      .find(".bsx")
-      .toArray()
-      .map((el) => parseCard($, base, el)),
-  );
-};
-
-export const parseRecommendation = ($: CheerioAPI, base: string): MangaCard[] => {
-  const scope = widgetByHeading($, "Recommendation");
+export const parseWidgetCards = ($: CheerioAPI, base: string, heading: string): MangaCard[] => {
+  const scope = widgetByHeading($, heading);
   return dedupeCards(
     scope
       .find(".bsx")
@@ -352,7 +351,7 @@ export const parseMangaDetails = (
   scope.find(GENRE_SELECTOR).each((_, el) => {
     const title = Application.decodeHTMLEntities($(el).text().trim());
     if (!title) return;
-    const id = title.toLowerCase().replace(/\s+/g, "-");
+    const id = toSafeId(title.toLowerCase().replace(/\s+/g, "-"));
     if (seenGenre.has(id)) return;
     seenGenre.add(id);
     genreTags.push({ id, title });
@@ -476,7 +475,7 @@ export const proxyImage = (url: string, mode: string): string => {
     return url;
   }
   const source = match[1].replace(/&/g, "%26");
-  const hq = mode === "quality" || mode === "fast";
+  const hq = mode === "quality";
   const width = hq ? 1080 : 720;
   const quality = hq ? 80 : 65;
   return `https://wsrv.nl/?w=${width}&q=${quality}&we&default=ssl:${source}&url=ssl:${source}`;

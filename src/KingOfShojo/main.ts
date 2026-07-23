@@ -35,7 +35,6 @@ import {
 } from "./forms/settings";
 import {
   ADULT_GENRE_NAMES,
-  CARD_SELECTOR,
   DEFAULT_DOMAIN,
   FEATURED_LIMIT,
   MANGA_DIR,
@@ -57,11 +56,12 @@ import {
   parseMangaDetails,
   parseMangaId,
   parsePopularSeries,
-  parsePopularToday,
-  parseRecommendation,
+  parseWidgetCards,
   proxyImage,
 } from "./parsers";
 import type KingOfShojoConfig from "./pbconfig";
+
+const ensureTrailingSlash = (url: string): string => (url.endsWith("/") ? url : `${url}/`);
 
 export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoConfig> {
   globalRateLimiter = new BasicRateLimiter("rateLimiter", {
@@ -72,10 +72,8 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
   cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
   mainInterceptor = new KingOfShojoInterceptor("main", () => this.baseUrl);
 
-  private homepageCache: { $: CheerioAPI; baseUrl: string } | null = null;
-  private homepagePromise: { promise: Promise<CheerioAPI>; baseUrl: string } | null = null;
-  private genresCache: { options: OptionItem[]; baseUrl: string } | null = null;
-  private genresPromise: { promise: Promise<OptionItem[]>; baseUrl: string } | null = null;
+  private homepageCache: { promise: Promise<CheerioAPI>; baseUrl: string } | null = null;
+  private genresCache: { promise: Promise<OptionItem[]>; baseUrl: string } | null = null;
   private featuredCache: {
     items: DiscoverSectionItem[];
     adult: boolean;
@@ -114,9 +112,7 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
     _localStorage: Record<string, string>,
   ): Promise<void> {
     this.homepageCache = null;
-    this.homepagePromise = null;
     this.genresCache = null;
-    this.genresPromise = null;
     this.featuredCache = null;
     for (const cookie of cookies) {
       if (
@@ -183,7 +179,7 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
 
     switch (section.id) {
       case "recommendation":
-        items = parseRecommendation($, this.baseUrl).map((card) => ({
+        items = parseWidgetCards($, this.baseUrl, "Recommendation").map((card) => ({
           type: "simpleCarouselItem",
           mangaId: card.mangaId,
           title: card.title,
@@ -272,7 +268,7 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
     if (genreValues.length > 0) builder.setQueryItem("genre[]", genreValues);
 
     const $ = await fetchCheerio({ url: builder.toString(), method: "GET" });
-    const items: SearchResultItem[] = parseCards($, this.baseUrl, CARD_SELECTOR).map((card) => ({
+    const items: SearchResultItem[] = parseCards($, this.baseUrl).map((card) => ({
       mangaId: card.mangaId,
       title: card.title,
       imageUrl: card.imageUrl,
@@ -327,8 +323,9 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    const base = new URL(this.baseUrl).addPathComponent(chapter.chapterId).toString();
-    const url = base.endsWith("/") ? base : `${base}/`;
+    const url = ensureTrailingSlash(
+      new URL(this.baseUrl).addPathComponent(chapter.chapterId).toString(),
+    );
     const $ = await fetchCheerio({ url, method: "GET" });
     const mode = getImageMode();
     const pages = parseChapterPages($, this.baseUrl).map((page) => proxyImage(page, mode));
@@ -339,31 +336,22 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
   }
 
   private mangaUrl(mangaId: string): string {
-    const url = new URL(this.baseUrl)
-      .addPathComponent(MANGA_DIR)
-      .addPathComponent(mangaId)
-      .toString();
-    return url.endsWith("/") ? url : `${url}/`;
+    return ensureTrailingSlash(
+      new URL(this.baseUrl).addPathComponent(MANGA_DIR).addPathComponent(mangaId).toString(),
+    );
   }
 
   private async getHomepage(): Promise<CheerioAPI> {
     const baseUrl = this.baseUrl;
-    if (this.homepageCache && this.homepageCache.baseUrl === baseUrl) {
-      return this.homepageCache.$;
-    }
-    if (this.homepagePromise && this.homepagePromise.baseUrl === baseUrl) {
-      return this.homepagePromise.promise;
-    }
-    const promise = fetchCheerio({ url: `${baseUrl}/`, method: "GET" })
-      .then(($) => {
-        this.homepageCache = { $, baseUrl };
-        return $;
-      })
-      .finally(() => {
-        this.homepagePromise = null;
-      });
-    this.homepagePromise = { promise, baseUrl };
-    return promise;
+    if (this.homepageCache?.baseUrl !== baseUrl) this.homepageCache = null;
+    const record = (this.homepageCache ??= {
+      baseUrl,
+      promise: fetchCheerio({ url: `${baseUrl}/`, method: "GET" }).catch((error: unknown) => {
+        if (this.homepageCache === record) this.homepageCache = null;
+        throw error;
+      }),
+    });
+    return record.promise;
   }
 
   private async buildFeaturedItems(): Promise<DiscoverSectionItem[]> {
@@ -378,7 +366,7 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
     }
 
     const $ = await this.getHomepage();
-    const cards = parsePopularToday($, this.baseUrl).slice(0, FEATURED_LIMIT);
+    const cards = parseWidgetCards($, this.baseUrl, "Popular Today").slice(0, FEATURED_LIMIT);
     const fallbackRating = this.contentRating;
 
     const built = await Promise.all(
@@ -426,27 +414,25 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
 
   private async getGenres(): Promise<OptionItem[]> {
     const baseUrl = this.baseUrl;
-    if (this.genresCache && this.genresCache.baseUrl === baseUrl) {
-      return this.genresCache.options;
-    }
-    if (this.genresPromise?.baseUrl === baseUrl) return this.genresPromise.promise;
-
-    const request = {
+    if (this.genresCache?.baseUrl !== baseUrl) this.genresCache = null;
+    const record = (this.genresCache ??= {
       baseUrl,
       promise: fetchCheerio({
         url: new URL(baseUrl).addPathComponent(`${MANGA_DIR}/`).toString(),
         method: "GET",
-      }).then(($) => {
-        const options = parseGenreFilter($);
-        if (options.length > 0) this.genresCache = { options, baseUrl };
-        return options;
-      }),
-    };
-    request.promise = request.promise.finally(() => {
-      if (this.genresPromise === request) this.genresPromise = null;
+      }).then(
+        ($) => {
+          const options = parseGenreFilter($);
+          if (options.length === 0 && this.genresCache === record) this.genresCache = null;
+          return options;
+        },
+        (error: unknown) => {
+          if (this.genresCache === record) this.genresCache = null;
+          throw error;
+        },
+      ),
     });
-    this.genresPromise = request;
-    return request.promise;
+    return record.promise;
   }
 }
 
