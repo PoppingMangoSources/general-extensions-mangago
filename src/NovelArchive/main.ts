@@ -34,8 +34,13 @@ import {
   type ChapterContentResponse,
   type Novel,
   type NovelListResponse,
+  type NovelSource,
   type PageMetadata,
   type SearchMetadata,
+  type SourceChapterContentResponse,
+  type SourceChapterEntry,
+  type SourceChapterListResponse,
+  type SourceListResponse,
   type TriState,
 } from "./models";
 import { fetchJSON, NovelArchiveInterceptor } from "./network";
@@ -43,6 +48,8 @@ import {
   parseChapterDetails,
   parseChapters,
   parseMangaDetails,
+  parseSourceChapterDetails,
+  parseSourceChapters,
   toCardItems,
   toChapterUpdateItems,
   toFeaturedItems,
@@ -217,14 +224,57 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
-    const novel = await this.fetchNovel(sourceManga.mangaId);
-    return parseChapters(novel, sourceManga);
+    const id = sourceManga.mangaId;
+    const novel = await this.fetchNovel(id);
+    const chapters = parseChapters(novel, sourceManga);
+
+    for (const source of await this.fetchSources(id)) {
+      const entries = await this.fetchSourceChapters(id, source.id);
+      chapters.push(...parseSourceChapters(source, entries, sourceManga));
+    }
+
+    return chapters;
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    const url = `${API_URL}/novels/${chapter.sourceManga.mangaId}/chapters/${chapter.chapterId}`;
-    const data = await fetchJSON<ChapterContentResponse>(url);
+    const id = chapter.sourceManga.mangaId;
+    const separator = chapter.chapterId.indexOf(":");
+
+    if (separator >= 0) {
+      const sourceId = chapter.chapterId.slice(0, separator);
+      const number = chapter.chapterId.slice(separator + 1);
+      const data = await fetchJSON<SourceChapterContentResponse>(
+        `${API_URL}/novels/${id}/sources/${sourceId}/chapters/${number}`,
+      );
+      return parseSourceChapterDetails(data, chapter);
+    }
+
+    const data = await fetchJSON<ChapterContentResponse>(
+      `${API_URL}/novels/${id}/chapters/${chapter.chapterId}`,
+    );
     return parseChapterDetails(data, chapter);
+  }
+
+  private async fetchSources(id: string): Promise<NovelSource[]> {
+    try {
+      const data = await fetchJSON<NovelSource[] | SourceListResponse>(
+        `${API_URL}/novels/${id}/sources`,
+      );
+      return Array.isArray(data) ? data : (data.sources ?? []);
+    } catch {
+      return [];
+    }
+  }
+
+  private async fetchSourceChapters(id: string, sourceId: string): Promise<SourceChapterEntry[]> {
+    try {
+      const data = await fetchJSON<SourceChapterEntry[] | SourceChapterListResponse>(
+        `${API_URL}/novels/${id}/sources/${sourceId}/chapters`,
+      );
+      return Array.isArray(data) ? data : (data.chapters ?? []);
+    } catch {
+      return [];
+    }
   }
 
   private async fetchNovel(id: string): Promise<Novel> {

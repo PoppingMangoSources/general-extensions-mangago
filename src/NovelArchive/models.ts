@@ -105,6 +105,30 @@ export interface ChapterContentResponse {
   content?: string | null;
 }
 
+export interface NovelSource {
+  id: string;
+  label?: string | null;
+}
+
+export interface SourceListResponse {
+  sources?: NovelSource[];
+}
+
+export interface SourceChapterEntry {
+  number: number | string;
+  title?: string | null;
+}
+
+export interface SourceChapterListResponse {
+  chapters?: SourceChapterEntry[];
+}
+
+export interface SourceChapterContentResponse {
+  content_html?: string | null;
+  content?: string | null;
+  chapter?: { content_html?: string | null; content?: string | null } | null;
+}
+
 export const SORT_OPTIONS: OptionItem[] = [
   { id: "recent", value: "Recent" },
   { id: "popular", value: "Popular" },

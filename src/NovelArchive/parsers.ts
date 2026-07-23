@@ -12,7 +12,15 @@ import {
   type Tag,
 } from "@paperback/types";
 
-import { ADULT_RATING_GENRES, DOMAIN, type ChapterContentResponse, type Novel } from "./models";
+import {
+  ADULT_RATING_GENRES,
+  DOMAIN,
+  type ChapterContentResponse,
+  type Novel,
+  type NovelSource,
+  type SourceChapterContentResponse,
+  type SourceChapterEntry,
+} from "./models";
 
 const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
 
@@ -228,25 +236,69 @@ export const parseMangaDetails = (novel: Novel): SourceManga => {
 
 const CHAPTER_LEAD = /^\s*(?:chapter|chap\.?|ch\.?|episode|ep\.?)?\s*(\d+(?:\.\d+)?)\s*[-:–.]?\s*/i;
 
+const cleanChapterName = (name: string): { chapNum?: number; title: string } => {
+  const match = name.match(CHAPTER_LEAD);
+  const parsed = match ? parseFloat(match[1]) : NaN;
+  const title = (match ? name.slice(match[0].length) : name)
+    .replace(/^\d+(?:\.\d+)?\s*[-:–.]\s*/, "")
+    .trim();
+  return { chapNum: Number.isFinite(parsed) ? parsed : undefined, title };
+};
+
 export const parseChapters = (novel: Novel, sourceManga: SourceManga): Chapter[] =>
   (novel.chapter_names ?? []).map((rawName, index) => {
-    const name = (rawName ?? "").trim();
-    const match = name.match(CHAPTER_LEAD);
-    const parsed = match ? parseFloat(match[1]) : NaN;
-    const chapNum = Number.isFinite(parsed) ? parsed : index + 1;
-    const title = (match ? name.slice(match[0].length) : name)
-      .replace(/^\d+(?:\.\d+)?\s*[-:–.]\s*/, "")
-      .trim();
+    const { chapNum, title } = cleanChapterName((rawName ?? "").trim());
+    const number = chapNum ?? index + 1;
     return {
       chapterId: String(index + 1),
       sourceManga,
       langCode: "en",
-      chapNum,
-      title: title || `Chapter ${chapNum}`,
+      chapNum: number,
+      title: title || `Chapter ${number}`,
       volume: 0,
       sortingIndex: index,
     };
   });
+
+export const parseSourceChapters = (
+  source: NovelSource,
+  entries: SourceChapterEntry[],
+  sourceManga: SourceManga,
+): Chapter[] =>
+  entries.map((entry, index) => {
+    const parsed =
+      typeof entry.number === "number" ? entry.number : parseFloat(String(entry.number));
+    const chapNum = Number.isFinite(parsed) ? parsed : index + 1;
+    const { title } = cleanChapterName((entry.title ?? "").trim());
+    return {
+      chapterId: `${source.id}:${entry.number}`,
+      sourceManga,
+      langCode: "en",
+      chapNum,
+      title: title || `Chapter ${chapNum}`,
+      version: source.label ?? undefined,
+      volume: 0,
+      sortingIndex: index,
+    };
+  });
+
+const toXhtmlDocument = (text: string): string => {
+  const body = text
+    .split(/\r?\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line) => `<p>${escapeXml(line)}</p>`)
+    .join("");
+  return `<html xmlns="http://www.w3.org/1999/xhtml"><head></head><body>${body}</body></html>`;
+};
+
+const htmlToText = (html: string): string =>
+  Application.decodeHTMLEntities(
+    html
+      .replace(/<\s*(?:br|hr)\s*\/?>/gi, "\n")
+      .replace(/<\/\s*(?:p|div|h[1-6]|li|blockquote)\s*>/gi, "\n\n")
+      .replace(/<[^>]+>/g, ""),
+  );
 
 export const parseChapterDetails = (
   response: ChapterContentResponse,
@@ -256,18 +308,31 @@ export const parseChapterDetails = (
   if (!content) {
     throw new Error(`No content returned for chapter ${chapter.chapterId}`);
   }
-
-  const body = content
-    .split(/\r?\n+/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .map((line) => `<p>${escapeXml(line)}</p>`)
-    .join("");
-
   return {
     type: "html",
     id: chapter.chapterId,
     mangaId: chapter.sourceManga.mangaId,
-    html: `<html xmlns="http://www.w3.org/1999/xhtml"><head></head><body>${body}</body></html>`,
+    html: toXhtmlDocument(content),
+  };
+};
+
+export const parseSourceChapterDetails = (
+  response: SourceChapterContentResponse,
+  chapter: Chapter,
+): ChapterDetails => {
+  const html = (
+    response.content_html ??
+    response.chapter?.content_html ??
+    response.content ??
+    ""
+  ).trim();
+  if (!html) {
+    throw new Error(`No content returned for chapter ${chapter.chapterId}`);
+  }
+  return {
+    type: "html",
+    id: chapter.chapterId,
+    mangaId: chapter.sourceManga.mangaId,
+    html: toXhtmlDocument(htmlToText(html)),
   };
 };
