@@ -12,6 +12,7 @@ export const SECTIONS = {
   MOST_VIEWED: "most-viewed",
   MOST_RATED: "most-rated",
   ALL_TIME: "all-time",
+  COMPLETED: "completed",
 } as const;
 
 export const DISCOVER_SECTIONS: DiscoverSection[] = [
@@ -32,6 +33,7 @@ export const DISCOVER_SECTIONS: DiscoverSection[] = [
     title: "All Time Popular",
     type: DiscoverSectionType.prominentCarousel,
   },
+  { id: SECTIONS.COMPLETED, title: "Completed", type: DiscoverSectionType.simpleCarousel },
 ];
 
 export const SORT_ORDERS = [

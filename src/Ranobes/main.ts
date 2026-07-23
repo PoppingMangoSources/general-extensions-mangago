@@ -117,6 +117,15 @@ const toRankingItem = (
   contentRating: parseContentRating(listing.genres ?? []),
 });
 
+const toSimpleItem = (listing: RanobesListing): DiscoverSectionItem => ({
+  type: "simpleCarouselItem",
+  mangaId: listing.mangaId,
+  title: listing.title,
+  imageUrl: listing.imageUrl,
+  subtitle: listing.rating !== undefined ? `★ ${listing.rating.toFixed(1)}` : undefined,
+  contentRating: parseContentRating(listing.genres ?? []),
+});
+
 const toSearchResult = (listing: RanobesListing): SearchResultItem => ({
   mangaId: listing.mangaId,
   title: listing.title,
@@ -127,7 +136,7 @@ const toSearchResult = (listing: RanobesListing): SearchResultItem => ({
 
 export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   mainRateLimiter = new BasicRateLimiter("main", {
-    numberOfRequests: 2,
+    numberOfRequests: 4,
     bufferInterval: 1,
     ignoreImages: true,
   });
@@ -193,6 +202,13 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
         return this.getRankingItems("/ranking/rated/", page, true);
       case SECTIONS.ALL_TIME:
         return this.getRankingItems("/ranking/all_time/", page, false);
+      case SECTIONS.COMPLETED: {
+        const $ = cheerio.load(await fetchListingPage("/tags/status-trs/Completed/", page));
+        return {
+          items: parseListings($, "stories").map(toSimpleItem),
+          metadata: isLastListingPage($) ? undefined : { page: page + 1 },
+        };
+      }
       default:
         return { items: [] };
     }
