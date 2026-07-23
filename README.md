@@ -28,9 +28,9 @@ After installing the repository, refresh it in Paperback to receive source updat
 
 ## Support
 
-Report source problems through this repository's [Issues page][issues]. Include the affected source, the page or title that failed, and screenshots or request details when possible.
+Report source problems through Inkdex's discord in the OTHER-REPOS channel where my support chat is. Include the affected source, the page or title that failed, and screenshots or request details when possible.
 
 These extensions are not affiliated with Paperback or any supported website. All site names and logos belong to their respective owners.
 
 [test-installation]: https://poppingmangosources.github.io/general-extensions-mangago/0.9/test/
-[issues]: https://github.com/PoppingMangoSources/general-extensions-mangago/issues
+[issues]: https://discord.com/invite/inkdex
