@@ -70,14 +70,8 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   private taxonomyPromise?: Promise<FilterTaxonomy>;
 
   async initialise(): Promise<void> {
-    this.cookieStorage.setCookie({
-      name: "browser_check",
-      value: "1",
-      domain: "ranobes.net",
-      path: "/",
-    });
-    this.cookieStorage.registerInterceptor();
     this.mainRateLimiter.registerInterceptor();
+    this.cookieStorage.registerInterceptor();
     this.requestManager.registerInterceptor();
   }
 
@@ -87,9 +81,14 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     _localStorage: Record<string, string>,
   ): Promise<void> {
     this.taxonomyPromise = undefined;
-    this.requestManager.clearChallenge();
     for (const cookie of cookies) {
-      if (cookie.domain.includes("ranobes.net")) this.cookieStorage.setCookie(cookie);
+      if (
+        cookie.name.startsWith("cf") ||
+        cookie.name.startsWith("_cf") ||
+        cookie.name.startsWith("__cf")
+      ) {
+        this.cookieStorage.setCookie(cookie);
+      }
     }
   }
 

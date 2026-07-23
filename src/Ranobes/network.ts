@@ -80,40 +80,14 @@ export const buildSearchPath = (
   return segments.length ? `/f/${segments.join("/")}/` : undefined;
 };
 
-// Paperback reports a bare iOS WebView UA, while the challenge WebView solves
-// the check as full Mobile Safari. DDoS-Guard binds its clearance cookies to
-// the solving browser's identity, so native requests must present the same
-// completed UA or every request after a successful bypass is challenged again.
-const completeMobileSafariUserAgent = (userAgent: string): string => {
-  if (!/\b(?:iPhone|iPad|iPod)\b/.test(userAgent) || /\bSafari\//.test(userAgent)) {
-    return userAgent;
-  }
-  const os = /\bOS (\d+)[_.](\d+)/.exec(userAgent);
-  const version = os ? `${os[1]}.${os[2]}` : "18.0";
-  const withVersion = /\bVersion\//.test(userAgent)
-    ? userAgent
-    : userAgent.replace(/\sMobile\//, ` Version/${version} Mobile/`);
-  return /\bSafari\//.test(withVersion) ? withVersion : `${withVersion} Safari/604.1`;
-};
-
-let ranobesUserAgent: Promise<string> | undefined;
-const getRanobesUserAgent = (): Promise<string> =>
-  (ranobesUserAgent ??= Application.getDefaultUserAgent().then(completeMobileSafariUserAgent));
-
 export class RanobesInterceptor extends PaperbackInterceptor {
-  private challengeThrownAt = 0;
-
-  clearChallenge(): void {
-    this.challengeThrownAt = 0;
-  }
-
   override async interceptRequest(request: Request): Promise<Request> {
     return {
       ...request,
       headers: {
         ...request.headers,
         referer: `${DOMAIN}/`,
-        "user-agent": await getRanobesUserAgent(),
+        "user-agent": await Application.getDefaultUserAgent(),
       },
     };
   }
@@ -130,22 +104,10 @@ export class RanobesInterceptor extends PaperbackInterceptor {
       response.status === 403 ||
       /(?:Just a moment|Security check|vb_challenge)/i.test(body)
     ) {
-      // The app queues one bypass entry per thrown CloudflareError, so with
-      // every Discover section challenged at once an unconditional throw
-      // queues six prompts. Throw a single CloudflareError per challenge
-      // episode — pointed at the homepage, which serves the gate — and give
-      // the other concurrent fetches a short pending error instead.
-      // cloudflareBypassCompleted calls clearChallenge() so the refresh after
-      // a bypass re-arms detection immediately.
-      const now = Date.now();
-      if (now - this.challengeThrownAt < 60_000) {
-        throw new Error("Cloudflare bypass pending — complete it and refresh.");
-      }
-      this.challengeThrownAt = now;
       throw new CloudflareError({
-        url: `${DOMAIN}/`,
-        method: "GET",
-        headers: { "user-agent": await getRanobesUserAgent() },
+        url: request.url,
+        method: request.method ?? "GET",
+        headers: { "user-agent": await Application.getDefaultUserAgent() },
       });
     }
     return data;
