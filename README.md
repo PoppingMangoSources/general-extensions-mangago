@@ -13,6 +13,7 @@ The repository's own sources are currently available from `0.9/test` while they 
 | [MyReadingManga](https://myreadingmanga.info) | `myreadingmanga.info` |
 | [oManga](https://omanga.to)                   | `omanga.to`           |
 | [OniSaga](https://onisaga.com)                | `onisaga.com`         |
+| [Ranobes](https://ranobes.net)                | `ranobes.net`         |
 | [RinkoComics](https://rinkocomics.com)        | `rinkocomics.com`     |
 | [RokariComics](https://rokaricomics.com)      | `rokaricomics.com`    |
 | [Scans.GG](https://scans.gg)                  | `scans.gg`            |
