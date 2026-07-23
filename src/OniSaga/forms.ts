@@ -6,7 +6,6 @@ import {
   ButtonRow,
   EditSection,
   Form,
-  type FormSectionElement,
   InputRow,
   LabelRow,
   NavigationRow,
@@ -112,20 +111,16 @@ class OniSagaSectionsForm extends Form {
     const deleted = getDeletedSections();
 
     return [
-      {
-        ...EditSection("order", {
-          id: "order",
-          header: "Section Order",
-          footer: "Long press to reorder, swipe to hide.",
-          items: getSectionsOrder().map((section) =>
-            LabelRow(section.id, { title: section.title }),
-          ),
-        }),
+      EditSection("order", {
+        id: "order",
+        header: "Section Order",
+        footer: "Long press to reorder, swipe to hide.",
+        items: getSectionsOrder().map((section) => LabelRow(section.id, { title: section.title })),
         allowReorder: true,
         allowDeletion: true,
         onReorder: Application.Selector(this as OniSagaSectionsForm, "rowDidReorder"),
         onDeletion: Application.Selector(this as OniSagaSectionsForm, "rowDidDelete"),
-      } as unknown as FormSectionElement<unknown>,
+      }),
       ...(deleted.length > 0
         ? [
             Section({ id: "restore", footer: "Re-add hidden rails to the bottom of the list." }, [

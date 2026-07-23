@@ -155,7 +155,15 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     cookies: Cookie[],
     _localStorage: Record<string, string>,
   ): Promise<void> {
-    for (const cookie of cookies) this.cookieStorageInterceptor.setCookie(cookie);
+    for (const cookie of cookies) {
+      if (
+        cookie.name.startsWith("cf") ||
+        cookie.name.startsWith("_cf") ||
+        cookie.name.startsWith("__cf")
+      ) {
+        this.cookieStorageInterceptor.setCookie(cookie);
+      }
+    }
 
     this.requestManager.resetAfterCloudflareBypass();
     this.browseStates.clear();
