@@ -115,7 +115,7 @@ throw new CloudflareError({
 
 - Prefer one shared detection: header `cf-mitigated === "challenge"` (optionally combined with a 403 and a challenge-title regex).
 - Use the current bypass hook `cloudflareBypassCompleted(request, cookies, localStorage)` (interface `CloudflareBypassRequestProviding`). **Never the deprecated `saveCloudflareBypassCookies`.**
-- Filter forwarded cookies to the `cf` / `_cf` / `__cf` prefixes:
+- Persist the captured cookies. A `cf` / `_cf` / `__cf` prefix filter is the default for a **static** site behind pure Cloudflare:
 
 ```ts
 async cloudflareBypassCompleted(request: Request, cookies: Cookie[], localStorage: Record<string, string>): Promise<void> {
@@ -125,6 +125,9 @@ async cloudflareBypassCompleted(request: Request, cookies: Cookie[], localStorag
   // reset memoized session caches here — see §5
 }
 ```
+
+- **This filter is NOT universal — verify against the site.** A server-rendered app (Laravel, etc.) binds the challenge to server-side session cookies too: forwarding only `cf*` drops the session and every post-bypass request 403s. Forward **all** cookies for such sites (OniSaga: `onisaga_session`/`XSRF-TOKEN`). A DDoS-Guard site names its cookies `__ddg*`, not `cf*`, so a `cf`-prefix filter would discard them entirely — filter by domain or forward all (Ranobes). Match the cookies the site actually sets.
+- **Present one browser identity everywhere.** The clearance cookie a challenge webview earns is bound to the UA that solved it (full Mobile Safari), while `Application.getDefaultUserAgent()` returns a bare iOS WebView UA. If native requests send a different UA the clearance is rejected and the source loops on the challenge forever. Complete the missing Safari tokens once and use that same UA for both the `CloudflareError` and every request (see OniSaga/Ranobes `completeMobileSafariUserAgent`).
 
 ### Interceptors & rate limiting
 
