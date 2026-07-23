@@ -20,6 +20,8 @@ import {
 } from "@paperback/types";
 
 import {
+  getDefaultAiMode,
+  getDefaultGenres,
   getHideAdultContent,
   NovelArchiveAdvancedSearchForm,
   NovelArchiveSettingsForm,
@@ -63,6 +65,8 @@ const pickGenreValues = (genres: TriState | undefined, state: "included" | "excl
   Object.entries(genres ?? {})
     .filter(([, value]) => value === state)
     .map(([id]) => GENRE_VALUE_BY_ID.get(id) ?? id);
+
+const dedupe = (values: string[]): string[] => [...new Set(values)];
 
 export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> {
   private rateLimiter = new BasicRateLimiter("rateLimiter", {
@@ -307,18 +311,25 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
       .addPathComponent("novels")
       .setQueryItem("page", opts.page.toString())
       .setQueryItem("per_page", PAGE_SIZE.toString())
-      .setQueryItem("ai_generated", opts.ai ?? "include");
+      .setQueryItem("ai_generated", opts.ai ?? getDefaultAiMode());
 
     if (opts.search) url.setQueryItem("search", opts.search);
     if (opts.sort) url.setQueryItem("sort", opts.sort);
     if (opts.status && opts.status !== "all") url.setQueryItem("status", opts.status);
     if (opts.genreMatch) url.setQueryItem("genre_match", opts.genreMatch);
-    if (opts.genresInclude && opts.genresInclude.length > 0) {
-      url.setQueryItem("genres_include", opts.genresInclude.join(","));
-    }
 
-    const excludes = [...(opts.genresExclude ?? [])];
-    if (getHideAdultContent()) excludes.push(...ADULT_EXCLUSIONS);
+    const defaults = getDefaultGenres();
+    const includes = dedupe([
+      ...(opts.genresInclude ?? []),
+      ...pickGenreValues(defaults, "included"),
+    ]);
+    if (includes.length > 0) url.setQueryItem("genres_include", includes.join(","));
+
+    const excludes = dedupe([
+      ...(opts.genresExclude ?? []),
+      ...pickGenreValues(defaults, "excluded"),
+      ...(getHideAdultContent() ? ADULT_EXCLUSIONS : []),
+    ]);
     if (excludes.length > 0) url.setQueryItem("genres_exclude", excludes.join(","));
 
     return url.toString();

@@ -108,7 +108,7 @@ export const toFeaturedItems = (
     const infoItems =
       variant === "trending"
         ? viewsInfo
-          ? [viewsInfo, rankInfo]
+          ? [rankInfo, viewsInfo]
           : [rankInfo]
         : viewsInfo
           ? [viewsInfo]

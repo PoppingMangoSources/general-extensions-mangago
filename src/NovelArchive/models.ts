@@ -138,6 +138,7 @@ export const SORT_OPTIONS: OptionItem[] = [
   { id: "popular", value: "Popular" },
   { id: "rating", value: "Top Rated" },
   { id: "chapters", value: "Chapters" },
+  { id: "views", value: "Most Viewed" },
 ];
 
 export const STATUS_OPTIONS: OptionItem[] = [
