@@ -13,9 +13,11 @@ import {
   type TagSection,
 } from "@paperback/types";
 
+import { getBaseUrl } from "./forms";
 import {
-  getBaseUrl,
+  type BrowsePage,
   type FilterOption,
+  type FilterTaxonomy,
   type HomeSections,
   type ValirChapterData,
   type ValirChapterItem,
@@ -129,16 +131,6 @@ export const parseHomeSections = (html: string): HomeSections => {
     ),
   };
 };
-
-export interface BrowsePage {
-  series: ValirSeries[];
-  hasMore: boolean;
-}
-
-export interface FilterTaxonomy {
-  genres: FilterOption[];
-  tags: FilterOption[];
-}
 
 // The browse page's filter component receives the full genre and tag lists as
 // flat `{ id, name, slug }` records; series cards nest genres differently, so

@@ -10,21 +10,6 @@ import {
 
 export const DOMAIN = "https://valirscans.org";
 
-const BASE_URL_KEY = "valirscans.baseUrl";
-
-export const getBaseUrl = (): string => {
-  const value = Application.getState(BASE_URL_KEY);
-  if (typeof value === "string") {
-    const trimmed = value.trim().replace(/\/+$/, "");
-    if (trimmed.length > 0) return trimmed;
-  }
-  return DOMAIN;
-};
-
-export const setBaseUrl = (value: string): void => {
-  Application.setState(value.trim().replace(/\/+$/, ""), BASE_URL_KEY);
-};
-
 // Genre entries are wrapped as `{ genre: {...} }` in homepage payloads but
 // flattened to `{ name, slug }` on series detail pages.
 export interface ValirGenre {
@@ -41,9 +26,7 @@ export interface ValirChapterItem {
   number: number;
   title?: string | null;
   isLocked?: boolean;
-  isFree?: boolean;
   publishedAt?: string | null;
-  createdAt?: string | null;
 }
 
 export interface ValirSeries {
@@ -101,6 +84,16 @@ export interface HomeSections {
 export interface FilterOption {
   id: string;
   title: string;
+}
+
+export interface BrowsePage {
+  series: ValirSeries[];
+  hasMore: boolean;
+}
+
+export interface FilterTaxonomy {
+  genres: FilterOption[];
+  tags: FilterOption[];
 }
 
 export type PageMetadata = { page: number };

@@ -15,15 +15,25 @@ import {
 
 import {
   DOMAIN,
-  getBaseUrl,
   ORIGIN_OPTIONS,
-  setBaseUrl,
   STATUS_OPTIONS,
   TYPE_OPTIONS,
   type FilterOption,
   type SearchMetadata,
   type TriState,
 } from "./models";
+
+const BASE_URL_KEY = "valirscans.baseUrl";
+
+// setBaseUrl normalizes before every write, so a plain non-empty read suffices.
+export const getBaseUrl = (): string => {
+  const value = Application.getState(BASE_URL_KEY);
+  return typeof value === "string" && value.length > 0 ? value : DOMAIN;
+};
+
+export const setBaseUrl = (value: string): void => {
+  Application.setState(value.trim().replace(/\/+$/, ""), BASE_URL_KEY);
+};
 
 const SHOW_PAID_CHAPTERS_KEY = "valirscans.showPaidChapters";
 
@@ -161,24 +171,29 @@ export class ValirScansAdvancedSearchForm extends AdvancedSearchForm {
     ];
   }
 
+  // Store `undefined` instead of an empty record so the metadata stays sparse.
+  private static sparse(value: TriState): TriState | undefined {
+    return Object.keys(value).length === 0 ? undefined : value;
+  }
+
   async handleGenresChange(value: TriState): Promise<void> {
-    this.searchMetadata.genres = value;
+    this.searchMetadata.genres = ValirScansAdvancedSearchForm.sparse(value);
   }
 
   async handleTagsChange(value: TriState): Promise<void> {
-    this.searchMetadata.tags = value;
+    this.searchMetadata.tags = ValirScansAdvancedSearchForm.sparse(value);
   }
 
   async handleTypesChange(value: TriState): Promise<void> {
-    this.searchMetadata.types = value;
+    this.searchMetadata.types = ValirScansAdvancedSearchForm.sparse(value);
   }
 
   async handleStatusesChange(value: TriState): Promise<void> {
-    this.searchMetadata.statuses = value;
+    this.searchMetadata.statuses = ValirScansAdvancedSearchForm.sparse(value);
   }
 
   async handleOriginsChange(value: TriState): Promise<void> {
-    this.searchMetadata.origins = value;
+    this.searchMetadata.origins = ValirScansAdvancedSearchForm.sparse(value);
   }
 
   async handleMinChaptersChange(value: string): Promise<void> {

@@ -25,6 +25,7 @@ import {
   DISCOVER_SECTIONS,
   GENRES,
   SORTING_OPTIONS,
+  type FilterTaxonomy,
   type HomeSections,
   type PageMetadata,
   type SearchMetadata,
@@ -48,7 +49,6 @@ import {
   toChapterUpdateItems,
   toFeaturedItems,
   toSearchResultItem,
-  type FilterTaxonomy,
 } from "./parsers";
 import type ValirScansConfig from "./pbconfig";
 

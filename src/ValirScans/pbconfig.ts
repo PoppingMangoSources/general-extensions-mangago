@@ -6,7 +6,7 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "ValirScans",
   description: "Extension that pulls comics and novels from valirscans.org.",
-  version: "1.0.0-alpha.4",
+  version: "1.0.0-alpha.5",
   icon: "icon.png",
   language: "en",
   contentRating: ContentRating.MATURE,

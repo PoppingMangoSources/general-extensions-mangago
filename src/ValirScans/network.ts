@@ -9,7 +9,8 @@ import {
   type Response,
 } from "@paperback/types";
 
-import { getBaseUrl, type SearchMetadata, type TriState } from "./models";
+import { getBaseUrl } from "./forms";
+import { type SearchMetadata, type TriState } from "./models";
 
 export class ValirScansInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
