@@ -15,7 +15,6 @@ import {
   type DiscoverSection,
   type DiscoverSectionItem,
   type ExtensionImpl,
-  type FeaturedCarouselItem,
   type Form,
   type PagedResults,
   type Request,
@@ -195,10 +194,10 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
       .setQueryItem("q", title)
       .setQueryItem("page", page.toString())
       .setQueryItem("search_po", meta.searchType?.[0] ?? "0")
-      .setQueryItem("author_po", meta.authorType?.[0] ?? "0")
-      .setQueryItem("author", meta.author ?? "")
-      .setQueryItem("completed", meta.status?.[0] ?? "");
+      .setQueryItem("author_po", meta.authorType?.[0] ?? "0");
 
+    if (meta.author) builder.setQueryItem("author", meta.author);
+    if (meta.status?.[0]) builder.setQueryItem("completed", meta.status[0]);
     if (meta.searchDescription) builder.setQueryItem("check_search_desc", "1");
 
     const sort = sortOverride || meta.sort?.[0];
@@ -289,31 +288,15 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
     const $ = await fetchCheerio({ url: this.browseUrl("viewed", 1), method: "GET" });
     const cards = parseCards($, this.baseUrl).slice(0, FEATURED_LIMIT);
 
-    const items = await Promise.all(
-      cards.map(async (card): Promise<DiscoverSectionItem> => {
-        let supertitle: string | undefined;
-        let summary: string | undefined;
-        let status: string | undefined;
-        try {
-          const manga = await this.getMangaDetails(card.mangaId);
-          supertitle = manga.mangaInfo.author;
-          summary = manga.mangaInfo.synopsis || undefined;
-          status = manga.mangaInfo.status;
-        } catch (error) {
-          if (error instanceof CloudflareError) throw error;
-        }
-        const infoItems: FeaturedCarouselItem["infoItems"] =
-          status && status !== "Unknown" ? [{ symbol: "book.closed", text: status }] : undefined;
-        return {
-          type: "featuredCarouselItem",
-          mangaId: card.mangaId,
-          title: card.title,
-          imageUrl: card.imageUrl,
-          supertitle,
-          summary,
-          infoItems,
-          contentRating: rating,
-        };
+    // Built from the "most viewed" browse listing alone — no per-card detail
+    // fetch. Author and synopsis are not present on the listing cards.
+    const items = cards.map(
+      (card): DiscoverSectionItem => ({
+        type: "featuredCarouselItem",
+        mangaId: card.mangaId,
+        title: card.title,
+        imageUrl: card.imageUrl,
+        contentRating: rating,
       }),
     );
 
