@@ -81,6 +81,12 @@ export const buildSearchPath = (
 };
 
 export class RanobesInterceptor extends PaperbackInterceptor {
+  private challengeThrownAt = 0;
+
+  clearChallenge(): void {
+    this.challengeThrownAt = 0;
+  }
+
   override async interceptRequest(request: Request): Promise<Request> {
     return {
       ...request,
@@ -107,12 +113,19 @@ export class RanobesInterceptor extends PaperbackInterceptor {
       /(?:vb_challenge|cf-turnstile|ddos-guard|<title>\s*(?:Just a moment|DDoS-Guard))/i.test(body);
     if (!challenged) return data;
 
-    // A challenged response is unusable, so surface the bypass on every one:
-    // the app coalesces concurrent CloudflareErrors into a single webview, and
-    // keeping the prompt available means retries always reach it.
+    // Discover fires every section at once; queue a single bypass per challenge
+    // episode instead of one webview per concurrent fetch. cloudflareBypassCompleted
+    // calls clearChallenge(), so the refresh after a bypass always reaches a fresh
+    // CloudflareError if the site is still gated. Point the webview at the homepage,
+    // which reliably serves the challenge, rather than at an API path.
+    const now = Date.now();
+    if (now - this.challengeThrownAt < 60_000) {
+      throw new Error("Ranobes: Cloudflare bypass pending — complete it and refresh.");
+    }
+    this.challengeThrownAt = now;
     throw new CloudflareError({
-      url: request.url,
-      method: request.method ?? "GET",
+      url: `${DOMAIN}/`,
+      method: "GET",
       headers: { "user-agent": await Application.getDefaultUserAgent() },
     });
   }
