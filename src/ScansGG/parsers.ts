@@ -92,7 +92,7 @@ export const seriesMatchesFilters = (
 export const hasImage = (item: DiscoverSectionItem): boolean =>
   "imageUrl" in item && item.imageUrl.length > 0;
 
-export const slugify = (text: string): string => {
+const slugify = (text: string): string => {
   return Application.decodeHTMLEntities(text)
     .toLowerCase()
     .normalize("NFKD")
@@ -102,7 +102,7 @@ export const slugify = (text: string): string => {
     .replace(/^-+|-+$/g, "");
 };
 
-export const buildSlugId = (id: number, title: string): string => {
+const buildSlugId = (id: number, title: string): string => {
   const slug = slugify(title);
   return slug.length > 0 ? `${id}-${slug}` : `${id}-series`;
 };
@@ -110,7 +110,7 @@ export const numericSeriesId = (mangaId: string): string => {
   return mangaId.match(/^\d+/)?.[0] ?? mangaId;
 };
 
-export const buildChapterId = (
+const buildChapterId = (
   seriesId: string,
   chapterId: number | string,
   groupId?: number | string | null,
@@ -125,22 +125,22 @@ export const parseChapterId = (
   }
   return { seriesId, chapterId, groupId };
 };
-export const buildCoverUrl = (cover?: string | null): string => {
+const buildCoverUrl = (cover?: string | null): string => {
   if (!cover) return "";
   if (/^https?:\/\//i.test(cover)) return cover;
   return `${CDN_URL}/covers/${cover}`;
 };
-export const formatChapterNumber = (raw: number | string): string => {
+const formatChapterNumber = (raw: number | string): string => {
   const n = typeof raw === "number" ? raw : Number.parseFloat(raw);
   return Number.isFinite(n) ? String(n) : String(raw);
 };
 
-export const chapterNumberValue = (raw: number | string): number => {
+const chapterNumberValue = (raw: number | string): number => {
   const n = typeof raw === "number" ? raw : Number.parseFloat(raw);
   return Number.isFinite(n) ? n : 0;
 };
 
-export const parseDate = (value?: string | null): Date | undefined => {
+const parseDate = (value?: string | null): Date | undefined => {
   if (!value) return undefined;
   const iso = value.includes("T") ? value : value.replace(" ", "T");
   const withZone = /[zZ]|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso}Z`;
@@ -159,9 +159,7 @@ const stripHtml = (html?: string | null): string => {
   );
 };
 
-export const deriveContentRating = (
-  series: Pick<SeriesDto, "tags" | "content_rating">,
-): ContentRating => {
+const deriveContentRating = (series: Pick<SeriesDto, "tags" | "content_rating">): ContentRating => {
   const tier = series.content_rating ?? 0;
   const tags = series.tags;
   if (tier >= 4 || tags?.some((id) => ADULT_TAG_IDS.has(id))) return ContentRating.ADULT;
@@ -241,17 +239,6 @@ export const toFeaturedItem = (series: SeriesDto): DiscoverSectionItem => {
     supertitle: creatorNames(series.author) ?? cardSubtitle(series),
     summary: stripHtml(series.summary) || undefined,
     infoItems: featuredInfoItems(series),
-    contentRating: deriveContentRating(series),
-  };
-};
-
-export const toProminentItem = (series: SeriesDto): DiscoverSectionItem => {
-  return {
-    type: "prominentCarouselItem",
-    mangaId: buildSlugId(series.id, series.title),
-    title: Application.decodeHTMLEntities(series.title),
-    imageUrl: buildCoverUrl(series.cover),
-    subtitle: cardSubtitle(series),
     contentRating: deriveContentRating(series),
   };
 };
@@ -355,8 +342,7 @@ export const parseChapterPages = (data: PageListDto, chapterId: string): string[
   const pageChapterId = chapterData?.id ?? Number(chapterId);
   const pages = [...(chapterData?.pages ?? [])]
     .sort((a, b) => a.position - b.position)
-    .map((page) => `${CDN_URL}/pages/${pageChapterId}/${page.path}`)
-    .filter((url) => url.length > 0);
+    .map((page) => `${CDN_URL}/pages/${pageChapterId}/${page.path}`);
 
   if (pages.length === 0) {
     throw new Error(`No pages returned for chapter ${chapterId}.`);

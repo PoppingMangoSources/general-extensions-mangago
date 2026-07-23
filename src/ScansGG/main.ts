@@ -32,12 +32,8 @@ import {
   MAX_FILTER_BATCHES,
   POPULAR_FETCH_SIZE,
   POPULAR_RANGE_OPTIONS,
+  SECTIONS,
   SERIES_PAGE_SIZE,
-  SECTION_ALL_SERIES,
-  SECTION_GENRES,
-  SECTION_LATEST,
-  SECTION_POPULAR,
-  SECTION_POPULAR_RANGES,
   TAG_OPTIONS,
   TOP_MANGA_SIZE,
   type ChapterDto,
@@ -105,15 +101,15 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
-      { id: SECTION_POPULAR, title: "Top Manga", type: DiscoverSectionType.featured },
+      { id: SECTIONS.POPULAR, title: "Top Manga", type: DiscoverSectionType.featured },
       {
-        id: SECTION_POPULAR_RANGES,
+        id: SECTIONS.POPULAR_RANGES,
         title: "Most Popular",
         type: DiscoverSectionType.genres,
       },
-      { id: SECTION_LATEST, title: "Latest Updates", type: DiscoverSectionType.chapterUpdates },
-      { id: SECTION_ALL_SERIES, title: "All Series", type: DiscoverSectionType.simpleCarousel },
-      { id: SECTION_GENRES, title: "Genres", type: DiscoverSectionType.genres },
+      { id: SECTIONS.LATEST, title: "Latest Updates", type: DiscoverSectionType.chapterUpdates },
+      { id: SECTIONS.ALL_SERIES, title: "All Series", type: DiscoverSectionType.simpleCarousel },
+      { id: SECTIONS.GENRES, title: "Genres", type: DiscoverSectionType.genres },
     ];
   }
 
@@ -123,7 +119,7 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const contentFilters = getContentFilters();
 
-    if (section.id === SECTION_GENRES) {
+    if (section.id === SECTIONS.GENRES) {
       const items: DiscoverSectionItem[] = TAG_OPTIONS.filter((tag) =>
         isGenreVisible(tag.id, contentFilters),
       ).map((tag) => ({
@@ -141,7 +137,7 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
       return { items, metadata: undefined };
     }
 
-    if (section.id === SECTION_POPULAR_RANGES) {
+    if (section.id === SECTIONS.POPULAR_RANGES) {
       const items: DiscoverSectionItem[] = POPULAR_RANGE_OPTIONS.filter(
         (range) => range.id !== "monthly",
       ).map((range) => ({
@@ -156,7 +152,7 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
       return { items, metadata: undefined };
     }
 
-    if (section.id === SECTION_POPULAR) {
+    if (section.id === SECTIONS.POPULAR) {
       const monthly = await this.fetchPopularSeries("monthly", undefined, contentFilters);
       const enriched = await this.enrichPopularChapters(monthly.slice(0, TOP_MANGA_SIZE));
       return {
@@ -165,7 +161,7 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
       };
     }
 
-    if (section.id === SECTION_LATEST) {
+    if (section.id === SECTIONS.LATEST) {
       const page = await this.fetchFilteredLatestSeries(
         metadata,
         (series) =>
@@ -180,7 +176,7 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
       return { items, metadata: page.metadata };
     }
 
-    if (section.id !== SECTION_ALL_SERIES) {
+    if (section.id !== SECTIONS.ALL_SERIES) {
       throw new Error(`Unknown discover section: ${section.id}`);
     }
 

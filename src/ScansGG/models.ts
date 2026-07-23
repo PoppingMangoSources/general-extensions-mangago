@@ -14,11 +14,13 @@ export const TOP_MANGA_SIZE = 7;
 export const MAX_CHAPTER_PAGES = 200;
 export const MAX_FILTER_BATCHES = 10;
 
-export const SECTION_POPULAR = "popular";
-export const SECTION_POPULAR_RANGES = "popular_ranges";
-export const SECTION_LATEST = "latest";
-export const SECTION_ALL_SERIES = "all_series";
-export const SECTION_GENRES = "genres";
+export const SECTIONS = {
+  POPULAR: "popular",
+  POPULAR_RANGES: "popular_ranges",
+  LATEST: "latest",
+  ALL_SERIES: "all_series",
+  GENRES: "genres",
+} as const;
 export const BASE_URL_KEY = "scansgg.baseUrlOverride";
 export const API_URL_KEY = "scansgg.apiUrlOverride";
 export const CONTENT_PREFERENCE_KEY = "scansgg.contentPreference";
@@ -133,21 +135,23 @@ export const TYPE_NAMES: Record<number, string> = {
   5: "Webtoon",
 };
 
-export const TYPE_OPTIONS: OptionItem[] = [
-  { id: "1", value: "Comic" },
-  { id: "2", value: "Manga" },
-  { id: "3", value: "Manhwa" },
-  { id: "4", value: "Manhua" },
-  { id: "5", value: "Webtoon" },
-];
+export const TYPE_OPTIONS: OptionItem[] = Object.entries(TYPE_NAMES).map(([id, value]) => ({
+  id,
+  value,
+}));
 
-export const STATUS_OPTIONS: OptionItem[] = [
-  { id: "1", value: "Ongoing" },
-  { id: "2", value: "Completed" },
-  { id: "3", value: "Hiatus" },
-  { id: "4", value: "Cancelled" },
-  { id: "5", value: "Dropped" },
-];
+export const STATUS_MAP: Record<number, string> = {
+  1: "Ongoing",
+  2: "Completed",
+  3: "Hiatus",
+  4: "Cancelled",
+  5: "Dropped",
+};
+
+export const STATUS_OPTIONS: OptionItem[] = Object.entries(STATUS_MAP).map(([id, value]) => ({
+  id,
+  value,
+}));
 export const POPULAR_RANGE_OPTIONS = [
   { id: "daily", value: "1 Day" },
   { id: "weekly", value: "7 Days" },
@@ -216,18 +220,5 @@ export const ADULT_TAG_IDS = new Set<number>([33, 34, 35, 38, 40, 44]);
 export const MATURE_TAG_IDS = new Set<number>([21, 24, 27, 28, 29, 30, 31, 37, 42]);
 
 export const mapStatus = (status?: number | null): string => {
-  switch (status) {
-    case 1:
-      return "Ongoing";
-    case 2:
-      return "Completed";
-    case 3:
-      return "Hiatus";
-    case 4:
-      return "Cancelled";
-    case 5:
-      return "Dropped";
-    default:
-      return "Unknown";
-  }
+  return status != null && status in STATUS_MAP ? STATUS_MAP[status] : "Unknown";
 };
