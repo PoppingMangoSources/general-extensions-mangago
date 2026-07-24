@@ -97,14 +97,14 @@ export class LuaComicExtension implements ExtensionImpl<typeof LuaComicConfig> {
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
       { id: SECTIONS.POPULAR, title: "Most Popular", type: DiscoverSectionType.featured },
-      { id: SECTIONS.FEATURED, title: "Featured", type: DiscoverSectionType.featured },
+      { id: SECTIONS.TRENDING, title: "Trending", type: DiscoverSectionType.genres },
       {
         id: SECTIONS.RECOMMENDED,
         title: "Recommended",
         type: DiscoverSectionType.simpleCarousel,
       },
       { id: SECTIONS.LATEST, title: "Latest Updates", type: DiscoverSectionType.chapterUpdates },
-      { id: SECTIONS.TRENDING, title: "Trending", type: DiscoverSectionType.genres },
+      { id: SECTIONS.FEATURED, title: "Featured", type: DiscoverSectionType.featured },
       { id: SECTIONS.EDITORS, title: "Editor's Choice", type: DiscoverSectionType.simpleCarousel },
       { id: SECTIONS.GENRES, title: "Genres", type: DiscoverSectionType.genres },
     ];
