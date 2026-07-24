@@ -21,9 +21,13 @@ const sanitizeId = (value: string): string =>
   value.toLowerCase().replace(SAFE_ID_REGEX, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 
 // Slugs double as ids; unusual characters are percent-encoded so the original
-// slug can always be recovered for request URLs.
+// slug can always be recovered for request URLs. Characters the encoder leaves
+// unchanged still fall back to a dash so the id always lands in the safe set.
 export const encodeSlugId = (slug: string): string =>
-  slug.replace(SAFE_ID_REGEX, (char) => encodeURIComponent(char));
+  slug.replace(SAFE_ID_REGEX, (char) => {
+    const encoded = encodeURIComponent(char);
+    return encoded !== char ? encoded : "-";
+  });
 
 export const decodeSlugId = (value: string): string => {
   try {
@@ -272,7 +276,7 @@ export const toLatestItems = (entries: KaliLatestEntry[]): DiscoverSectionItem[]
       {
         type: "chapterUpdatesCarouselItem",
         mangaId: encodeSlugId(slug),
-        chapterId: entry.chapterUrl?.split("/").pop() ?? "",
+        chapterId: encodeSlugId(entry.chapterUrl?.split("/").pop() ?? ""),
         imageUrl: entry.cover,
         title: entry.title,
         subtitle: subtitle || undefined,

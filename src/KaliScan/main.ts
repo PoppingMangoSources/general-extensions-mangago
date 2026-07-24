@@ -71,6 +71,9 @@ export class KaliScanExtension implements ExtensionImpl<typeof KaliScanConfig> {
     _localStorage: Record<string, string>,
   ): Promise<void> {
     this.homePagePromise = undefined;
+    // Forward every cookie: the backend chapter-list fragment sits behind the
+    // same session cookies as the pages, so a clearance-only filter would let
+    // browsing recover while chapter lists stay challenged.
     for (const cookie of cookies) {
       this.cookieStorageInterceptor.setCookie(cookie);
     }
