@@ -3,6 +3,7 @@
 
 import {
   BasicRateLimiter,
+  CookieStorageInterceptor,
   type AdvancedSearchForm,
   type Chapter,
   type ChapterDetails,
@@ -30,13 +31,13 @@ import {
   SORT_ORDERS,
   type FilterTaxonomy,
   type PageMetadata,
+  type RanobesListing,
   type SearchMetadata,
 } from "./models";
 import {
   buildSearchPath,
   canonicalUrl,
   fetchChapterListPage,
-  cookieStorage,
   fetchHtml,
   fetchListingPage,
   RanobesInterceptor,
@@ -47,36 +48,126 @@ import {
   parseChapterDetails,
   parseChapterPage,
   parseChapters,
+  parseContentRating,
   parseFilterTaxonomy,
   parseListings,
   parseMangaDetails,
-  toChapterUpdateItem,
-  toCompletedItem,
-  toFeaturedItem,
-  toRankingItem,
-  toSearchResult,
 } from "./parsers";
 import type RanobesConfig from "./pbconfig";
 
+const formatCount = (value: number): string => value.toLocaleString("en-US");
+
+const toFeaturedItem = (listing: RanobesListing): DiscoverSectionItem => ({
+  type: "featuredCarouselItem",
+  mangaId: listing.mangaId,
+  title: listing.title,
+  imageUrl: listing.imageUrl,
+  summary: listing.description,
+  infoItems:
+    listing.rating !== undefined && listing.views !== undefined
+      ? [
+          {
+            symbol: "star.fill",
+            text: `${listing.rating.toFixed(1)}${
+              listing.ratingCount ? ` (${listing.ratingCount})` : ""
+            }`,
+          },
+          { symbol: "eye.fill", text: formatCount(listing.views) },
+        ]
+      : listing.rating !== undefined
+        ? [
+            {
+              symbol: "star.fill",
+              text: `${listing.rating.toFixed(1)}${
+                listing.ratingCount ? ` (${listing.ratingCount})` : ""
+              }`,
+            },
+          ]
+        : listing.views !== undefined
+          ? [{ symbol: "eye.fill", text: formatCount(listing.views) }]
+          : undefined,
+  contentRating: parseContentRating(listing.genres ?? []),
+});
+
+const toChapterUpdateItem = (listing: RanobesListing): DiscoverSectionItem | undefined => {
+  if (!listing.chapterId) return undefined;
+  return {
+    type: "chapterUpdatesCarouselItem",
+    mangaId: listing.mangaId,
+    chapterId: listing.chapterId,
+    title: listing.title,
+    imageUrl: listing.imageUrl,
+    subtitle: listing.chapterTitle || undefined,
+    publishDate: listing.publishDate,
+  };
+};
+
+const toRankingItem = (
+  listing: RanobesListing,
+  rank: number,
+  useRating: boolean,
+): DiscoverSectionItem => ({
+  type: "prominentCarouselItem",
+  mangaId: listing.mangaId,
+  title: listing.title,
+  imageUrl: listing.imageUrl,
+  subtitle: useRating
+    ? `#${rank} • ★ ${listing.rating?.toFixed(1) ?? "—"}${
+        listing.ratingCount ? ` (${listing.ratingCount})` : ""
+      }`
+    : `#${rank} • ${formatCount(listing.views ?? 0)} views`,
+  contentRating: parseContentRating(listing.genres ?? []),
+});
+
+const toCompletedItem = (listing: RanobesListing): DiscoverSectionItem => ({
+  type: "prominentCarouselItem",
+  mangaId: listing.mangaId,
+  title: listing.title,
+  imageUrl: listing.imageUrl,
+  subtitle:
+    listing.views !== undefined
+      ? `${formatCount(listing.views)} views`
+      : listing.rating !== undefined
+        ? `★ ${listing.rating.toFixed(1)}`
+        : undefined,
+  contentRating: parseContentRating(listing.genres ?? []),
+});
+
+const toSearchResult = (listing: RanobesListing): SearchResultItem => ({
+  mangaId: listing.mangaId,
+  title: listing.title,
+  imageUrl: listing.imageUrl,
+  subtitle: listing.rating !== undefined ? `★ ${listing.rating.toFixed(1)}` : undefined,
+  contentRating: parseContentRating(listing.genres ?? []),
+});
+
 export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   mainRateLimiter = new BasicRateLimiter("main", {
-    numberOfRequests: 2,
+    numberOfRequests: 4,
     bufferInterval: 1,
     ignoreImages: true,
   });
 
   requestManager = new RanobesInterceptor("main");
 
+  cookieStorage = new CookieStorageInterceptor({ storage: "stateManager" });
+
   private taxonomyPromise?: Promise<FilterTaxonomy>;
 
   async initialise(): Promise<void> {
+    this.cookieStorage.setCookie({
+      name: "browser_check",
+      value: "1",
+      domain: "ranobes.net",
+      path: "/",
+    });
+    this.cookieStorage.registerInterceptor();
     this.mainRateLimiter.registerInterceptor();
-    cookieStorage.registerInterceptor();
     this.requestManager.registerInterceptor();
   }
 
   async getSettingsForm(): Promise<Form> {
-    return new RanobesSettingsForm(cookieStorage);
+    return new RanobesSettingsForm(this.cookieStorage);
   }
 
   async cloudflareBypassCompleted(
@@ -85,14 +176,8 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     _localStorage: Record<string, string>,
   ): Promise<void> {
     this.taxonomyPromise = undefined;
-    // The site's protection issues its clearance as __ddg* cookies alongside a
-    // PHP session; a cf-prefix filter would discard all of them and the bypass
-    // would never stick, so every cookie is forwarded. Existing __ddg* copies
-    // are cleared first so a stale variant cannot shadow the fresh clearance.
-    const stale = cookieStorage.cookies.filter((cookie) => cookie.name.startsWith("__ddg"));
-    for (const cookie of stale) cookieStorage.deleteCookie(cookie);
     for (const cookie of cookies) {
-      cookieStorage.setCookie(cookie);
+      if (cookie.domain.includes("ranobes.net")) this.cookieStorage.setCookie(cookie);
     }
   }
 
@@ -174,14 +259,17 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     const firstPage = parseChapterPage(cheerio.load(await fetchChapterListPage(novelId)));
     const pageCount = Math.max(1, firstPage.pages_count ?? 1);
 
-    // Pages are fetched one at a time: a parallel burst of sequential page
-    // numbers reads as automation to the site's protection, and a challenge
-    // mid-list should stop the remaining requests instead of firing them all.
-    const pages = [firstPage];
-    for (let page = 2; page <= pageCount; page++) {
-      pages.push(parseChapterPage(cheerio.load(await fetchChapterListPage(novelId, page))));
-    }
-    return parseChapters(pages, sourceManga);
+    const remainingPages =
+      pageCount > 1
+        ? await Promise.all(
+            Array.from({ length: pageCount - 1 }, (_, index) =>
+              fetchChapterListPage(novelId, index + 2).then((html) =>
+                parseChapterPage(cheerio.load(html)),
+              ),
+            ),
+          )
+        : [];
+    return parseChapters([firstPage, ...remainingPages], sourceManga);
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {

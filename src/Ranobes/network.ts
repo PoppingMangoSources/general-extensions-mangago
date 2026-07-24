@@ -3,7 +3,6 @@
 
 import {
   CloudflareError,
-  CookieStorageInterceptor,
   PaperbackInterceptor,
   type Request,
   type Response,
@@ -81,61 +80,14 @@ export const buildSearchPath = (
   return segments.length ? `/f/${segments.join("/")}/` : undefined;
 };
 
-// The bypass webview solves challenges under the full Safari user agent while
-// the app reports a bare WebKit one; the protection ties its clearance to the
-// fingerprint, so mismatched requests draw fresh challenges. Complete only the
-// missing browser tokens, preserving the device and OS.
-const completeMobileSafariUserAgent = (userAgent: string): string => {
-  if (!/\b(?:iPhone|iPad|iPod)\b/.test(userAgent) || /\bSafari\//.test(userAgent)) {
-    return userAgent;
-  }
-  const os = /\bOS (\d+)[_.](\d+)/.exec(userAgent);
-  const version = os ? `${os[1]}.${os[2]}` : "18.0";
-  const withVersion = /\bVersion\//.test(userAgent)
-    ? userAgent
-    : userAgent.replace(/\sMobile\//, ` Version/${version} Mobile/`);
-  return /\bSafari\//.test(withVersion) ? withVersion : `${withVersion} Safari/604.1`;
-};
-
-let userAgentPromise: Promise<string> | undefined;
-const getUserAgent = (): Promise<string> =>
-  (userAgentPromise ??= Application.getDefaultUserAgent().then(completeMobileSafariUserAgent));
-
-const IMAGE_EXTENSION_REGEX = /\.(jpe?g|png|webp|gif|avif|bmp)(\?|#|$)/i;
-
-export const cookieStorage = new CookieStorageInterceptor({ storage: "stateManager" });
-
-// The protection signs a short-lived cookie pair and stalls any client that
-// replays a stale one; a stalled request never receives the refreshed pair,
-// so dropping it is the only way back to a clean state.
-const ROTATING_CLEARANCE = ["__ddg8_", "__ddg10_"];
-
-// One challenge burst (several discover sections failing together) should
-// surface a single bypass entry, not one per request.
-let lastChallengeAt = 0;
-const CHALLENGE_DEDUPE_MS = 10_000;
-
-export const dropRotatingClearance = (): void => {
-  const stale = cookieStorage.cookies.filter((cookie) => ROTATING_CLEARANCE.includes(cookie.name));
-  for (const cookie of stale) cookieStorage.deleteCookie(cookie);
-};
-
 export class RanobesInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
-    // A request without browser-shaped Accept headers is likelier to draw a
-    // challenge; mirror what the browser sends for each content type.
-    const accept = IMAGE_EXTENSION_REGEX.test(request.url)
-      ? "image/avif,image/webp,image/apng,image/png,image/svg+xml,*/*;q=0.8"
-      : "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
-
     return {
       ...request,
       headers: {
         ...request.headers,
         referer: `${DOMAIN}/`,
-        "user-agent": await getUserAgent(),
-        accept,
-        "accept-language": "en-US,en;q=0.9",
+        "user-agent": await Application.getDefaultUserAgent(),
       },
     };
   }
@@ -151,27 +103,10 @@ export class RanobesInterceptor extends PaperbackInterceptor {
       response.headers?.["cf-mitigated"] === "challenge" ||
       /(?:vb_challenge|cf-turnstile|<title>Just a moment)/i.test(body)
     ) {
-      dropRotatingClearance();
-
-      const now = Date.now();
-      if (now - lastChallengeAt < CHALLENGE_DEDUPE_MS) {
-        throw new Error("Waiting on the protection check — solve the pending bypass, then retry.");
-      }
-      lastChallengeAt = now;
-
-      // The site's pages carry an inline script with a top-level return that
-      // crashes the bypass webview after the check is solved. robots.txt runs
-      // the same protection but renders as plain text, so the solve completes
-      // and the clearance covers the whole domain.
-      // The default message is load-bearing: the app recognises bypass errors
-      // by it, and a custom message suppresses the bypass banner entirely.
       throw new CloudflareError({
-        url: `${DOMAIN}/robots.txt`,
-        method: "GET",
-        headers: {
-          referer: `${DOMAIN}/`,
-          "user-agent": await getUserAgent(),
-        },
+        url: request.url,
+        method: request.method ?? "GET",
+        headers: { "user-agent": await Application.getDefaultUserAgent() },
       });
     }
     return data;
@@ -188,17 +123,11 @@ const responseText = (response: Response, buffer: ArrayBuffer, url: string): str
 };
 
 export const fetchHtml = async (url: string): Promise<string> => {
-  try {
-    const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
-    return responseText(response, buffer, url);
-  } catch (error: unknown) {
-    if (error instanceof CloudflareError) throw error;
-    // A timed-out request usually means a stale clearance pair was replayed;
-    // retry once as a clean client so the next response can re-issue it.
-    dropRotatingClearance();
-    const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
-    return responseText(response, buffer, url);
-  }
+  const [response, buffer] = await Application.scheduleRequest({
+    url,
+    method: "GET",
+  });
+  return responseText(response, buffer, url);
 };
 
 export const fetchListingPage = (path: string, page = 1): Promise<string> =>
