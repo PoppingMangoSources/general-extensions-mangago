@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-24T01:32:39.537Z",
+  "buildTime": "2026-07-24T03:08:09.315Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -149,7 +149,7 @@
     {
       "name": "OniSaga",
       "description": "Extension that pulls content from onisaga.com.",
-      "version": "1.0.0-alpha.24",
+      "version": "1.0.0-alpha.25",
       "icon": "icon.png",
       "language": "multi",
       "contentRating": "MATURE",
