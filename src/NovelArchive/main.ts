@@ -53,6 +53,7 @@ import {
   decodeId,
   dedupe,
   encodeId,
+  novelUpdatedAt,
   parseChapterDetails,
   parseChapters,
   parseMangaDetails,
@@ -261,14 +262,15 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
       this.fetchSources(id),
     ]);
 
-    const chapters = parseChapters(novel, sourceManga);
+    const publishDate = this.chapterListDate(id, novel);
+    const chapters = parseChapters(novel, sourceManga, publishDate);
     const perSource = await Promise.all(
       sources.map(async (source) =>
         parseSourceChapters(
           source,
           await this.fetchSourceChapters(id, source.id),
           sourceManga,
-          chapters[0]?.publishDate,
+          publishDate,
         ),
       ),
     );
@@ -295,6 +297,23 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
       method: "GET",
     });
     return parseChapterDetails(data, chapter);
+  }
+
+  // The API carries no chapter dates, so ages anchor to the novel's update
+  // time when the response includes one, or to the first time this device
+  // loaded the list — a stable value instead of one that drifts every fetch.
+  private chapterListDate(id: string, novel: Novel): Date {
+    const updated = novelUpdatedAt(novel);
+    if (updated) return updated;
+
+    const key = `novelarchive.first-seen.${id}`;
+    const stored = Application.getState(key);
+    if (typeof stored === "number" && Number.isFinite(stored) && stored <= Date.now()) {
+      return new Date(stored);
+    }
+    const now = Date.now();
+    Application.setState(now, key);
+    return new Date(now);
   }
 
   // Mirror listings are optional extras; their absence should not take the
