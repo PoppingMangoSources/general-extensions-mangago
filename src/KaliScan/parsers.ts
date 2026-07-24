@@ -190,7 +190,7 @@ export const parseGridEntries = (html: string): KaliLatestEntry[] => {
     entries.push({
       url,
       title: data?.name ?? cleanText(item.find(".title, .name").first().text()),
-      cover: data?.cover ?? coverFrom($, item as cheerio.Cheerio<never>),
+      cover: data?.cover ? absoluteUrl(data.cover) : coverFrom($, item as cheerio.Cheerio<never>),
       rating: data?.rating,
       summary: data?.summary,
       updatedAt: data?.updated_at,
@@ -261,7 +261,7 @@ export const toRankedCardItems = (
 export const toLatestItems = (entries: KaliLatestEntry[]): DiscoverSectionItem[] =>
   entries.flatMap((entry) => {
     const slug = mangaSlugFromUrl(entry.url);
-    if (!slug || !entry.title) return [];
+    if (!slug || !entry.title || !entry.chapterUrl) return [];
 
     const chapNum = entry.chapterName ? chapterNumberFrom(entry.chapterName) : undefined;
     const rating = entry.rating && parseFloat(entry.rating) > 0 ? entry.rating : undefined;
@@ -276,7 +276,7 @@ export const toLatestItems = (entries: KaliLatestEntry[]): DiscoverSectionItem[]
       {
         type: "chapterUpdatesCarouselItem",
         mangaId: encodeSlugId(slug),
-        chapterId: encodeSlugId(entry.chapterUrl?.split("/").pop() ?? ""),
+        chapterId: encodeSlugId((entry.chapterUrl.split("/").pop() ?? "").replace(/[?#].*$/, "")),
         imageUrl: entry.cover,
         title: entry.title,
         subtitle: subtitle || undefined,
@@ -359,7 +359,10 @@ export const parseMangaDetails = (html: string, mangaId: string): SourceManga =>
   });
 
   const ratingText = cleanText($(".rating .score").first().text()).replace(/[^\d.]/g, "");
-  const rating = ratingText ? Math.min(1, Math.max(0, parseFloat(ratingText) / 5)) : undefined;
+  const rating =
+    ratingText && parseFloat(ratingText) > 0
+      ? Math.min(1, Math.max(0, parseFloat(ratingText) / 5))
+      : undefined;
 
   return {
     mangaId,
@@ -385,7 +388,11 @@ export const parseChapterList = (html: string, sourceManga: SourceManga): Chapte
   const chapters = rows.flatMap((element, index) => {
     const row = $(element);
     const url = row.find("a").first().attr("href") ?? "";
-    const chapterId = url.split("/").filter(Boolean).pop();
+    const chapterId = url
+      .split("/")
+      .filter(Boolean)
+      .pop()
+      ?.replace(/[?#].*$/, "");
     if (!chapterId) return [];
 
     const name = cleanText(row.find(".chapter-title").first().text());
