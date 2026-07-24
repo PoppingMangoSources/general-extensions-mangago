@@ -62,7 +62,7 @@ export class RanobesAdvancedSearchForm extends AdvancedSearchForm {
       Section({ id: "events", footer: "Tap once to include, twice to exclude." }, [
         TriStateSelectRow("events", {
           title: "Tags (Events)",
-          layout: "list",
+          layout: "flow",
           value: this.searchMetadata.events ?? {},
           items: this.taxonomy.events,
           allowExclusion: true,
