@@ -3,7 +3,6 @@
 
 import {
   BasicRateLimiter,
-  CookieStorageInterceptor,
   type AdvancedSearchForm,
   type Chapter,
   type ChapterDetails,
@@ -37,6 +36,7 @@ import {
 import {
   buildSearchPath,
   canonicalUrl,
+  cookieStorage,
   fetchChapterListPage,
   fetchHtml,
   fetchListingPage,
@@ -150,24 +150,22 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
 
   requestManager = new RanobesInterceptor("main");
 
-  cookieStorage = new CookieStorageInterceptor({ storage: "stateManager" });
-
   private taxonomyPromise?: Promise<FilterTaxonomy>;
 
   async initialise(): Promise<void> {
-    this.cookieStorage.setCookie({
+    cookieStorage.setCookie({
       name: "browser_check",
       value: "1",
       domain: "ranobes.net",
       path: "/",
     });
-    this.cookieStorage.registerInterceptor();
+    cookieStorage.registerInterceptor();
     this.mainRateLimiter.registerInterceptor();
     this.requestManager.registerInterceptor();
   }
 
   async getSettingsForm(): Promise<Form> {
-    return new RanobesSettingsForm(this.cookieStorage);
+    return new RanobesSettingsForm(cookieStorage);
   }
 
   async cloudflareBypassCompleted(
@@ -177,7 +175,7 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   ): Promise<void> {
     this.taxonomyPromise = undefined;
     for (const cookie of cookies) {
-      if (cookie.domain.includes("ranobes.net")) this.cookieStorage.setCookie(cookie);
+      if (cookie.domain.includes("ranobes.net")) cookieStorage.setCookie(cookie);
     }
   }
 

@@ -3,6 +3,7 @@
 
 import {
   CloudflareError,
+  CookieStorageInterceptor,
   PaperbackInterceptor,
   type Request,
   type Response,
@@ -80,6 +81,23 @@ export const buildSearchPath = (
   return segments.length ? `/f/${segments.join("/")}/` : undefined;
 };
 
+export const cookieStorage = new CookieStorageInterceptor({ storage: "stateManager" });
+
+// The protection signs a short-lived cookie pair and stalls any client that
+// replays a stale one; a stalled request never receives the refreshed pair,
+// so dropping it is the only way back to a clean state.
+const ROTATING_CLEARANCE = ["__ddg8_", "__ddg10_"];
+
+export const dropRotatingClearance = (): void => {
+  const stale = cookieStorage.cookies.filter((cookie) => ROTATING_CLEARANCE.includes(cookie.name));
+  for (const cookie of stale) cookieStorage.deleteCookie(cookie);
+};
+
+// One challenge burst (several sections failing together) should surface a
+// single bypass entry, not one per request.
+let lastChallengeAt = 0;
+const CHALLENGE_DEDUPE_MS = 10_000;
+
 export class RanobesInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
     return {
@@ -103,9 +121,20 @@ export class RanobesInterceptor extends PaperbackInterceptor {
       response.headers?.["cf-mitigated"] === "challenge" ||
       /(?:vb_challenge|cf-turnstile|<title>Just a moment)/i.test(body)
     ) {
+      dropRotatingClearance();
+
+      const now = Date.now();
+      if (now - lastChallengeAt < CHALLENGE_DEDUPE_MS) {
+        throw new Error("Waiting on the protection check — solve the pending bypass, then retry.");
+      }
+      lastChallengeAt = now;
+
+      // The site's pages carry an inline script that crashes the bypass
+      // webview's cookie handoff after the check is solved; robots.txt runs
+      // the same protection but renders as plain text, so the solve sticks.
       throw new CloudflareError({
-        url: request.url,
-        method: request.method ?? "GET",
+        url: `${DOMAIN}/robots.txt`,
+        method: "GET",
         headers: { "user-agent": await Application.getDefaultUserAgent() },
       });
     }
@@ -123,11 +152,17 @@ const responseText = (response: Response, buffer: ArrayBuffer, url: string): str
 };
 
 export const fetchHtml = async (url: string): Promise<string> => {
-  const [response, buffer] = await Application.scheduleRequest({
-    url,
-    method: "GET",
-  });
-  return responseText(response, buffer, url);
+  try {
+    const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
+    return responseText(response, buffer, url);
+  } catch (error: unknown) {
+    if (error instanceof CloudflareError) throw error;
+    // A request that dies without a response usually replayed a stale
+    // clearance pair; retry once as a clean client so it can be re-issued.
+    dropRotatingClearance();
+    const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
+    return responseText(response, buffer, url);
+  }
 };
 
 export const fetchListingPage = (path: string, page = 1): Promise<string> =>
