@@ -204,9 +204,14 @@ export const isCloudflareChallengeResponse = (
   if (getHeaderValue(headers, "cf-mitigated")?.toLowerCase() === "challenge") return true;
   if (status !== 403 && status !== 503) return false;
 
+  // The site's own token errors are JSON; an HTML body on these statuses is a
+  // challenge interstitial regardless of which variant's wording it carries.
   const contentType = getHeaderValue(headers, "content-type")?.toLowerCase() ?? "";
-  if (!contentType.includes("text/html")) return false;
-  return /just a moment|challenge-platform|cf-browser-verification|_cf_chl_opt/i.test(bodyText);
+  if (contentType.includes("text/html")) return true;
+  if (contentType) return false;
+  return /just a moment|challenge-platform|cf-browser-verification|_cf_chl_opt|verifying you are human|turnstile/i.test(
+    bodyText,
+  );
 };
 
 // Sanitize persisted history before it affects pacing. Sorting also makes the
@@ -260,9 +265,15 @@ const rememberLongPageBlock = (now: number): number => {
   return until;
 };
 
+// A probing request can die without ever reaching interceptResponse (transport
+// error, timeout); waiters give up after this long instead of hanging the
+// remaining discover sections forever.
+const CLOUDFLARE_PROBE_MAX_WAIT_MS = 15_000;
+
 export class OniSagaInterceptor extends PaperbackInterceptor {
   private cloudflareProbe?: { promise: Promise<void>; release: () => void };
   private cloudflareVerifiedAt = 0;
+  private cloudflareChallengeActive = false;
 
   // Per-chapter reader sessions (chapterId -> token + reader-page referer) set
   // by getChapterDetails; the page API wants both, like the site's own reader.
@@ -331,7 +342,18 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
       return;
     }
 
-    if (this.cloudflareProbe) return this.cloudflareProbe.promise;
+    if (this.cloudflareProbe) {
+      await Promise.race([
+        this.cloudflareProbe.promise,
+        Application.sleep(CLOUDFLARE_PROBE_MAX_WAIT_MS / 1000),
+      ]);
+      if (this.cloudflareChallengeActive) {
+        // One request already surfaced the bypass; fail the rest of the burst
+        // plainly so the app shows a single prompt instead of one per section.
+        throw new Error("OniSaga needs a Cloudflare check — complete the bypass and retry.");
+      }
+      return;
+    }
 
     let release = (): void => {};
     const promise = new Promise<void>((resolve) => {
@@ -342,6 +364,13 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
 
   private completeCloudflareProbe(): void {
     this.cloudflareVerifiedAt = Date.now();
+    this.cloudflareChallengeActive = false;
+    this.cloudflareProbe?.release();
+    this.cloudflareProbe = undefined;
+  }
+
+  private failCloudflareProbe(): void {
+    this.cloudflareChallengeActive = true;
     this.cloudflareProbe?.release();
     this.cloudflareProbe = undefined;
   }
@@ -668,6 +697,10 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
       // an internal sentinel and lets the outer request make the challenge at a
       // response stage Paperback can handle.
       if (this.pageResolveNetworkRequests.has(request.url)) return data;
+
+      // Release any discover requests queued behind this probe so they fail
+      // fast instead of hanging while the challenged request raises the bypass.
+      this.failCloudflareProbe();
 
       // Kagane's working bypass path preserves the challenged request URL and
       // headers. In particular, using the actual protected endpoint lets

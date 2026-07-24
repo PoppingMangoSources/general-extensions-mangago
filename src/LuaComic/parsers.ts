@@ -137,12 +137,52 @@ const extractArray = <T>(payload: string, key: string): T[] => {
   }
 };
 
+// Long strings arrive as row references ("$1d") pointing at a `1d:T<hexlen>,`
+// text row elsewhere in the payload; inline values pass through unchanged.
+const resolveFlightText = (
+  payload: string,
+  value: string | null | undefined,
+): string | undefined => {
+  if (!value) return undefined;
+  if (!/^\$[0-9a-f]+$/i.test(value)) return value;
+
+  const marker = `${value.slice(1)}:T`;
+  let index = payload.indexOf(marker);
+  while (index > 0 && /[0-9a-z]/i.test(payload[index - 1])) {
+    index = payload.indexOf(marker, index + 1);
+  }
+  if (index === -1) return undefined;
+
+  const comma = payload.indexOf(",", index + marker.length);
+  if (comma === -1) return undefined;
+  const length = parseInt(payload.slice(index + marker.length, comma), 16);
+  if (!Number.isFinite(length) || length <= 0) return undefined;
+
+  // The declared length counts bytes of the raw stream; cut at the next row
+  // boundary as well so multi-byte text can't bleed into the following row.
+  const chunk = payload.slice(comma + 1, comma + 1 + length);
+  const boundary = chunk.search(/\n[0-9a-f]{1,4}:/i);
+  return (boundary === -1 ? chunk : chunk.slice(0, boundary)).trim() || undefined;
+};
+
+const resolveSeriesText = (payload: string, series: LuaSeries): LuaSeries => ({
+  ...series,
+  description: resolveFlightText(payload, series.description) ?? null,
+});
+
 export const parseHomePage = (html: string): LuaHomePage => {
   const payload = flightPayload(html);
   return {
-    banners: extractArray<LuaBanner>(payload, "banners"),
-    recommended: extractArray<LuaSeries>(payload, "series"),
-    editors: extractArray<LuaSeries>(payload, "pinned_series"),
+    banners: extractArray<LuaBanner>(payload, "banners").map((banner) => ({
+      ...banner,
+      series: banner.series ? resolveSeriesText(payload, banner.series) : banner.series,
+    })),
+    recommended: extractArray<LuaSeries>(payload, "series").map((series) =>
+      resolveSeriesText(payload, series),
+    ),
+    editors: extractArray<LuaSeries>(payload, "pinned_series").map((series) =>
+      resolveSeriesText(payload, series),
+    ),
   };
 };
 
