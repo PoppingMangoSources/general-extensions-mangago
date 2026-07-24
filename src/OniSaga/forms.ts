@@ -6,6 +6,7 @@ import {
   ButtonRow,
   EditSection,
   Form,
+  type FormSectionElement,
   InputRow,
   LabelRow,
   NavigationRow,
@@ -22,7 +23,6 @@ import {
   DISCOVER_STATUS_KEY,
   DISCOVER_TYPE_KEY,
   EXCLUDED_GENRES_KEY,
-  GENRES,
   LANGUAGES,
   DEDUPE_CHAPTERS_KEY,
   LANGUAGES_KEY,
@@ -39,96 +39,107 @@ import {
   type Option,
   type OniSagaSearchMetadata,
 } from "./models";
+import { getGenres, getPageDelayId } from "./utils/helpers";
 
-const getPageDelayId = (): string => {
-  const stored = Application.getState(PAGE_DELAY_KEY) as string | undefined;
-  if (stored && PAGE_DELAY_OPTIONS.some((option) => option.id === stored)) return stored;
-  return PAGE_DELAY_DEFAULT;
-};
+// ----- Settings state accessors -----
 
-export const getPageDelaySeconds = (): number => {
-  const seconds = Number(getPageDelayId());
-  return Number.isFinite(seconds) && seconds > 0 ? seconds : Number(PAGE_DELAY_DEFAULT);
-};
-
-export const getShowNsfw = (): boolean => {
+export function getShowNsfw(): boolean {
   return (Application.getState(SHOW_NSFW_KEY) as boolean | undefined) ?? false;
-};
+}
 
-export const getDiscoverType = (): string => {
+// Every stored-selection getter validates against its CURRENT option list: a
+// SelectRow whose value isn't inside its items hard-errors the settings form,
+// so a stored id that a later release removed (this already happened once with
+// the pacing options) must be dropped/snapped, never rendered.
+
+export function getDiscoverType(): string {
   const stored = (Application.getState(DISCOVER_TYPE_KEY) as string | undefined) ?? "";
   return TYPE_OPTIONS.some((option) => option.id === stored) ? stored : "";
-};
+}
 
-export const getDiscoverStatus = (): string => {
+export function getDiscoverStatus(): string {
   const stored = (Application.getState(DISCOVER_STATUS_KEY) as string | undefined) ?? "";
   return STATUS_OPTIONS.some((option) => option.id === stored) ? stored : "";
-};
+}
 
-export const getExcludedGenres = (): string[] => {
+export function getExcludedGenres(): string[] {
   const stored = (Application.getState(EXCLUDED_GENRES_KEY) as string[] | undefined) ?? [];
-  return stored.filter((id) => GENRES.some((genre) => genre.id === id));
-};
+  return stored.filter((id) => getGenres().some((genre) => genre.id === id));
+}
 
-export const getLanguages = (): string[] => {
+// Chapter languages to show (langCodes); defaults to English, also when every
+// stored code has dropped out of the supported list (the row requires >= 1).
+export function getLanguages(): string[] {
   const stored = (Application.getState(LANGUAGES_KEY) as string[] | undefined) ?? ["en"];
   const valid = stored.filter((code) => LANGUAGES.some((lang) => lang.langCode === code));
   return valid.length > 0 ? valid : ["en"];
-};
+}
 
-export const getDedupeChapters = (): boolean => {
+// Drop duplicate uploads of the same chapter in the same language, keeping the
+// newest. onisaga often carries several uploads of one chapter; on by default,
+// matching the site's own reader and the MangaDex source's "Skip Same Chapter".
+export function getDedupeChapters(): boolean {
   return (Application.getState(DEDUPE_CHAPTERS_KEY) as boolean | undefined) ?? true;
-};
+}
 
-const getDeletedSections = (): DiscoverSectionDef[] => {
+// ----- Discover section order / visibility -----
+
+export function getDeletedSections(): DiscoverSectionDef[] {
   return (Application.getState(SECTIONS_DELETED_KEY) as DiscoverSectionDef[] | undefined) ?? [];
-};
+}
 
-export const getSectionsOrder = (): DiscoverSectionDef[] => {
+// Stored order, with any newly-shipped rails (absent from a saved order and not
+// hidden) appended so an app update never silently drops a section.
+export function getSectionsOrder(): DiscoverSectionDef[] {
   const stored = Application.getState(SECTIONS_ORDER_KEY) as DiscoverSectionDef[] | undefined;
   if (!stored) return [...DISCOVER_SECTIONS];
   const known = new Set([...stored, ...getDeletedSections()].map((s) => s.id));
   return [...stored, ...DISCOVER_SECTIONS.filter((s) => !known.has(s.id))];
-};
+}
 
-const setSectionsOrder = (sections: DiscoverSectionDef[]): void => {
+function setSectionsOrder(sections: DiscoverSectionDef[]): void {
   Application.setState(sections, SECTIONS_ORDER_KEY);
-};
+}
 
-const setDeletedSections = (sections: DiscoverSectionDef[]): void => {
+function setDeletedSections(sections: DiscoverSectionDef[]): void {
   Application.setState(sections, SECTIONS_DELETED_KEY);
-};
+}
 
-const resetSections = (): void => {
+function resetSections(): void {
   Application.setState(undefined, SECTIONS_ORDER_KEY);
   Application.setState(undefined, SECTIONS_DELETED_KEY);
-};
+}
 
 const toTags = (options: Option[]): Tag[] => options.map((o) => ({ id: o.id, title: o.title }));
 
-class OniSagaSectionsForm extends Form {
+// ----- Discover sections order/visibility form -----
+
+export class OniSagaSectionsForm extends Form {
   override getSections() {
     const deleted = getDeletedSections();
 
     return [
-      EditSection("order", {
-        id: "order",
-        header: "Section Order",
-        footer: "Long press to reorder, swipe to hide.",
-        items: getSectionsOrder().map((section) => LabelRow(section.id, { title: section.title })),
+      {
+        ...EditSection("order", {
+          id: "order",
+          header: "Section Order",
+          footer: "Long press to reorder, swipe to hide.",
+          items: getSectionsOrder().map((section) =>
+            LabelRow(section.id, { title: section.title }),
+          ),
+        }),
         allowReorder: true,
         allowDeletion: true,
         onReorder: Application.Selector(this as OniSagaSectionsForm, "rowDidReorder"),
         onDeletion: Application.Selector(this as OniSagaSectionsForm, "rowDidDelete"),
-      }),
+      } as unknown as FormSectionElement<unknown>,
       ...(deleted.length > 0
         ? [
             Section({ id: "restore", footer: "Re-add hidden rails to the bottom of the list." }, [
               SelectRow("restore", {
                 title: "Hidden Sections",
-                layout: "flow",
                 value: [],
-                items: deleted.map((section) => ({ id: section.id, title: section.title })),
+                options: deleted.map((section) => ({ id: section.id, title: section.title })),
                 minItemCount: 0,
                 maxItemCount: deleted.length,
                 onValueChange: Application.Selector(this as OniSagaSectionsForm, "handleRestore"),
@@ -181,6 +192,8 @@ class OniSagaSectionsForm extends Form {
   }
 }
 
+// ----- Settings form -----
+
 export class OniSagaSettingsForm extends Form {
   private showNsfw: boolean;
   private type: string;
@@ -225,18 +238,16 @@ export class OniSagaSettingsForm extends Form {
         [
           SelectRow("type", {
             title: "Type",
-            layout: "flow",
             value: [this.type],
-            items: toTags(TYPE_OPTIONS),
+            options: toTags(TYPE_OPTIONS),
             minItemCount: 0,
             maxItemCount: 1,
             onValueChange: Application.Selector(this as OniSagaSettingsForm, "updateType"),
           }),
           SelectRow("status", {
             title: "Status",
-            layout: "flow",
             value: [this.status],
-            items: toTags(STATUS_OPTIONS),
+            options: toTags(STATUS_OPTIONS),
             minItemCount: 0,
             maxItemCount: 1,
             onValueChange: Application.Selector(this as OniSagaSettingsForm, "updateStatus"),
@@ -252,9 +263,8 @@ export class OniSagaSettingsForm extends Form {
         [
           SelectRow("languages", {
             title: "Chapter Languages",
-            layout: "flow",
             value: this.languages,
-            items: LANGUAGES.map((lang) => ({ id: lang.langCode, title: lang.title })),
+            options: LANGUAGES.map((lang) => ({ id: lang.langCode, title: lang.title })),
             minItemCount: 1,
             maxItemCount: LANGUAGES.length,
             onValueChange: Application.Selector(this as OniSagaSettingsForm, "updateLanguages"),
@@ -273,14 +283,13 @@ export class OniSagaSettingsForm extends Form {
         {
           id: "reader",
           footer:
-            "Signed page lookups are paced separately from image downloads. The hourly safety ceiling still prevents onisaga's long reader lockout.",
+            "Page lookups start quickly, then settle into a sustainable cross-chapter pace. If onisaga's hourly safety budget is already full, the reader reports the remaining pause instead of staying at Loading 0%.",
         },
         [
           SelectRow("pageDelay", {
-            title: "Reader Request Speed",
-            layout: "flow",
+            title: "Image Requests Limit",
             value: [this.pageDelay],
-            items: toTags(PAGE_DELAY_OPTIONS),
+            options: toTags(PAGE_DELAY_OPTIONS),
             minItemCount: 1,
             maxItemCount: 1,
             onValueChange: Application.Selector(this as OniSagaSettingsForm, "updatePageDelay"),
@@ -299,11 +308,10 @@ export class OniSagaSettingsForm extends Form {
         [
           SelectRow("excludedGenres", {
             title: "Genre Blacklist",
-            layout: "flow",
             value: this.excludedGenres,
-            items: toTags(GENRES),
+            options: toTags(getGenres()),
             minItemCount: 0,
-            maxItemCount: GENRES.length,
+            maxItemCount: getGenres().length,
             onValueChange: Application.Selector(
               this as OniSagaSettingsForm,
               "updateExcludedGenres",
@@ -365,6 +373,8 @@ export class OniSagaSettingsForm extends Form {
   }
 }
 
+// ----- Advanced search form -----
+
 export class OniSagaAdvancedSearchForm extends AdvancedSearchForm {
   private type: string;
   private status: string;
@@ -379,6 +389,8 @@ export class OniSagaAdvancedSearchForm extends AdvancedSearchForm {
   constructor(searchQuery: SearchQuery<OniSagaSearchMetadata>) {
     super();
     const meta = searchQuery.metadata ?? {};
+    // Default to the saved discover Type/Status so the form opens reflecting the
+    // filter that's actually applied; the user can then switch either to All.
     this.type = meta.type ?? getDiscoverType();
     this.status = meta.status ?? getDiscoverStatus();
     this.minChapters = meta.minChapters ?? "";
@@ -386,7 +398,7 @@ export class OniSagaAdvancedSearchForm extends AdvancedSearchForm {
     this.releaseStart = meta.releaseStart ?? "";
     this.releaseEnd = meta.releaseEnd ?? "";
     this.genres = { ...meta.genres };
-    this.genreOptions = toTags(GENRES);
+    this.genreOptions = toTags(getGenres());
   }
 
   override getSections() {
@@ -405,9 +417,8 @@ export class OniSagaAdvancedSearchForm extends AdvancedSearchForm {
       Section("type", [
         SelectRow("type", {
           title: "Type",
-          layout: "flow",
           value: [this.type],
-          items: toTags(TYPE_OPTIONS),
+          options: toTags(TYPE_OPTIONS),
           minItemCount: 0,
           maxItemCount: 1,
           onValueChange: Application.Selector(this as OniSagaAdvancedSearchForm, "handleType"),
@@ -416,9 +427,8 @@ export class OniSagaAdvancedSearchForm extends AdvancedSearchForm {
       Section("status", [
         SelectRow("status", {
           title: "Status",
-          layout: "flow",
           value: [this.status],
-          items: toTags(STATUS_OPTIONS),
+          options: toTags(STATUS_OPTIONS),
           minItemCount: 0,
           maxItemCount: 1,
           onValueChange: Application.Selector(this as OniSagaAdvancedSearchForm, "handleStatus"),
@@ -427,9 +437,8 @@ export class OniSagaAdvancedSearchForm extends AdvancedSearchForm {
       Section("minChapters", [
         SelectRow("minChapters", {
           title: "Min Chapters",
-          layout: "flow",
           value: [this.minChapters],
-          items: toTags(MIN_CHAPTERS_OPTIONS),
+          options: toTags(MIN_CHAPTERS_OPTIONS),
           minItemCount: 0,
           maxItemCount: 1,
           onValueChange: Application.Selector(
@@ -497,6 +506,9 @@ export class OniSagaAdvancedSearchForm extends AdvancedSearchForm {
   override getSearchQueryMetadata(): OniSagaSearchMetadata {
     const result: OniSagaSearchMetadata = {};
     if (Object.keys(this.genres).length > 0) result.genres = this.genres;
+    // Always emit Type/Status (even when All → "") so searchUpdates uses the
+    // advanced selection verbatim. A plain title search omits them entirely and
+    // still falls back to the saved discover filters.
     result.type = this.type;
     result.status = this.status;
     if (this.minChapters) result.minChapters = this.minChapters;

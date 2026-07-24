@@ -6,6 +6,7 @@ import {
   CloudflareError,
   ContentRating,
   CookieStorageInterceptor,
+  DiscoverSectionType,
   type AdvancedSearchForm,
   type Chapter,
   type ChapterDetails,
@@ -13,6 +14,7 @@ import {
   type DiscoverSection,
   type DiscoverSectionItem,
   type ExtensionImpl,
+  type FeaturedCarouselItem,
   type Form,
   type PagedResults,
   type Request,
@@ -21,6 +23,7 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
+  type UpdateManager,
 } from "@paperback/types";
 import * as cheerio from "cheerio";
 
@@ -36,62 +39,99 @@ import {
   OniSagaSettingsForm,
 } from "./forms";
 import {
-  BROWSE_PAGE_SIZE,
-  BROWSE_STATE_CACHE_MAX,
-  BROWSE_STATE_TTL,
   DEFAULT_SORT,
-  defaultUpdates,
   DOMAIN,
-  FEATURED_LIMIT,
-  GENRES,
-  HOME_TTL,
-  HOST,
-  IMPORT_POLL_FAST_COUNT,
-  IMPORT_POLL_FAST_SECONDS,
-  IMPORT_POLL_SLOW_SECONDS,
-  READER_MAX_ATTEMPTS,
   SORT_OPTIONS,
-  TOP_MANGA_TTL,
-  type DiscoverMetadata,
   type LivewireResponse,
   type LivewireState,
   type OniSagaSearchMetadata,
   type PostFilterUpdates,
 } from "./models";
-import {
-  buildBrowseRequest,
-  buildLoadMoreChaptersRequest,
-  buildSectionToggleRequest,
-  livewireHeaders,
-  OniSagaInterceptor,
-  OniSagaPageRateLimiter,
-} from "./network";
+import { OniSagaInterceptor, OniSagaPageRateLimiter } from "./network";
 import {
   buildStatSubtitle,
   componentHtmlByName,
   countPages,
-  discoverSectionType,
-  extractLivewireState,
-  extractLivewireStateFromHtml,
   extractPageOrders,
   extractReaderToken,
   hasNextPageFromHtml,
-  mangaIdFromHref,
-  normalizeReleaseDate,
   parseChapters,
   parseHomeRail,
   parseMangaCards,
   parseMangaCardsFromHtml,
   parseMangaDetails,
-  parseJson,
   parseTopManga,
-  topMangaInfoItems,
   topMangaSubtitle,
-  straightenQuotes,
   type MangaCard,
   type TopMangaItem,
 } from "./parsers";
 import type OniSagaConfig from "./pbconfig";
+import {
+  getGenres,
+  mangaIdFromHref,
+  normalizeReleaseDate,
+  parseJson,
+  straightenQuotes,
+} from "./utils/helpers";
+import {
+  buildBrowseRequest,
+  buildLoadMoreChaptersRequest,
+  buildSectionToggleRequest,
+  defaultUpdates,
+  extractLivewireState,
+  extractLivewireStateFromHtml,
+  livewireHeaders,
+} from "./utils/livewire";
+
+const FEATURED_LIMIT = 10;
+
+// The browse/search Livewire component renders this many cards per page.
+const BROWSE_PAGE_SIZE = 24;
+
+// A freshly-opened chapter onisaga hasn't imported yet serves a
+// `manga.chapter-page-loader` page (no reader token) that polls every 3s until
+// the import finishes. Mirror that poll: re-fetch the reader page until the real
+// reader with its token loads — quickly at first so a fast import opens
+// snappily, then more slowly, since a long chapter's first import can take well
+// over a minute (a 36s budget was observed timing out on real chapters).
+// Worst case ≈ 6×3s + 11×6s ≈ 84s of waiting before giving up with a clear
+// "come back shortly" error; the import keeps running server-side regardless.
+const IMPORT_POLL_FAST_SECONDS = 3;
+const IMPORT_POLL_SLOW_SECONDS = 6;
+const IMPORT_POLL_FAST_COUNT = 6;
+const READER_MAX_ATTEMPTS = 18;
+
+// Carousel style per rail.
+function discoverSectionType(id: string): DiscoverSectionType {
+  switch (id) {
+    case "top_manga":
+      return DiscoverSectionType.featured;
+    case "highest_rated":
+      return DiscoverSectionType.prominentCarousel;
+    default:
+      return DiscoverSectionType.simpleCarousel;
+  }
+}
+
+function toSearchItems(cards: MangaCard[]): SearchResultItem[] {
+  return cards.map((card) => ({
+    mangaId: card.mangaId,
+    title: card.title,
+    imageUrl: card.imageUrl,
+    contentRating: card.contentRating,
+  }));
+}
+
+// Featured hero stat pills: ★ rating and read count, when present.
+function topMangaInfoItems(item: TopMangaItem): FeaturedCarouselItem["infoItems"] {
+  const pills: { symbol: string; text: string }[] = [];
+  if (item.rating) pills.push({ symbol: "star.fill", text: item.rating });
+  if (item.reads) pills.push({ symbol: "flame.fill", text: item.reads });
+  if (pills.length === 0) return undefined;
+  return (
+    pills.length === 1 ? [pills[0]] : [pills[0], pills[1]]
+  ) as FeaturedCarouselItem["infoItems"];
+}
 
 export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
@@ -118,6 +158,17 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   // share one download.
   private browseStates = new Map<string, { state: LivewireState; at: number }>();
   private browseStateFetches = new Map<string, Promise<LivewireState | undefined>>();
+  private static readonly BROWSE_STATE_TTL = 1_800_000;
+  private static readonly BROWSE_STATE_CACHE_MAX = 8;
+
+  private static readonly HOME_TTL = 60_000;
+
+  // Library-update scan bounds (see processTitlesForUpdates): pages of the
+  // Latest feed scanned per refresh (~24 titles each), and the maximum age of
+  // the last refresh for which that window is trusted to cover the gap.
+  private static readonly UPDATE_SCAN_MAX_PAGES = 8;
+  private static readonly UPDATE_SCAN_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
+
   // Cached /home document. It server-renders the Latest, Fan Favorites and Top
   // Rated rails inline, so one fetch serves several rails instead of a separate
   // (10MB+) /browse or /top-manga request each.
@@ -129,6 +180,8 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   // rails as it refreshes/scrolls, so cache each sort briefly to collapse the
   // repeated fetches into one.
   private topMangaCache = new Map<string, { items: TopMangaItem[]; at: number }>();
+  private static readonly TOP_MANGA_TTL = 60_000;
+
   async initialise(): Promise<void> {
     // Cookie storage runs last on requests so the latest saved cookies are
     // injected after the page-budget gate. Responses run in reverse, letting it
@@ -150,22 +203,24 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     return this.requestManager.prepareRedirect(request, response);
   }
 
+  async saveCloudflareBypassCookies(cookies: Cookie[]): Promise<void> {
+    await this.cloudflareBypassCompleted({ url: `${DOMAIN}/`, method: "GET" }, cookies, {});
+  }
+
   async cloudflareBypassCompleted(
     _request: Request,
     cookies: Cookie[],
     _localStorage: Record<string, string>,
   ): Promise<void> {
-    // Forward every cookie, not just cf*: onisaga.com is a Laravel app whose
-    // session (onisaga_session, XSRF-TOKEN) is required alongside cf_clearance,
-    // and dropping those makes every post-bypass request 403.
-    for (const cookie of cookies) this.cookieStorageInterceptor.setCookie(cookie);
-
-    this.requestManager.resetAfterCloudflareBypass();
-    this.browseStates.clear();
-    this.browseStateFetches.clear();
-    this.homeDocCache = undefined;
-    this.homeDocFetch = undefined;
-    this.topMangaCache.clear();
+    for (const cookie of cookies) {
+      if (
+        cookie.name.startsWith("cf") ||
+        cookie.name.startsWith("_cf") ||
+        cookie.name.startsWith("__cf")
+      ) {
+        this.cookieStorageInterceptor.setCookie(cookie);
+      }
+    }
   }
 
   async getSettingsForm(): Promise<Form> {
@@ -182,6 +237,8 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     return SORT_OPTIONS.map((option) => ({ id: option.id, label: option.title }));
   }
 
+  // =============================== Discover ====================================
+
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return getSectionsOrder().map((section) => ({
       id: section.id,
@@ -192,7 +249,7 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
 
   async getDiscoverSectionItems(
     section: DiscoverSection,
-    metadata: DiscoverMetadata | undefined,
+    metadata: { page?: number; collectedIds?: string[] } | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
       case "top_manga":
@@ -221,7 +278,7 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
 
   private async browseDiscover(
     sort: string,
-    metadata: DiscoverMetadata | undefined,
+    metadata: { page?: number; collectedIds?: string[] } | undefined,
     map: (card: MangaCard) => DiscoverSectionItem,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const page = metadata?.page ?? 1;
@@ -271,12 +328,18 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     const key = `${sort}:${showNsfw}`;
     const now = Date.now();
     const cached = this.topMangaCache.get(key);
-    if (cached && now - cached.at < TOP_MANGA_TTL) return cached.items;
+    if (cached && now - cached.at < OniSagaExtension.TOP_MANGA_TTL) return cached.items;
 
-    const $ = await this.fetchCheerio({ url: `${DOMAIN}/top-manga?sort=${sort}`, method: "GET" });
-    const items = parseTopManga($, showNsfw);
-    this.topMangaCache.set(key, { items, at: now });
-    return items;
+    try {
+      const $ = await this.fetchCheerio({ url: `${DOMAIN}/top-manga?sort=${sort}`, method: "GET" });
+      const items = parseTopManga($, showNsfw);
+      this.topMangaCache.set(key, { items, at: now });
+      return items;
+    } catch (error) {
+      // A Cloudflare wall must reach the user as the bypass prompt.
+      if (error instanceof CloudflareError) throw error;
+      return [];
+    }
   }
 
   // POST a Livewire update and return the first component's re-render.
@@ -305,7 +368,7 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   // Favorites) share a single request instead of each downloading it.
   private async getHomeDoc(): Promise<string> {
     const now = Date.now();
-    if (this.homeDocCache && now - this.homeDocCache.at < HOME_TTL) {
+    if (this.homeDocCache && now - this.homeDocCache.at < OniSagaExtension.HOME_TTL) {
       return this.homeDocCache.html;
     }
     if (this.homeDocFetch) return this.homeDocFetch;
@@ -330,7 +393,7 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   // Mangas" grid (no 10MB+ /browse download); deeper pages fall back to the
   // Livewire browse path.
   private async fetchLatest(
-    metadata: DiscoverMetadata | undefined,
+    metadata: { page?: number; collectedIds?: string[] } | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const map = (card: MangaCard): DiscoverSectionItem => ({
       type: "simpleCarouselItem",
@@ -399,7 +462,7 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
       };
     } catch (error) {
       if (error instanceof CloudflareError) throw error;
-      throw new Error("Failed to load Fan Favorites", { cause: error });
+      return { items: [] };
     }
   }
 
@@ -410,7 +473,9 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     const excludedIds = new Set(getExcludedGenres());
     if (excludedIds.size === 0) return items;
     const excludedTitles = new Set(
-      GENRES.filter((genre) => excludedIds.has(genre.id)).map((genre) => genre.title.toLowerCase()),
+      getGenres()
+        .filter((genre) => excludedIds.has(genre.id))
+        .map((genre) => genre.title.toLowerCase()),
     );
     if (excludedTitles.size === 0) return items;
     // Card/ranking genre lines use assorted separators ("Action / Adventure",
@@ -420,6 +485,8 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
       return !titles.some((title) => excludedTitles.has(title));
     });
   }
+
+  // ================================ Search =====================================
 
   async getSearchResults(
     query: SearchQuery<OniSagaSearchMetadata>,
@@ -440,12 +507,7 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     const { cards, hasNext } = await this.fetchBrowse(baseUrl, updates, page);
 
     return {
-      items: cards.map((card) => ({
-        mangaId: card.mangaId,
-        title: card.title,
-        imageUrl: card.imageUrl,
-        contentRating: card.contentRating,
-      })),
+      items: toSearchItems(cards),
       metadata: hasNext ? { page: page + 1 } : undefined,
     };
   }
@@ -478,7 +540,7 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     // Only resolve links that actually point at this source's site; a pasted
     // foreign URL must not be fetched with this source's headers.
     const host = rawUrl.match(/^https?:\/\/([^/]+)/i)?.[1]?.toLowerCase();
-    if (!host || (host !== HOST && !host.endsWith(`.${HOST}`))) return undefined;
+    if (!host || (host !== "onisaga.com" && !host.endsWith(".onisaga.com"))) return undefined;
 
     // Reader URLs embed the manga slug directly (/read/<slug>/<chapter>).
     const mangaId = mangaIdFromHref(rawUrl) || (rawUrl.match(/\/read\/([^/]+)/)?.[1] ?? "");
@@ -505,6 +567,8 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
       contentRating: details.mangaInfo.contentRating ?? ContentRating.EVERYONE,
     };
   }
+
+  // ============================ Manga & Chapters ===============================
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
     // Canonicalize via the final URL: an alias slug (e.g. /manga/handa-kun)
@@ -560,6 +624,55 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
       chapter.sortingIndex = chapters.length - index;
     });
     return chapters;
+  }
+
+  // Bulk library-update check. Without this, a refresh fetches every followed
+  // title individually (a /manga page + a Livewire chapter-list POST each —
+  // hundreds of requests for a large library, against the same site that rate
+  // limits the reader). Instead, scan the first pages of the Latest feed (the
+  // same created_at browse the Latest rail uses, ~24 titles/page): a followed
+  // title that appears there gets checked with high priority, everything else
+  // is skipped this round. Guard rails, since cards carry no timestamps:
+  // - Only trust the scan for a recent refresh gap (<= UPDATE_SCAN_MAX_AGE_MS);
+  //   an older gap falls through to the app's normal per-title refresh.
+  // - The scan ignores the user's NSFW/genre/type filters — a followed title
+  //   must never be skipped because a display filter hid it.
+  // - Any scan failure leaves priorities untouched (never skip on bad data).
+  async processTitlesForUpdates(
+    updateManager: UpdateManager,
+    lastUpdateDate?: Date,
+  ): Promise<void> {
+    if (!lastUpdateDate) return;
+    if (Date.now() - lastUpdateDate.getTime() > OniSagaExtension.UPDATE_SCAN_MAX_AGE_MS) return;
+
+    const queued = updateManager.getQueuedItems();
+    if (queued.length === 0) return;
+
+    // Pure defaults: created_at sort (newest updates first), no user filters.
+    const updates = defaultUpdates();
+
+    const recentIds = new Set<string>();
+    try {
+      for (let page = 1; page <= OniSagaExtension.UPDATE_SCAN_MAX_PAGES; page++) {
+        const { cards, hasNext } = await this.fetchBrowse(`${DOMAIN}/browse`, updates, page, true);
+        const before = recentIds.size;
+        for (const card of cards) recentIds.add(card.mangaId);
+        // An empty or repeated page means the feed ended (or the Livewire state
+        // went stale mid-scan) — the window is as big as it's going to get.
+        if (cards.length === 0 || recentIds.size === before || !hasNext) break;
+      }
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+      return; // failed scan: never mark titles skippable on bad data
+    }
+    if (recentIds.size === 0) return;
+
+    for (const manga of queued) {
+      await updateManager.setUpdatePriority(
+        manga.mangaId,
+        recentIds.has(manga.mangaId) ? "high" : "skip",
+      );
+    }
   }
 
   // Collapse repeat uploads of the same chapter+language to a single entry,
@@ -688,6 +801,8 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     }
   }
 
+  // ============================== Livewire browse ==============================
+
   // All browse/search listing goes through the Livewire component, page 1
   // included: its responses carry only one page of cards, while the /browse
   // document itself can exceed 10 MB — far too big to parse on-device.
@@ -695,6 +810,9 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     baseUrl: string,
     updates: PostFilterUpdates,
     page: number,
+    // The library-update scan passes true: a hidden-NSFW followed title must
+    // still be seen in the Latest window, or it would be wrongly skipped.
+    showNsfw: boolean = getShowNsfw(),
   ): Promise<{ cards: MangaCard[]; hasNext: boolean }> {
     const state = await this.resolveBrowseState(baseUrl);
     if (!state) return { cards: [], hasNext: false };
@@ -715,7 +833,7 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
 
     // Never cheerio-load the whole response: a filtered browse render can be
     // 15 MB, which freezes the device. Slice cards off the raw string instead.
-    const { cards, rawCount, truncated } = parseMangaCardsFromHtml(html, getShowNsfw());
+    const { cards, rawCount, truncated } = parseMangaCardsFromHtml(html, showNsfw);
     // The browse component paginates server-side (~24 cards/page), and its
     // "next" control markup varies, so the button regex alone would often miss
     // it — leaving search stuck on the first page. Treat a full page as "there's
@@ -736,7 +854,7 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     this.browseStates.delete(baseUrl);
     this.browseStates.set(baseUrl, { state, at: Date.now() });
     // Bound the cache: drop the stalest entry (search terms come and go).
-    if (this.browseStates.size > BROWSE_STATE_CACHE_MAX) {
+    if (this.browseStates.size > OniSagaExtension.BROWSE_STATE_CACHE_MAX) {
       let oldestKey = "";
       let oldestAt = Infinity;
       for (const [key, entry] of this.browseStates) {
@@ -751,7 +869,7 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
 
   private async resolveBrowseState(baseUrl: string): Promise<LivewireState | undefined> {
     const cached = this.browseStates.get(baseUrl);
-    if (cached && Date.now() - cached.at < BROWSE_STATE_TTL) {
+    if (cached && Date.now() - cached.at < OniSagaExtension.BROWSE_STATE_TTL) {
       return cached.state;
     }
 
@@ -779,8 +897,8 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   }
 
   async fetchCheerio(request: Request): Promise<cheerio.CheerioAPI> {
-    const [$] = await this.fetchCheerioWithFinalUrl(request);
-    return $;
+    const [, data] = await Application.scheduleRequest(request);
+    return cheerio.load(Application.arrayBufferToUTF8String(data));
   }
 
   // Like fetchCheerio, but also returns the response's final (post-redirect) URL
@@ -789,10 +907,6 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   // library entry from the canonical one.
   private async fetchCheerioWithFinalUrl(request: Request): Promise<[cheerio.CheerioAPI, string]> {
     const [response, data] = await Application.scheduleRequest(request);
-    if (response.status === 404) throw new Error(`Content not found: ${request.url}`);
-    if (response.status < 200 || response.status >= 300) {
-      throw new Error(`Request failed with status ${response.status}: ${request.url}`);
-    }
     return [cheerio.load(Application.arrayBufferToUTF8String(data)), response.url];
   }
 }

@@ -8,78 +8,14 @@ import {
   type Response,
 } from "@paperback/types";
 
-import { getPageDelaySeconds } from "./forms";
 import {
-  DEFAULT_SORT,
   DOMAIN,
   PAGE_BUDGET_BLOCKED_UNTIL_KEY,
   PAGE_BUDGET_HISTORY_KEY,
-  type BrowseLivewireRequest,
-  type ChapterLivewireRequest,
-  type LivewireCall,
-  type LivewireState,
+  PAGE_TOKEN_BUCKET_KEY,
   type PageApiResponse,
-  type PostFilterUpdates,
-  type ToggleLivewireRequest,
 } from "./models";
-
-export const livewireHeaders = (referer: string): Record<string, string> => {
-  return {
-    "X-Livewire": "",
-    Accept: "application/json",
-    "X-Requested-With": "XMLHttpRequest",
-    "Content-Type": "application/json",
-    Origin: DOMAIN,
-    Referer: referer,
-  };
-};
-
-export const buildSectionToggleRequest = (
-  state: LivewireState,
-  method: string,
-  value: string,
-): ToggleLivewireRequest => {
-  return {
-    _token: state.token,
-    components: [
-      {
-        snapshot: state.snapshot,
-        updates: {},
-        calls: [{ type: "call", path: "", method, params: [value] }],
-      },
-    ],
-  };
-};
-
-export const buildBrowseRequest = (
-  state: LivewireState,
-  updates: PostFilterUpdates,
-  page: number,
-): BrowseLivewireRequest => {
-  const calls: LivewireCall[] = [
-    { type: "call", path: "", method: "updateSort", params: [updates.sort || DEFAULT_SORT] },
-    { type: "call", path: "", method: "updatePlatform", params: [updates.platform] },
-    { type: "call", path: "", method: "gotoPage", params: [page] },
-  ];
-
-  return {
-    _token: state.token,
-    components: [{ snapshot: state.snapshot, updates, calls }],
-  };
-};
-
-export const buildLoadMoreChaptersRequest = (state: LivewireState): ChapterLivewireRequest => {
-  return {
-    _token: state.token,
-    components: [
-      {
-        snapshot: state.snapshot,
-        updates: { chaptersLoaded: 3000, volumesLoaded: 3000 },
-        calls: [],
-      },
-    ],
-  };
-};
+import { getPageDelaySeconds } from "./utils/helpers";
 
 // Matches a reader page-API url and captures the chapter id and page order,
 // e.g. https://onisaga.com/api/chapter/3718181/page/0 -> ["3718181", "0"].
@@ -105,11 +41,6 @@ const RATE_LIMIT_FALLBACK_MS = 2000;
 // much longer block is handled by the separate rolling-budget circuit below.
 const MAX_COOLDOWN_MS = 90_000;
 
-// Discover asks several sections for data at once. Let one request verify the
-// current clearance before the rest of that burst leave the app; otherwise one
-// expired session produces a separate Paperback bypass prompt per section.
-const CLOUDFLARE_PROBE_FRESH_MS = 5000;
-
 // A signed CDN URL is valid ~10 min; reuse a cached one for up to 9 (matching
 // the site reader's _cdnUrls window) so scroll-back and re-opens spend no
 // page-API call, leaving a safe margin before the signature expires.
@@ -128,10 +59,23 @@ const SIGNED_URL_CACHE_MAX = 512;
 export const PAGE_BUDGET_WINDOW_MS = 65 * 60 * 1000;
 export const PAGE_BUDGET_MAX_REQUESTS = 350;
 
+// Allow a normal chapter/prefetch run to start quickly, then refill at a rate
+// that mathematically stays inside 350 requests in any 65-minute window:
+// 30 initial tokens + 320 refills over the window. The existing rolling history
+// remains a hard backstop and safely covers migration from alpha.16.
+export const PAGE_BURST_CAPACITY = 30;
+export const PAGE_TOKEN_REFILL_INTERVAL_MS =
+  PAGE_BUDGET_WINDOW_MS / (PAGE_BUDGET_MAX_REQUESTS - PAGE_BURST_CAPACITY);
+
 // Short pacing delays are worth hiding behind prefetch. A wait longer than this
 // is surfaced immediately with a countdown so Paperback never sits at 0% for
 // most of an hour with no explanation.
 export const PAGE_MAX_INLINE_WAIT_MS = 30_000;
+
+export type PageTokenBucketState = {
+  tokens: number;
+  updatedAt: number;
+};
 
 // Shared page-API circuit. An unexpected 429 parks the retry and every queued
 // prefetch page for the measured long safety window, preventing one response
@@ -141,7 +85,7 @@ const pageCooldown = { until: 0 };
 // Paperback currently reports a bare iOS WebView UA. Cloudflare can treat that
 // differently from the full Safari UA used by its challenge WebView, so complete
 // only the missing browser tokens while preserving the device/OS fingerprint.
-export const completeMobileSafariUserAgent = (userAgent: string): string => {
+export function completeMobileSafariUserAgent(userAgent: string): string {
   if (!/\b(?:iPhone|iPad|iPod)\b/.test(userAgent) || /\bSafari\//.test(userAgent)) {
     return userAgent;
   }
@@ -151,12 +95,12 @@ export const completeMobileSafariUserAgent = (userAgent: string): string => {
     ? userAgent
     : userAgent.replace(/\sMobile\//, ` Version/${version} Mobile/`);
   return /\bSafari\//.test(withVersion) ? withVersion : `${withVersion} Safari/604.1`;
-};
+}
 
-const withHeaders = (
+function withHeaders(
   headers: Record<string, string> | undefined,
   overrides: Record<string, string | undefined>,
-): Record<string, string> => {
+): Record<string, string> {
   const result: Record<string, string> = {};
   const replaced = new Set(Object.keys(overrides).map((key) => key.toLowerCase()));
   for (const [key, value] of Object.entries(headers ?? {})) {
@@ -166,57 +110,52 @@ const withHeaders = (
     if (value !== undefined) result[key] = value;
   }
   return result;
-};
+}
 
-let oniSagaUserAgent: Promise<string> | undefined;
-const getOniSagaUserAgent = (): Promise<string> =>
-  (oniSagaUserAgent ??= Application.getDefaultUserAgent().then(completeMobileSafariUserAgent));
+async function getOniSagaUserAgent(): Promise<string> {
+  return completeMobileSafariUserAgent(await Application.getDefaultUserAgent());
+}
 
 // Response headers can arrive in any casing; read them case-insensitively.
-export const getHeaderValue = (
+export function getHeaderValue(
   headers: Record<string, string> | undefined,
   name: string,
-): string | undefined => {
+): string | undefined {
   const wanted = name.toLowerCase();
   for (const [key, value] of Object.entries(headers ?? {})) {
     if (key.toLowerCase() === wanted) return value;
   }
   return undefined;
-};
+}
 
 // Delay before retrying a rate-limited request, honouring Retry-After.
-export const getRetryDelayMs = (headers: Record<string, string> | undefined): number => {
+export function getRetryDelayMs(headers: Record<string, string> | undefined): number {
   const retryAfter = Number(getHeaderValue(headers, "retry-after"));
   return Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : RATE_LIMIT_FALLBACK_MS;
-};
+}
 
 // Cloudflare normally labels a managed challenge with `cf-mitigated`, as in
 // the captured reader 403. Keep a narrow HTML fallback for proxies/runtimes that
 // omit that header, without mistaking onisaga's ordinary JSON token 403s for a
 // challenge just because the site itself is proxied through Cloudflare.
-export const isCloudflareChallengeResponse = (
+export function isCloudflareChallengeResponse(
   url: string,
   status: number,
   headers: Record<string, string> | undefined,
   bodyText = "",
-): boolean => {
+): boolean {
   if (!url.startsWith(DOMAIN)) return false;
   if (getHeaderValue(headers, "cf-mitigated")?.toLowerCase() === "challenge") return true;
-  if (status !== 403 && status !== 503) return false;
+  if (status !== 403) return false;
 
-  // The site's own token errors are JSON; an HTML body on these statuses is a
-  // challenge interstitial regardless of which variant's wording it carries.
   const contentType = getHeaderValue(headers, "content-type")?.toLowerCase() ?? "";
-  if (contentType.includes("text/html")) return true;
-  if (contentType) return false;
-  return /just a moment|challenge-platform|cf-browser-verification|_cf_chl_opt|verifying you are human|turnstile/i.test(
-    bodyText,
-  );
-};
+  if (!contentType.includes("text/html")) return false;
+  return /just a moment|challenge-platform|cf-browser-verification|_cf_chl_opt/i.test(bodyText);
+}
 
 // Sanitize persisted history before it affects pacing. Sorting also makes the
 // result stable if a previous build wrote starts while the device clock moved.
-export const normalisePageRequestStarts = (value: unknown, now: number): number[] => {
+export function normalisePageRequestStarts(value: unknown, now: number): number[] {
   if (!Array.isArray(value)) return [];
   const cutoff = now - PAGE_BUDGET_WINDOW_MS;
   return value
@@ -229,52 +168,110 @@ export const normalisePageRequestStarts = (value: unknown, now: number): number[
     )
     .sort((a, b) => a - b)
     .slice(-PAGE_BUDGET_MAX_REQUESTS);
-};
+}
 
 // Earliest safe start under the persisted rolling budget. Returning `now` means
 // the request may proceed immediately; at capacity, the oldest charged lookup
 // must age out first.
-export const pageBudgetReadyAt = (starts: number[], now: number): number => {
+export function pageBudgetReadyAt(starts: number[], now: number): number {
   const recent = normalisePageRequestStarts(starts, now);
   if (recent.length < PAGE_BUDGET_MAX_REQUESTS) return now;
   return (recent[0] ?? now) + PAGE_BUDGET_WINDOW_MS;
-};
+}
 
-export const formatPageSafetyPause = (waitMs: number): string => {
+function refillPageTokenBucket(state: PageTokenBucketState, now: number): PageTokenBucketState {
+  if (now <= state.updatedAt) return state;
+  return {
+    tokens: Math.min(
+      PAGE_BURST_CAPACITY,
+      state.tokens + (now - state.updatedAt) / PAGE_TOKEN_REFILL_INTERVAL_MS,
+    ),
+    updatedAt: now,
+  };
+}
+
+function isPageTokenBucketState(value: unknown, now: number): value is PageTokenBucketState {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const candidate = value as Partial<PageTokenBucketState>;
+  return (
+    typeof candidate.tokens === "number" &&
+    Number.isFinite(candidate.tokens) &&
+    candidate.tokens >= 0 &&
+    typeof candidate.updatedAt === "number" &&
+    Number.isFinite(candidate.updatedAt) &&
+    candidate.updatedAt <= now
+  );
+}
+
+// Restore the persisted bucket and reconcile any history entries written after
+// it (for example if the app stopped between the two state writes). On first
+// alpha.17 launch, replay the retained alpha.16 history from a full bucket so a
+// busy existing install does not receive a fresh 30-request burst.
+export function normalisePageTokenBucket(
+  value: unknown,
+  starts: number[],
+  now: number,
+): PageTokenBucketState {
+  const recent = normalisePageRequestStarts(starts, now);
+  const persisted = isPageTokenBucketState(value, now);
+  let state: PageTokenBucketState = persisted
+    ? {
+        tokens: Math.min(PAGE_BURST_CAPACITY, value.tokens),
+        updatedAt: value.updatedAt,
+      }
+    : {
+        tokens: PAGE_BURST_CAPACITY,
+        updatedAt: recent[0] ?? now,
+      };
+
+  const unaccountedStarts = persisted
+    ? recent.filter((startedAt) => startedAt > state.updatedAt)
+    : recent;
+  for (const startedAt of unaccountedStarts) {
+    state = refillPageTokenBucket(state, startedAt);
+    state = { tokens: Math.max(0, state.tokens - 1), updatedAt: startedAt };
+  }
+
+  return refillPageTokenBucket(state, now);
+}
+
+export function pageTokenReadyAt(state: PageTokenBucketState, now: number): number {
+  const refilled = refillPageTokenBucket(state, now);
+  if (refilled.tokens >= 1) return now;
+  return now + (1 - refilled.tokens) * PAGE_TOKEN_REFILL_INTERVAL_MS;
+}
+
+export function consumePageToken(state: PageTokenBucketState, now: number): PageTokenBucketState {
+  const refilled = refillPageTokenBucket(state, now);
+  return { tokens: Math.max(0, refilled.tokens - 1), updatedAt: now };
+}
+
+export function formatPageSafetyPause(waitMs: number): string {
   const seconds = Math.max(1, Math.ceil(waitMs / 1000));
   const duration =
     seconds < 90
       ? `${seconds} second${seconds === 1 ? "" : "s"}`
       : `${Math.ceil(seconds / 60)} minutes`;
   return `OniSaga safety pause — retry in about ${duration}. This prevents the site's hour-long page lockout.`;
-};
+}
 
-const readBlockedUntil = (now: number): number => {
+function readBlockedUntil(now: number): number {
   const value = Number(Application.getState(PAGE_BUDGET_BLOCKED_UNTIL_KEY) ?? 0);
   if (!Number.isFinite(value) || value <= now) {
     if (value !== 0) Application.setState(undefined, PAGE_BUDGET_BLOCKED_UNTIL_KEY);
     return 0;
   }
   return value;
-};
+}
 
-const rememberLongPageBlock = (now: number): number => {
+function rememberLongPageBlock(now: number): number {
   const until = now + PAGE_BUDGET_WINDOW_MS;
   pageCooldown.until = Math.max(pageCooldown.until, until);
   Application.setState(until, PAGE_BUDGET_BLOCKED_UNTIL_KEY);
   return until;
-};
-
-// A probing request can die without ever reaching interceptResponse (transport
-// error, timeout); waiters give up after this long instead of hanging the
-// remaining discover sections forever.
-const CLOUDFLARE_PROBE_MAX_WAIT_MS = 15_000;
+}
 
 export class OniSagaInterceptor extends PaperbackInterceptor {
-  private cloudflareProbe?: { promise: Promise<void>; release: () => void };
-  private cloudflareVerifiedAt = 0;
-  private cloudflareChallengeActive = false;
-
   // Per-chapter reader sessions (chapterId -> token + reader-page referer) set
   // by getChapterDetails; the page API wants both, like the site's own reader.
   private readerSessions = new Map<
@@ -320,60 +317,6 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
   // Alamofire request-adaptation error. The outer request cannot reach the same
   // URL concurrently because it is awaiting this lookup.
   private pageResolveNetworkRequests = new Set<string>();
-
-  resetAfterCloudflareBypass(): void {
-    this.completeCloudflareProbe();
-    this.refreshInFlight.clear();
-    this.pageResolveInFlight.clear();
-    this.pageResolveNetworkRequests.clear();
-    for (const session of this.readerSessions.values()) {
-      session.refreshedAt = undefined;
-      session.refreshOk = undefined;
-    }
-  }
-
-  private async waitForCloudflareProbe(request: Request): Promise<void> {
-    if (
-      !request.url.startsWith(DOMAIN) ||
-      PAGE_API_REGEX.test(request.url) ||
-      getHeaderValue(request.headers, PAGE_RESOLVE_HEADER) === "1" ||
-      Date.now() - this.cloudflareVerifiedAt < CLOUDFLARE_PROBE_FRESH_MS
-    ) {
-      return;
-    }
-
-    if (this.cloudflareProbe) {
-      await Promise.race([
-        this.cloudflareProbe.promise,
-        Application.sleep(CLOUDFLARE_PROBE_MAX_WAIT_MS / 1000),
-      ]);
-      if (this.cloudflareChallengeActive) {
-        // One request already surfaced the bypass; fail the rest of the burst
-        // plainly so the app shows a single prompt instead of one per section.
-        throw new Error("OniSaga needs a Cloudflare check — complete the bypass and retry.");
-      }
-      return;
-    }
-
-    let release = (): void => {};
-    const promise = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    this.cloudflareProbe = { promise, release };
-  }
-
-  private completeCloudflareProbe(): void {
-    this.cloudflareVerifiedAt = Date.now();
-    this.cloudflareChallengeActive = false;
-    this.cloudflareProbe?.release();
-    this.cloudflareProbe = undefined;
-  }
-
-  private failCloudflareProbe(): void {
-    this.cloudflareChallengeActive = true;
-    this.cloudflareProbe?.release();
-    this.cloudflareProbe = undefined;
-  }
 
   setReaderToken(chapterId: string, token: string, referer: string): void {
     this.readerSessions.set(chapterId, { token, referer });
@@ -597,8 +540,6 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
   }
 
   override async interceptRequest(request: Request): Promise<Request> {
-    await this.waitForCloudflareProbe(request);
-
     // Keep a caller-provided Referer/Origin (Livewire calls send page-specific
     // ones); normalize to lower-case so the map never carries both casings.
     // Origin is only sent when a caller set it (browsers omit it on plain GETs).
@@ -685,10 +626,7 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
     response: Response,
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
-    const challengeBody =
-      response.status === 403 || response.status === 503
-        ? Application.arrayBufferToUTF8String(data)
-        : "";
+    const challengeBody = response.status === 403 ? Application.arrayBufferToUTF8String(data) : "";
     if (
       isCloudflareChallengeResponse(request.url, response.status, response.headers, challengeBody)
     ) {
@@ -697,10 +635,6 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
       // an internal sentinel and lets the outer request make the challenge at a
       // response stage Paperback can handle.
       if (this.pageResolveNetworkRequests.has(request.url)) return data;
-
-      // Release any discover requests queued behind this probe so they fail
-      // fast instead of hanging while the challenged request raises the bypass.
-      this.failCloudflareProbe();
 
       // Kagane's working bypass path preserves the challenged request URL and
       // headers. In particular, using the actual protected endpoint lets
@@ -717,8 +651,6 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
         headers: resolutionHeaders,
       });
     }
-
-    if (request.url.startsWith(DOMAIN)) this.completeCloudflareProbe();
 
     // Browse/search/details endpoints can also 429 — onisaga rate-limits deep
     // search pagination (the heaviest, multi-MB responses). Unlike the reader
@@ -833,15 +765,22 @@ export class OniSagaInterceptor extends PaperbackInterceptor {
   }
 }
 
-// Reader page-API starts are evenly spaced while the persisted rolling history
-// remains the hard long-window ceiling. OniSaga's own reader preloads two pages
-// concurrently; 0.5s spacing is at least as conservative without making a normal
-// chapter take several minutes to resolve. Signed CDN images bypass this gate.
+// Reader page-API pacing. Requests are strictly serialized and evenly spaced at
+// the user's Image Requests Limit (2s by default). A persisted token bucket lets
+// ordinary chapters start quickly, then settles sustained reading to the safe
+// 350/65-minute envelope. The retained rolling history is a hard backstop. Long
+// safety waits fail with a countdown instead of holding Paperback at 0%. Only
+// the protected page API is paced; signed CDN images and ordinary requests pass.
 
 export class OniSagaPageRateLimiter extends PaperbackInterceptor {
   private chain: Promise<unknown> = Promise.resolve();
+  // Fire time of the last page request, for even inter-request spacing.
   private lastRequestAt = 0;
   private requestStarts: number[] = [];
+  private tokenBucket: PageTokenBucketState = {
+    tokens: PAGE_BURST_CAPACITY,
+    updatedAt: 0,
+  };
   private stateLoaded = false;
   constructor(
     id: string,
@@ -853,8 +792,8 @@ export class OniSagaPageRateLimiter extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
     const cid = PAGE_API_REGEX.exec(request.url)?.[1];
     if (!cid) return request;
-    // Serialize admission through one chain so concurrent Paperback prefetches
-    // cannot start together; pace() evenly spaces their API lookups.
+    // Serialize every page request through one chain so no two are ever in
+    // flight together; pace() then even-spaces them.
     const wait = this.chain.then(async () => {
       await this.pace();
       await this.beforePageRequest?.(request);
@@ -883,12 +822,14 @@ export class OniSagaPageRateLimiter extends PaperbackInterceptor {
       const now = Date.now();
       this.loadState(now);
       this.requestStarts = normalisePageRequestStarts(this.requestStarts, now);
+      this.tokenBucket = normalisePageTokenBucket(this.tokenBucket, this.requestStarts, now);
 
       const waitUntil = Math.max(
         pageCooldown.until,
         readBlockedUntil(now),
         this.lastRequestAt + intervalMs,
         pageBudgetReadyAt(this.requestStarts, now),
+        pageTokenReadyAt(this.tokenBucket, now),
       );
       const waitMs = waitUntil - now;
 
@@ -902,6 +843,7 @@ export class OniSagaPageRateLimiter extends PaperbackInterceptor {
 
       const startedAt = Date.now();
       this.lastRequestAt = startedAt;
+      this.tokenBucket = consumePageToken(this.tokenBucket, startedAt);
       this.requestStarts.push(startedAt);
       this.saveState();
       return;
@@ -914,10 +856,18 @@ export class OniSagaPageRateLimiter extends PaperbackInterceptor {
       Application.getState(PAGE_BUDGET_HISTORY_KEY),
       now,
     );
+    this.tokenBucket = normalisePageTokenBucket(
+      Application.getState(PAGE_TOKEN_BUCKET_KEY),
+      this.requestStarts,
+      now,
+    );
     this.stateLoaded = true;
   }
 
   private saveState(): void {
+    // Save the bucket first. If the app stops between writes, losing one token
+    // is conservative; the opposite order could grant an uncharged request.
+    Application.setState(this.tokenBucket, PAGE_TOKEN_BUCKET_KEY);
     Application.setState(this.requestStarts, PAGE_BUDGET_HISTORY_KEY);
   }
 }
