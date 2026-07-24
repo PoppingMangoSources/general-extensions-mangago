@@ -3,7 +3,6 @@
 
 import {
   BasicRateLimiter,
-  CookieStorageInterceptor,
   type AdvancedSearchForm,
   type Chapter,
   type ChapterDetails,
@@ -37,6 +36,7 @@ import {
   buildSearchPath,
   canonicalUrl,
   fetchChapterListPage,
+  cookieStorage,
   fetchHtml,
   fetchListingPage,
   RanobesInterceptor,
@@ -67,18 +67,16 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
 
   requestManager = new RanobesInterceptor("main");
 
-  cookieStorage = new CookieStorageInterceptor({ storage: "stateManager" });
-
   private taxonomyPromise?: Promise<FilterTaxonomy>;
 
   async initialise(): Promise<void> {
     this.mainRateLimiter.registerInterceptor();
-    this.cookieStorage.registerInterceptor();
+    cookieStorage.registerInterceptor();
     this.requestManager.registerInterceptor();
   }
 
   async getSettingsForm(): Promise<Form> {
-    return new RanobesSettingsForm(this.cookieStorage);
+    return new RanobesSettingsForm(cookieStorage);
   }
 
   async cloudflareBypassCompleted(
@@ -89,9 +87,12 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     this.taxonomyPromise = undefined;
     // The site's protection issues its clearance as __ddg* cookies alongside a
     // PHP session; a cf-prefix filter would discard all of them and the bypass
-    // would never stick, so every cookie is forwarded.
+    // would never stick, so every cookie is forwarded. Existing __ddg* copies
+    // are cleared first so a stale variant cannot shadow the fresh clearance.
+    const stale = cookieStorage.cookies.filter((cookie) => cookie.name.startsWith("__ddg"));
+    for (const cookie of stale) cookieStorage.deleteCookie(cookie);
     for (const cookie of cookies) {
-      this.cookieStorage.setCookie(cookie);
+      cookieStorage.setCookie(cookie);
     }
   }
 

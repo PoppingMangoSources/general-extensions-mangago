@@ -3,6 +3,7 @@
 
 import {
   CloudflareError,
+  CookieStorageInterceptor,
   PaperbackInterceptor,
   type Request,
   type Response,
@@ -102,6 +103,18 @@ const getUserAgent = (): Promise<string> =>
 
 const IMAGE_EXTENSION_REGEX = /\.(jpe?g|png|webp|gif|avif|bmp)(\?|#|$)/i;
 
+export const cookieStorage = new CookieStorageInterceptor({ storage: "stateManager" });
+
+// The protection signs a short-lived cookie pair and stalls any client that
+// replays a stale one; a stalled request never receives the refreshed pair,
+// so dropping it is the only way back to a clean state.
+const ROTATING_CLEARANCE = ["__ddg8_", "__ddg10_"];
+
+export const dropRotatingClearance = (): void => {
+  const stale = cookieStorage.cookies.filter((cookie) => ROTATING_CLEARANCE.includes(cookie.name));
+  for (const cookie of stale) cookieStorage.deleteCookie(cookie);
+};
+
 export class RanobesInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
     // A request without browser-shaped Accept headers is likelier to draw a
@@ -137,6 +150,7 @@ export class RanobesInterceptor extends PaperbackInterceptor {
       // The bypass loads the challenged page itself: the root page's inline
       // scripts break the bypass webview, and with the clearance cookies
       // persisted a single solved prompt already covers later requests.
+      dropRotatingClearance();
       throw new CloudflareError({
         url: request.url,
         method: request.method ?? "GET",
@@ -161,11 +175,17 @@ const responseText = (response: Response, buffer: ArrayBuffer, url: string): str
 };
 
 export const fetchHtml = async (url: string): Promise<string> => {
-  const [response, buffer] = await Application.scheduleRequest({
-    url,
-    method: "GET",
-  });
-  return responseText(response, buffer, url);
+  try {
+    const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
+    return responseText(response, buffer, url);
+  } catch (error: unknown) {
+    if (error instanceof CloudflareError) throw error;
+    // A timed-out request usually means a stale clearance pair was replayed;
+    // retry once as a clean client so the next response can re-issue it.
+    dropRotatingClearance();
+    const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
+    return responseText(response, buffer, url);
+  }
 };
 
 export const fetchListingPage = (path: string, page = 1): Promise<string> =>
