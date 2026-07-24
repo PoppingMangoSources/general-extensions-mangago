@@ -81,14 +81,11 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     _localStorage: Record<string, string>,
   ): Promise<void> {
     this.taxonomyPromise = undefined;
+    // The site's protection issues its clearance as __ddg* cookies alongside a
+    // PHP session; a cf-prefix filter would discard all of them and the bypass
+    // would never stick, so every cookie is forwarded.
     for (const cookie of cookies) {
-      if (
-        cookie.name.startsWith("cf") ||
-        cookie.name.startsWith("_cf") ||
-        cookie.name.startsWith("__cf")
-      ) {
-        this.cookieStorage.setCookie(cookie);
-      }
+      this.cookieStorage.setCookie(cookie);
     }
   }
 

@@ -104,9 +104,12 @@ export class RanobesInterceptor extends PaperbackInterceptor {
       response.status === 403 ||
       /(?:Just a moment|Security check|vb_challenge)/i.test(body)
     ) {
+      // Solving the challenge on the site root clears the clearance cookies
+      // for the whole domain, so parallel challenged requests funnel into one
+      // bypass instead of one prompt per endpoint.
       throw new CloudflareError({
-        url: request.url,
-        method: request.method ?? "GET",
+        url: `${DOMAIN}/`,
+        method: "GET",
         headers: { "user-agent": await Application.getDefaultUserAgent() },
       });
     }
