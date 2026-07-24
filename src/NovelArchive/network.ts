@@ -8,16 +8,32 @@ import {
   type Response,
 } from "@paperback/types";
 
-import { DOMAIN } from "./models";
+import { API_URL, DOMAIN } from "./models";
+
+// One native lookup for the whole session instead of one per request.
+let userAgentPromise: Promise<string> | undefined;
+const getUserAgent = (): Promise<string> =>
+  (userAgentPromise ??= Application.getDefaultUserAgent());
 
 export class NovelArchiveInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
+    // API calls send the browser's JSON request profile — the backend answers
+    // these markedly faster than bare requests — while other requests only
+    // carry the referer and user agent.
+    const isApi = request.url.startsWith(API_URL);
     return {
       ...request,
       headers: {
         ...request.headers,
         referer: `${DOMAIN}/`,
-        "user-agent": await Application.getDefaultUserAgent(),
+        "user-agent": await getUserAgent(),
+        ...(isApi
+          ? {
+              origin: DOMAIN,
+              accept: "application/json, text/plain, */*",
+              "accept-language": "en-US,en;q=0.5",
+            }
+          : {}),
       },
     };
   }
@@ -36,7 +52,7 @@ export class NovelArchiveInterceptor extends PaperbackInterceptor {
         url: `${DOMAIN}/`,
         method: "GET",
         headers: {
-          "user-agent": await Application.getDefaultUserAgent(),
+          "user-agent": await getUserAgent(),
         },
       });
     }
