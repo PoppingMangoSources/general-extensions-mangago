@@ -12,12 +12,16 @@ import { API_URL, DOMAIN } from "./models";
 
 export class TempleScanInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
+    // Some covers live on third-party hosts whose hotlink protection swaps in
+    // a placeholder when a foreign referer is attached; only claim the site
+    // as referer on its own hosts.
+    const firstParty = /^https:\/\/(?:[a-z0-9-]+\.)*templetoons\.com\//i.test(request.url);
+
     return {
       ...request,
       headers: {
         ...request.headers,
-        referer: `${DOMAIN}/`,
-        origin: DOMAIN,
+        ...(firstParty ? { referer: `${DOMAIN}/`, origin: DOMAIN } : {}),
         "user-agent": await Application.getDefaultUserAgent(),
       },
     };
