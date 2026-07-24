@@ -163,18 +163,16 @@ export class RanobesInterceptor extends PaperbackInterceptor {
       // crashes the bypass webview after the check is solved. robots.txt runs
       // the same protection but renders as plain text, so the solve completes
       // and the clearance covers the whole domain.
-      throw new CloudflareError(
-        {
-          url: `${DOMAIN}/robots.txt`,
-          method: "GET",
-          headers: {
-            referer: `${DOMAIN}/`,
-            "user-agent": await getUserAgent(),
-          },
+      // The default message is load-bearing: the app recognises bypass errors
+      // by it, and a custom message suppresses the bypass banner entirely.
+      throw new CloudflareError({
+        url: `${DOMAIN}/robots.txt`,
+        method: "GET",
+        headers: {
+          referer: `${DOMAIN}/`,
+          "user-agent": await getUserAgent(),
         },
-        "Protection check required — solve it from the bypass banner, or open " +
-          "ranobes.net from the source settings.",
-      );
+      });
     }
     return data;
   }

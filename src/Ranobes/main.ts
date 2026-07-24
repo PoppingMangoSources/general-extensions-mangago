@@ -174,17 +174,14 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     const firstPage = parseChapterPage(cheerio.load(await fetchChapterListPage(novelId)));
     const pageCount = Math.max(1, firstPage.pages_count ?? 1);
 
-    const remainingPages =
-      pageCount > 1
-        ? await Promise.all(
-            Array.from({ length: pageCount - 1 }, (_, index) =>
-              fetchChapterListPage(novelId, index + 2).then((html) =>
-                parseChapterPage(cheerio.load(html)),
-              ),
-            ),
-          )
-        : [];
-    return parseChapters([firstPage, ...remainingPages], sourceManga);
+    // Pages are fetched one at a time: a parallel burst of sequential page
+    // numbers reads as automation to the site's protection, and a challenge
+    // mid-list should stop the remaining requests instead of firing them all.
+    const pages = [firstPage];
+    for (let page = 2; page <= pageCount; page++) {
+      pages.push(parseChapterPage(cheerio.load(await fetchChapterListPage(novelId, page))));
+    }
+    return parseChapters(pages, sourceManga);
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
