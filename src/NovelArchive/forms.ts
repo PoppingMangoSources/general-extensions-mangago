@@ -189,7 +189,7 @@ export class NovelArchiveAdvancedSearchForm extends AdvancedSearchForm {
           ),
         }),
         SelectRow("genre_match", {
-          title: "Match",
+          title: "",
           layout: "flow",
           value: this.genreMatch,
           items: this.genreMatchOptions,

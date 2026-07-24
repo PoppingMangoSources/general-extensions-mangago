@@ -149,8 +149,8 @@ export const STATUS_OPTIONS: OptionItem[] = [
 ];
 
 export const GENRE_MATCH_OPTIONS: OptionItem[] = [
-  { id: "all", value: "All" },
-  { id: "any", value: "Any" },
+  { id: "all", value: "AND" },
+  { id: "any", value: "OR" },
 ];
 
 export const AI_OPTIONS: OptionItem[] = [
