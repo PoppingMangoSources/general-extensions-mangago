@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-24T05:56:15.186Z",
+  "buildTime": "2026-07-24T05:59:30.895Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -202,7 +202,7 @@
     {
       "name": "Ranobes",
       "description": "Extension that pulls light novels from ranobes.net.",
-      "version": "1.0.0-alpha.24",
+      "version": "1.0.0-alpha.25",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
