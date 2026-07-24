@@ -267,8 +267,19 @@ const cleanChapterName = (name: string): { chapNum?: number; title: string } => 
   return { chapNum: Number.isFinite(parsed) ? parsed : undefined, title };
 };
 
-export const parseChapters = (novel: Novel, sourceManga: SourceManga): Chapter[] =>
-  (novel.chapter_names ?? []).map((rawName, index) => {
+// The API exposes no per-chapter dates; the novel's last-update time is its
+// only real timestamp. Sharing it keeps chapter ages stable instead of
+// drifting to whenever the list was fetched.
+const novelUpdatedAt = (novel: Novel): Date | undefined => {
+  if (!novel.updated_at) return undefined;
+  const date = new Date(novel.updated_at);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date.getTime() > Date.now() ? new Date() : date;
+};
+
+export const parseChapters = (novel: Novel, sourceManga: SourceManga): Chapter[] => {
+  const publishDate = novelUpdatedAt(novel);
+  return (novel.chapter_names ?? []).map((rawName, index) => {
     const { chapNum, title } = cleanChapterName((rawName ?? "").trim());
     const number = chapNum ?? index + 1;
     return {
@@ -282,13 +293,16 @@ export const parseChapters = (novel: Novel, sourceManga: SourceManga): Chapter[]
       version: NATIVE_VERSION,
       volume: 0,
       sortingIndex: index,
+      publishDate,
     };
   });
+};
 
 export const parseSourceChapters = (
   source: NovelSource,
   entries: SourceChapterEntry[],
   sourceManga: SourceManga,
+  publishDate?: Date,
 ): Chapter[] =>
   entries.map((entry, index) => {
     const parsed =
@@ -304,6 +318,7 @@ export const parseSourceChapters = (
       version: source.label ?? source.id,
       volume: 0,
       sortingIndex: index,
+      publishDate,
     };
   });
 

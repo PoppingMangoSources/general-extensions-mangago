@@ -261,13 +261,19 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
       this.fetchSources(id),
     ]);
 
+    const chapters = parseChapters(novel, sourceManga);
     const perSource = await Promise.all(
       sources.map(async (source) =>
-        parseSourceChapters(source, await this.fetchSourceChapters(id, source.id), sourceManga),
+        parseSourceChapters(
+          source,
+          await this.fetchSourceChapters(id, source.id),
+          sourceManga,
+          chapters[0]?.publishDate,
+        ),
       ),
     );
 
-    return [...parseChapters(novel, sourceManga), ...perSource.flat()];
+    return [...chapters, ...perSource.flat()];
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
