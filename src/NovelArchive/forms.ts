@@ -6,6 +6,7 @@ import {
   Form,
   Section,
   SelectRow,
+  SelectSection,
   ToggleRow,
   TriStateSelectRow,
   type SearchQuery,
@@ -189,20 +190,14 @@ export class NovelArchiveAdvancedSearchForm extends AdvancedSearchForm {
           ),
         }),
       ]),
-      Section("genre_match", [
-        SelectRow("genre_match", {
-          title: "",
-          layout: "flow",
-          value: this.genreMatch,
-          items: this.genreMatchOptions,
-          minItemCount: 1,
-          maxItemCount: 1,
-          onValueChange: Application.Selector(
-            this as NovelArchiveAdvancedSearchForm,
-            "handleGenreMatchChange",
-          ),
-        }),
-      ]),
+      SelectSection(this, {
+        id: "genre_match",
+        layout: "flow",
+        value: this.genreMatch,
+        items: this.genreMatchOptions,
+        minItemCount: 1,
+        maxItemCount: 1,
+      }),
     ];
   }
 
@@ -212,10 +207,6 @@ export class NovelArchiveAdvancedSearchForm extends AdvancedSearchForm {
 
   async handleAiChange(value: string[]): Promise<void> {
     this.ai = value;
-  }
-
-  async handleGenreMatchChange(value: string[]): Promise<void> {
-    this.genreMatch = value;
   }
 
   async handleGenresChange(value: TriState): Promise<void> {

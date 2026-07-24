@@ -5,6 +5,11 @@ import { PaperbackInterceptor, type Request, type Response } from "@paperback/ty
 
 import { API_URL, DOMAIN } from "./models";
 
+// One native lookup for the whole session instead of one per request.
+let userAgentPromise: Promise<string> | undefined;
+const getUserAgent = (): Promise<string> =>
+  (userAgentPromise ??= Application.getDefaultUserAgent());
+
 export class NovelArchiveInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
     // Keep image requests untouched apart from the user agent — extra headers
@@ -14,7 +19,7 @@ export class NovelArchiveInterceptor extends PaperbackInterceptor {
       ...request,
       headers: {
         ...request.headers,
-        "user-agent": await Application.getDefaultUserAgent(),
+        "user-agent": await getUserAgent(),
         ...(isApi
           ? {
               referer: `${DOMAIN}/`,
