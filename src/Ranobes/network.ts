@@ -149,8 +149,7 @@ export class RanobesInterceptor extends PaperbackInterceptor {
     const body = contentType.includes("text/html") ? Application.arrayBufferToUTF8String(data) : "";
     if (
       response.headers?.["cf-mitigated"] === "challenge" ||
-      response.status === 403 ||
-      /(?:Just a moment|Security check|vb_challenge)/i.test(body)
+      /(?:vb_challenge|cf-turnstile|<title>Just a moment)/i.test(body)
     ) {
       dropRotatingClearance();
 
