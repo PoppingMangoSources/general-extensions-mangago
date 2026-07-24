@@ -5,8 +5,9 @@ export const DOMAIN = "https://novelarchive.cc";
 export const API_URL = "https://novelarchive.cc/api";
 export const PAGE_SIZE = 24;
 
-export const NATIVE_VERSION = "📖 NovelArchive";
-export const AGGREGATOR_ICON = "🌐";
+// The house mark distinguishes chapters hosted by the site itself from
+// chapters mirrored in from its alternate sources.
+export const NATIVE_VERSION = "𖠿 NovelArchive";
 
 export const SECTIONS = {
   TRENDING: "trending",
@@ -18,19 +19,21 @@ export const SECTIONS = {
   GENRES: "genres",
 } as const;
 
+// Sent to the API's genres_exclude parameter, which matches the display
+// names the site uses for genres.
 export const ADULT_EXCLUSIONS = [
-  "adult",
-  "smut",
-  "mature",
-  "erotica",
-  "ecchi",
-  "hentai",
-  "explicit",
-  "sexual content",
-  "nsfw",
-  "r-18",
-  "lewd",
-  "pornographic",
+  "Adult",
+  "Smut",
+  "Mature",
+  "Erotica",
+  "Ecchi",
+  "Hentai",
+  "Explicit",
+  "Sexual Content",
+  "NSFW",
+  "R-18",
+  "Lewd",
+  "Pornographic",
 ];
 
 export const ADULT_RATING_GENRES = [

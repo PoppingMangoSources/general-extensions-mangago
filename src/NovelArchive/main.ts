@@ -3,16 +3,20 @@
 
 import {
   BasicRateLimiter,
+  CloudflareError,
+  CookieStorageInterceptor,
   DiscoverSectionType,
   URL,
   type AdvancedSearchForm,
   type Chapter,
   type ChapterDetails,
+  type Cookie,
   type DiscoverSection,
   type DiscoverSectionItem,
   type ExtensionImpl,
   type Form,
   type PagedResults,
+  type Request,
   type SearchQuery,
   type SearchResultItem,
   type SortingOption,
@@ -43,30 +47,24 @@ import {
   type SourceChapterEntry,
   type SourceChapterListResponse,
   type SourceListResponse,
-  type TriState,
 } from "./models";
 import { fetchJSON, NovelArchiveInterceptor } from "./network";
 import {
+  decodeId,
+  dedupe,
+  encodeId,
   parseChapterDetails,
   parseChapters,
   parseMangaDetails,
   parseSourceChapterDetails,
   parseSourceChapters,
   toCardItems,
+  pickGenreValues,
   toChapterUpdateItems,
   toFeaturedItems,
   toSearchResultItem,
 } from "./parsers";
 import type NovelArchiveConfig from "./pbconfig";
-
-const GENRE_VALUE_BY_ID = new Map(GENRES.map((genre) => [genre.id, genre.value]));
-
-const pickGenreValues = (genres: TriState | undefined, state: "included" | "excluded"): string[] =>
-  Object.entries(genres ?? {})
-    .filter(([, value]) => value === state)
-    .map(([id]) => GENRE_VALUE_BY_ID.get(id) ?? id);
-
-const dedupe = (values: string[]): string[] => [...new Set(values)];
 
 export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> {
   private rateLimiter = new BasicRateLimiter("rateLimiter", {
@@ -75,10 +73,29 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
     ignoreImages: true,
   });
   private interceptor = new NovelArchiveInterceptor("main");
+  cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
 
   async initialise(): Promise<void> {
     this.rateLimiter.registerInterceptor();
+    this.cookieStorageInterceptor.registerInterceptor();
     this.interceptor.registerInterceptor();
+  }
+
+  async cloudflareBypassCompleted(
+    _request: Request,
+    cookies: Cookie[],
+    _localStorage: Record<string, string>,
+  ): Promise<void> {
+    this.novelRequest = undefined;
+    for (const cookie of cookies) {
+      if (
+        cookie.name.startsWith("cf") ||
+        cookie.name.startsWith("_cf") ||
+        cookie.name.startsWith("__cf")
+      ) {
+        this.cookieStorageInterceptor.setCookie(cookie);
+      }
+    }
   }
 
   async getSettingsForm(): Promise<Form> {
@@ -114,10 +131,8 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
         return this.getFeaturedItems(`${API_URL}/novels/trending?limit=11`, "trending");
       case SECTIONS.EDITORS:
         return this.getFeaturedItems(`${API_URL}/novels/editors-choice?limit=15`, "editors");
-      case SECTIONS.LATEST: {
-        const novels = await this.fetchNovelArray(`${API_URL}/novels/recently-updated?limit=30`);
-        return { items: toChapterUpdateItems(novels), metadata: undefined };
-      }
+      case SECTIONS.LATEST:
+        return this.getLatestSection();
       case SECTIONS.POPULAR:
         return this.getCardItems("popular", "rating", metadata);
       case SECTIONS.TOP_RATED:
@@ -129,6 +144,11 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
       default:
         return { items: [], metadata: undefined };
     }
+  }
+
+  private async getLatestSection(): Promise<PagedResults<DiscoverSectionItem>> {
+    const novels = await this.fetchNovelArray(`${API_URL}/novels/recently-updated?limit=30`);
+    return { items: toChapterUpdateItems(novels), metadata: undefined };
   }
 
   private async getFeaturedItems(
@@ -154,17 +174,17 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
 
   private genreCarouselItems(): DiscoverSectionItem[] {
     const hideAdult = getHideAdultContent();
-    return GENRES.filter(
-      (genre) => !hideAdult || !ADULT_EXCLUSIONS.includes(genre.value.toLowerCase()),
-    ).map((genre) => ({
-      type: "genresCarouselItem",
-      name: genre.value,
-      searchQuery: {
-        title: "",
-        metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
-      },
-      metadata: undefined,
-    }));
+    return GENRES.filter((genre) => !hideAdult || !ADULT_EXCLUSIONS.includes(genre.value)).map(
+      (genre) => ({
+        type: "genresCarouselItem",
+        name: genre.value,
+        searchQuery: {
+          title: "",
+          metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
+        },
+        metadata: undefined,
+      }),
+    );
   }
 
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
@@ -210,7 +230,13 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
       trimmed.match(/^https?:\/\/(?:www\.)?novelarchive\.cc\/reader\?[^#]*\bnovel=([^&#]+)/i)?.[1];
     if (!id) return undefined;
 
-    const manga = await this.getMangaDetails(decodeURIComponent(id));
+    let decoded = id;
+    try {
+      decoded = decodeURIComponent(id);
+    } catch {
+      // A malformed escape in a pasted URL falls back to the raw value.
+    }
+    const manga = await this.getMangaDetails(encodeId(decoded));
     return {
       items: [
         {
@@ -229,8 +255,11 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
-    const id = sourceManga.mangaId;
-    const [novel, sources] = await Promise.all([this.fetchNovel(id), this.fetchSources(id)]);
+    const id = decodeId(sourceManga.mangaId);
+    const [novel, sources] = await Promise.all([
+      this.fetchNovel(sourceManga.mangaId),
+      this.fetchSources(id),
+    ]);
 
     const perSource = await Promise.all(
       sources.map(async (source) =>
@@ -242,58 +271,82 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    const id = chapter.sourceManga.mangaId;
-    const separator = chapter.chapterId.indexOf(":");
+    const id = decodeId(chapter.sourceManga.mangaId);
+    const separator = chapter.chapterId.lastIndexOf(":");
 
     if (separator >= 0) {
-      const sourceId = chapter.chapterId.slice(0, separator);
+      const sourceId = decodeId(chapter.chapterId.slice(0, separator));
       const number = chapter.chapterId.slice(separator + 1);
-      const data = await fetchJSON<SourceChapterContentResponse>(
-        `${API_URL}/novels/${id}/sources/${sourceId}/chapters/${number}`,
-      );
+      const data = await fetchJSON<SourceChapterContentResponse>({
+        url: `${API_URL}/novels/${id}/sources/${sourceId}/chapters/${number}`,
+        method: "GET",
+      });
       return parseSourceChapterDetails(data, chapter);
     }
 
-    const data = await fetchJSON<ChapterContentResponse>(
-      `${API_URL}/novels/${id}/chapters/${chapter.chapterId}`,
-    );
+    const data = await fetchJSON<ChapterContentResponse>({
+      url: `${API_URL}/novels/${id}/chapters/${chapter.chapterId}`,
+      method: "GET",
+    });
     return parseChapterDetails(data, chapter);
   }
 
+  // Mirror listings are optional extras; their absence should not take the
+  // native chapter list down with them.
   private async fetchSources(id: string): Promise<NovelSource[]> {
     try {
-      const data = await fetchJSON<NovelSource[] | SourceListResponse>(
-        `${API_URL}/novels/${id}/sources`,
-      );
+      const data = await fetchJSON<NovelSource[] | SourceListResponse>({
+        url: `${API_URL}/novels/${id}/sources`,
+        method: "GET",
+      });
       return Array.isArray(data) ? data : (data.sources ?? []);
-    } catch {
+    } catch (error: unknown) {
+      if (error instanceof CloudflareError) throw error;
       return [];
     }
   }
 
   private async fetchSourceChapters(id: string, sourceId: string): Promise<SourceChapterEntry[]> {
     try {
-      const data = await fetchJSON<SourceChapterEntry[] | SourceChapterListResponse>(
-        `${API_URL}/novels/${id}/sources/${sourceId}/chapters`,
-      );
+      const data = await fetchJSON<SourceChapterEntry[] | SourceChapterListResponse>({
+        url: `${API_URL}/novels/${id}/sources/${sourceId}/chapters`,
+        method: "GET",
+      });
       return Array.isArray(data) ? data : (data.chapters ?? []);
-    } catch {
+    } catch (error: unknown) {
+      if (error instanceof CloudflareError) throw error;
       return [];
     }
   }
 
-  private async fetchNovel(id: string): Promise<Novel> {
-    const data = await fetchJSON<Novel | { novel: Novel }>(`${API_URL}/novels/${id}`);
-    return "novel" in data && data.novel ? data.novel : (data as Novel);
+  // Details and the chapter list both need the novel; sharing one in-flight
+  // request keeps that to a single round trip. A failed fetch clears itself
+  // so the next call retries.
+  private novelRequest?: { id: string; promise: Promise<Novel> };
+
+  private fetchNovel(mangaId: string): Promise<Novel> {
+    const id = decodeId(mangaId);
+    if (this.novelRequest?.id !== id) {
+      const promise = fetchJSON<Novel | { novel: Novel }>({
+        url: `${API_URL}/novels/${id}`,
+        method: "GET",
+      }).then((data) => ("novel" in data && data.novel ? data.novel : (data as Novel)));
+      const entry = { id, promise };
+      promise.catch(() => {
+        if (this.novelRequest === entry) this.novelRequest = undefined;
+      });
+      this.novelRequest = entry;
+    }
+    return this.novelRequest.promise;
   }
 
   private async fetchNovelArray(url: string): Promise<Novel[]> {
-    const data = await fetchJSON<Novel[] | NovelListResponse>(url);
+    const data = await fetchJSON<Novel[] | NovelListResponse>({ url, method: "GET" });
     return Array.isArray(data) ? data : (data.novels ?? []);
   }
 
   private async fetchBrowse(url: string): Promise<{ novels: Novel[]; hasNext: boolean }> {
-    const data = await fetchJSON<NovelListResponse>(url);
+    const data = await fetchJSON<NovelListResponse>({ url, method: "GET" });
     return { novels: data.novels ?? [], hasNext: data.pagination?.has_next ?? false };
   }
 

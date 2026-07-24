@@ -6,17 +6,18 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "NovelArchive",
   description: "Extension that pulls light novels from novelarchive.cc.",
-  version: "1.0.0-alpha.13",
+  version: "1.0.0-alpha.14",
   icon: "icon.png",
   language: "en",
   contentRating: ContentRating.ADULT,
   capabilities: [
     SourceIntents.CHAPTER_PROVIDING,
+    SourceIntents.CLOUDFLARE_BYPASS_PROVIDING,
     SourceIntents.DISCOVER_SECTION_PROVIDING,
     SourceIntents.SEARCH_RESULT_PROVIDING,
     SourceIntents.SETTINGS_FORM_PROVIDING,
   ],
-  badges: [],
+  badges: [{ label: "Novel", textColor: "#ffffff", backgroundColor: "#3baf4b" }],
   developers: [
     {
       name: "PopMango",

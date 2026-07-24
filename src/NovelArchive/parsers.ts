@@ -14,20 +14,39 @@ import {
 
 import {
   ADULT_RATING_GENRES,
-  AGGREGATOR_ICON,
   DOMAIN,
+  GENRES,
   NATIVE_VERSION,
   type ChapterContentResponse,
   type Novel,
   type NovelSource,
   type SourceChapterContentResponse,
   type SourceChapterEntry,
+  type TriState,
 } from "./models";
 
 const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
 
+// Human-readable slugs for tag ids only; manga and chapter ids use the
+// encoding helpers below so they can be recovered for request URLs.
 const sanitizeId = (value: string): string =>
   value.toLowerCase().replace(SAFE_ID_REGEX, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+
+// API identifiers double as Paperback ids; unusual characters are
+// percent-encoded so the original value can always be recovered.
+export const encodeId = (value: string): string =>
+  value.replace(SAFE_ID_REGEX, (char) => {
+    const encoded = encodeURIComponent(char);
+    return encoded !== char ? encoded : "-";
+  });
+
+export const decodeId = (value: string): string => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
 
 const coverOf = (novel: Novel): string => {
   const path = novel.cover_url ?? novel.image_url ?? novel.novel_image;
@@ -103,9 +122,9 @@ export const toFeaturedItems = (
   novels.map((novel, index) => {
     const views = viewsOf(novel);
     const viewsInfo =
-      views === undefined ? undefined : { symbol: "eye.fill", text: formatCount(views) };
-    const rankInfo = { symbol: "flame.fill", text: `${index + 1}` };
-    const infoItems =
+      views === undefined ? undefined : { symbol: "eye.fill" as const, text: formatCount(views) };
+    const rankInfo = { symbol: "flame.fill" as const, text: `${index + 1}` };
+    const infoItems: FeaturedCarouselItem["infoItems"] =
       variant === "trending"
         ? viewsInfo
           ? [rankInfo, viewsInfo]
@@ -116,13 +135,12 @@ export const toFeaturedItems = (
 
     return {
       type: "featuredCarouselItem",
-      mangaId: String(novel.id),
+      mangaId: encodeId(String(novel.id)),
       imageUrl: coverOf(novel),
       title: novel.title,
-      supertitle:
-        variant === "trending" ? genreLabel(novel) : index % 2 === 0 ? "Staff Pick" : "Must Read",
+      supertitle: genreLabel(novel),
       summary: cleanDescription(novel.description) || undefined,
-      infoItems: infoItems as FeaturedCarouselItem["infoItems"],
+      infoItems,
       contentRating: contentRatingForNovel(novel),
     };
   });
@@ -135,7 +153,7 @@ export const toCardItems = (
     const lead =
       variant === "chapters"
         ? novel.total_chapters
-          ? `${novel.total_chapters} ch`
+          ? `Ch. ${novel.total_chapters}`
           : undefined
         : novel.rating != null
           ? `★ ${novel.rating.toFixed(1)}`
@@ -146,7 +164,7 @@ export const toCardItems = (
 
     return {
       type: "simpleCarouselItem",
-      mangaId: String(novel.id),
+      mangaId: encodeId(String(novel.id)),
       imageUrl: coverOf(novel),
       title: novel.title,
       subtitle: subtitle || undefined,
@@ -155,24 +173,27 @@ export const toCardItems = (
   });
 
 export const toChapterUpdateItems = (novels: Novel[]): DiscoverSectionItem[] =>
-  novels.map((novel) => {
+  novels.flatMap((novel) => {
+    // The card links to the newest chapter, addressed by position; counts can
+    // arrive formatted, so only the digits are kept.
+    const latest = parseInt(String(novel.total_chapters ?? "").replace(/\D/g, ""), 10);
+    if (!Number.isFinite(latest) || latest <= 0) return [];
     const date = novel.updated_at ? new Date(novel.updated_at) : undefined;
-    const subtitle = [
-      novel.total_chapters ? `Ch. ${novel.total_chapters}` : undefined,
-      genreList(novel)[0],
-    ]
+    const subtitle = [`Ch. ${latest}`, genreList(novel)[0]]
       .filter((part): part is string => Boolean(part))
       .join(" • ");
-    return {
-      type: "chapterUpdatesCarouselItem",
-      mangaId: String(novel.id),
-      chapterId: String(novel.total_chapters ?? ""),
-      imageUrl: coverOf(novel),
-      title: novel.title,
-      subtitle: subtitle || undefined,
-      publishDate: date && !Number.isNaN(date.getTime()) ? date : undefined,
-      contentRating: contentRatingForNovel(novel),
-    };
+    return [
+      {
+        type: "chapterUpdatesCarouselItem",
+        mangaId: encodeId(String(novel.id)),
+        chapterId: String(latest),
+        imageUrl: coverOf(novel),
+        title: novel.title,
+        subtitle: subtitle || undefined,
+        publishDate: date && !Number.isNaN(date.getTime()) ? date : undefined,
+        contentRating: contentRatingForNovel(novel),
+      },
+    ];
   });
 
 export const toSearchResultItem = (novel: Novel): SearchResultItem => {
@@ -184,7 +205,7 @@ export const toSearchResultItem = (novel: Novel): SearchResultItem => {
     .join(" • ");
 
   return {
-    mangaId: String(novel.id),
+    mangaId: encodeId(String(novel.id)),
     title: novel.title,
     imageUrl: coverOf(novel),
     subtitle: subtitle || undefined,
@@ -217,14 +238,13 @@ export const parseMangaDetails = (novel: Novel): SourceManga => {
         };
 
   return {
-    mangaId: String(novel.id),
+    mangaId: encodeId(String(novel.id)),
     mangaInfo: {
       primaryTitle,
       secondaryTitles,
       thumbnailUrl: coverOf(novel),
       synopsis: cleanDescription(novel.description),
       author: novel.author?.trim() || undefined,
-      artist: novel.author?.trim() || undefined,
       status: statusOf(novel),
       rating: percentage,
       contentRating: contentRatingForNovel(novel),
@@ -252,6 +272,8 @@ export const parseChapters = (novel: Novel, sourceManga: SourceManga): Chapter[]
     const { chapNum, title } = cleanChapterName((rawName ?? "").trim());
     const number = chapNum ?? index + 1;
     return {
+      // The API addresses native chapters by list position, so the position
+      // is the canonical chapter identifier.
       chapterId: String(index + 1),
       sourceManga,
       langCode: "en",
@@ -274,26 +296,32 @@ export const parseSourceChapters = (
     const chapNum = Number.isFinite(parsed) ? parsed : index + 1;
     const { title } = cleanChapterName((entry.title ?? "").trim());
     return {
-      chapterId: `${source.id}:${entry.number}`,
+      chapterId: `${encodeId(source.id)}:${entry.number}`,
       sourceManga,
       langCode: "en",
       chapNum,
       title: title || `Chapter ${chapNum}`,
-      version: `${AGGREGATOR_ICON} ${source.label ?? source.id}`,
+      version: source.label ?? source.id,
       volume: 0,
       sortingIndex: index,
     };
   });
 
-const toXhtmlDocument = (text: string): string => {
+// The heading gives each rendered chapter a visible title, and the reader
+// parses the chapter as XHTML, so all content is escaped into closed tags.
+const toXhtmlDocument = (text: string, heading: string): string => {
   const body = text
     .split(/\r?\n+/)
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
     .map((line) => `<p>${escapeXml(line)}</p>`)
     .join("");
-  return `<html xmlns="http://www.w3.org/1999/xhtml"><head></head><body>${body}</body></html>`;
+  const title = heading ? `<h2>${escapeXml(heading)}</h2>` : "";
+  return `<html xmlns="http://www.w3.org/1999/xhtml"><head></head><body>${title}${body}</body></html>`;
 };
+
+const chapterHeading = (chapter: Chapter): string =>
+  chapter.title ?? (chapter.chapNum ? `Chapter ${chapter.chapNum}` : "");
 
 const htmlToText = (html: string): string =>
   Application.decodeHTMLEntities(
@@ -315,7 +343,7 @@ export const parseChapterDetails = (
     type: "html",
     id: chapter.chapterId,
     mangaId: chapter.sourceManga.mangaId,
-    html: toXhtmlDocument(content),
+    html: toXhtmlDocument(content, chapterHeading(chapter)),
   };
 };
 
@@ -336,6 +364,18 @@ export const parseSourceChapterDetails = (
     type: "html",
     id: chapter.chapterId,
     mangaId: chapter.sourceManga.mangaId,
-    html: toXhtmlDocument(htmlToText(html)),
+    html: toXhtmlDocument(htmlToText(html), chapterHeading(chapter)),
   };
 };
+
+const GENRE_VALUE_BY_ID = new Map(GENRES.map((genre) => [genre.id, genre.value]));
+
+export const pickGenreValues = (
+  genres: TriState | undefined,
+  state: "included" | "excluded",
+): string[] =>
+  Object.entries(genres ?? {})
+    .filter(([, value]) => value === state)
+    .map(([id]) => GENRE_VALUE_BY_ID.get(id) ?? id);
+
+export const dedupe = (values: string[]): string[] => [...new Set(values)];
