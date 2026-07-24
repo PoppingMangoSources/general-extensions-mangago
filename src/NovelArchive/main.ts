@@ -70,7 +70,7 @@ const dedupe = (values: string[]): string[] => [...new Set(values)];
 
 export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> {
   private rateLimiter = new BasicRateLimiter("rateLimiter", {
-    numberOfRequests: 15,
+    numberOfRequests: 20,
     bufferInterval: 10,
     ignoreImages: true,
   });

@@ -13,7 +13,6 @@ import {
 
 import {
   DOMAIN,
-  FEATURED_COVER_OVERRIDES,
   type BrowseSeries,
   type FeaturedEntry,
   type HomeSections,
@@ -320,7 +319,7 @@ export const withFeaturedCovers = (
   const covers = new Map(directory.map((series) => [series.series_slug, series.thumbnail]));
   return entries.map((entry) => ({
     ...entry,
-    thumbnail: FEATURED_COVER_OVERRIDES[entry.series_slug] ?? covers.get(entry.series_slug),
+    thumbnail: covers.get(entry.series_slug),
   }));
 };
 

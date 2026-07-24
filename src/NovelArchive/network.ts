@@ -3,19 +3,26 @@
 
 import { PaperbackInterceptor, type Request, type Response } from "@paperback/types";
 
-import { DOMAIN } from "./models";
+import { API_URL, DOMAIN } from "./models";
 
 export class NovelArchiveInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
+    // Keep image requests untouched apart from the user agent — extra headers
+    // on cover fetches slow the CDN's responses down.
+    const isApi = request.url.startsWith(API_URL);
     return {
       ...request,
       headers: {
         ...request.headers,
-        referer: `${DOMAIN}/`,
-        origin: DOMAIN,
         "user-agent": await Application.getDefaultUserAgent(),
-        accept: "application/json, text/plain, */*",
-        "accept-language": "en-US,en;q=0.5",
+        ...(isApi
+          ? {
+              referer: `${DOMAIN}/`,
+              origin: DOMAIN,
+              accept: "application/json, text/plain, */*",
+              "accept-language": "en-US,en;q=0.5",
+            }
+          : {}),
       },
     };
   }
