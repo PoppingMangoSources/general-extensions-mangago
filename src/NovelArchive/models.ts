@@ -7,7 +7,7 @@ export const PAGE_SIZE = 24;
 
 // The house mark distinguishes chapters hosted by the site itself from
 // chapters mirrored in from its alternate sources.
-export const NATIVE_VERSION = "𖠿 NovelArchive";
+export const NATIVE_VERSION = "NovelArchive 𖠿";
 
 export const SECTIONS = {
   TRENDING: "trending",
