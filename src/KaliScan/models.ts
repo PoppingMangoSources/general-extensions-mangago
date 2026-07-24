@@ -63,18 +63,6 @@ export interface KaliCard {
   summary?: string;
 }
 
-export interface KaliLatestEntry {
-  url: string;
-  title: string;
-  cover: string;
-  rating?: string;
-  summary?: string;
-  updatedAt?: string;
-  genres: string[];
-  chapterName?: string;
-  chapterUrl?: string;
-}
-
 export const GENRES: OptionItem[] = [
   { id: "action", value: "Action" },
   { id: "adaptation", value: "Adaptation" },

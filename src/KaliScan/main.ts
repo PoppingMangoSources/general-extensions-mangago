@@ -12,6 +12,7 @@ import {
   type DiscoverSection,
   type DiscoverSectionItem,
   type ExtensionImpl,
+  type Form,
   type PagedResults,
   type Request,
   type SearchQuery,
@@ -20,9 +21,8 @@ import {
   type SourceManga,
 } from "@paperback/types";
 
-import { KaliScanAdvancedSearchForm } from "./forms";
+import { getBaseUrl, KaliScanAdvancedSearchForm, KaliScanSettingsForm } from "./forms";
 import {
-  DOMAIN,
   GENRES,
   SECTIONS,
   SORTING_OPTIONS,
@@ -38,7 +38,6 @@ import {
   parseChapterList,
   parseChapterPages,
   parseDetailedCards,
-  parseGridEntries,
   parseHotCells,
   parseMangaDetails,
   toFeaturedItems,
@@ -57,7 +56,7 @@ export class KaliScanExtension implements ExtensionImpl<typeof KaliScanConfig> {
   private cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
   private interceptor = new KaliScanInterceptor("main");
 
-  private homePagePromise?: Promise<string>;
+  private homePage?: { base: string; promise: Promise<string> };
 
   async initialise(): Promise<void> {
     this.rateLimiter.registerInterceptor();
@@ -65,12 +64,16 @@ export class KaliScanExtension implements ExtensionImpl<typeof KaliScanConfig> {
     this.interceptor.registerInterceptor();
   }
 
+  async getSettingsForm(): Promise<Form> {
+    return new KaliScanSettingsForm();
+  }
+
   async cloudflareBypassCompleted(
     _request: Request,
     cookies: Cookie[],
     _localStorage: Record<string, string>,
   ): Promise<void> {
-    this.homePagePromise = undefined;
+    this.homePage = undefined;
     // Forward every cookie: the backend chapter-list fragment sits behind the
     // same session cookies as the pages, so a clearance-only filter would let
     // browsing recover while chapter lists stay challenged.
@@ -119,11 +122,11 @@ export class KaliScanExtension implements ExtensionImpl<typeof KaliScanConfig> {
       case SECTIONS.TRENDING:
         return this.getTopSection("day");
       case SECTIONS.REVIEWS:
-        return this.getRankedSection(`${DOMAIN}/top/reviews`, "views");
+        return this.getRankedSection(`${getBaseUrl()}/top/reviews`, "views");
       case SECTIONS.MOST_VIEWED:
-        return this.getRankedSection(`${DOMAIN}/az-list`, "views");
+        return this.getRankedSection(`${getBaseUrl()}/az-list`, "views");
       case SECTIONS.EDITORS:
-        return this.getRankedSection(`${DOMAIN}/top/comments`, "chapter");
+        return this.getRankedSection(`${getBaseUrl()}/top/comments`, "chapter");
       case SECTIONS.GENRES:
         return { items: this.genreChipItems(), metadata: undefined };
       default:
@@ -132,7 +135,7 @@ export class KaliScanExtension implements ExtensionImpl<typeof KaliScanConfig> {
   }
 
   private async getTopSection(range: "day" | "week"): Promise<PagedResults<DiscoverSectionItem>> {
-    const html = await fetchHtml(`${DOMAIN}/top/${range}`);
+    const html = await fetchHtml(`${getBaseUrl()}/top/${range}`);
     return { items: toFeaturedItems(parseDetailedCards(html)), metadata: undefined };
   }
 
@@ -146,9 +149,9 @@ export class KaliScanExtension implements ExtensionImpl<typeof KaliScanConfig> {
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const page = metadata?.page ?? 1;
-    const html = await fetchHtml(`${DOMAIN}/latest?page=${page}`);
+    const html = await fetchHtml(`${getBaseUrl()}/latest?page=${page}`);
     return {
-      items: toLatestItems(parseGridEntries(html)),
+      items: toLatestItems(parseDetailedCards(html)),
       metadata: hasNextPage(html) ? { page: page + 1 } : undefined,
     };
   }
@@ -176,7 +179,20 @@ export class KaliScanExtension implements ExtensionImpl<typeof KaliScanConfig> {
   }
 
   private getHomePage(): Promise<string> {
-    return (this.homePagePromise ??= fetchHtml(`${DOMAIN}/`));
+    const base = getBaseUrl();
+    if (this.homePage?.base !== base) this.homePage = undefined;
+
+    if (!this.homePage) {
+      const promise = fetchHtml(`${base}/`);
+      const entry = { base, promise };
+      // A failed fetch must not stay memoized, or the section it feeds would
+      // remain empty until the app restarts.
+      promise.catch(() => {
+        if (this.homePage === entry) this.homePage = undefined;
+      });
+      this.homePage = entry;
+    }
+    return this.homePage.promise;
   }
 
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
@@ -226,13 +242,19 @@ export class KaliScanExtension implements ExtensionImpl<typeof KaliScanConfig> {
       params.push(`include_mode=${encodeURIComponent(meta?.genreMode?.[0] ?? "and")}`);
     }
 
-    return `${DOMAIN}/search?${params.join("&")}`;
+    return `${getBaseUrl()}/search?${params.join("&")}`;
   }
 
   private async resolveUrlQuery(
     query: string,
   ): Promise<PagedResults<SearchResultItem> | undefined> {
-    const slug = query.trim().match(/^https?:\/\/(?:www\.)?kaliscan\.io\/manga\/([^/?#]+)/i)?.[1];
+    const trimmed = query.trim();
+    const host = getBaseUrl().replace(/^https?:\/\//, "");
+    const pattern = new RegExp(
+      `^https?://(?:www\\.)?(?:kaliscan\\.io|${host.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})/manga/([^/?#]+)`,
+      "i",
+    );
+    const slug = pattern.exec(trimmed)?.[1];
     if (!slug) return undefined;
 
     const manga = await this.getMangaDetails(encodeSlugId(decodeURIComponent(slug)));
@@ -250,7 +272,7 @@ export class KaliScanExtension implements ExtensionImpl<typeof KaliScanConfig> {
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
-    const html = await fetchHtml(`${DOMAIN}/manga/${decodeSlugId(mangaId)}`);
+    const html = await fetchHtml(`${getBaseUrl()}/manga/${decodeSlugId(mangaId)}`);
     return parseMangaDetails(html, mangaId);
   }
 
@@ -261,14 +283,14 @@ export class KaliScanExtension implements ExtensionImpl<typeof KaliScanConfig> {
     }
     // The trailing slash is required — without it the server answers with the
     // page shell instead of the chapter-list fragment.
-    const html = await fetchHtml(`${DOMAIN}/service/backend/chaplist/?manga_id=${numericId}`);
+    const html = await fetchHtml(`${getBaseUrl()}/service/backend/chaplist/?manga_id=${numericId}`);
     return parseChapterList(html, sourceManga);
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
     const slug = decodeSlugId(chapter.sourceManga.mangaId);
     const chapterSlug = decodeSlugId(chapter.chapterId);
-    const html = await fetchHtml(`${DOMAIN}/manga/${slug}/${chapterSlug}`);
+    const html = await fetchHtml(`${getBaseUrl()}/manga/${slug}/${chapterSlug}`);
     return parseChapterPages(html, chapter);
   }
 }

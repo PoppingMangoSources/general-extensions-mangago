@@ -3,6 +3,7 @@
 
 import {
   AdvancedSearchForm,
+  Form,
   InputRow,
   Section,
   SelectRow,
@@ -13,6 +14,7 @@ import {
 } from "@paperback/types";
 
 import {
+  DOMAIN,
   GENRE_MODE_OPTIONS,
   GENRES,
   STATUS_OPTIONS,
@@ -20,8 +22,49 @@ import {
   type SearchMetadata,
 } from "./models";
 
+const BASE_URL_KEY = "kaliscan.baseUrl";
+
+export const getBaseUrl = (): string =>
+  (Application.getState(BASE_URL_KEY) as string | undefined) ?? DOMAIN;
+
+export const setBaseUrl = (value: string): void => {
+  const trimmed = value.trim().replace(/\/+$/, "");
+  Application.setState(/^https?:\/\/[^\s/]+$/.test(trimmed) ? trimmed : undefined, BASE_URL_KEY);
+  Application.invalidateDiscoverSections();
+};
+
 const toTags = (options: OptionItem[]): Tag[] =>
   options.map((option) => ({ id: option.id, title: option.value }));
+
+export class KaliScanSettingsForm extends Form {
+  private baseUrl = getBaseUrl();
+
+  override getSections() {
+    return [
+      Section(
+        {
+          id: "domain",
+          footer: `Override the site address if it moves. Leave empty to use ${DOMAIN}.`,
+        },
+        [
+          InputRow("base_url", {
+            title: "Base URL",
+            value: this.baseUrl === DOMAIN ? "" : this.baseUrl,
+            onValueChange: Application.Selector(
+              this as KaliScanSettingsForm,
+              "handleBaseUrlChange",
+            ),
+          }),
+        ],
+      ),
+    ];
+  }
+
+  async handleBaseUrlChange(value: string): Promise<void> {
+    this.baseUrl = value;
+    setBaseUrl(value);
+  }
+}
 
 export class KaliScanAdvancedSearchForm extends AdvancedSearchForm {
   private status: string[];

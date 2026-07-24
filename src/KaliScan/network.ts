@@ -8,7 +8,7 @@ import {
   type Response,
 } from "@paperback/types";
 
-import { DOMAIN } from "./models";
+import { getBaseUrl } from "./forms";
 
 // One native lookup for the whole session instead of one per request.
 let userAgentPromise: Promise<string> | undefined;
@@ -28,7 +28,7 @@ export class KaliScanInterceptor extends PaperbackInterceptor {
       ...request,
       headers: {
         ...request.headers,
-        referer: `${DOMAIN}/`,
+        referer: `${getBaseUrl()}/`,
         "user-agent": await getUserAgent(),
         "accept-language": "en-US,en;q=0.5",
         accept: isImage
