@@ -17,7 +17,7 @@ import { VOID_TAGS, type Series } from "./models";
 export class LNoriParser {
   async parseProminent(html: string): Promise<PagedResults<DiscoverSectionItem>> {
     const $ = cheerio.load(html);
-    const novels: Series[] = $("#hero-stack article.hero-card")
+    const novels: Series[] = $("#hero-stack .hero-carousel-card")
       .map((_, el) => {
         const article = $(el);
         return {
@@ -47,14 +47,49 @@ export class LNoriParser {
     sectionId: string,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const $ = cheerio.load(html);
-    const heading = $(`#${sectionId}`).first();
-    const header = heading.closest("header");
-    const list = header.next("ul");
+    const section = $(`#${sectionId}`).first();
     const sections = {
-      items: list
-        .find("li")
+      items: section
+        .find(".catalog-grid > div")
         .map((_, el) => {
-          const a = $(el).find("a").first();
+          const item = $(el);
+          const a = item.find("a").first();
+          const img = a.find("img").first();
+          return {
+            title: img.attr("alt")?.trim() ?? "",
+            cover: img.attr("src") ?? "",
+            link: a.attr("href") ?? "",
+          };
+        })
+        .get(),
+    };
+    return {
+      items: sections.items.map((item) => ({
+        type: "prominentCarouselItem",
+        mangaId: item.link,
+        title: item.title,
+        imageUrl: item.cover,
+        contentRating: ContentRating.EVERYONE,
+      })),
+    };
+  }
+
+  async parseSeasonal(html: string): Promise<PagedResults<DiscoverSectionItem>> {
+    const $ = cheerio.load(html);
+
+    const section = $("section[id]")
+      .filter((_, el) => {
+        return ["winter", "spring", "summer", "fall", "autumn"].includes(
+          $(el).attr("id")?.toLowerCase() ?? "",
+        );
+      })
+      .first();
+    const sections = {
+      items: section
+        .find(".catalog-grid > div")
+        .map((_, el) => {
+          const item = $(el);
+          const a = item.find("a").first();
           const img = a.find("img").first();
           return {
             title: img.attr("alt")?.trim() ?? "",

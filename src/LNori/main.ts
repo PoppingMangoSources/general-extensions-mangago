@@ -55,10 +55,10 @@ export class LNoriExtension implements ExtensionImpl<typeof LNoriConfig> {
         return this.parser.parseProminent(html);
       }
       case "seasonal": {
-        return this.parser.extractSection(html, "winter-heading");
+        return this.parser.parseSeasonal(html);
       }
       case "popular": {
-        return this.parser.extractSection(html, "library-heading");
+        return this.parser.extractSection(html, "library");
       }
       default:
         return { items: [] };
