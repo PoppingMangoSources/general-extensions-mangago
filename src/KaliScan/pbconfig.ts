@@ -6,7 +6,7 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "KaliScan",
   description: "Extension that pulls manga from kaliscan.io.",
-  version: "1.0.0-alpha.4",
+  version: "1.0.0-alpha.5",
   icon: "icons.png",
   language: "en",
   contentRating: ContentRating.ADULT,

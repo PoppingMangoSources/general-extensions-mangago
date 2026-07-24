@@ -23,6 +23,7 @@ export type OptionItem = {
 
 export type PageMetadata = {
   page?: number;
+  seen?: string[];
 };
 
 export type SearchMetadata = {
@@ -61,6 +62,17 @@ export interface KaliCard {
   rating?: string;
   genres: string[];
   summary?: string;
+}
+
+export interface KaliGridEntry {
+  url: string;
+  title: string;
+  cover: string;
+  rating?: string;
+  updatedAt?: string;
+  genres: string[];
+  chapterName?: string;
+  chapterUrl?: string;
 }
 
 export const GENRES: OptionItem[] = [

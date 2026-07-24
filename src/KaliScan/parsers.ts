@@ -13,7 +13,7 @@ import {
 import * as cheerio from "cheerio";
 
 import { getBaseUrl } from "./forms";
-import { ADULT_GENRES, type KaliCard } from "./models";
+import { ADULT_GENRES, type KaliCard, type KaliGridEntry } from "./models";
 
 // Paperback rejects ids containing characters outside this set.
 const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
@@ -209,6 +209,81 @@ export const toRankedCardItems = (
     ];
   });
 
+// The homepage's latest grid embeds a JSON metadata block per card carrying
+// the update timestamp and rating the listing page itself omits.
+export const parseGridEntries = (html: string): KaliGridEntry[] => {
+  const $ = cheerio.load(html);
+  const entries: KaliGridEntry[] = [];
+
+  $(".book-item").each((_, element) => {
+    const item = $(element);
+    const raw = item.find("script#json-data").first().text();
+    if (!raw) return;
+
+    let data:
+      | {
+          name?: string;
+          url?: string;
+          cover?: string;
+          rating?: string;
+          updated_at?: string;
+          genres?: { name?: string }[];
+        }
+      | undefined;
+    try {
+      data = JSON.parse(raw) as typeof data;
+    } catch {
+      return;
+    }
+
+    const url = data?.url ?? item.find("a").first().attr("href") ?? "";
+    if (!mangaSlugFromUrl(url)) return;
+
+    const chapterLink = item.find('a[href*="chapter"]').first();
+
+    entries.push({
+      url,
+      title: data?.name ?? cleanText(item.find(".title, .name").first().text()),
+      cover: data?.cover ? absoluteUrl(data.cover) : coverFrom($, item as cheerio.Cheerio<never>),
+      rating: data?.rating,
+      updatedAt: data?.updated_at,
+      genres: (data?.genres ?? []).map((genre) => genre.name ?? "").filter(Boolean),
+      chapterName: cleanText(chapterLink.text()) || undefined,
+      chapterUrl: chapterLink.attr("href") ?? undefined,
+    });
+  });
+
+  return entries;
+};
+
+export const toLatestGridItems = (entries: KaliGridEntry[]): DiscoverSectionItem[] =>
+  entries.flatMap((entry) => {
+    const slug = mangaSlugFromUrl(entry.url);
+    if (!slug || !entry.title || !entry.chapterUrl) return [];
+
+    const chapNum = entry.chapterName ? chapterNumberFrom(entry.chapterName) : undefined;
+    const rating = entry.rating && parseFloat(entry.rating) > 0 ? entry.rating : undefined;
+    const subtitle = [
+      chapNum !== undefined ? `Ch. ${chapNum}` : entry.chapterName,
+      rating ? `★ ${parseFloat(rating).toFixed(1)}` : undefined,
+    ]
+      .filter(Boolean)
+      .join(" • ");
+
+    return [
+      {
+        type: "chapterUpdatesCarouselItem",
+        mangaId: encodeSlugId(slug),
+        chapterId: encodeSlugId((entry.chapterUrl.split("/").pop() ?? "").replace(/[?#].*$/, "")),
+        imageUrl: entry.cover,
+        title: entry.title,
+        subtitle: subtitle || undefined,
+        publishDate: entry.updatedAt ? parseSiteDate(entry.updatedAt) : undefined,
+        contentRating: contentRatingForGenres(entry.genres),
+      },
+    ];
+  });
+
 // The latest listing labels each series with its newest chapter; reader URLs
 // follow the same chapter-{n} shape, so the id is derived from that label.
 export const toLatestItems = (cards: KaliCard[]): DiscoverSectionItem[] =>
@@ -285,20 +360,22 @@ export const parseMangaDetails = (html: string, mangaId: string): SourceManga =>
     $('.detail .meta > p > strong:contains("Status") ~ a').first().text(),
   );
 
+  // The inline cover is a lazy-loading placeholder; the share image carries
+  // the real full-size cover.
   const cover = $("#cover img").first();
-  const thumbnailUrl = cover.attr("data-src") ?? cover.attr("src") ?? "";
+  const thumbnailUrl =
+    $('meta[property="og:image"]').attr("content") ??
+    cover.attr("data-src") ??
+    cover.attr("src") ??
+    "";
 
-  let summary = $(".summary .content, .summary .content ~ p")
+  // The first summary paragraph is boilerplate about the site; the story
+  // description follows it.
+  const summary = $(".summary p, .summary .content")
     .toArray()
     .map((element) => cleanText($(element).text()))
-    .filter(Boolean)
+    .filter((text) => text && !/^you are reading\b/i.test(text))
     .join("\n\n");
-  if (!summary) {
-    summary = cleanText($(".summary").first().text()).replace(/^summary\s*/i, "");
-  }
-  if (!summary) {
-    summary = cleanText($('meta[name="description"]').attr("content") ?? "");
-  }
 
   const secondaryTitles = cleanText($(".detail h2").first().text())
     .split(/[,;]/)

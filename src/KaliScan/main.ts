@@ -39,8 +39,10 @@ import {
   parseChapterPages,
   parseDetailedCards,
   parseHotCells,
+  parseGridEntries,
   parseMangaDetails,
   toFeaturedItems,
+  toLatestGridItems,
   toLatestItems,
   toRankedCardItems,
   toSearchResultItems,
@@ -145,13 +147,31 @@ export class KaliScanExtension implements ExtensionImpl<typeof KaliScanConfig> {
     return { items: toRankedCardItems(cards, "chapter"), metadata: undefined };
   }
 
+  // The first page comes from the homepage grid, whose embedded metadata
+  // carries timestamps and ratings the listing page omits; deeper pages come
+  // from the listing with the overlap filtered out.
   private async getLatestSection(
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const page = metadata?.page ?? 1;
-    const html = await fetchHtml(`${getBaseUrl()}/latest?page=${page}`);
+
+    if (page === 1) {
+      const items = toLatestGridItems(parseGridEntries(await this.getHomePage()));
+      if (items.length > 0) {
+        const seen = items.flatMap((item) => ("mangaId" in item ? [item.mangaId] : []));
+        return { items, metadata: { page: 2, seen } };
+      }
+    }
+
+    const listingPage = Math.max(1, page - 1);
+    const html = await fetchHtml(`${getBaseUrl()}/latest?page=${listingPage}`);
+    const seen = new Set(metadata?.seen ?? []);
+    const items = toLatestItems(parseDetailedCards(html)).filter(
+      (item) => !("mangaId" in item) || !seen.has(item.mangaId),
+    );
+
     return {
-      items: toLatestItems(parseDetailedCards(html)),
+      items,
       metadata: hasNextPage(html) ? { page: page + 1 } : undefined,
     };
   }
