@@ -93,11 +93,6 @@ export const dropRotatingClearance = (): void => {
   for (const cookie of stale) cookieStorage.deleteCookie(cookie);
 };
 
-// One challenge burst (several sections failing together) should surface a
-// single bypass entry, not one per request.
-let lastChallengeAt = 0;
-const CHALLENGE_DEDUPE_MS = 10_000;
-
 export class RanobesInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
     return {
@@ -122,18 +117,10 @@ export class RanobesInterceptor extends PaperbackInterceptor {
       /(?:vb_challenge|cf-turnstile|<title>Just a moment)/i.test(body)
     ) {
       dropRotatingClearance();
-
-      const now = Date.now();
-      if (now - lastChallengeAt < CHALLENGE_DEDUPE_MS) {
-        throw new Error("Waiting on the protection check — solve the pending bypass, then retry.");
-      }
-      lastChallengeAt = now;
-
-      // The site's pages carry an inline script that crashes the bypass
-      // webview's cookie handoff after the check is solved; robots.txt runs
-      // the same protection but renders as plain text, so the solve sticks.
+      // Solving on the site root clears the domain-wide clearance, and the
+      // root is a page the bypass webview can always render the challenge on.
       throw new CloudflareError({
-        url: `${DOMAIN}/robots.txt`,
+        url: `${DOMAIN}/`,
         method: "GET",
         headers: { "user-agent": await Application.getDefaultUserAgent() },
       });
