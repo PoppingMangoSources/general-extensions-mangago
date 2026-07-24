@@ -3,6 +3,7 @@
 
 import {
   BasicRateLimiter,
+  CloudflareError,
   ContentRating,
   CookieStorageInterceptor,
   DiscoverSectionType,
@@ -43,6 +44,8 @@ import {
 } from "./models";
 import { fetchJSON, fetchTags, fetchText, LuaComicInterceptor } from "./network";
 import {
+  decodeSlugId,
+  encodeSlugId,
   parseChapterList,
   parseChapterPages,
   parseHomePage,
@@ -112,10 +115,8 @@ export class LuaComicExtension implements ExtensionImpl<typeof LuaComicConfig> {
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
-      case SECTIONS.POPULAR: {
-        const data = await this.fetchQuery({ page: 1, orderBy: "total_views" });
-        return { items: toPopularItems(data.data ?? []), metadata: undefined };
-      }
+      case SECTIONS.POPULAR:
+        return this.getPopularSection();
       case SECTIONS.FEATURED: {
         const home = await this.getHomePage();
         return { items: toBannerItems(home.banners), metadata: undefined };
@@ -124,50 +125,61 @@ export class LuaComicExtension implements ExtensionImpl<typeof LuaComicConfig> {
         const home = await this.getHomePage();
         return { items: toRecommendedItems(home.recommended), metadata: undefined };
       }
-      case SECTIONS.LATEST: {
-        const page = metadata?.page ?? 1;
-        const data = await this.fetchQuery({ page, orderBy: "updated_at" });
-        const hasNext = (data.meta?.last_page ?? 1) > page;
-        return {
-          items: toLatestItems(data.data ?? []),
-          metadata: hasNext ? { page: page + 1 } : undefined,
-        };
-      }
+      case SECTIONS.LATEST:
+        return this.getLatestSection(metadata);
       case SECTIONS.TRENDING:
-        return {
-          items: TRENDING_RANGES.map((range) => ({
-            type: "genresCarouselItem",
-            name: range.title,
-            searchQuery: {
-              title: "",
-              metadata: { trending: range.id } satisfies SearchMetadata,
-            },
-            metadata: undefined,
-          })),
-          metadata: undefined,
-        };
+        return { items: this.trendingChipItems(), metadata: undefined };
       case SECTIONS.EDITORS: {
         const home = await this.getHomePage();
         return { items: toRankedItems(home.editors), metadata: undefined };
       }
-      case SECTIONS.GENRES: {
-        const genres = await this.getGenreOptions();
-        return {
-          items: genres.map((genre) => ({
-            type: "genresCarouselItem",
-            name: genre.value,
-            searchQuery: {
-              title: "",
-              metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
-            },
-            metadata: undefined,
-          })),
-          metadata: undefined,
-        };
-      }
+      case SECTIONS.GENRES:
+        return { items: await this.genreChipItems(), metadata: undefined };
       default:
         return { items: [], metadata: undefined };
     }
+  }
+
+  private async getPopularSection(): Promise<PagedResults<DiscoverSectionItem>> {
+    const data = await this.fetchQuery({ page: 1, orderBy: "total_views" });
+    return { items: toPopularItems(data.data ?? []), metadata: undefined };
+  }
+
+  private async getLatestSection(
+    metadata: PageMetadata | undefined,
+  ): Promise<PagedResults<DiscoverSectionItem>> {
+    const page = metadata?.page ?? 1;
+    const data = await this.fetchQuery({ page, orderBy: "updated_at" });
+    const hasNext = (data.meta?.last_page ?? 1) > page;
+    return {
+      items: toLatestItems(data.data ?? []),
+      metadata: hasNext ? { page: page + 1 } : undefined,
+    };
+  }
+
+  private trendingChipItems(): DiscoverSectionItem[] {
+    return TRENDING_RANGES.map((range) => ({
+      type: "genresCarouselItem",
+      name: range.title,
+      searchQuery: {
+        title: "",
+        metadata: { trending: range.id } satisfies SearchMetadata,
+      },
+      metadata: undefined,
+    }));
+  }
+
+  private async genreChipItems(): Promise<DiscoverSectionItem[]> {
+    const genres = await this.getGenreOptions();
+    return genres.map((genre) => ({
+      type: "genresCarouselItem",
+      name: genre.value,
+      searchQuery: {
+        title: "",
+        metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
+      },
+      metadata: undefined,
+    }));
   }
 
   async getSortingOptions(_query: SearchQuery<SearchMetadata>): Promise<SortingOption[]> {
@@ -200,7 +212,7 @@ export class LuaComicExtension implements ExtensionImpl<typeof LuaComicConfig> {
             .filter(Boolean)
             .join(" • ");
           return {
-            mangaId: entry.series_slug,
+            mangaId: encodeSlugId(entry.series_slug),
             title: entry.title,
             imageUrl: entry.thumbnail ?? "",
             subtitle,
@@ -247,7 +259,7 @@ export class LuaComicExtension implements ExtensionImpl<typeof LuaComicConfig> {
     const slug = query.trim().match(/^https?:\/\/(?:www\.)?luacomic\.org\/series\/([^/?#]+)/i)?.[1];
     if (!slug) return undefined;
 
-    const manga = await this.getMangaDetails(decodeURIComponent(slug));
+    const manga = await this.getMangaDetails(encodeSlugId(decodeURIComponent(slug)));
     return {
       items: [
         {
@@ -271,23 +283,23 @@ export class LuaComicExtension implements ExtensionImpl<typeof LuaComicConfig> {
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    const html = await fetchText(
-      `${DOMAIN}/series/${chapter.sourceManga.mangaId}/${chapter.chapterId}`,
-    );
+    const seriesSlug = decodeSlugId(chapter.sourceManga.mangaId);
+    const chapterSlug = decodeSlugId(chapter.chapterId);
+    const html = await fetchText(`${DOMAIN}/series/${seriesSlug}/${chapterSlug}`);
     return parseChapterPages(html, chapter);
   }
 
-  private async fetchSeries(slug: string): Promise<LuaSeries> {
+  private async fetchSeries(mangaId: string): Promise<LuaSeries> {
     const url = new URL(API_URL)
       .addPathComponent("query")
-      .setQueryItem("series_slug", slug)
+      .setQueryItem("series_slug", decodeSlugId(mangaId))
       .setQueryItem("page", "1")
       .setQueryItem("perPage", "1")
       .setQueryItem("adult", "true")
       .toString();
     const data = await fetchJSON<LuaQueryResponse>(url);
     const series = data.data?.[0];
-    if (!series) throw new Error(`Series not found: ${slug}`);
+    if (!series) throw new Error(`Series not found: ${mangaId}`);
     return series;
   }
 
@@ -299,7 +311,10 @@ export class LuaComicExtension implements ExtensionImpl<typeof LuaComicConfig> {
   private getGenreOptions(): Promise<OptionItem[]> {
     this.genresPromise ??= fetchTags()
       .then((tags) => (tags.length > 0 ? tags : FALLBACK_GENRES))
-      .catch(() => FALLBACK_GENRES);
+      .catch((error: unknown) => {
+        if (error instanceof CloudflareError) throw error;
+        return FALLBACK_GENRES;
+      });
     return this.genresPromise;
   }
 
@@ -316,13 +331,13 @@ export class LuaComicExtension implements ExtensionImpl<typeof LuaComicConfig> {
       .setQueryItem("perPage", PAGE_SIZE.toString())
       .setQueryItem("series_type", "Comic")
       .setQueryItem("adult", getShowAdultContent() ? "true" : "false")
-      .setQueryItem("orderBy", opts.orderBy ?? "created_at")
-      .setQueryItem("status", opts.status ?? "All");
+      .setQueryItem("orderBy", opts.orderBy ?? "created_at");
 
+    if (opts.status && opts.status !== "All") builder.setQueryItem("status", opts.status);
     if (opts.search) builder.setQueryItem("query_string", opts.search);
 
     const numericIds = (opts.genres ?? []).filter((id) => /^\d+$/.test(id));
-    builder.setQueryItem("tags_ids", `[${numericIds.join(",")}]`);
+    if (numericIds.length > 0) builder.setQueryItem("tags_ids", `[${numericIds.join(",")}]`);
 
     return fetchJSON<LuaQueryResponse>(builder.toString());
   }

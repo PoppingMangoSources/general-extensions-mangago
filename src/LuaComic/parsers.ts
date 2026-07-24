@@ -13,8 +13,8 @@ import {
 } from "@paperback/types";
 
 import {
+  ADULT_GENRES,
   DOMAIN,
-  isAdultGenre,
   type LuaBanner,
   type LuaChapter,
   type LuaHomePage,
@@ -27,6 +27,21 @@ const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
 
 const sanitizeId = (value: string): string =>
   value.toLowerCase().replace(SAFE_ID_REGEX, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+
+// Slugs double as ids; unusual characters are percent-encoded so the original
+// slug can always be recovered for request URLs.
+export const encodeSlugId = (slug: string): string =>
+  slug.replace(SAFE_ID_REGEX, (char) => encodeURIComponent(char));
+
+export const decodeSlugId = (value: string): string => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
+const isAdultGenre = (name: string): boolean => ADULT_GENRES.includes(name.trim().toLowerCase());
 
 const cleanText = (value?: string | null): string => {
   if (!value) return "";
@@ -79,45 +94,62 @@ const chapterCount = (
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 };
 
-export const parseHomePage = (html: string): LuaHomePage => {
-  // The homepage embeds its data in the Next.js flight payload; quotes arrive
-  // escaped inside script strings, so unescape before slicing out the arrays.
-  const unescaped = html.replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+// Page data arrives split across script-string chunks with escaped quotes;
+// joining the chunks before unescaping keeps embedded arrays parseable.
+const flightPayload = (html: string): string =>
+  html
+    .replace(/"\]\)\s*;?\s*(?:<\/script>\s*<script>\s*)?self\.__next_f\.push\(\[1,\s*"/g, "")
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, "\\");
 
-  const extractArray = <T>(key: string): T[] => {
-    const marker = `"${key}":[`;
-    const start = unescaped.indexOf(marker);
-    if (start === -1) return [];
-    const from = start + marker.length - 1;
-    let depth = 0;
-    for (let i = from; i < unescaped.length; i++) {
-      const char = unescaped[i];
-      if (char === "[") depth++;
-      else if (char === "]") {
-        depth--;
-        if (depth === 0) {
-          try {
-            return JSON.parse(unescaped.slice(from, i + 1)) as T[];
-          } catch {
-            return [];
-          }
-        }
-      }
+// Walks a JSON array starting at `from`, tracking string state so brackets
+// inside values do not desync the depth counter.
+const sliceJsonArray = (text: string, from: number): string | undefined => {
+  let depth = 0;
+  let inString = false;
+  for (let i = from; i < text.length; i++) {
+    const char = text[i];
+    if (inString) {
+      if (char === "\\") i++;
+      else if (char === '"') inString = false;
+      continue;
     }
-    return [];
-  };
+    if (char === '"') inString = true;
+    else if (char === "[") depth++;
+    else if (char === "]") {
+      depth--;
+      if (depth === 0) return text.slice(from, i + 1);
+    }
+  }
+  return undefined;
+};
 
+const extractArray = <T>(payload: string, key: string): T[] => {
+  const marker = `"${key}":[`;
+  const start = payload.indexOf(marker);
+  if (start === -1) return [];
+  const slice = sliceJsonArray(payload, start + marker.length - 1);
+  if (!slice) return [];
+  try {
+    return JSON.parse(slice) as T[];
+  } catch {
+    return [];
+  }
+};
+
+export const parseHomePage = (html: string): LuaHomePage => {
+  const payload = flightPayload(html);
   return {
-    banners: extractArray<LuaBanner>("banners"),
-    recommended: extractArray<LuaSeries>("series"),
-    editors: extractArray<LuaSeries>("pinned_series"),
+    banners: extractArray<LuaBanner>(payload, "banners"),
+    recommended: extractArray<LuaSeries>(payload, "series"),
+    editors: extractArray<LuaSeries>(payload, "pinned_series"),
   };
 };
 
 export const toPopularItems = (entries: LuaSeries[]): DiscoverSectionItem[] =>
   entries.map((series) => {
     const ratingInfo =
-      series.rating == null
+      series.rating == null || !Number.isFinite(series.rating)
         ? undefined
         : { symbol: "star.fill" as const, text: series.rating.toFixed(1) };
     const statusText = mapStatus(series.status);
@@ -128,7 +160,7 @@ export const toPopularItems = (entries: LuaSeries[]): DiscoverSectionItem[] =>
 
     return {
       type: "featuredCarouselItem" as const,
-      mangaId: series.series_slug,
+      mangaId: encodeSlugId(series.series_slug),
       imageUrl: series.thumbnail ?? "",
       title: cleanText(series.title),
       supertitle: cleanText(series.alternative_names) || undefined,
@@ -148,7 +180,7 @@ export const toBannerItems = (banners: LuaBanner[]): DiscoverSectionItem[] =>
     return [
       {
         type: "featuredCarouselItem",
-        mangaId: series.series_slug,
+        mangaId: encodeSlugId(series.series_slug),
         imageUrl: banner.banner ?? series.thumbnail ?? "",
         title: cleanText(series.title),
         summary: cleanDescription(series.description) || undefined,
@@ -175,7 +207,7 @@ export const toRecommendedItems = (entries: LuaSeries[]): DiscoverSectionItem[] 
 
     return {
       type: "simpleCarouselItem",
-      mangaId: series.series_slug,
+      mangaId: encodeSlugId(series.series_slug),
       imageUrl: series.thumbnail ?? "",
       title: cleanText(series.title),
       subtitle: subtitle || undefined,
@@ -197,8 +229,8 @@ export const toLatestItems = (entries: LuaSeries[]): DiscoverSectionItem[] =>
     return [
       {
         type: "chapterUpdatesCarouselItem",
-        mangaId: series.series_slug,
-        chapterId: chapter.chapter_slug,
+        mangaId: encodeSlugId(series.series_slug),
+        chapterId: encodeSlugId(chapter.chapter_slug),
         imageUrl: series.thumbnail ?? "",
         title: cleanText(series.title),
         subtitle: cleanText(chapter.chapter_name ?? "") || undefined,
@@ -217,7 +249,7 @@ export const toRankedItems = (entries: (LuaTrendingItem | LuaSeries)[]): Discove
 
     return {
       type: "simpleCarouselItem",
-      mangaId: entry.series_slug,
+      mangaId: encodeSlugId(entry.series_slug),
       imageUrl: entry.thumbnail ?? "",
       title: cleanText(entry.title),
       subtitle,
@@ -227,7 +259,7 @@ export const toRankedItems = (entries: (LuaTrendingItem | LuaSeries)[]): Discove
 
 export const toSearchResultItems = (entries: LuaSeries[]): SearchResultItem[] =>
   entries.map((series) => ({
-    mangaId: series.series_slug,
+    mangaId: encodeSlugId(series.series_slug),
     title: cleanText(series.title),
     imageUrl: series.thumbnail ?? "",
     subtitle: mapStatus(series.status),
@@ -254,7 +286,7 @@ export const parseMangaDetails = (series: LuaSeries): SourceManga => {
     views == null || !Number.isFinite(views) ? undefined : { views: formatCount(views) };
 
   return {
-    mangaId: series.series_slug,
+    mangaId: encodeSlugId(series.series_slug),
     mangaInfo: {
       primaryTitle,
       secondaryTitles,
@@ -296,7 +328,7 @@ export const parseChapterList = (
   return sorted.map(({ chapter, locked }, index) => {
     const title = cleanText(chapter.chapter_title ?? "");
     return {
-      chapterId: chapter.chapter_slug,
+      chapterId: encodeSlugId(chapter.chapter_slug),
       sourceManga,
       title: locked ? `🔒 ${title}`.trim() : title,
       chapNum: chapterNumberOf(chapter),
@@ -309,20 +341,20 @@ export const parseChapterList = (
 };
 
 export const parseChapterPages = (html: string, chapter: Chapter): ChapterDetails => {
-  // Reader pages embed their image list in the Next.js flight payload under
+  // Reader pages embed their image list in the page payload under
   // "chapter_data":{"images":[...]}; fall back to DOM <img> sources.
-  const unescaped = html.replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+  const payload = flightPayload(html);
   let pages: string[] = [];
 
+  const anchor = payload.indexOf('"chapter_data":');
   const marker = '"images":[';
-  const start = unescaped.indexOf(marker);
+  const start = payload.indexOf(marker, anchor === -1 ? 0 : anchor);
   if (start !== -1) {
-    const from = start + marker.length - 1;
-    const end = unescaped.indexOf("]", from);
-    if (end !== -1) {
+    const slice = sliceJsonArray(payload, start + marker.length - 1);
+    if (slice) {
       try {
-        pages = (JSON.parse(unescaped.slice(from, end + 1)) as string[]).filter(
-          (url) => typeof url === "string",
+        pages = (JSON.parse(slice) as unknown[]).filter(
+          (url): url is string => typeof url === "string",
         );
       } catch {
         pages = [];
@@ -333,7 +365,7 @@ export const parseChapterPages = (html: string, chapter: Chapter): ChapterDetail
   if (pages.length === 0) {
     const imgRegex = /<img[^>]+(?:data-src|src)=["']([^"']+)["']/gi;
     let match: RegExpExecArray | null;
-    while ((match = imgRegex.exec(html)) !== null) {
+    while ((match = imgRegex.exec(payload)) !== null) {
       pages.push(match[1]);
     }
   }

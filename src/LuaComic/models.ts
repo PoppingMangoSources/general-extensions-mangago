@@ -86,10 +86,7 @@ export const FALLBACK_GENRES: OptionItem[] = [
   { id: "villainess", value: "Villainess" },
 ];
 
-const ADULT_GENRES = ["adult", "smut", "mature", "ecchi", "hentai", "yaoi", "yuri"];
-
-export const isAdultGenre = (name: string): boolean =>
-  ADULT_GENRES.includes(name.trim().toLowerCase());
+export const ADULT_GENRES = ["adult", "smut", "mature", "ecchi", "hentai", "yaoi", "yuri"];
 
 export interface LuaChapter {
   id: number;
