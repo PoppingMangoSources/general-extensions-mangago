@@ -9,6 +9,7 @@ The repository's own sources are currently available from `0.9/test` while they 
 | Source                                        | Website               |
 | --------------------------------------------- | --------------------- |
 | [HiveScans](https://hivetoons.org)            | `hivetoons.org`       |
+| [KaliScan](https://kaliscan.io)               | `kaliscan.io`         |
 | [KingOfShojo](https://kingofshojo.com)        | `kingofshojo.com`     |
 | [Lua Comic](https://luacomic.org)             | `luacomic.org`        |
 | [MyReadingManga](https://myreadingmanga.info) | `myreadingmanga.info` |
