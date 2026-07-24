@@ -151,15 +151,19 @@ export class RanobesInterceptor extends PaperbackInterceptor {
       // scripts break the bypass webview, and with the clearance cookies
       // persisted a single solved prompt already covers later requests.
       dropRotatingClearance();
-      throw new CloudflareError({
-        url: request.url,
-        method: request.method ?? "GET",
-        headers: {
-          referer: `${DOMAIN}/`,
-          origin: DOMAIN,
-          "user-agent": await getUserAgent(),
+      throw new CloudflareError(
+        {
+          url: request.url,
+          method: request.method ?? "GET",
+          headers: {
+            referer: `${DOMAIN}/`,
+            origin: DOMAIN,
+            "user-agent": await getUserAgent(),
+          },
         },
-      });
+        "Protection check required — tap this banner to solve it, or open " +
+          "ranobes.net from the source settings.",
+      );
     }
     return data;
   }
