@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-24T00:49:56.821Z",
+  "buildTime": "2026-07-24T01:08:16.016Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -104,7 +104,7 @@
     {
       "name": "NovelArchive",
       "description": "Extension that pulls light novels from novelarchive.cc.",
-      "version": "1.0.0-alpha.10",
+      "version": "1.0.0-alpha.11",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
@@ -263,7 +263,7 @@
     {
       "name": "Temple Scan",
       "description": "Extension that pulls content from templetoons.com.",
-      "version": "1.0.0-alpha.9",
+      "version": "1.0.0-alpha.10",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
