@@ -105,8 +105,7 @@ const parseRelativeDate = (value: string): Date | undefined => {
   ].find(([name]) => text.includes(String(name)))?.[1];
   if (typeof unit === "number") return new Date(Date.now() - count * unit);
 
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? undefined : date;
+  return parseChapterDate(value);
 };
 
 const novelUrlFromChapter = (href: string): string => {
@@ -383,6 +382,34 @@ export const parseChapterPage = ($: cheerio.CheerioAPI): RanobesChapterPage => {
   }
 };
 
+// Chapter timestamps arrive zoneless in the site's own clock; reading them as
+// device-local time makes fresh chapters sit in the future and render as
+// negative ages. Treat them as UTC and clamp any remaining zone gap to now.
+const parseChapterDate = (value: string): Date | undefined => {
+  const text = value.trim();
+  if (!text) return undefined;
+
+  const ymd = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(text);
+  const dmy = /^(\d{1,2})\.(\d{1,2})\.(\d{2,4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(text);
+
+  let date: Date | undefined;
+  if (ymd) {
+    date = new Date(
+      Date.UTC(+ymd[1], +ymd[2] - 1, +ymd[3], +(ymd[4] ?? 0), +(ymd[5] ?? 0), +(ymd[6] ?? 0)),
+    );
+  } else if (dmy) {
+    const year = +dmy[3] < 100 ? +dmy[3] + 2000 : +dmy[3];
+    date = new Date(
+      Date.UTC(year, +dmy[2] - 1, +dmy[1], +(dmy[4] ?? 0), +(dmy[5] ?? 0), +(dmy[6] ?? 0)),
+    );
+  } else {
+    date = new Date(text);
+  }
+
+  if (!date || Number.isNaN(date.getTime())) return undefined;
+  return date.getTime() > Date.now() ? new Date() : date;
+};
+
 const parseChapterTitle = (value: string): { number: number; title?: string } => {
   const title = cleanText(value);
   const match = /^chapter\s+(\d+(?:\.\d+)?)\s*(?:[:.\-–—]\s*)?(.*)$/i.exec(title);
@@ -412,7 +439,7 @@ export const parseChapters = (pages: RanobesChapterPage[], sourceManga: SourceMa
       ...(chapter.title ? { title: chapter.title } : {}),
       volume: 0,
       sortingIndex: total - index,
-      publishDate: entry.date ? new Date(entry.date.replace(" ", "T")) : undefined,
+      publishDate: entry.date ? parseChapterDate(entry.date) : undefined,
     };
   });
 };
