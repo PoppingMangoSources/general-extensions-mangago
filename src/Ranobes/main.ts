@@ -11,6 +11,7 @@ import {
   type DiscoverSection,
   type DiscoverSectionItem,
   type ExtensionImpl,
+  type Form,
   type PagedResults,
   type Request,
   type SearchQuery,
@@ -21,6 +22,7 @@ import {
 import * as cheerio from "cheerio";
 
 import { RanobesAdvancedSearchForm } from "./forms/search";
+import { RanobesSettingsForm } from "./forms/settings";
 import {
   DISCOVER_SECTIONS,
   DOMAIN,
@@ -73,6 +75,10 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     this.mainRateLimiter.registerInterceptor();
     this.cookieStorage.registerInterceptor();
     this.requestManager.registerInterceptor();
+  }
+
+  async getSettingsForm(): Promise<Form> {
+    return new RanobesSettingsForm(this.cookieStorage);
   }
 
   async cloudflareBypassCompleted(
