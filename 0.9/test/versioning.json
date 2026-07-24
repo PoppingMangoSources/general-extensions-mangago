@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-24T00:49:20.111Z",
+  "buildTime": "2026-07-24T00:49:56.821Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -58,7 +58,7 @@
     {
       "name": "Lua Comic",
       "description": "Extension that pulls comics from luacomic.org.",
-      "version": "1.0.0-alpha.4",
+      "version": "1.0.0-alpha.5",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
