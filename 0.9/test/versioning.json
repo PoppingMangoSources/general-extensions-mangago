@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-24T05:01:19.721Z",
+  "buildTime": "2026-07-24T05:12:13.587Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -35,7 +35,7 @@
     {
       "name": "KaliScan",
       "description": "Extension that pulls manga from kaliscan.io.",
-      "version": "1.0.0-alpha.5",
+      "version": "1.0.0-alpha.6",
       "icon": "icons.png",
       "language": "en",
       "contentRating": "ADULT",
