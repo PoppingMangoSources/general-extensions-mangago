@@ -188,6 +188,8 @@ export class NovelArchiveAdvancedSearchForm extends AdvancedSearchForm {
             "handleGenresChange",
           ),
         }),
+      ]),
+      Section("genre_match", [
         SelectRow("genre_match", {
           title: "",
           layout: "flow",
