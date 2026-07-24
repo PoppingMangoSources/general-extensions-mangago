@@ -10,6 +10,7 @@ The repository's own sources are currently available from `0.9/test` while they 
 | --------------------------------------------- | --------------------- |
 | [HiveScans](https://hivetoons.org)            | `hivetoons.org`       |
 | [KingOfShojo](https://kingofshojo.com)        | `kingofshojo.com`     |
+| [Lua Comic](https://luacomic.org)             | `luacomic.org`        |
 | [MyReadingManga](https://myreadingmanga.info) | `myreadingmanga.info` |
 | [NovelArchive](https://novelarchive.cc)       | `novelarchive.cc`     |
 | [oManga](https://omanga.to)                   | `omanga.to`           |
