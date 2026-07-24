@@ -203,7 +203,7 @@ export class KaliScanExtension implements ExtensionImpl<typeof KaliScanConfig> {
     if (this.homePage?.base !== base) this.homePage = undefined;
 
     if (!this.homePage) {
-      const promise = fetchHtml(`${base}/`);
+      const promise = fetchHtml(`${base}/home`);
       const entry = { base, promise };
       // A failed fetch must not stay memoized, or the section it feeds would
       // remain empty until the app restarts.
