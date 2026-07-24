@@ -110,6 +110,11 @@ export const cookieStorage = new CookieStorageInterceptor({ storage: "stateManag
 // so dropping it is the only way back to a clean state.
 const ROTATING_CLEARANCE = ["__ddg8_", "__ddg10_"];
 
+// One challenge burst (several discover sections failing together) should
+// surface a single bypass entry, not one per request.
+let lastChallengeAt = 0;
+const CHALLENGE_DEDUPE_MS = 10_000;
+
 export const dropRotatingClearance = (): void => {
   const stale = cookieStorage.cookies.filter((cookie) => ROTATING_CLEARANCE.includes(cookie.name));
   for (const cookie of stale) cookieStorage.deleteCookie(cookie);
@@ -147,21 +152,28 @@ export class RanobesInterceptor extends PaperbackInterceptor {
       response.status === 403 ||
       /(?:Just a moment|Security check|vb_challenge)/i.test(body)
     ) {
-      // The bypass loads the challenged page itself: the root page's inline
-      // scripts break the bypass webview, and with the clearance cookies
-      // persisted a single solved prompt already covers later requests.
       dropRotatingClearance();
+
+      const now = Date.now();
+      if (now - lastChallengeAt < CHALLENGE_DEDUPE_MS) {
+        throw new Error("Waiting on the protection check — solve the pending bypass, then retry.");
+      }
+      lastChallengeAt = now;
+
+      // The site's pages carry an inline script with a top-level return that
+      // crashes the bypass webview after the check is solved. robots.txt runs
+      // the same protection but renders as plain text, so the solve completes
+      // and the clearance covers the whole domain.
       throw new CloudflareError(
         {
-          url: request.url,
-          method: request.method ?? "GET",
+          url: `${DOMAIN}/robots.txt`,
+          method: "GET",
           headers: {
             referer: `${DOMAIN}/`,
-            origin: DOMAIN,
             "user-agent": await getUserAgent(),
           },
         },
-        "Protection check required — tap this banner to solve it, or open " +
+        "Protection check required — solve it from the bypass banner, or open " +
           "ranobes.net from the source settings.",
       );
     }
