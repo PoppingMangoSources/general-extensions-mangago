@@ -152,6 +152,15 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
 
   private taxonomyPromise?: Promise<FilterTaxonomy>;
 
+  // A long novel's chapter list spans dozens of sequential page fetches; the
+  // protection reads repeating that crawl on every visit as automation, so
+  // one successful crawl is reused for a while.
+  private chapterPagesCache?: {
+    novelId: string;
+    pages: ReturnType<typeof parseChapterPage>[];
+    fetchedAt: number;
+  };
+
   async initialise(): Promise<void> {
     cookieStorage.setCookie({
       name: "browser_check",
@@ -174,6 +183,7 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     _localStorage: Record<string, string>,
   ): Promise<void> {
     this.taxonomyPromise = undefined;
+    this.chapterPagesCache = undefined;
     for (const cookie of cookies) {
       if (cookie.domain.includes("ranobes.net")) cookieStorage.setCookie(cookie);
     }
@@ -254,6 +264,12 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
     const novelId = extractNovelId(sourceManga.mangaId);
+
+    const cached = this.chapterPagesCache;
+    if (cached?.novelId === novelId && Date.now() - cached.fetchedAt < 10 * 60 * 1000) {
+      return parseChapters(cached.pages, sourceManga);
+    }
+
     const firstPage = parseChapterPage(cheerio.load(await fetchChapterListPage(novelId)));
     const pageCount = Math.max(1, firstPage.pages_count ?? 1);
 
@@ -264,6 +280,7 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     for (let page = 2; page <= pageCount; page++) {
       pages.push(parseChapterPage(cheerio.load(await fetchChapterListPage(novelId, page))));
     }
+    this.chapterPagesCache = { novelId, pages, fetchedAt: Date.now() };
     return parseChapters(pages, sourceManga);
   }
 
