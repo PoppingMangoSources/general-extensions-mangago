@@ -296,7 +296,11 @@ export const isLastListingPage = ($: cheerio.CheerioAPI): boolean =>
   $(".navigation .page_next a").length === 0;
 
 const parseSynopsis = ($: cheerio.CheerioAPI): string => {
-  const html = $(".r-desription .cont-text").first().html() ?? "";
+  const container = $(".r-desription .cont-text").first().clone();
+  // Some titles carry their genre and tag links inside the description
+  // container; they belong to the tag list, not the prose.
+  container.find('a[href*="/genre"], a[href*="/tags/"], a[href*="/category/"]').remove();
+  const html = container.html() ?? "";
   return cleanText(
     html
       .replace(/<br\s*\/?>(\s*)/gi, "\n")
