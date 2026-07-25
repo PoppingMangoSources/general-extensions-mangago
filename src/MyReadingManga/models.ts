@@ -35,7 +35,9 @@ export interface FilterOption {
 // One entry per Easy-Post filter widget in the site's search sidebar.
 export type FilterTaxonomies = Record<string, FilterOption[]>;
 
-export type PageMetadata = { page: number };
+export interface PageMetadata extends JSONObject {
+  page: number;
+}
 
 // Selection state consumed by `TriStateSelectRow`: include or exclude per id.
 export type TriState = Record<string, "included" | "excluded">;
