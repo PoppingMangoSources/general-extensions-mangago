@@ -363,9 +363,10 @@ export const toFeaturedItems = (entries: FeaturedEntry[]): DiscoverSectionItem[]
     type: "featuredCarouselItem",
     mangaId: entry.series_slug,
     title: entry.title,
-    // Prefer the wide hero banner the site shows on its featured carousel; fall
-    // back to the portrait cover, then the protagonist art.
-    imageUrl: entry.banner ?? entry.thumbnail ?? entry.protagonist ?? "",
+    // The featured carousel renders one image as both the portrait tile and the
+    // card background, so a wide hero banner crops badly. Use the portrait cover
+    // (as every other source does), falling back to protagonist art then banner.
+    imageUrl: entry.thumbnail ?? entry.protagonist ?? entry.banner ?? "",
     supertitle: entry.author ?? undefined,
     summary: cleanDescription(entry.description ?? "") || undefined,
     infoItems: entry.total_views
