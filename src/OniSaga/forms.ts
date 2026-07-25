@@ -133,7 +133,8 @@ export class OniSagaSectionsForm extends Form {
               SelectRow("restore", {
                 title: "Hidden Sections",
                 value: [],
-                options: deleted.map((section) => ({ id: section.id, title: section.title })),
+                layout: "list",
+                items: deleted.map((section) => ({ id: section.id, title: section.title })),
                 minItemCount: 0,
                 maxItemCount: deleted.length,
                 onValueChange: Application.Selector(this as OniSagaSectionsForm, "handleRestore"),
@@ -231,7 +232,8 @@ export class OniSagaSettingsForm extends Form {
           SelectRow("type", {
             title: "Type",
             value: [this.type],
-            options: toTags(TYPE_OPTIONS),
+            layout: "list",
+            items: toTags(TYPE_OPTIONS),
             minItemCount: 0,
             maxItemCount: 1,
             onValueChange: Application.Selector(this as OniSagaSettingsForm, "updateType"),
@@ -239,7 +241,8 @@ export class OniSagaSettingsForm extends Form {
           SelectRow("status", {
             title: "Status",
             value: [this.status],
-            options: toTags(STATUS_OPTIONS),
+            layout: "list",
+            items: toTags(STATUS_OPTIONS),
             minItemCount: 0,
             maxItemCount: 1,
             onValueChange: Application.Selector(this as OniSagaSettingsForm, "updateStatus"),
@@ -256,7 +259,8 @@ export class OniSagaSettingsForm extends Form {
           SelectRow("languages", {
             title: "Chapter Languages",
             value: this.languages,
-            options: LANGUAGES.map((lang) => ({ id: lang.langCode, title: lang.title })),
+            layout: "list",
+            items: LANGUAGES.map((lang) => ({ id: lang.langCode, title: lang.title })),
             minItemCount: 1,
             maxItemCount: LANGUAGES.length,
             onValueChange: Application.Selector(this as OniSagaSettingsForm, "updateLanguages"),
@@ -281,7 +285,8 @@ export class OniSagaSettingsForm extends Form {
           SelectRow("pageDelay", {
             title: "Image Requests Limit",
             value: [this.pageDelay],
-            options: toTags(PAGE_DELAY_OPTIONS),
+            layout: "list",
+            items: toTags(PAGE_DELAY_OPTIONS),
             minItemCount: 1,
             maxItemCount: 1,
             onValueChange: Application.Selector(this as OniSagaSettingsForm, "updatePageDelay"),
@@ -301,7 +306,8 @@ export class OniSagaSettingsForm extends Form {
           SelectRow("excludedGenres", {
             title: "Genre Blacklist",
             value: this.excludedGenres,
-            options: toTags(getGenres()),
+            layout: "list",
+            items: toTags(getGenres()),
             minItemCount: 0,
             maxItemCount: getGenres().length,
             onValueChange: Application.Selector(
@@ -408,7 +414,8 @@ export class OniSagaAdvancedSearchForm extends AdvancedSearchForm {
         SelectRow("type", {
           title: "Type",
           value: [this.type],
-          options: toTags(TYPE_OPTIONS),
+          layout: "list",
+          items: toTags(TYPE_OPTIONS),
           minItemCount: 0,
           maxItemCount: 1,
           onValueChange: Application.Selector(this as OniSagaAdvancedSearchForm, "handleType"),
@@ -418,7 +425,8 @@ export class OniSagaAdvancedSearchForm extends AdvancedSearchForm {
         SelectRow("status", {
           title: "Status",
           value: [this.status],
-          options: toTags(STATUS_OPTIONS),
+          layout: "list",
+          items: toTags(STATUS_OPTIONS),
           minItemCount: 0,
           maxItemCount: 1,
           onValueChange: Application.Selector(this as OniSagaAdvancedSearchForm, "handleStatus"),
@@ -428,7 +436,8 @@ export class OniSagaAdvancedSearchForm extends AdvancedSearchForm {
         SelectRow("minChapters", {
           title: "Min Chapters",
           value: [this.minChapters],
-          options: toTags(MIN_CHAPTERS_OPTIONS),
+          layout: "list",
+          items: toTags(MIN_CHAPTERS_OPTIONS),
           minItemCount: 0,
           maxItemCount: 1,
           onValueChange: Application.Selector(
