@@ -198,10 +198,10 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
     metadata: Metadata | undefined,
     _sortingOption?: SortingOption,
   ): Promise<PagedResults<SearchResultItem>> {
-    const pasted = await this.resolveDirectQuery((query.title ?? "").trim());
+    const term = (query.title ?? "").trim();
+    const pasted = await this.resolveDirectQuery(term);
     if (pasted) return pasted;
 
-    const term = (query.title ?? "").trim();
     const meta = query.metadata;
     const includedTypes = getSelectedIds(meta?.types, "included");
     const includedStatuses = getSelectedIds(meta?.statuses, "included");
