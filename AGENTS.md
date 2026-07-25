@@ -50,6 +50,7 @@ Very large sources use `implementations/<capability>/` (kebab-case, e.g. `chapte
 
 - Parsers and API logic are free exported arrow functions (`parseX`, `buildX`, `toX`); file-local helpers are `const` arrow functions.
 - **Classes only when the framework requires them:** the `PaperbackInterceptor` subclass and the `ExtensionImpl` subclass. No "Api" class for plain REST/Next.js GETs — use plain fetch helpers (`fetchNextData<T>`) + URL builders. No base classes to share small utility methods; use free functions taking instance args (`saveSetting(form, key, value)`).
+- **A typed fetch helper takes a fully-built URL string, not a `Request`.** One `fetchApi<T>(url)` does the GET, status check, and JSON parse; callers pass a URL assembled by small `URL`-class builders (`novelsUrl(...segments)`, `novelsFeedUrl(segment, limit?)`) rather than interpolating path/query strings by hand. Wrap only the JSON parse in `try/catch` and surface the failing URL. (Matches MangaFire's `fetchApi`.)
 
 ### Simplification
 
@@ -80,7 +81,9 @@ Very large sources use `implementations/<capability>/` (kebab-case, e.g. `chapte
 
 - **Omit empty query params.** Never send placeholders like `searchTerm=""`, `s=""`, or `author=""`. Add an optional param only when it has a value. (niclimcy)
 - **Use server-side filters when the API has them** — send both included and excluded genre IDs. Only crawl-and-filter client-side when the API genuinely lacks the filter. (niclimcy)
+- **Send filter values in the site's exact casing and spelling.** Copy a real filtered request off the live site and mirror its parameter names and value case (e.g. lowercase `genres_exclude` values, not Title Case). A case/spelling mismatch is silently ignored by the server, so the filter appears wired up but does nothing.
 - **Pagination derives from the API contract.** Read incoming page metadata, request the configured page size, and return next-page metadata from `totalCount`/the site's cursor. Don't hardcode page 1, cap with `.slice()`, or use an arbitrary smaller page size unless the UI contract requires it.
+- **Don't clamp a curated feed to a fixed count.** A curated endpoint (e.g. editor's choice) should return exactly what the site lists; make the `limit` optional and append it only when one is genuinely needed, so entries the site later adds or removes track automatically instead of being frozen at a hardcoded number.
 - **`hasMore` derives from the UNFILTERED server count/length.** When filtering locally, filter first, then slice/page from the filtered candidate set. (niclimcy)
 - **Keep search metadata sparse** — `getSearchQueryMetadata` returns only non-empty fields; no empty arrays or empty genre maps.
 - **URL-paste lookup is an optional fast path.** Match only supported source URLs, encode the slug once, and return `undefined` when it can't resolve so ordinary text search continues. Do not use blanket error suppression on normal API/parser/reader paths.
@@ -128,6 +131,7 @@ async cloudflareBypassCompleted(request: Request, cookies: Cookie[], localStorag
 
 - **This filter is NOT universal — verify against the site.** A server-rendered app (Laravel, etc.) binds the challenge to server-side session cookies too: forwarding only `cf*` drops the session and every post-bypass request 403s. Forward **all** cookies for such sites (OniSaga: `onisaga_session`/`XSRF-TOKEN`). A DDoS-Guard site names its cookies `__ddg*`, not `cf*`, so a `cf`-prefix filter would discard them entirely — filter by domain or forward all (Ranobes). Match the cookies the site actually sets.
 - **Present one browser identity everywhere.** The clearance cookie a challenge webview earns is bound to the UA that solved it (full Mobile Safari), while `Application.getDefaultUserAgent()` returns a bare iOS WebView UA. If native requests send a different UA the clearance is rejected and the source loops on the challenge forever. Complete the missing Safari tokens once and use that same UA for both the `CloudflareError` and every request (see OniSaga/Ranobes `completeMobileSafariUserAgent`).
+- **Mirror failover for multi-domain sites.** When a source is reachable through alternate domains that get blocked independently, keep an ordered mirror list, fall through to the next host when the current one fails, and remember the host that last worked so later requests skip dead mirrors (Ranobes ranobes.net ↔ ranobes.top). Re-throw `CloudflareError` instead of failing over — a challenge is not a dead host.
 
 ### Interceptors & rate limiting
 
@@ -176,6 +180,7 @@ const genres = await (this.genresPromise ??= fetchGenres());
 - **Brace/JSON slicing over decoded payloads must be string-aware** — track `inString`/`escaped` so brackets inside string values don't desync bracket depth. Unescape only what the transport escaped. Parse only verified delimiters and field orders. (niclimcy)
 - **Parse only verified delimiters.** Don't split titles/creator names on convenient punctuation (commas can be part of a title); use delimiters observed in the live payload (slash, pipe, newline).
 - Avoid speculative cleanup — normalize whitespace and known placeholders, but don't strip site text with unverified regexes.
+- **Synthetic dates must be stable across fetches.** When the payload carries no chapter/update date, anchor ages to the title's own update time, or to a first-load timestamp persisted in `Application` state — never `Date.now()`/`new Date()` at parse time, which makes the whole list re-sort on every refresh.
 - Reuse the API's base response type instead of re-declaring a narrower interface that only restates optional fields as required.
 - One generic list parser (`parseMangaList`) returning a generic item shape; the section handler switches on item type and maps at the call site.
 
@@ -226,6 +231,7 @@ Every extension implementation file starts with (generated `src/tests/*` are exe
 ### Verification gate (run before declaring work done / opening a PR)
 
 - **`npm run conformance` must pass** — `tsc` + `oxlint --type-aware --deny-warnings` + `oxfmt`. This is also the pre-push hook. Type-only imports use `import type`; leave imports in oxfmt's sorted order. No `new Array(n)` (use `Array.from({ length: n })`).
+- **Format with `oxfmt` (`npm run format`), never Prettier.** Prettier's output differs from `oxfmt` (import sorting, wrapping) and fails `format:check`; don't reach for it even when it's the muscle-memory default.
 - **`npm test` must pass.** Generate tests via `npx paperback-cli test --generate <Name>` — don't hand-write fixtures. Default tests cover `initialise → getSortingOptions → getSearchResults → getMangaDetails → getChapters → getChapterDetails` only; **manually verify Discover sections and settings forms in-app.**
 - New source (or removal / branding / domain change) → update the root README "Sources" list. Maintainers block on a missing entry.
 - Don't edit the PR template; explain any test failure under the summary block instead. A green PR still needs ≥1 maintainer approval.
