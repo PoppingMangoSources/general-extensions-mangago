@@ -174,7 +174,6 @@ export interface RanobesChapterEntry {
   id: string;
   title: string;
   date?: string;
-  showDate?: string;
   link: string;
 }
 

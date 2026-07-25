@@ -133,7 +133,7 @@ export const parseFilterTaxonomy = ($: cheerio.CheerioAPI): FilterTaxonomy => {
   };
 };
 
-export const parseContentRating = (genres: string[]): ContentRating => {
+export const contentRatingForGenres = (genres: string[]): ContentRating => {
   const normalized = genres.map((genre) => genre.toLowerCase());
   if (["adult", "hentai", "smut", "yaoi"].some((genre) => normalized.includes(genre))) {
     return ContentRating.ADULT;
@@ -175,7 +175,7 @@ export const toFeaturedItem = (listing: RanobesListing): DiscoverSectionItem => 
         : listing.views !== undefined
           ? [{ symbol: "eye.fill", text: formatCount(listing.views) }]
           : undefined,
-  contentRating: parseContentRating(listing.genres ?? []),
+  contentRating: contentRatingForGenres(listing.genres ?? []),
 });
 
 export const toChapterUpdateItem = (listing: RanobesListing): DiscoverSectionItem | undefined => {
@@ -205,7 +205,7 @@ export const toRankingItem = (
         listing.ratingCount ? ` (${listing.ratingCount})` : ""
       }`
     : `#${rank} • ${formatCount(listing.views ?? 0)} views`,
-  contentRating: parseContentRating(listing.genres ?? []),
+  contentRating: contentRatingForGenres(listing.genres ?? []),
 });
 
 export const toCompletedItem = (listing: RanobesListing): DiscoverSectionItem => ({
@@ -219,7 +219,7 @@ export const toCompletedItem = (listing: RanobesListing): DiscoverSectionItem =>
       : listing.rating !== undefined
         ? `★ ${listing.rating.toFixed(1)}`
         : undefined,
-  contentRating: parseContentRating(listing.genres ?? []),
+  contentRating: contentRatingForGenres(listing.genres ?? []),
 });
 
 export const toSearchResult = (listing: RanobesListing): SearchResultItem => ({
@@ -227,7 +227,7 @@ export const toSearchResult = (listing: RanobesListing): SearchResultItem => ({
   title: listing.title,
   imageUrl: listing.imageUrl,
   subtitle: listing.rating !== undefined ? `★ ${listing.rating.toFixed(1)}` : undefined,
-  contentRating: parseContentRating(listing.genres ?? []),
+  contentRating: contentRatingForGenres(listing.genres ?? []),
 });
 
 const parseNovelCard = (
@@ -355,7 +355,7 @@ export const parseMangaDetails = ($: cheerio.CheerioAPI, mangaId: string): Sourc
       synopsis: parseSynopsis($),
       author: authors.length ? authors.join(", ") : undefined,
       status: status || undefined,
-      contentRating: parseContentRating(genres),
+      contentRating: contentRatingForGenres(genres),
       contentType: "novel",
       rating: Number.isFinite(rating) ? Math.min(1, Math.max(0, rating / 5)) : undefined,
       tagGroups: tagGroups.length ? tagGroups : undefined,
