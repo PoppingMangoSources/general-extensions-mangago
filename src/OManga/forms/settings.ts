@@ -3,13 +3,30 @@
 
 import { ButtonRow, Form, InputRow, LabelRow, Section, ToggleRow, URL } from "@paperback/types";
 
-import {
-  DEFAULT_DOMAIN,
-  getDomain,
-  getShowAllVersions,
-  setDomainOverride,
-  setShowAllVersions,
-} from "../models";
+import { DEFAULT_DOMAIN } from "../models";
+
+const BASE_URL_KEY = "omanga_base_url";
+const ALL_VERSIONS_KEY = "omanga_all_versions";
+
+export const getDomain = (): string => {
+  const value = Application.getState(BASE_URL_KEY);
+  if (typeof value === "string") {
+    const trimmed = value.trim().replace(/\/+$/, "");
+    if (trimmed.length > 0) return trimmed;
+  }
+  return DEFAULT_DOMAIN;
+};
+
+export const setDomainOverride = (value: string): void => {
+  Application.setState(value, BASE_URL_KEY);
+};
+
+export const getShowAllVersions = (): boolean =>
+  (Application.getState(ALL_VERSIONS_KEY) as boolean | undefined) ?? true;
+
+export const setShowAllVersions = (value: boolean): void => {
+  Application.setState(value, ALL_VERSIONS_KEY);
+};
 
 const normalizeDomainInput = (value: string): string | undefined => {
   let trimmed = value.trim().replace(/\/+$/, "");

@@ -9,7 +9,8 @@ import {
   type Response,
 } from "@paperback/types";
 
-import { type CatalogQuery, type CatalogResponse, getDomain } from "./models";
+import { getDomain } from "./forms/settings";
+import { type CatalogQuery, type CatalogResponse } from "./models";
 
 const IMAGE_EXTENSION_REGEX = /\.(jpe?g|png|webp|gif|avif)(\?|#|$)/i;
 

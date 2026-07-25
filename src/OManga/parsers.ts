@@ -12,15 +12,16 @@ import {
   type TagSection,
 } from "@paperback/types";
 
-import { getDomain, getShowAllVersions, isOfficialTeam } from "./models";
-import type {
-  CatalogItem,
-  ChapterEntry,
-  HomeLinkCard,
-  HomeUpdate,
-  ReaderChapter,
-  SeriesProps,
-  TopSeriesCountry,
+import { getDomain, getShowAllVersions } from "./forms/settings";
+import {
+  isOfficialTeam,
+  type CatalogItem,
+  type ChapterEntry,
+  type HomeLinkCard,
+  type HomeUpdate,
+  type ReaderChapter,
+  type SeriesProps,
+  type TopSeriesCountry,
 } from "./models";
 
 export const toLinkCardSimpleItem = (card: HomeLinkCard): DiscoverSectionItem => ({

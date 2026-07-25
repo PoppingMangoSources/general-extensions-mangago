@@ -23,14 +23,13 @@ import {
 } from "@paperback/types";
 
 import { OMangaAdvancedSearchForm } from "./forms/search";
-import { OMangaSettingsForm } from "./forms/settings";
+import { getDomain, OMangaSettingsForm } from "./forms/settings";
 import {
   AGE_RATING_OPTIONS,
   type CatalogItem,
   type CatalogQuery,
   FEATURED_HERO_LIMIT,
   GENRE_OPTIONS,
-  getDomain,
   type PageMetadata,
   resolveOptionValues,
   SECTIONS,

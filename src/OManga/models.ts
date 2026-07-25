@@ -26,22 +26,6 @@ export interface CatalogResponse {
   nextPage?: number | null;
 }
 
-const BASE_URL_KEY = "omanga_base_url";
-const ALL_VERSIONS_KEY = "omanga_all_versions";
-
-export const getDomain = (): string => {
-  const value = Application.getState(BASE_URL_KEY);
-  if (typeof value === "string") {
-    const trimmed = value.trim().replace(/\/+$/, "");
-    if (trimmed.length > 0) return trimmed;
-  }
-  return DEFAULT_DOMAIN;
-};
-
-export const setDomainOverride = (value: string): void => {
-  Application.setState(value, BASE_URL_KEY);
-};
-
 const OFFICIAL_TEAMS = new Set([
   "official",
   "tapas",
@@ -79,12 +63,6 @@ export const isOfficialTeam = (name?: string | null, slug?: string | null): bool
     (value) => typeof value === "string" && OFFICIAL_TEAMS.has(normalizeTeamKey(value)),
   );
 
-export const getShowAllVersions = (): boolean =>
-  (Application.getState(ALL_VERSIONS_KEY) as boolean | undefined) ?? true;
-
-export const setShowAllVersions = (value: boolean): void => {
-  Application.setState(value, ALL_VERSIONS_KEY);
-};
 export interface CatalogItem {
   id: number;
   title: string;
