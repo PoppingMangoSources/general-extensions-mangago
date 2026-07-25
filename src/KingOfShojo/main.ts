@@ -128,16 +128,16 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
     return [
       { id: SECTIONS.POPULAR_TODAY, title: "Popular Today", type: DiscoverSectionType.featured },
       {
-        id: SECTIONS.LATEST_UPDATE,
-        title: "Latest Update",
-        type: DiscoverSectionType.chapterUpdates,
-      },
-      {
         id: SECTIONS.RECOMMENDATION,
         title: "Recommendation",
         type: DiscoverSectionType.simpleCarousel,
       },
       { id: SECTIONS.POPULAR_SERIES, title: "Popular Series", type: DiscoverSectionType.genres },
+      {
+        id: SECTIONS.LATEST_UPDATE,
+        title: "Latest Update",
+        type: DiscoverSectionType.chapterUpdates,
+      },
       { id: SECTIONS.GENRES, title: "Genres", type: DiscoverSectionType.genres },
     ];
   }
