@@ -129,10 +129,26 @@ const escapeXml = (value: string): string =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
 
-// Fold non-ASCII (curly quotes, dashes, special spaces) into numeric entities so
-// the pure-ASCII XHTML can't be mis-decoded as Latin-1 ("a" mojibake).
-const escapeNonAscii = (value: string): string =>
-  value.replace(/[\u{80}-\u{10FFFF}]/gu, (char) => `&#${char.codePointAt(0)};`);
+// Some mirrors serve calibre-converted EPUB text whose UTF-8 bytes were re-read
+// as Latin-1 and re-encoded (double-encoded), so spaces and curly quotes arrive
+// as garbled sequences. Reinterpret each char as its original byte and re-decode
+// as UTF-8; bail unless the whole string is cleanly double-encoded so genuinely
+// accented text is never corrupted.
+const repairMojibake = (value: string): string => {
+  const bytes = new Uint8Array(value.length);
+  let hasHighByte = false;
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code > 0xff) return value; // real Unicode present: not double-encoded
+    if (code > 0x7f) hasHighByte = true; // high Latin-1 byte: a repair candidate
+    bytes[i] = code;
+  }
+  if (!hasHighByte) return value; // pure ASCII: nothing to fix
+  const decoded = Application.arrayBufferToUTF8String(bytes.buffer);
+  // A stray replacement char means the bytes were not valid UTF-8, so the text
+  // was not cleanly double-encoded; leave it untouched rather than mangle it.
+  return decoded.includes(String.fromCharCode(0xfffd)) ? value : decoded;
+};
 
 const dotJoin = (...parts: (string | undefined)[]): string =>
   parts.filter((part): part is string => Boolean(part)).join(" • ");
@@ -362,8 +378,7 @@ export const parseSourceChapters = (
 // The reader parses chapters as XHTML, so escape content into closed tags.
 const wrapXhtml = (bodyHtml: string, heading: string): string => {
   const title = heading ? `<h2>${escapeXml(heading)}</h2>` : "";
-  const doc = `<html xmlns="http://www.w3.org/1999/xhtml"><head><meta charset="utf-8"/></head><body>${title}${bodyHtml}</body></html>`;
-  return escapeNonAscii(doc);
+  return `<html xmlns="http://www.w3.org/1999/xhtml"><head><meta charset="utf-8"/></head><body>${title}${bodyHtml}</body></html>`;
 };
 
 // Native chapters arrive as plain text; each line becomes a paragraph.
@@ -390,7 +405,7 @@ export const parseChapterDetails = (
   response: ChapterContentResponse,
   chapter: Chapter,
 ): ChapterDetails => {
-  const content = (response.chapter?.content ?? response.content ?? "").trim();
+  const content = repairMojibake((response.chapter?.content ?? response.content ?? "").trim());
   if (!content) {
     throw new Error(`No content returned for chapter ${chapter.chapterId}`);
   }
@@ -406,12 +421,9 @@ export const parseSourceChapterDetails = (
   response: SourceChapterContentResponse,
   chapter: Chapter,
 ): ChapterDetails => {
-  const html = (
-    response.content_html ??
-    response.chapter?.content_html ??
-    response.content ??
-    ""
-  ).trim();
+  const html = repairMojibake(
+    (response.content_html ?? response.chapter?.content_html ?? response.content ?? "").trim(),
+  );
   if (!html) {
     throw new Error(`No content returned for chapter ${chapter.chapterId}`);
   }
