@@ -68,19 +68,34 @@ export class NovelArchiveInterceptor extends PaperbackInterceptor {
   }
 }
 
+// Identical concurrent GETs (library-update scans, discover rails, the same
+// title's details+chapters pair) share one request instead of firing duplicates,
+// mirroring the site's own inFlightGetRequests map.
+const inFlightRequests = new Map<string, Promise<unknown>>();
+
 export const fetchApi = async <T>(url: string): Promise<T> => {
-  const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
+  const existing = inFlightRequests.get(url);
+  if (existing) return existing as Promise<T>;
 
-  if (response.status !== 200) {
-    throw new Error(`Request failed with status ${response.status}: ${url}`);
-  }
+  const promise = (async (): Promise<T> => {
+    const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
+    if (response.status !== 200) {
+      throw new Error(`Request failed with status ${response.status}: ${url}`);
+    }
+    const data = Application.arrayBufferToUTF8String(buffer);
+    try {
+      return JSON.parse(data) as T;
+    } catch (error: unknown) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to parse JSON from ${url}: ${reason}`, { cause: error });
+    }
+  })();
 
-  const data = Application.arrayBufferToUTF8String(buffer);
+  inFlightRequests.set(url, promise);
   try {
-    return JSON.parse(data) as T;
-  } catch (error: unknown) {
-    const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to parse JSON from ${url}: ${reason}`, { cause: error });
+    return await promise;
+  } finally {
+    inFlightRequests.delete(url);
   }
 };
 
@@ -113,10 +128,21 @@ export const fetchBrowse = async (url: string): Promise<{ novels: Novel[]; hasNe
   return { novels: data.novels ?? [], hasNext: data.pagination?.has_next ?? false };
 };
 
-// Mirror listings are optional; their failure must not sink the native chapter list.
+// Mirror listings are optional; their failure must not sink the native chapter
+// list. The /sources endpoint is flaky and can hang ~30s before a 504 (it sends
+// Retry-After), so cap the wait and fall back to native-only chapters rather
+// than blocking the list on it.
+const SOURCES_TIMEOUT_SECONDS = 8;
+
 export const fetchSources = async (id: string): Promise<NovelSource[]> => {
+  const request = fetchApi<NovelSource[] | SourceListResponse>(novelsUrl(id, "sources"));
+  // Swallow a late 504 so it doesn't surface as an unhandled rejection after the timeout wins.
+  request.catch(() => undefined);
   try {
-    const data = await fetchApi<NovelSource[] | SourceListResponse>(novelsUrl(id, "sources"));
+    const data = await Promise.race([
+      request,
+      Application.sleep(SOURCES_TIMEOUT_SECONDS).then(() => [] as NovelSource[]),
+    ]);
     return Array.isArray(data) ? data : (data.sources ?? []);
   } catch (error: unknown) {
     if (error instanceof CloudflareError) throw error;
