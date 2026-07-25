@@ -192,12 +192,38 @@ export const GENRES: FilterOption[] = [
   { id: "yuri", title: "Yuri" },
 ];
 
+export const SECTIONS = {
+  FEATURED: "featured",
+  EDITORS_PICKS: "editors-picks",
+  LATEST_COMICS: "latest-comics",
+  LATEST_NOVELS: "latest-novels",
+  POPULAR_TODAY: "popular-today",
+  MOST_POPULAR: "most-popular",
+  NEW_SERIES: "new-series",
+} as const;
+
 export const DISCOVER_SECTIONS: DiscoverSection[] = [
-  { id: "featured", title: "Top Featured", type: DiscoverSectionType.featured },
-  { id: "editors-picks", title: "Editors' Picks", type: DiscoverSectionType.prominentCarousel },
-  { id: "latest-comics", title: "Latest Comic Updates", type: DiscoverSectionType.chapterUpdates },
-  { id: "latest-novels", title: "Latest Novel Updates", type: DiscoverSectionType.chapterUpdates },
-  { id: "popular-today", title: "Popular Today", type: DiscoverSectionType.prominentCarousel },
-  { id: "most-popular", title: "Most Popular", type: DiscoverSectionType.simpleCarousel },
-  { id: "new-series", title: "New Series", type: DiscoverSectionType.simpleCarousel },
+  { id: SECTIONS.FEATURED, title: "Top Featured", type: DiscoverSectionType.featured },
+  {
+    id: SECTIONS.EDITORS_PICKS,
+    title: "Editors' Picks",
+    type: DiscoverSectionType.prominentCarousel,
+  },
+  {
+    id: SECTIONS.LATEST_COMICS,
+    title: "Latest Comic Updates",
+    type: DiscoverSectionType.chapterUpdates,
+  },
+  {
+    id: SECTIONS.LATEST_NOVELS,
+    title: "Latest Novel Updates",
+    type: DiscoverSectionType.chapterUpdates,
+  },
+  {
+    id: SECTIONS.POPULAR_TODAY,
+    title: "Popular Today",
+    type: DiscoverSectionType.prominentCarousel,
+  },
+  { id: SECTIONS.MOST_POPULAR, title: "Most Popular", type: DiscoverSectionType.simpleCarousel },
+  { id: SECTIONS.NEW_SERIES, title: "New Series", type: DiscoverSectionType.simpleCarousel },
 ];

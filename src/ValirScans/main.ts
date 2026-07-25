@@ -24,6 +24,7 @@ import { getShowPaidChapters, ValirScansAdvancedSearchForm, ValirScansSettingsFo
 import {
   DISCOVER_SECTIONS,
   GENRES,
+  SECTIONS,
   SORTING_OPTIONS,
   type FilterTaxonomy,
   type HomeSections,
@@ -126,7 +127,7 @@ export class ValirScansExtension implements ExtensionImpl<typeof ValirScansConfi
     section: DiscoverSection,
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    if (section.id === "new-series") {
+    if (section.id === SECTIONS.NEW_SERIES) {
       const page = metadata?.page ?? 1;
       const browse = parseBrowsePage(await fetchBrowsePage(page, undefined, "newest"));
       return {
@@ -137,17 +138,17 @@ export class ValirScansExtension implements ExtensionImpl<typeof ValirScansConfi
 
     const home = await this.getHomeSections();
     switch (section.id) {
-      case "featured":
+      case SECTIONS.FEATURED:
         return { items: toFeaturedItems(home.featured) };
-      case "editors-picks":
+      case SECTIONS.EDITORS_PICKS:
         return { items: toCarouselItems(home.editorsPicks, "prominentCarouselItem") };
-      case "latest-comics":
+      case SECTIONS.LATEST_COMICS:
         return { items: toChapterUpdateItems(home.latestUpdates, false) };
-      case "latest-novels":
+      case SECTIONS.LATEST_NOVELS:
         return { items: toChapterUpdateItems(home.latestUpdates, true) };
-      case "popular-today":
+      case SECTIONS.POPULAR_TODAY:
         return { items: toCarouselItems(home.popularToday, "prominentCarouselItem", true) };
-      case "most-popular":
+      case SECTIONS.MOST_POPULAR:
         return { items: toCarouselItems(home.mostPopular, "simpleCarouselItem", true) };
       default:
         return { items: [] };
