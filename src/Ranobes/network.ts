@@ -98,13 +98,15 @@ const isChallengeResponse = (response: Response, body: string): boolean => {
   );
 };
 
-// A solved challenge clears the whole domain, so once one bypass prompt is
-// raised the rest of a burst (concurrent discover sections, a long chapter
-// crawl) should fail quietly instead of stacking up a banner each.
+// A solved challenge clears the whole domain, so a burst (concurrent discover
+// sections, a chapter crawl) should raise ONE prompt. Within this window every
+// further challenge reuses the first one's URL so the app de-dupes to a single
+// banner — but it stays a real, solvable CloudflareError, never a dead error.
 const CHALLENGE_COOLDOWN = 15_000;
 
 export class RanobesInterceptor extends PaperbackInterceptor {
   private lastChallengeAt = 0;
+  private lastChallengeUrl = `${DOMAIN}/`;
 
   override async interceptRequest(request: Request): Promise<Request> {
     const origin = request.url.match(MIRROR_HOST)?.[0] ?? DOMAIN;
@@ -132,17 +134,17 @@ export class RanobesInterceptor extends PaperbackInterceptor {
     const body = contentType.includes("text/html") ? Application.arrayBufferToUTF8String(data) : "";
     if (isChallengeResponse(response, body)) {
       const now = Date.now();
-      if (now - this.lastChallengeAt < CHALLENGE_COOLDOWN) {
-        // A prompt is already up; don't raise a second banner for this burst.
-        throw new Error("Ranobes: Cloudflare bypass pending — solve the prompt, then refresh.");
+      const withinBurst = now - this.lastChallengeAt < CHALLENGE_COOLDOWN;
+      if (!withinBurst) {
+        // First challenge of a burst: point the bypass at the URL that was
+        // actually blocked — its challenge page is what the webview renders for
+        // the user to solve — and remember it so the rest of the burst reuses it.
+        this.lastChallengeUrl = request.url.replace(MIRROR_HOST, DOMAIN);
+        dropRotatingClearance();
       }
       this.lastChallengeAt = now;
-      dropRotatingClearance();
-      // Point the bypass at the URL that was actually blocked: its challenge
-      // page is what the webview needs to render for the user to solve. The
-      // site root is often cached challenge-free, so it gives nothing to solve.
       throw new CloudflareError({
-        url: request.url.replace(MIRROR_HOST, DOMAIN),
+        url: this.lastChallengeUrl,
         method: "GET",
         headers: {
           referer: `${DOMAIN}/`,
@@ -188,11 +190,13 @@ const requestText = async (url: string): Promise<string> => {
 
 // Keep chapter-list crawling gentle. Very long novels require many sequential
 // pages, and ddos-guard starts challenging when those pages arrive too quickly.
+// The gap is jittered (1.1–1.7s) so a long crawl doesn't hit the server on a
+// perfectly fixed cadence, which itself reads as a bot.
 let nextChapterListRequestAt = 0;
 const waitForChapterListSlot = async (): Promise<void> => {
   const now = Date.now();
   const wait = Math.max(0, nextChapterListRequestAt - now);
-  nextChapterListRequestAt = Math.max(now, nextChapterListRequestAt) + 1100;
+  nextChapterListRequestAt = Math.max(now, nextChapterListRequestAt) + 1100 + Math.random() * 600;
   if (wait > 0) await new Promise<void>((resolve) => setTimeout(resolve, wait));
 };
 
