@@ -17,7 +17,7 @@ import type { SearchMetadata } from "./models";
 const HIDE_LOCKED_KEY = "hide_paid_chapters";
 
 export const getHideLocked = (): boolean => {
-  return (Application.getState(HIDE_LOCKED_KEY) ?? false) as boolean;
+  return (Application.getState(HIDE_LOCKED_KEY) as boolean | undefined) ?? false;
 };
 
 export class RinkoComicsSettingsForm extends Form {
@@ -43,7 +43,7 @@ export class RinkoComicsSettingsForm extends Form {
 }
 
 export class RinkoComicsAdvancedSearchForm extends AdvancedSearchForm {
-  private readonly genreOptions: Tag[] = [];
+  private readonly genreOptions: Tag[];
   private genres: Record<string, "included" | "excluded">;
 
   constructor(searchQuery: SearchQuery<SearchMetadata>, genreSection: TagSection) {

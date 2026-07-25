@@ -135,9 +135,8 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
         title: "",
         metadata: { genres: { [genre.slug]: "included" } } satisfies SearchMetadata,
       },
-      metadata: undefined,
     }));
-    return { items, metadata: undefined };
+    return { items };
   }
 
   async getSortingOptions(): Promise<SortingOption[]> {
