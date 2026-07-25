@@ -27,13 +27,11 @@ import {
 } from "./models";
 import { decodeId, dedupe, encodeId, parseMangaDetails, pickGenreValues } from "./parsers";
 
-// Covers are served from extensionless /api/novels/{id}/cover URLs, so they are
-// image requests that must not get the JSON accept profile or be rate-limited.
+// Covers come from extensionless /api/novels/{id}/cover URLs — images, not JSON.
 const isCoverUrl = (url: string): boolean => /\/cover(\?|$)/.test(url);
 
-// The rate limiter's image regex only skips URLs with an image extension, which
-// the extensionless cover endpoint lacks — skip it explicitly so covers, the bulk
-// of requests, aren't throttled.
+// The limiter's image regex needs an extension, so extensionless covers would be
+// throttled; skip them since covers are the bulk of requests.
 export class NovelArchiveRateLimiter extends BasicRateLimiter {
   override async interceptRequest(request: Request): Promise<Request> {
     if (isCoverUrl(request.url)) return request;
