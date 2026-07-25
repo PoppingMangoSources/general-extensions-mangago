@@ -11,6 +11,14 @@ export const LOCK_SUFFIX = "#lock";
 // `div.chapter` rows, and reader sidebars as `a.chapter-item`.
 export const CHAPTER_SELECTOR = "li.chapter, div.chapter, a.chapter-item";
 
+export const SECTIONS = {
+  HOT: "hot",
+  PINNED: "pinned",
+  LATEST: "latest",
+  NOVELS: "novels",
+  GENRES: "genres",
+} as const;
+
 export const SORTING_OPTIONS = [
   { id: "newest", label: "Newest First" },
   { id: "oldest", label: "Oldest First" },

@@ -30,6 +30,7 @@ import {
   CHAPTER_SELECTOR,
   DOMAIN,
   LOCK_SUFFIX,
+  SECTIONS,
   SORTING_OPTIONS,
   type ComicCard,
   type Genre,
@@ -82,11 +83,15 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
-      { id: "hot", title: "Hot This Week", type: DiscoverSectionType.featured },
-      { id: "pinned", title: "Editor's Choice", type: DiscoverSectionType.prominentCarousel },
-      { id: "latest", title: "Latest Releases", type: DiscoverSectionType.chapterUpdates },
-      { id: "novels", title: "Latest Novels", type: DiscoverSectionType.prominentCarousel },
-      { id: "genres", title: "Genres", type: DiscoverSectionType.genres },
+      { id: SECTIONS.HOT, title: "Hot This Week", type: DiscoverSectionType.featured },
+      {
+        id: SECTIONS.PINNED,
+        title: "Editor's Choice",
+        type: DiscoverSectionType.prominentCarousel,
+      },
+      { id: SECTIONS.LATEST, title: "Latest Releases", type: DiscoverSectionType.chapterUpdates },
+      { id: SECTIONS.NOVELS, title: "Latest Novels", type: DiscoverSectionType.prominentCarousel },
+      { id: SECTIONS.GENRES, title: "Genres", type: DiscoverSectionType.genres },
     ];
   }
 
@@ -94,18 +99,18 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
     section: DiscoverSection,
     _metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    if (section.id === "genres") {
+    if (section.id === SECTIONS.GENRES) {
       return this.getGenresSection();
     }
     const $ = await this.getHomePage();
     switch (section.id) {
-      case "hot":
+      case SECTIONS.HOT:
         return { items: toHotItems($) };
-      case "pinned":
+      case SECTIONS.PINNED:
         return { items: toPinnedItems($) };
-      case "latest":
+      case SECTIONS.LATEST:
         return { items: toLatestItems($) };
-      case "novels":
+      case SECTIONS.NOVELS:
         return { items: toNovelItems($) };
       default:
         return { items: [] };
