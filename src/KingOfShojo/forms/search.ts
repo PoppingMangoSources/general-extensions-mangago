@@ -13,9 +13,6 @@ import {
 
 import { STATUS_OPTIONS, TYPE_OPTIONS, type OptionItem, type SearchMetadata } from "../models";
 
-const toTags = (options: OptionItem[]): Tag[] =>
-  options.map((option) => ({ id: option.id, title: option.value }));
-
 export class KingOfShojoAdvancedSearchForm extends AdvancedSearchForm {
   private author: string;
   private year: string;
@@ -23,13 +20,11 @@ export class KingOfShojoAdvancedSearchForm extends AdvancedSearchForm {
   private type: string[];
   private genres: Record<string, "included" | "excluded">;
 
-  private readonly statusOptions = toTags(STATUS_OPTIONS);
-  private readonly typeOptions = toTags(TYPE_OPTIONS);
   private readonly genreOptions: Tag[];
 
   constructor(searchQuery: SearchQuery<SearchMetadata>, genres: OptionItem[]) {
     super();
-    this.genreOptions = toTags(genres);
+    this.genreOptions = genres.map((option) => ({ id: option.id, title: option.value }));
 
     const meta = searchQuery.metadata ?? {};
     this.author = meta.author ?? "";
@@ -64,7 +59,7 @@ export class KingOfShojoAdvancedSearchForm extends AdvancedSearchForm {
           title: "Status",
           layout: "flow",
           value: this.status,
-          items: this.statusOptions,
+          items: STATUS_OPTIONS,
           minItemCount: 0,
           maxItemCount: 1,
           onValueChange: Application.Selector(
@@ -78,7 +73,7 @@ export class KingOfShojoAdvancedSearchForm extends AdvancedSearchForm {
           title: "Type",
           layout: "flow",
           value: this.type,
-          items: this.typeOptions,
+          items: TYPE_OPTIONS,
           minItemCount: 0,
           maxItemCount: 1,
           onValueChange: Application.Selector(
