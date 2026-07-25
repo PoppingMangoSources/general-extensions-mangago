@@ -41,8 +41,6 @@ import {
 } from "./models";
 import { getGenres, getPageDelayId } from "./utils/helpers";
 
-// ----- Settings state accessors -----
-
 export function getShowNsfw(): boolean {
   return (Application.getState(SHOW_NSFW_KEY) as boolean | undefined) ?? false;
 }
@@ -82,8 +80,6 @@ export function getDedupeChapters(): boolean {
   return (Application.getState(DEDUPE_CHAPTERS_KEY) as boolean | undefined) ?? true;
 }
 
-// ----- Discover section order / visibility -----
-
 export function getDeletedSections(): DiscoverSectionDef[] {
   return (Application.getState(SECTIONS_DELETED_KEY) as DiscoverSectionDef[] | undefined) ?? [];
 }
@@ -111,8 +107,6 @@ function resetSections(): void {
 }
 
 const toTags = (options: Option[]): Tag[] => options.map((o) => ({ id: o.id, title: o.title }));
-
-// ----- Discover sections order/visibility form -----
 
 export class OniSagaSectionsForm extends Form {
   override getSections() {
@@ -191,8 +185,6 @@ export class OniSagaSectionsForm extends Form {
     this.reloadForm();
   }
 }
-
-// ----- Settings form -----
 
 export class OniSagaSettingsForm extends Form {
   private showNsfw: boolean;
@@ -372,8 +364,6 @@ export class OniSagaSettingsForm extends Form {
     this.reloadForm();
   }
 }
-
-// ----- Advanced search form -----
 
 export class OniSagaAdvancedSearchForm extends AdvancedSearchForm {
   private type: string;

@@ -1,7 +1,15 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import { ContentRating, type Chapter, type SourceManga, type TagSection } from "@paperback/types";
+import {
+  ContentRating,
+  DiscoverSectionType,
+  type Chapter,
+  type FeaturedCarouselItem,
+  type SearchResultItem,
+  type SourceManga,
+  type TagSection,
+} from "@paperback/types";
 import { load, type Cheerio, type CheerioAPI } from "cheerio";
 import { type Element } from "domhandler";
 
@@ -95,6 +103,27 @@ export function buildStatSubtitle(card: MangaCard): string | undefined {
   return card.genres || undefined;
 }
 
+// Carousel style per rail.
+export function discoverSectionType(id: string): DiscoverSectionType {
+  switch (id) {
+    case "top_manga":
+      return DiscoverSectionType.featured;
+    case "highest_rated":
+      return DiscoverSectionType.prominentCarousel;
+    default:
+      return DiscoverSectionType.simpleCarousel;
+  }
+}
+
+export function toSearchItems(cards: MangaCard[]): SearchResultItem[] {
+  return cards.map((card) => ({
+    mangaId: card.mangaId,
+    title: card.title,
+    imageUrl: card.imageUrl,
+    contentRating: card.contentRating,
+  }));
+}
+
 export function parseMangaCards($: CheerioAPI, showNsfw: boolean): MangaCard[] {
   const cards: MangaCard[] = [];
 
@@ -175,7 +204,6 @@ export function parseMangaCardsFromHtml(
   return { cards, rawCount: starts.length, truncated };
 }
 
-// ============================= Top-manga ranking =============================
 // /top-manga rows carry both the read count and ★ rating that /browse lacks.
 export interface TopMangaItem {
   mangaId: string;
@@ -281,7 +309,17 @@ export function topMangaSubtitle(item: TopMangaItem): string | undefined {
   return item.genres || undefined;
 }
 
-// =============================== Home sections ===============================
+// Featured hero stat pills: ★ rating and read count, when present.
+export function topMangaInfoItems(item: TopMangaItem): FeaturedCarouselItem["infoItems"] {
+  const pills: { symbol: string; text: string }[] = [];
+  if (item.rating) pills.push({ symbol: "star.fill", text: item.rating });
+  if (item.reads) pills.push({ symbol: "flame.fill", text: item.reads });
+  if (pills.length === 0) return undefined;
+  return (
+    pills.length === 1 ? [pills[0]] : [pills[0], pills[1]]
+  ) as FeaturedCarouselItem["infoItems"];
+}
+
 // Outer HTML of the Livewire component whose wire:snapshot names it, so its
 // cards can be parsed. Empty when the page lacks the component.
 export function componentHtmlByName($: CheerioAPI, componentName: string): string {
@@ -494,25 +532,25 @@ export function parseChapterDate(value: string): Date {
     return Number.isNaN(absolute.getTime()) ? now : absolute;
   }
 
-  const value2 = /^\d/.test(match[1]) ? parseInt(match[1], 10) : 1;
+  const amount = /^\d/.test(match[1]) ? parseInt(match[1], 10) : 1;
   switch (match[2]) {
     case "minute":
-      now.setMinutes(now.getMinutes() - value2);
+      now.setMinutes(now.getMinutes() - amount);
       break;
     case "hour":
-      now.setHours(now.getHours() - value2);
+      now.setHours(now.getHours() - amount);
       break;
     case "day":
-      now.setDate(now.getDate() - value2);
+      now.setDate(now.getDate() - amount);
       break;
     case "week":
-      now.setDate(now.getDate() - value2 * 7);
+      now.setDate(now.getDate() - amount * 7);
       break;
     case "month":
-      now.setMonth(now.getMonth() - value2);
+      now.setMonth(now.getMonth() - amount);
       break;
     case "year":
-      now.setFullYear(now.getFullYear() - value2);
+      now.setFullYear(now.getFullYear() - amount);
       break;
   }
   return now;
@@ -560,24 +598,26 @@ export function parseChapters($: CheerioAPI, sourceManga: SourceManga): Chapter[
   // Structure 1: direct chapter links.
   $("a[wire\\:key^='ch-']").each((_, el) => {
     const link = $(el);
-    const number =
+    const numberText =
       link.find("div[data-flux-heading]").first().text().replace("Chapter ", "").trim() ||
       link.find("div.w-10").first().text().trim();
-    if (!number) return;
+    if (!numberText) return;
 
     const href = link.attr("href") ?? "";
     const details = splitDetails(link.find("p[data-flux-text]").first().text());
 
-    push(makeChapter(sourceManga, href, number, detailsLanguage(details), detailsDate(details)));
+    push(
+      makeChapter(sourceManga, href, numberText, detailsLanguage(details), detailsDate(details)),
+    );
   });
 
   // Structure 2: dropdown menus (per-language chapter variants).
   $("ui-dropdown[wire\\:key^='ch-']").each((_, el) => {
     const dropdown = $(el);
-    const number =
+    const numberText =
       dropdown.find("div[data-flux-heading]").first().text().replace("Chapter ", "").trim() ||
       dropdown.find("button div.w-10").first().text().trim();
-    if (!number) return;
+    if (!numberText) return;
 
     const details = splitDetails(dropdown.find("p[data-flux-text]").first().text());
     const dateStr = detailsDate(details);
@@ -592,7 +632,7 @@ export function parseChapters($: CheerioAPI, sourceManga: SourceManga): Chapter[
         menuItem.find("div[data-flux-badge]").first().text().trim() ||
         firstKnownBadge(menuItem.text().trim());
 
-      push(makeChapter(sourceManga, href, number, badge, dateStr));
+      push(makeChapter(sourceManga, href, numberText, badge, dateStr));
     });
   });
 

@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
+import type { SortingOption } from "@paperback/types";
+
 export const DOMAIN = "https://onisaga.com";
 
 // State keys
@@ -106,15 +108,16 @@ export const PAGE_DELAY_OPTIONS: Option[] = [
   { id: "2.5", title: "1 image per 2.50 seconds" },
 ];
 
-// Livewire `sort` field.
-export const SORT_OPTIONS: Option[] = [
-  { id: "created_at", title: "Latest" },
-  { id: "view", title: "Popular" },
-  { id: "title", title: "Title" },
-  { id: "vote_average", title: "Rating" },
-  { id: "like_count", title: "Most Liked" },
-  { id: "fan_favorites", title: "Fan Favorites" },
-  { id: "release_date", title: "Recently Released" },
+// Livewire `sort` field. Single consumer (getSortingOptions), so declared in the
+// SortingOption `{ id, label }` shape and returned directly.
+export const SORT_OPTIONS: SortingOption[] = [
+  { id: "created_at", label: "Latest" },
+  { id: "view", label: "Popular" },
+  { id: "title", label: "Title" },
+  { id: "vote_average", label: "Rating" },
+  { id: "like_count", label: "Most Liked" },
+  { id: "fan_favorites", label: "Fan Favorites" },
+  { id: "release_date", label: "Recently Released" },
 ];
 
 export const DEFAULT_SORT = "created_at";

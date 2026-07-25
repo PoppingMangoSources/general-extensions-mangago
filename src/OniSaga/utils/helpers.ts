@@ -47,8 +47,6 @@ export function parseJson<T>(raw: string, context: string): T {
   }
 }
 
-// ----- Genres -----
-
 // The genre list shown in search and the blacklist. onisaga's taxonomy is a
 // fixed set of ~90 genres (each with a stable numeric filter id), so we ship it
 // as a curated constant exactly like the reference extension — rather than
@@ -57,8 +55,6 @@ export function parseJson<T>(raw: string, context: string): T {
 export function getGenres(): Option[] {
   return GENRES;
 }
-
-// ----- Reader pacing -----
 
 // Stored option id for the reader's request spacing (see PAGE_DELAY_OPTIONS).
 // Snap an obsolete stored id to the default: a SelectRow whose value isn't

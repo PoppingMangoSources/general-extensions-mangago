@@ -6,7 +6,6 @@ import {
   CloudflareError,
   ContentRating,
   CookieStorageInterceptor,
-  DiscoverSectionType,
   type AdvancedSearchForm,
   type Chapter,
   type ChapterDetails,
@@ -14,7 +13,6 @@ import {
   type DiscoverSection,
   type DiscoverSectionItem,
   type ExtensionImpl,
-  type FeaturedCarouselItem,
   type Form,
   type PagedResults,
   type Request,
@@ -52,6 +50,7 @@ import {
   buildStatSubtitle,
   componentHtmlByName,
   countPages,
+  discoverSectionType,
   extractPageOrders,
   extractReaderToken,
   hasNextPageFromHtml,
@@ -61,6 +60,8 @@ import {
   parseMangaCardsFromHtml,
   parseMangaDetails,
   parseTopManga,
+  toSearchItems,
+  topMangaInfoItems,
   topMangaSubtitle,
   type MangaCard,
   type TopMangaItem,
@@ -100,38 +101,6 @@ const IMPORT_POLL_FAST_SECONDS = 3;
 const IMPORT_POLL_SLOW_SECONDS = 6;
 const IMPORT_POLL_FAST_COUNT = 6;
 const READER_MAX_ATTEMPTS = 18;
-
-// Carousel style per rail.
-function discoverSectionType(id: string): DiscoverSectionType {
-  switch (id) {
-    case "top_manga":
-      return DiscoverSectionType.featured;
-    case "highest_rated":
-      return DiscoverSectionType.prominentCarousel;
-    default:
-      return DiscoverSectionType.simpleCarousel;
-  }
-}
-
-function toSearchItems(cards: MangaCard[]): SearchResultItem[] {
-  return cards.map((card) => ({
-    mangaId: card.mangaId,
-    title: card.title,
-    imageUrl: card.imageUrl,
-    contentRating: card.contentRating,
-  }));
-}
-
-// Featured hero stat pills: ★ rating and read count, when present.
-function topMangaInfoItems(item: TopMangaItem): FeaturedCarouselItem["infoItems"] {
-  const pills: { symbol: string; text: string }[] = [];
-  if (item.rating) pills.push({ symbol: "star.fill", text: item.rating });
-  if (item.reads) pills.push({ symbol: "flame.fill", text: item.reads });
-  if (pills.length === 0) return undefined;
-  return (
-    pills.length === 1 ? [pills[0]] : [pills[0], pills[1]]
-  ) as FeaturedCarouselItem["infoItems"];
-}
 
 export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
@@ -234,10 +203,8 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   }
 
   async getSortingOptions(): Promise<SortingOption[]> {
-    return SORT_OPTIONS.map((option) => ({ id: option.id, label: option.title }));
+    return SORT_OPTIONS;
   }
-
-  // =============================== Discover ====================================
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return getSectionsOrder().map((section) => ({
@@ -486,8 +453,6 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     });
   }
 
-  // ================================ Search =====================================
-
   async getSearchResults(
     query: SearchQuery<OniSagaSearchMetadata>,
     metadata: { page?: number } | undefined,
@@ -567,8 +532,6 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
       contentRating: details.mangaInfo.contentRating ?? ContentRating.EVERYONE,
     };
   }
-
-  // ============================ Manga & Chapters ===============================
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
     // Canonicalize via the final URL: an alias slug (e.g. /manga/handa-kun)
@@ -800,8 +763,6 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
       return [];
     }
   }
-
-  // ============================== Livewire browse ==============================
 
   // All browse/search listing goes through the Livewire component, page 1
   // included: its responses carry only one page of cards, while the /browse
