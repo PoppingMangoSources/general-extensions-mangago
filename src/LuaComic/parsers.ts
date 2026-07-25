@@ -78,8 +78,8 @@ export const tagNames = (series: LuaSeries): string[] =>
     .map((name) => name.trim())
     .filter((name) => name.length > 0);
 
-export const contentRatingForSeries = (series: Pick<LuaSeries, "tags">): ContentRating =>
-  tagNames(series as LuaSeries).some(isAdultGenre) ? ContentRating.ADULT : ContentRating.MATURE;
+const contentRatingForSeries = (series: LuaSeries): ContentRating =>
+  tagNames(series).some(isAdultGenre) ? ContentRating.ADULT : ContentRating.MATURE;
 
 const yearOf = (value?: string | null): string | undefined => {
   const match = (value ?? "").match(/^(\d{4})/);

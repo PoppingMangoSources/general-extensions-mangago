@@ -19,7 +19,7 @@ export class LuaComicAdvancedSearchForm extends AdvancedSearchForm {
   private status: string[];
   private genres: Record<string, "included" | "excluded">;
 
-  private readonly statusOptions: Tag[] = toTags(STATUS_OPTIONS);
+  private readonly statusOptions: Tag[] = STATUS_OPTIONS;
   private readonly genreOptions: Tag[];
 
   constructor(searchQuery: SearchQuery<SearchMetadata>, genreOptions: OptionItem[]) {

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import type { SortingOption } from "@paperback/types";
+import type { SortingOption, Tag } from "@paperback/types";
 
 export const DOMAIN = "https://luacomic.org";
 export const API_URL = "https://api.luacomic.org";
@@ -40,12 +40,12 @@ export const SORTING_OPTIONS: SortingOption[] = [
   { id: "title", label: "Title" },
 ];
 
-export const STATUS_OPTIONS: OptionItem[] = [
-  { id: "All", value: "All" },
-  { id: "Ongoing", value: "Ongoing" },
-  { id: "Hiatus", value: "Hiatus" },
-  { id: "Dropped", value: "Dropped" },
-  { id: "Completed", value: "Completed" },
+export const STATUS_OPTIONS: Tag[] = [
+  { id: "All", title: "All" },
+  { id: "Ongoing", title: "Ongoing" },
+  { id: "Hiatus", title: "Hiatus" },
+  { id: "Dropped", title: "Dropped" },
+  { id: "Completed", title: "Completed" },
 ];
 
 // Chips shown under the Trending section.
