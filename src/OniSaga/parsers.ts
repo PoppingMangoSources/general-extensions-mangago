@@ -169,12 +169,10 @@ export function parseMangaCards($: CheerioAPI, showNsfw: boolean): MangaCard[] {
 // 15 MB (the whole catalog), so we never parse more than this many.
 export const CARD_PARSE_CAP = 100;
 
-// Parse browse/search cards straight off the Livewire HTML string. A filtered
-// browse response can render the entire catalog (tens of MB); `cheerio.load`-ing
-// all of it freezes the device, so instead find each `div.relative.group` card
-// wrapper by scanning the text, then cheerio-parse only that one small slice —
-// and stop after a page's worth. Bounds the work at ~100 tiny parses regardless
-// of how large the response is.
+// Parse browse/search cards off the Livewire HTML string. A filtered response can
+// render the whole catalog (tens of MB); cheerio-loading all of it freezes the
+// device, so scan the text for each `div.relative.group` card, cheerio-parse only
+// that slice, and stop after one page (~100 tiny parses regardless of size).
 export function parseMangaCardsFromHtml(
   html: string,
   showNsfw: boolean,
@@ -188,11 +186,9 @@ export function parseMangaCardsFromHtml(
       if (starts.length > CARD_PARSE_CAP) break;
     }
   }
-  // Raw pre-filter card count and whether the scan hit the cap (a whole-catalog
-  // render, not a server page). Reported separately from cards.length because
-  // NSFW/malformed-card filtering shrinks the returned count — pagination
-  // decisions must key on what the server actually rendered, not what survived
-  // the filters.
+  // Raw pre-filter count and whether the scan hit the cap (whole-catalog render).
+  // Kept separate from cards.length because NSFW/malformed filtering shrinks the
+  // returned count, and pagination must key on what the server rendered.
   const truncated = starts.length > CARD_PARSE_CAP;
 
   const cards: MangaCard[] = [];
@@ -333,13 +329,11 @@ export function componentHtmlByName($: CheerioAPI, componentName: string): strin
   return html;
 }
 
-// The /home page server-renders every discover rail inline — no 10MB+ /browse
-// document. Slice one rail out by its section heading, stopping at the next
-// rail's heading, a Livewire island (`wire:snapshot`) or a flux section heading,
-// then parse the cards from that region of the already-fetched document. Not
-// every rail heading is a `data-flux-heading` (the SSR "Latest Mangas" grid is
-// plain), so the sibling headings are explicit boundaries too — otherwise the
-// "Most Popular" carousel would swallow the "Latest Mangas" grid that follows it.
+// The /home page server-renders every discover rail inline. Slice one rail out by
+// its heading, stopping at the next rail's heading / `wire:snapshot` island / flux
+// heading, then parse its cards. Sibling headings are explicit boundaries because
+// not every rail heading is `data-flux-heading` (the "Latest Mangas" grid is
+// plain) — otherwise "Most Popular" would swallow the grid after it.
 const HOME_RAIL_HEADINGS = ["Most Popular", "Latest Mangas", "Fan Favorites", "Top Rated"];
 
 export function parseHomeRail(html: string, heading: string, showNsfw: boolean): MangaCard[] {
@@ -361,11 +355,9 @@ export function parseHomeRail(html: string, heading: string, showNsfw: boolean):
   return parseMangaCardsFromHtml(after.slice(0, end), showNsfw).cards;
 }
 
-// Scans the multi-MB browse response we never fully cheerio-load: an enabled
-// `wire:click="...nextPage..."` control means there's another page. The
-// disabled check must match the ATTRIBUTE only — `\bdisabled\b` also matches
-// Tailwind's `disabled:opacity-50` variant classes on an enabled button, which
-// would report the last visible page as final and truncate pagination.
+// An enabled `wire:click="...nextPage..."` in the multi-MB browse response means
+// another page. Match the disabled ATTRIBUTE only — `\bdisabled\b` also hits
+// Tailwind's `disabled:opacity-50` variant, which would truncate pagination.
 export function hasNextPageFromHtml(html: string): boolean {
   const regex = /<[^>]*\bwire:click="[^"]*nextPage[^"]*"[^>]*>/g;
   for (const match of html.matchAll(regex)) {
@@ -398,11 +390,9 @@ function parseStatus($: CheerioAPI): string {
 export function parseMangaDetails($: CheerioAPI, mangaId: string): SourceManga {
   const title = ($("h1").first().text() || $("[data-flux-heading]").first().text()).trim();
 
-  // The poster markup varies between titles, so try the poster block loosely
-  // then fall back to the page's og:image/twitter:image. An empty thumbnailUrl
-  // makes Paperback throw "Invalid URL", so this must always resolve something —
-  // the site favicon is the guaranteed-valid last resort (a blank cover beats a
-  // hard error on the details screen).
+  // Poster markup varies, so try the poster block then fall back to og:image/
+  // twitter:image. An empty thumbnailUrl makes Paperback throw "Invalid URL", so
+  // always resolve something — the favicon is the guaranteed-valid last resort.
   const thumbnailUrl =
     resolveImageUrl($(".w-32 picture img").first()) ||
     resolveImageUrl($(".w-32 img").first()) ||

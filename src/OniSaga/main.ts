@@ -101,13 +101,9 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     this.requestManager.preparePageRequest(request),
   );
 
-  // Cached `post-filter` states (token + snapshot) per listing URL — /browse
-  // plus each active /search/{term}. A single shared slot would let every new
-  // search evict the /browse state (and vice versa), re-downloading the 10MB+
-  // /browse document on each swap. Snapshots refresh themselves on every
-  // successful Livewire response, so the TTL only bounds how often the big
-  // documents are re-fetched; in-flight fetches are de-duped so parallel rails
-  // share one download.
+  // Cached `post-filter` state (token + snapshot) per listing URL (/browse and
+  // each /search/{term}) — a shared slot would evict on every swap, re-downloading
+  // the 10MB+ document. In-flight fetches are de-duped so parallel rails share one.
   private browseStates = new Map<string, { state: LivewireState; at: number }>();
   private browseStateFetches = new Map<string, Promise<LivewireState | undefined>>();
   private static readonly BROWSE_STATE_TTL = 1_800_000;
@@ -121,16 +117,13 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   private static readonly UPDATE_SCAN_MAX_PAGES = 8;
   private static readonly UPDATE_SCAN_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 
-  // Cached /home document. It server-renders the Latest, Fan Favorites and Top
-  // Rated rails inline, so one fetch serves several rails instead of a separate
-  // (10MB+) /browse or /top-manga request each.
+  // Cached /home document: it server-renders Latest, Fan Favorites and Top Rated
+  // rails inline, so one fetch serves several rails.
   private homeDocCache?: { html: string; at: number };
   private homeDocFetch?: Promise<string>;
 
-  // Cached /top-manga rankings by sort. The featured + highest-rated rails both
-  // pull from this slow (~3s) ranking page, and the discover screen re-requests
-  // rails as it refreshes/scrolls, so cache each sort briefly to collapse the
-  // repeated fetches into one.
+  // Cached /top-manga rankings by sort: the featured + highest-rated rails share
+  // this slow (~3s) page, and discover re-requests rails on refresh/scroll.
   private topMangaCache = new Map<string, { items: TopMangaItem[]; at: number }>();
   private static readonly TOP_MANGA_TTL = 60_000;
 
@@ -139,14 +132,9 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   // The browse/search Livewire component renders this many cards per page.
   private static readonly BROWSE_PAGE_SIZE = 24;
 
-  // A freshly-opened chapter onisaga hasn't imported yet serves a
-  // `manga.chapter-page-loader` page (no reader token) that polls every 3s until
-  // the import finishes. Mirror that poll: re-fetch the reader page until the real
-  // reader with its token loads — quickly at first so a fast import opens
-  // snappily, then more slowly, since a long chapter's first import can take well
-  // over a minute (a 36s budget was observed timing out on real chapters).
-  // Worst case ≈ 6×3s + 11×6s ≈ 84s of waiting before giving up with a clear
-  // "come back shortly" error; the import keeps running server-side regardless.
+  // An unimported chapter serves a `chapter-page-loader` page (no token) that
+  // polls until import finishes. Mirror that: re-fetch fast then slow (worst case
+  // ~84s) before giving up; a long chapter's first import can exceed a minute.
   private static readonly IMPORT_POLL_FAST_SECONDS = 3;
   private static readonly IMPORT_POLL_SLOW_SECONDS = 6;
   private static readonly IMPORT_POLL_FAST_COUNT = 6;
@@ -258,11 +246,9 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     const { cards, hasNext } = await this.fetchBrowse(`${DOMAIN}/browse`, updates, page);
     const fresh = cards.filter((card) => !collectedIds.includes(card.mangaId));
 
-    // Thread the initial /home id set through unchanged rather than appending
-    // every page's ids: it exists only to de-dupe the one-time overlap between
-    // the /home "Latest" grid and browse page 1 (both sorted newest-first, so
-    // later pages never re-hit it), and accumulating would grow the page metadata
-    // by ~24 slugs per page across a long scroll.
+    // Thread the initial /home id set through unchanged: it only de-dupes the
+    // one-time /home-vs-browse-page-1 overlap (both newest-first), and
+    // accumulating would grow metadata by ~24 slugs per page.
     return {
       items: fresh.map(map),
       metadata: hasNext ? { page: page + 1, collectedIds } : undefined,
@@ -590,18 +576,11 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     return chapters;
   }
 
-  // Bulk library-update check. Without this, a refresh fetches every followed
-  // title individually (a /manga page + a Livewire chapter-list POST each —
-  // hundreds of requests for a large library, against the same site that rate
-  // limits the reader). Instead, scan the first pages of the Latest feed (the
-  // same created_at browse the Latest rail uses, ~24 titles/page): a followed
-  // title that appears there gets checked with high priority, everything else
-  // is skipped this round. Guard rails, since cards carry no timestamps:
-  // - Only trust the scan for a recent refresh gap (<= UPDATE_SCAN_MAX_AGE_MS);
-  //   an older gap falls through to the app's normal per-title refresh.
-  // - The scan ignores the user's NSFW/genre/type filters — a followed title
-  //   must never be skipped because a display filter hid it.
-  // - Any scan failure leaves priorities untouched (never skip on bad data).
+  // Bulk library-update check: refreshing each followed title individually is
+  // hundreds of requests, so scan the first Latest-feed pages (~24 titles/page)
+  // and only high-priority the followed titles that appear. Guards: trust the
+  // scan only for a recent gap (<= UPDATE_SCAN_MAX_AGE_MS), ignore display
+  // filters so a hidden title is never skipped, and never skip on scan failure.
   async processTitlesForUpdates(
     updateManager: UpdateManager,
     lastUpdateDate?: Date,
@@ -639,11 +618,9 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     }
   }
 
-  // Collapse repeat uploads of the same chapter+language to a single entry,
-  // keeping the newest by upload date (MangaDex's "Skip Same Chapter" / Aidoku's
-  // dedupe). Key on the chapter title, which carries the original number *text*
-  // (`Chapter 10.10`), not the parsed float — `parseFloat("10.10") === 10.1`, so
-  // keying on chapNum would collapse distinct decimal extras like 10.1 and 10.10.
+  // Collapse repeat uploads of the same chapter+language, keeping the newest.
+  // Key on the title (carries the original number *text*, e.g. `Chapter 10.10`),
+  // not chapNum — parseFloat("10.10") === 10.1 would collapse 10.1 and 10.10.
   private dedupeChapters(chapters: Chapter[]): Chapter[] {
     const byNewest = [...chapters].sort(
       (a, b) => (b.publishDate?.getTime() ?? 0) - (a.publishDate?.getTime() ?? 0),
@@ -798,15 +775,11 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     // Never cheerio-load the whole response: a filtered browse render can be
     // 15 MB, which freezes the device. Slice cards off the raw string instead.
     const { cards, rawCount, truncated } = parseMangaCardsFromHtml(html, showNsfw);
-    // The browse component paginates server-side (~24 cards/page), and its
-    // "next" control markup varies, so the button regex alone would often miss
-    // it — leaving search stuck on the first page. Treat a full page as "there's
-    // more" (an empty next page terminates the loop); only skip the heuristic
-    // when the raw scan truncated a whole-catalog render, where paging the
-    // client-side list would just repeat the same items. Keyed on the RAW
-    // pre-filter count, not cards.length: with NSFW hidden (the default), one
-    // adult card on a full server page would shrink the filtered count and end
-    // pagination early, silently truncating search/browse results.
+    // Browse paginates server-side (~24/page) with variable "next" markup, so
+    // treat a full page as "more" (an empty next page ends the loop); skip that
+    // only when a whole-catalog render was truncated. Key on the RAW pre-filter
+    // count — filtering (NSFW hidden) could shrink cards.length and end
+    // pagination early, silently truncating results.
     const fullPage = rawCount >= OniSagaExtension.BROWSE_PAGE_SIZE && !truncated;
     return {
       cards,
