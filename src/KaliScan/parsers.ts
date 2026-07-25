@@ -244,7 +244,7 @@ export const parseGridEntries = (html: string): KaliGridEntry[] => {
 
     entries.push({
       url,
-      title: data?.name ?? cleanText(item.find(".title, .name").first().text()),
+      title: cleanText(data?.name ?? item.find(".title, .name").first().text()),
       cover: data?.cover ? absoluteUrl(data.cover) : coverFrom(item),
       rating: data?.rating,
       updatedAt: data?.updated_at,

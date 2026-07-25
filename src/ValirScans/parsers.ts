@@ -363,7 +363,9 @@ export const toChapterUpdateItems = (
           chapterId: String(chapter.number),
           imageUrl: toAbsoluteUrl(series.coverImage),
           title: series.title,
-          subtitle: chapterTitle(chapter),
+          // Update cards show the chapter number, not its title text (some
+          // chapters carry a name after the number that would read oddly here).
+          subtitle: `${chapter.isLocked ? "🔒 " : ""}Chapter ${chapter.number}`,
           publishDate: date ? new Date(date) : undefined,
           contentRating: toContentRating(series),
         },
