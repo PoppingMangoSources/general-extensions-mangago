@@ -236,13 +236,13 @@ const parseLinkCards = (fragment: string): HomeLinkCard[] => {
     const start = anchors[i].index ?? 0;
     const end =
       i + 1 < anchors.length ? (anchors[i + 1].index ?? fragment.length) : fragment.length;
-    const window = fragment.slice(start, end);
+    const segment = fragment.slice(start, end);
 
-    const cover = window.match(/"src":"(https:\/\/[^"]+)"/)?.[1];
-    const alt = window.match(/"alt":"((?:[^"\\]|\\.)*)"/)?.[1];
+    const cover = segment.match(/"src":"(https:\/\/[^"]+)"/)?.[1];
+    const alt = segment.match(/"alt":"((?:[^"\\]|\\.)*)"/)?.[1];
     if (!cover || !alt) continue;
 
-    const sub = window.match(/"hl-card-sub","children":\["((?:[^"\\]|\\.)*)"," (\d{4})"\]/);
+    const sub = segment.match(/"hl-card-sub","children":\["((?:[^"\\]|\\.)*)"," (\d{4})"\]/);
     cards.push({
       slug: anchors[i][1],
       title: unescapeText(alt),
