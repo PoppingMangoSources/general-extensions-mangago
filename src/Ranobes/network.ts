@@ -94,7 +94,14 @@ const isChallengeResponse = (response: Response, body: string): boolean => {
   );
 };
 
+// A solved challenge clears the whole domain, so once one bypass prompt is
+// raised the rest of a burst (concurrent discover sections, a long chapter
+// crawl) should fail quietly instead of stacking up a banner each.
+const CHALLENGE_COOLDOWN = 15_000;
+
 export class RanobesInterceptor extends PaperbackInterceptor {
+  private lastChallengeAt = 0;
+
   override async interceptRequest(request: Request): Promise<Request> {
     const origin = request.url.match(MIRROR_HOST)?.[0] ?? DOMAIN;
     return {
@@ -115,12 +122,18 @@ export class RanobesInterceptor extends PaperbackInterceptor {
     const contentType = response.headers?.["content-type"] ?? "";
     const body = contentType.includes("text/html") ? Application.arrayBufferToUTF8String(data) : "";
     if (isChallengeResponse(response, body)) {
+      const now = Date.now();
+      if (now - this.lastChallengeAt < CHALLENGE_COOLDOWN) {
+        // A prompt is already up; don't raise a second banner for this burst.
+        throw new Error("Ranobes: Cloudflare bypass pending — solve the prompt, then refresh.");
+      }
+      this.lastChallengeAt = now;
       dropRotatingClearance();
-      // Bounce every challenge to the site root so concurrent discover fetches
-      // (ranking, updates, …) collapse into a single bypass prompt whose
-      // clearance then covers the whole domain.
+      // Point the bypass at the URL that was actually blocked: its challenge
+      // page is what the webview needs to render for the user to solve. The
+      // site root is often cached challenge-free, so it gives nothing to solve.
       throw new CloudflareError({
-        url: `${DOMAIN}/`,
+        url: request.url.replace(MIRROR_HOST, DOMAIN),
         method: "GET",
         headers: {
           referer: `${DOMAIN}/`,
