@@ -204,7 +204,10 @@ export const parseSeriesPage = (html: string, slug: string): LuaSeries => {
   const payload = flightPayload(html);
   const titleFromMeta = parseMetaContent(html, "og:title")?.replace(/\s+-\s+Lua Comic$/i, "");
   const descriptionFromMeta = parseMetaContent(html, "og:description")?.replace(
-    new RegExp(`^Read\\s+${(titleFromMeta ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s+on\\s+Lua Comic\\s*-\\s*`, "i"),
+    new RegExp(
+      `^Read\\s+${(titleFromMeta ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s+on\\s+Lua Comic\\s*-\\s*`,
+      "i",
+    ),
     "",
   );
 
@@ -275,7 +278,9 @@ export const toBannerItems = (banners: LuaBanner[]): DiscoverSectionItem[] =>
         infoItems:
           views == null
             ? undefined
-            : ([{ symbol: "eye.fill", text: formatCount(views) }] as FeaturedCarouselItem["infoItems"]),
+            : ([
+                { symbol: "eye.fill", text: formatCount(views) },
+              ] as FeaturedCarouselItem["infoItems"]),
         contentRating: ContentRating.MATURE,
       },
     ];
