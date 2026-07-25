@@ -78,7 +78,7 @@ export const buildSearchPath = (
 
 export const cookieStorage = new CookieStorageInterceptor({ storage: "stateManager" });
 
-const ROTATING_CLEARANCE = ["__ddg8_", "__ddg10_"];
+const ROTATING_CLEARANCE = ["__ddg8_", "__ddg9_", "__ddg10_"];
 
 export const dropRotatingClearance = (): void => {
   const stale = cookieStorage.cookies.filter((cookie) => ROTATING_CLEARANCE.includes(cookie.name));
@@ -138,9 +138,27 @@ const responseText = (response: Response, buffer: ArrayBuffer, url: string): str
   return text;
 };
 
+// Identical concurrent GETs (e.g. discover and a chapter list hitting the same
+// page) share one in-flight promise so we never fire duplicate network requests.
+const inFlightTextRequests = new Map<string, Promise<string>>();
+
 const requestText = async (url: string): Promise<string> => {
-  const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
-  return responseText(response, buffer, url);
+  const key = `GET:${url}`;
+  const existing = inFlightTextRequests.get(key);
+  if (existing) return existing;
+
+  const promise = (async () => {
+    const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
+    return responseText(response, buffer, url);
+  })();
+  inFlightTextRequests.set(key, promise);
+  try {
+    return await promise;
+  } finally {
+    if (inFlightTextRequests.get(key) === promise) {
+      inFlightTextRequests.delete(key);
+    }
+  }
 };
 
 // Keep chapter-list crawling gentle. Very long novels require many sequential
