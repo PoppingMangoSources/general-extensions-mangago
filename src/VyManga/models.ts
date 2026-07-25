@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
+import { type Tag } from "@paperback/types";
+
 export const DEFAULT_DOMAIN = "https://vymanga.com";
 export const SEARCH_PATH = "search";
 export const GENRES_KEY = "vymanga_genres";
@@ -62,10 +64,10 @@ export type MangaCard = {
   subtitle?: string;
 };
 
-export const STATUS_OPTIONS: OptionItem[] = [
-  { id: "", value: "All" },
-  { id: "0", value: "Ongoing" },
-  { id: "1", value: "Completed" },
+export const STATUS_OPTIONS: Tag[] = [
+  { id: "", title: "All" },
+  { id: "0", title: "Ongoing" },
+  { id: "1", title: "Completed" },
 ];
 
 export const SORT_OPTIONS: OptionItem[] = [
@@ -80,15 +82,15 @@ export const SORTING_OPTIONS = SORT_OPTIONS.map((option) => ({
   label: option.value,
 }));
 
-export const ORDER_OPTIONS: OptionItem[] = [
-  { id: "desc", value: "Descending" },
-  { id: "asc", value: "Ascending" },
+export const ORDER_OPTIONS: Tag[] = [
+  { id: "desc", title: "Descending" },
+  { id: "asc", title: "Ascending" },
 ];
 
-export const SEARCH_TYPE_OPTIONS: OptionItem[] = [
-  { id: "0", value: "Contains" },
-  { id: "1", value: "Begins with" },
-  { id: "2", value: "Ends with" },
+export const SEARCH_TYPE_OPTIONS: Tag[] = [
+  { id: "0", title: "Contains" },
+  { id: "1", title: "Begins with" },
+  { id: "2", title: "Ends with" },
 ];
 
 export const ADULT_GENRE_NAMES: ReadonlySet<string> = new Set([

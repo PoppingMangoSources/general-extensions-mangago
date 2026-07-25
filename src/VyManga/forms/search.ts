@@ -33,10 +33,7 @@ export class VyMangaSearchForm extends AdvancedSearchForm {
   private order: string[];
   private genres: Record<string, "included" | "excluded">;
 
-  private readonly searchTypeOptions = toTags(SEARCH_TYPE_OPTIONS);
-  private readonly statusOptions = toTags(STATUS_OPTIONS);
   private readonly sortOptions = toTags(SORT_OPTIONS);
-  private readonly orderOptions = toTags(ORDER_OPTIONS);
   private readonly genreOptions: Tag[];
 
   constructor(searchQuery: SearchQuery<SearchMetadata>, genres: OptionItem[]) {
@@ -60,7 +57,7 @@ export class VyMangaSearchForm extends AdvancedSearchForm {
           title: "Title match",
           layout: "flow",
           value: this.searchType,
-          items: this.searchTypeOptions,
+          items: SEARCH_TYPE_OPTIONS,
           minItemCount: 0,
           maxItemCount: 1,
           onValueChange: Application.Selector(this as VyMangaSearchForm, "handleSearchTypeChange"),
@@ -86,7 +83,7 @@ export class VyMangaSearchForm extends AdvancedSearchForm {
           title: "Status",
           layout: "flow",
           value: this.status,
-          items: this.statusOptions,
+          items: STATUS_OPTIONS,
           minItemCount: 0,
           maxItemCount: 1,
           onValueChange: Application.Selector(this as VyMangaSearchForm, "handleStatusChange"),
@@ -106,7 +103,7 @@ export class VyMangaSearchForm extends AdvancedSearchForm {
           title: "Order",
           layout: "flow",
           value: this.order,
-          items: this.orderOptions,
+          items: ORDER_OPTIONS,
           minItemCount: 0,
           maxItemCount: 1,
           onValueChange: Application.Selector(this as VyMangaSearchForm, "handleOrderChange"),
