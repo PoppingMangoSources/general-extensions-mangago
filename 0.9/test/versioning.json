@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-25T18:05:13.876Z",
+  "buildTime": "2026-07-25T18:16:16.169Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -35,7 +35,7 @@
     {
       "name": "KingOfShojo",
       "description": "Extension that pulls content from kingofshojo.com.",
-      "version": "1.0.0-alpha.15",
+      "version": "1.0.0-alpha.16",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
@@ -179,7 +179,7 @@
     {
       "name": "Ranobes",
       "description": "Extension that pulls light novels from ranobes.net.",
-      "version": "1.0.0-alpha.42",
+      "version": "1.0.0-alpha.43",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
@@ -300,7 +300,7 @@
     {
       "name": "ValirScans",
       "description": "Extension that pulls comics and novels from valirscans.org.",
-      "version": "1.0.0-alpha.9",
+      "version": "1.0.0-alpha.10",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
