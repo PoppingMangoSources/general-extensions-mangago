@@ -54,7 +54,7 @@ These sources **compose capabilities by mixin, not inheritance**: each capabilit
 - **Classes only when the framework requires them:** the `PaperbackInterceptor` subclass and the `ExtensionImpl` subclass. No "Api" class for plain REST/Next.js GETs — use plain fetch helpers (`fetchNextData<T>`) + URL builders. No base classes to share small utility methods; use free functions taking instance args (`saveSetting(form, key, value)`).
 - **A typed fetch helper takes a fully-built URL string, not a `Request`.** One `fetchApi<T>(url)` does the GET, status check, and JSON parse; callers pass a URL assembled by small `URL`-class builders (`novelsUrl(...segments)`, `novelsFeedUrl(segment, limit?)`) rather than interpolating path/query strings by hand. Wrap only the JSON parse in `try/catch` and surface the failing URL. (Matches MangaFire's `fetchApi`. Several older sources instead pass a `Request` object — the URL-string form is the target.)
 - **Bind the class to its config: `implements ExtensionImpl<typeof XConfig>`**, with `import type XConfig from "./pbconfig"`. This is the standard `ExtensionImpl` form; the class type-checks against its own pbconfig capabilities.
-- **HTML sources get the same fetch helper, one layer down.** The HTML analog of the JSON `fetchApi<T>` destructures `Application.scheduleRequest({ url, method: "GET" })` as `[, buffer]`, checks status, decodes with `Application.arrayBufferToUTF8String(buffer)`, then returns the string or `cheerio.load(...)` (the docs call these `fetchText`/`fetchJSON<T>`). Do not inline that `scheduleRequest → arrayBufferToUTF8String` dance at each call site.
+- **HTML sources get the same fetch helper, one layer down.** The HTML analog of the JSON `fetchApi<T>` destructures `Application.scheduleRequest({ url, method: "GET" })` as `[response, buffer]`, checks `response.status`, decodes the buffer with `Application.arrayBufferToUTF8String(buffer)`, then returns the string or `cheerio.load(...)` (the docs' minimal `fetchText`/`fetchJSON<T>` discard the response as `[, buffer]`). Do not inline that `scheduleRequest → arrayBufferToUTF8String` dance at each call site.
 - **Always route requests through `Application.scheduleRequest`**, never a raw fetch — it is what lets interceptors, the rate limiter, and dynamic cookies apply. Model a stable JSON response shape as a `<Thing>Response` interface in `models.ts` and fetch it as `fetchJSON<ThatType>(url)`.
 
 ### Simplification
@@ -78,7 +78,7 @@ Extensions run in a JS runtime that is **not a browser** — several globals are
 - Decode bytes with `Application.arrayBufferToUTF8String`, not `TextDecoder` (not guaranteed on-device). Hash/crypto via `Application.crypto_*` / `crypto.subtle` — `new SubtleCrypto()` throws.
 - `Application.base64Decode` / `base64Encode` may return **a string OR an ArrayBuffer** — handle both.
 - `typeof`-guard `setTimeout`/`clearTimeout`/`URLSearchParams` before use; reach `Function` as `globalThis.Function`.
-- `new URL(absolute, base)` mis-resolves absolute inputs in the polyfill (folds a mirror host back to the base). Build with `new URL(base).addPathComponent(...).setQueryItem(...)` and reserve `new URL(x)` for known-relative inputs; string-parse absolutes.
+- The global `URL` polyfill mis-resolves a two-arg `new URL(absolute, base)` (folds a mirror host back to the base). Prefer the SDK `URL` class (single-arg) — `new URL(base).addPathComponent(...).setQueryItem(...)` — and string-parse absolute URLs instead of reconstructing them.
 
 ---
 
