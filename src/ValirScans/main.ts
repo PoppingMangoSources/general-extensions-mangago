@@ -20,7 +20,8 @@ import {
   type SourceManga,
 } from "@paperback/types";
 
-import { getShowPaidChapters, ValirScansAdvancedSearchForm, ValirScansSettingsForm } from "./forms";
+import { ValirScansAdvancedSearchForm } from "./forms/search";
+import { getShowPaidChapters, ValirScansSettingsForm } from "./forms/settings";
 import {
   DISCOVER_SECTIONS,
   GENRES,

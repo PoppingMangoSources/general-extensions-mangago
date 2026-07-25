@@ -13,7 +13,7 @@ import {
   type TagSection,
 } from "@paperback/types";
 
-import { getBaseUrl } from "./forms";
+import { getBaseUrl } from "./forms/settings";
 import {
   type BrowsePage,
   type FilterOption,

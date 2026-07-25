@@ -9,7 +9,7 @@ import {
   type Response,
 } from "@paperback/types";
 
-import { getBaseUrl } from "./forms";
+import { getBaseUrl } from "./forms/settings";
 import { type SearchMetadata, type TriState } from "./models";
 
 export class ValirScansInterceptor extends PaperbackInterceptor {
