@@ -327,9 +327,6 @@ const parseChapterTitle = (chapter: ChapterDto): { title?: string; group?: strin
   };
 };
 
-const buildChapterTitle = (chapter: ChapterDto): string | undefined =>
-  parseChapterTitle(chapter).title;
-
 // Prefer the structured group; fall back to the group embedded in the title.
 const chapterGroup = (chapter: ChapterDto): string | undefined =>
   scanlationTeam(chapter) ?? parseChapterTitle(chapter).group;
@@ -342,7 +339,7 @@ export const parseChapterList = (
   return chapters.map((chapter, index) => ({
     chapterId: buildChapterId(seriesSlugId, chapter.id, chapter.group_id),
     sourceManga,
-    title: buildChapterTitle(chapter),
+    title: parseChapterTitle(chapter).title,
     version: chapterGroup(chapter) ?? "Unknown",
     chapNum: chapterNumberValue(chapter.number),
     volume: 0,

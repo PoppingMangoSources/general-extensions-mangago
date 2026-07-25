@@ -77,7 +77,7 @@ const absoluteUrl = (src: string): string => {
   return s.startsWith("/") ? `${DOMAIN}${s}` : `${DOMAIN}/${s}`;
 };
 
-const imageFromElement = (img: Cheerio<AnyNode>): string => {
+const imageUrlFromElement = (img: Cheerio<AnyNode>): string => {
   const src = img.attr("data-src") || img.attr("data-lazy-src") || img.attr("src") || "";
   return absoluteUrl(src);
 };
@@ -131,7 +131,7 @@ export const toHotItems = ($: CheerioAPI): DiscoverSectionItem[] => {
       type: "featuredCarouselItem",
       mangaId,
       title,
-      imageUrl: imageFromElement(card.find(".comic-cover img").first()),
+      imageUrl: imageUrlFromElement(card.find(".comic-cover img").first()),
       supertitle: rank ? `#${rank}` : undefined,
       summary: genres.length > 0 ? genres.join(" · ") : undefined,
       infoItems:
@@ -175,7 +175,7 @@ const toProminentItems = (
       type: "prominentCarouselItem",
       mangaId,
       title,
-      imageUrl: imageFromElement(card.find(selectors.imageSelector).first()),
+      imageUrl: imageUrlFromElement(card.find(selectors.imageSelector).first()),
       subtitle: card.find(".chapter-badge").first().text().trim() || undefined,
       contentRating: ContentRating.EVERYONE,
     });
@@ -215,7 +215,7 @@ export const toLatestItems = ($: CheerioAPI): DiscoverSectionItem[] => {
       mangaId,
       chapterId: parsePath(chapter.attr("href") || ""),
       title,
-      imageUrl: imageFromElement(card.find(".comic-card__cover img").first()),
+      imageUrl: imageUrlFromElement(card.find(".comic-card__cover img").first()),
       subtitle: chapter.find("label").first().text().trim() || undefined,
       publishDate: parseRelativeDate(chapter.find("span").first().text()),
       contentRating: ContentRating.EVERYONE,
@@ -253,7 +253,7 @@ export const parseComicCards = ($: CheerioAPI): ComicCard[] => {
     cards.push({
       mangaId,
       title,
-      imageUrl: imageFromElement(card.find(".ac-thumb img").first()),
+      imageUrl: imageUrlFromElement(card.find(".ac-thumb img").first()),
     });
   }
 
