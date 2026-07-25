@@ -129,6 +129,26 @@ export const parseDirectory = (payload: string): BrowseSeries[] => {
   return directory;
 };
 
+// A long value (e.g. the description) is deduped into its own flight row and
+// referenced as "$<row>"; resolve that back to the row's byte-counted text.
+const resolveFlightRef = (payload: string, ref: string): string | undefined => {
+  for (const text of [payload, decodeEscaped(payload)]) {
+    const header = new RegExp(`(?:^|\\n)${ref.slice(1)}:T([0-9a-f]+),`).exec(text);
+    if (!header) continue;
+    const byteLength = parseInt(header[1], 16);
+    const start = header.index + header[0].length;
+    let bytes = 0;
+    let end = start;
+    while (end < text.length && bytes < byteLength) {
+      const code = text.codePointAt(end) ?? 0;
+      bytes += code <= 0x7f ? 1 : code <= 0x7ff ? 2 : code <= 0xffff ? 3 : 4;
+      end += code > 0xffff ? 2 : 1;
+    }
+    return text.slice(start, end);
+  }
+  return undefined;
+};
+
 export const parseSeriesData = (payload: string, mangaId: string): SeriesData => {
   const data = extractByKey<SeriesData>(
     payload,
@@ -137,6 +157,11 @@ export const parseSeriesData = (payload: string, mangaId: string): SeriesData =>
   );
   if (!data) {
     throw new Error(`Temple Scan: no details found for ${mangaId}`);
+  }
+  // A bare "$<row>" description is an unresolved flight reference; resolve it to
+  // the real text, or blank it so the pointer never shows as the synopsis.
+  if (typeof data.description === "string" && /^\$[0-9a-f]+$/i.test(data.description)) {
+    data.description = resolveFlightRef(payload, data.description) ?? "";
   }
   return data;
 };
