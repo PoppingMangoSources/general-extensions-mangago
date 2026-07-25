@@ -20,6 +20,7 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
+  type Tag,
 } from "@paperback/types";
 
 import { HiveScansAdvancedSearchForm } from "./forms/search";
@@ -33,7 +34,6 @@ import {
   type HiveScansPostDetailsResponse,
   type HiveScansPost,
   type HiveScansSearchResponse,
-  type OptionItem,
   type PageMetadata,
   type SearchMetadata,
 } from "./models";
@@ -63,7 +63,7 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
   private cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
   private interceptor = new HiveScansInterceptor("main");
 
-  private genresPromise?: Promise<OptionItem[]>;
+  private genresPromise?: Promise<Tag[]>;
 
   async initialise(): Promise<void> {
     this.rateLimiter.registerInterceptor();
@@ -110,12 +110,12 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
       const genres = await this.getGenreOptions();
       const items: DiscoverSectionItem[] = genres.map((genre) => ({
         type: "genresCarouselItem",
-        name: genre.value,
+        name: genre.title,
         searchQuery: {
           title: "",
           metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
         },
-        contentRating: contentRatingForGenres([genre.value]),
+        contentRating: contentRatingForGenres([genre.title]),
         metadata: undefined,
       }));
       return { items, metadata: undefined };
@@ -178,10 +178,8 @@ export class HiveScansExtension implements ExtensionImpl<typeof HiveScansConfig>
     return new HiveScansAdvancedSearchForm(query, await this.getGenreOptions());
   }
 
-  private getGenreOptions(): Promise<OptionItem[]> {
-    this.genresPromise ??= fetchGenres().then((items) =>
-      items.map((item) => ({ id: item.id, value: item.title })),
-    );
+  private getGenreOptions(): Promise<Tag[]> {
+    this.genresPromise ??= fetchGenres();
     return this.genresPromise;
   }
 

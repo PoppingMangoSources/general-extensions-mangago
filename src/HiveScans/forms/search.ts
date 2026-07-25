@@ -14,12 +14,8 @@ import {
   SORT_DIRECTION_OPTIONS,
   STATUS_OPTIONS,
   TYPE_OPTIONS,
-  type OptionItem,
   type SearchMetadata,
 } from "../models";
-
-const toTags = (options: OptionItem[]): Tag[] =>
-  options.map((option) => ({ id: option.id, title: option.value }));
 
 export class HiveScansAdvancedSearchForm extends AdvancedSearchForm {
   private status: string[];
@@ -27,14 +23,14 @@ export class HiveScansAdvancedSearchForm extends AdvancedSearchForm {
   private direction: string[];
   private genres: Record<string, "included" | "excluded">;
 
-  private readonly statusOptions: Tag[] = toTags(STATUS_OPTIONS);
-  private readonly typeOptions: Tag[] = toTags(TYPE_OPTIONS);
-  private readonly directionOptions: Tag[] = toTags(SORT_DIRECTION_OPTIONS);
+  private readonly statusOptions: Tag[] = STATUS_OPTIONS;
+  private readonly typeOptions: Tag[] = TYPE_OPTIONS;
+  private readonly directionOptions: Tag[] = SORT_DIRECTION_OPTIONS;
   private readonly genreOptions: Tag[];
 
-  constructor(searchQuery: SearchQuery<SearchMetadata>, genreOptions: OptionItem[]) {
+  constructor(searchQuery: SearchQuery<SearchMetadata>, genreOptions: Tag[]) {
     super();
-    this.genreOptions = toTags(genreOptions);
+    this.genreOptions = genreOptions;
 
     const meta = searchQuery.metadata ?? {};
     this.status = meta.status ?? [];

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import type { SortingOption } from "@paperback/types";
+import type { SortingOption, Tag } from "@paperback/types";
 
 export const DOMAIN = "https://hivetoons.org";
 export const API_URL = "https://api.hivetoons.org/api";
@@ -26,11 +26,6 @@ export type SearchMetadata = {
   type?: string[];
   direction?: string[];
   genres?: Record<string, "included" | "excluded">;
-};
-
-export type OptionItem = {
-  id: string;
-  value: string;
 };
 
 export interface HiveScansGenre {
@@ -93,28 +88,28 @@ export interface HiveScansChapterResponse {
   chapter?: HiveScansChapterData;
 }
 
-export const STATUS_OPTIONS: OptionItem[] = [
-  { id: "ONGOING", value: "Ongoing" },
-  { id: "HIATUS", value: "Hiatus" },
-  { id: "COMPLETED", value: "Completed" },
-  { id: "CANCELLED", value: "Cancelled" },
-  { id: "DROPPED", value: "Dropped" },
-  { id: "COMING_SOON", value: "Coming Soon" },
-  { id: "MASS_RELEASED", value: "Mass Released" },
+export const STATUS_OPTIONS: Tag[] = [
+  { id: "ONGOING", title: "Ongoing" },
+  { id: "HIATUS", title: "Hiatus" },
+  { id: "COMPLETED", title: "Completed" },
+  { id: "CANCELLED", title: "Cancelled" },
+  { id: "DROPPED", title: "Dropped" },
+  { id: "COMING_SOON", title: "Coming Soon" },
+  { id: "MASS_RELEASED", title: "Mass Released" },
 ];
 
-export const TYPE_OPTIONS: OptionItem[] = [
-  { id: "NOVEL", value: "Novel" },
-  { id: "MANGA", value: "Manga" },
-  { id: "MANHUA", value: "Manhua" },
-  { id: "MANHWA", value: "Manhwa" },
-  { id: "RUSSIAN", value: "Russian" },
-  { id: "SPANISH", value: "Spanish" },
+export const TYPE_OPTIONS: Tag[] = [
+  { id: "NOVEL", title: "Novel" },
+  { id: "MANGA", title: "Manga" },
+  { id: "MANHUA", title: "Manhua" },
+  { id: "MANHWA", title: "Manhwa" },
+  { id: "RUSSIAN", title: "Russian" },
+  { id: "SPANISH", title: "Spanish" },
 ];
 
-export const SORT_DIRECTION_OPTIONS: OptionItem[] = [
-  { id: "desc", value: "Descending" },
-  { id: "asc", value: "Ascending" },
+export const SORT_DIRECTION_OPTIONS: Tag[] = [
+  { id: "desc", title: "Descending" },
+  { id: "asc", title: "Ascending" },
 ];
 
 export const SORTING_OPTIONS: SortingOption[] = [
