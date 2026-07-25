@@ -39,6 +39,7 @@ import {
 import {
   DEFAULT_SORT,
   DOMAIN,
+  SECTIONS,
   SORT_OPTIONS,
   type LivewireResponse,
   type LivewireState,
@@ -83,24 +84,6 @@ import {
   extractLivewireStateFromHtml,
   livewireHeaders,
 } from "./utils/livewire";
-
-const FEATURED_LIMIT = 10;
-
-// The browse/search Livewire component renders this many cards per page.
-const BROWSE_PAGE_SIZE = 24;
-
-// A freshly-opened chapter onisaga hasn't imported yet serves a
-// `manga.chapter-page-loader` page (no reader token) that polls every 3s until
-// the import finishes. Mirror that poll: re-fetch the reader page until the real
-// reader with its token loads — quickly at first so a fast import opens
-// snappily, then more slowly, since a long chapter's first import can take well
-// over a minute (a 36s budget was observed timing out on real chapters).
-// Worst case ≈ 6×3s + 11×6s ≈ 84s of waiting before giving up with a clear
-// "come back shortly" error; the import keeps running server-side regardless.
-const IMPORT_POLL_FAST_SECONDS = 3;
-const IMPORT_POLL_SLOW_SECONDS = 6;
-const IMPORT_POLL_FAST_COUNT = 6;
-const READER_MAX_ATTEMPTS = 18;
 
 export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
@@ -150,6 +133,24 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   // repeated fetches into one.
   private topMangaCache = new Map<string, { items: TopMangaItem[]; at: number }>();
   private static readonly TOP_MANGA_TTL = 60_000;
+
+  private static readonly FEATURED_LIMIT = 10;
+
+  // The browse/search Livewire component renders this many cards per page.
+  private static readonly BROWSE_PAGE_SIZE = 24;
+
+  // A freshly-opened chapter onisaga hasn't imported yet serves a
+  // `manga.chapter-page-loader` page (no reader token) that polls every 3s until
+  // the import finishes. Mirror that poll: re-fetch the reader page until the real
+  // reader with its token loads — quickly at first so a fast import opens
+  // snappily, then more slowly, since a long chapter's first import can take well
+  // over a minute (a 36s budget was observed timing out on real chapters).
+  // Worst case ≈ 6×3s + 11×6s ≈ 84s of waiting before giving up with a clear
+  // "come back shortly" error; the import keeps running server-side regardless.
+  private static readonly IMPORT_POLL_FAST_SECONDS = 3;
+  private static readonly IMPORT_POLL_SLOW_SECONDS = 6;
+  private static readonly IMPORT_POLL_FAST_COUNT = 6;
+  private static readonly READER_MAX_ATTEMPTS = 18;
 
   async initialise(): Promise<void> {
     // Cookie storage runs last on requests so the latest saved cookies are
@@ -219,28 +220,32 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     metadata: { page?: number; collectedIds?: string[] } | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
-      case "top_manga":
+      case SECTIONS.TOP_MANGA:
         return this.getTopMangaFeatured();
-      case "latest":
+      case SECTIONS.LATEST:
         return this.fetchLatest(metadata);
-      case "highest_rated": {
-        const items = this.dropBlacklisted(await this.fetchTopManga("rated"));
-        return {
-          items: items.map((item) => ({
-            type: "prominentCarouselItem",
-            mangaId: item.mangaId,
-            imageUrl: item.imageUrl,
-            title: item.title,
-            subtitle: topMangaSubtitle(item),
-            contentRating: item.contentRating,
-          })),
-        };
-      }
-      case "fan_favorites":
+      case SECTIONS.HIGHEST_RATED:
+        return this.getHighestRated();
+      case SECTIONS.FAN_FAVORITES:
         return this.fetchFanFavorites();
       default:
         return { items: [] };
     }
+  }
+
+  // Highest Rated rail from the /top-manga "rated" ranking (one request).
+  private async getHighestRated(): Promise<PagedResults<DiscoverSectionItem>> {
+    const items = this.dropBlacklisted(await this.fetchTopManga("rated"));
+    return {
+      items: items.map((item) => ({
+        type: "prominentCarouselItem",
+        mangaId: item.mangaId,
+        imageUrl: item.imageUrl,
+        title: item.title,
+        subtitle: topMangaSubtitle(item),
+        contentRating: item.contentRating,
+      })),
+    };
   }
 
   private async browseDiscover(
@@ -273,7 +278,10 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
 
   // Featured hero from the /top-manga ranking (one request, no per-item lookups).
   private async getTopMangaFeatured(): Promise<PagedResults<DiscoverSectionItem>> {
-    const items = this.dropBlacklisted(await this.fetchTopManga("reads")).slice(0, FEATURED_LIMIT);
+    const items = this.dropBlacklisted(await this.fetchTopManga("reads")).slice(
+      0,
+      OniSagaExtension.FEATURED_LIMIT,
+    );
 
     return {
       items: items.map((item) => ({
@@ -672,16 +680,18 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     // does until the real reader appears; for a non-loader miss, one quick retry.
     let body = "";
     let token = "";
-    for (let attempt = 0; attempt < READER_MAX_ATTEMPTS && !token; attempt++) {
+    for (let attempt = 0; attempt < OniSagaExtension.READER_MAX_ATTEMPTS && !token; attempt++) {
       const [, buffer] = await Application.scheduleRequest({ url: chapterUrl, method: "GET" });
       body = Application.arrayBufferToUTF8String(buffer);
       token = extractReaderToken(body);
       if (token) break;
       if (body.includes("manga.chapter-page-loader")) {
         // No sleep after the final fetch — the loop is about to exit and throw.
-        if (attempt < READER_MAX_ATTEMPTS - 1) {
+        if (attempt < OniSagaExtension.READER_MAX_ATTEMPTS - 1) {
           await Application.sleep(
-            attempt < IMPORT_POLL_FAST_COUNT ? IMPORT_POLL_FAST_SECONDS : IMPORT_POLL_SLOW_SECONDS,
+            attempt < OniSagaExtension.IMPORT_POLL_FAST_COUNT
+              ? OniSagaExtension.IMPORT_POLL_FAST_SECONDS
+              : OniSagaExtension.IMPORT_POLL_SLOW_SECONDS,
           );
         }
         continue;
@@ -804,7 +814,7 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     // pre-filter count, not cards.length: with NSFW hidden (the default), one
     // adult card on a full server page would shrink the filtered count and end
     // pagination early, silently truncating search/browse results.
-    const fullPage = rawCount >= BROWSE_PAGE_SIZE && !truncated;
+    const fullPage = rawCount >= OniSagaExtension.BROWSE_PAGE_SIZE && !truncated;
     return {
       cards,
       hasNext: fullPage || hasNextPageFromHtml(html),

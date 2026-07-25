@@ -19,6 +19,15 @@ export const PAGE_TOKEN_BUCKET_KEY = "onisaga_page_token_bucket_v1";
 export const SECTIONS_ORDER_KEY = "sections_order";
 export const SECTIONS_DELETED_KEY = "sections_deleted";
 
+// Discover section ids, grouped `as const` so no id literal is inlined at a
+// call site (the dispatcher switch and the carousel-style mapper reference these).
+export const SECTIONS = {
+  TOP_MANGA: "top_manga",
+  LATEST: "latest",
+  HIGHEST_RATED: "highest_rated",
+  FAN_FAVORITES: "fan_favorites",
+} as const;
+
 // Discover rail catalog. The array order is the default display order; the
 // section settings form lets the user reorder or hide individual rails.
 export interface DiscoverSectionDef {
@@ -27,10 +36,10 @@ export interface DiscoverSectionDef {
 }
 
 export const DISCOVER_SECTIONS: DiscoverSectionDef[] = [
-  { id: "top_manga", title: "Top Manga" },
-  { id: "latest", title: "Latest" },
-  { id: "highest_rated", title: "Highest Rated" },
-  { id: "fan_favorites", title: "Fan Favorites" },
+  { id: SECTIONS.TOP_MANGA, title: "Top Manga" },
+  { id: SECTIONS.LATEST, title: "Latest" },
+  { id: SECTIONS.HIGHEST_RATED, title: "Highest Rated" },
+  { id: SECTIONS.FAN_FAVORITES, title: "Fan Favorites" },
 ];
 
 export interface Option {

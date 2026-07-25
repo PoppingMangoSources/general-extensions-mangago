@@ -11,9 +11,9 @@ import {
   type TagSection,
 } from "@paperback/types";
 import { load, type Cheerio, type CheerioAPI } from "cheerio";
-import { type Element } from "domhandler";
+import { type AnyNode } from "domhandler";
 
-import { DOMAIN, LANGUAGES } from "./models";
+import { DOMAIN, LANGUAGES, SECTIONS } from "./models";
 import { chapterIdFromHref, getGenres, mangaIdFromHref } from "./utils/helpers";
 
 const READER_TOKEN_REGEX = /readerToken["']?\s*:\s*["']([^"']+)["']/;
@@ -67,7 +67,7 @@ function lastSrcsetUrl(srcset: string): string {
   return urls[urls.length - 1] ?? "";
 }
 
-function resolveImageUrl($el: Cheerio<Element>): string {
+function resolveImageUrl($el: Cheerio<AnyNode>): string {
   const direct = $el.attr("data-src") || $el.attr("data-lazy-src") || $el.attr("src") || "";
   if (direct && !direct.startsWith("data:")) return resolveUrl(direct);
 
@@ -106,9 +106,9 @@ export function buildStatSubtitle(card: MangaCard): string | undefined {
 // Carousel style per rail.
 export function discoverSectionType(id: string): DiscoverSectionType {
   switch (id) {
-    case "top_manga":
+    case SECTIONS.TOP_MANGA:
       return DiscoverSectionType.featured;
-    case "highest_rated":
+    case SECTIONS.HIGHEST_RATED:
       return DiscoverSectionType.prominentCarousel;
     default:
       return DiscoverSectionType.simpleCarousel;
@@ -130,7 +130,7 @@ export function parseMangaCards($: CheerioAPI, showNsfw: boolean): MangaCard[] {
   $("div.relative.group").each((_, element) => {
     const card = $(element);
 
-    const isAdult = card.find("span:contains('18+')").length > 0;
+    const isAdult = hasAdultMarker(card);
     if (isAdult && !showNsfw) return;
 
     const link = card.find("a[href*='/manga/']").first();
@@ -229,7 +229,7 @@ function ratingValue(text: string): string | undefined {
 }
 
 // The 18+ overlay/badge the site stamps on adult posters.
-function hasAdultMarker(el: Cheerio<Element>): boolean {
+function hasAdultMarker(el: Cheerio<AnyNode>): boolean {
   return el.find("span:contains('18+')").length > 0;
 }
 
