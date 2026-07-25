@@ -201,11 +201,7 @@ export const SECTIONS = {
 
 export const DISCOVER_SECTIONS: DiscoverSection[] = [
   { id: SECTIONS.FEATURED, title: "Top Featured", type: DiscoverSectionType.featured },
-  {
-    id: SECTIONS.EDITORS_PICKS,
-    title: "Editors' Picks",
-    type: DiscoverSectionType.prominentCarousel,
-  },
+  { id: SECTIONS.MOST_POPULAR, title: "Most Popular", type: DiscoverSectionType.simpleCarousel },
   {
     id: SECTIONS.LATEST_COMICS,
     title: "Latest Comic Updates",
@@ -221,6 +217,10 @@ export const DISCOVER_SECTIONS: DiscoverSection[] = [
     title: "Popular Today",
     type: DiscoverSectionType.prominentCarousel,
   },
-  { id: SECTIONS.MOST_POPULAR, title: "Most Popular", type: DiscoverSectionType.simpleCarousel },
+  {
+    id: SECTIONS.EDITORS_PICKS,
+    title: "Editors' Picks",
+    type: DiscoverSectionType.prominentCarousel,
+  },
   { id: SECTIONS.NEW_SERIES, title: "New Series", type: DiscoverSectionType.simpleCarousel },
 ];

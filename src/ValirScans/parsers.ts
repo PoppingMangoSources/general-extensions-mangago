@@ -115,11 +115,14 @@ const toTitleCase = (value: string): string =>
   value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
 
 const statSubtitle = (series: ValirSeries, rank?: number): string | undefined => {
-  const parts = [
-    rank !== undefined ? `#${rank}` : "",
-    series.rating ? `★ ${series.rating.toFixed(1)}` : "",
-    series.viewCount ? `▲ ${formatCount(series.viewCount)}` : "",
-  ].filter(Boolean);
+  // Ranked carousels lead with the rank number, unranked ones with the rating;
+  // both trail with view count. Keeping it to two stats stops the subtitle from
+  // overflowing the card.
+  const lead =
+    rank !== undefined ? `#${rank}` : series.rating ? `★ ${series.rating.toFixed(1)}` : "";
+  const parts = [lead, series.viewCount ? `▲ ${formatCount(series.viewCount)}` : ""].filter(
+    Boolean,
+  );
   return parts.length > 0 ? parts.join(" · ") : undefined;
 };
 

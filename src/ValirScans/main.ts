@@ -148,7 +148,7 @@ export class ValirScansExtension implements ExtensionImpl<typeof ValirScansConfi
       case SECTIONS.LATEST_NOVELS:
         return { items: toChapterUpdateItems(home.latestUpdates, true) };
       case SECTIONS.POPULAR_TODAY:
-        return { items: toCarouselItems(home.popularToday, "prominentCarouselItem", true) };
+        return { items: toCarouselItems(home.popularToday, "prominentCarouselItem") };
       case SECTIONS.MOST_POPULAR:
         return { items: toCarouselItems(home.mostPopular, "simpleCarouselItem", true) };
       default:
