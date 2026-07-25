@@ -95,7 +95,7 @@ export const parseSiteDate = (value: string): Date | undefined => {
   return date.getTime() > Date.now() ? new Date() : date;
 };
 
-const coverFrom = ($: cheerio.CheerioAPI, element: cheerio.Cheerio<never>): string => {
+const coverFrom = (element: cheerio.Cheerio<never>): string => {
   const img = element.find("img").first();
   const source = img.attr("data-src") ?? img.attr("src") ?? "";
   return source && !source.includes("/static/") ? absoluteUrl(source) : "";
@@ -115,7 +115,7 @@ export const parseDetailedCards = (html: string): KaliCard[] => {
     cards.push({
       url,
       title: cleanText(link.text()),
-      cover: coverFrom($, item as cheerio.Cheerio<never>),
+      cover: coverFrom(item as cheerio.Cheerio<never>),
       latestChapter: cleanText(item.find(".latest-chapter").first().text()) || undefined,
       views: cleanText(item.find(".views span").first().text()) || undefined,
       rating:
@@ -145,7 +145,7 @@ export const parseHotCells = (html: string): KaliCard[] => {
     cards.push({
       url,
       title: cleanText(item.find(".name").first().text()),
-      cover: coverFrom($, item as cheerio.Cheerio<never>),
+      cover: coverFrom(item as cheerio.Cheerio<never>),
       latestChapter: cleanText(item.find(".latest-chapter").first().text()) || undefined,
       genres: [],
     });
@@ -244,7 +244,7 @@ export const parseGridEntries = (html: string): KaliGridEntry[] => {
     entries.push({
       url,
       title: data?.name ?? cleanText(item.find(".title, .name").first().text()),
-      cover: data?.cover ? absoluteUrl(data.cover) : coverFrom($, item as cheerio.Cheerio<never>),
+      cover: data?.cover ? absoluteUrl(data.cover) : coverFrom(item as cheerio.Cheerio<never>),
       rating: data?.rating,
       updatedAt: data?.updated_at,
       genres: (data?.genres ?? []).map((genre) => genre.name ?? "").filter(Boolean),

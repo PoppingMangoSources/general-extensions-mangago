@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import type { SortingOption } from "@paperback/types";
+import type { SortingOption, Tag } from "@paperback/types";
 
 export const DOMAIN = "https://kaliscan.io";
 
@@ -42,15 +42,15 @@ export const SORTING_OPTIONS: SortingOption[] = [
   { id: "rating", label: "Rating" },
 ];
 
-export const STATUS_OPTIONS: OptionItem[] = [
-  { id: "all", value: "All" },
-  { id: "ongoing", value: "Ongoing" },
-  { id: "completed", value: "Completed" },
+export const STATUS_OPTIONS: Tag[] = [
+  { id: "all", title: "All" },
+  { id: "ongoing", title: "Ongoing" },
+  { id: "completed", title: "Completed" },
 ];
 
-export const GENRE_MODE_OPTIONS: OptionItem[] = [
-  { id: "and", value: "AND" },
-  { id: "or", value: "OR" },
+export const GENRE_MODE_OPTIONS: Tag[] = [
+  { id: "and", title: "AND" },
+  { id: "or", title: "OR" },
 ];
 
 export interface KaliCard {

@@ -13,14 +13,7 @@ import {
   type Tag,
 } from "@paperback/types";
 
-import {
-  DOMAIN,
-  GENRE_MODE_OPTIONS,
-  GENRES,
-  STATUS_OPTIONS,
-  type OptionItem,
-  type SearchMetadata,
-} from "./models";
+import { DOMAIN, GENRE_MODE_OPTIONS, GENRES, STATUS_OPTIONS, type SearchMetadata } from "./models";
 
 const BASE_URL_KEY = "kaliscan.baseUrl";
 
@@ -32,9 +25,6 @@ export const setBaseUrl = (value: string): void => {
   Application.setState(/^https?:\/\/[^\s/]+$/.test(trimmed) ? trimmed : undefined, BASE_URL_KEY);
   Application.invalidateDiscoverSections();
 };
-
-const toTags = (options: OptionItem[]): Tag[] =>
-  options.map((option) => ({ id: option.id, title: option.value }));
 
 export class KaliScanSettingsForm extends Form {
   private baseUrl = getBaseUrl();
@@ -72,8 +62,11 @@ export class KaliScanAdvancedSearchForm extends AdvancedSearchForm {
   private genres: Record<string, "included" | "excluded">;
   private genreMode: string[];
 
-  private readonly statusOptions: Tag[] = toTags(STATUS_OPTIONS);
-  private readonly genreOptions: Tag[] = toTags(GENRES);
+  private readonly statusOptions: Tag[] = STATUS_OPTIONS;
+  private readonly genreOptions: Tag[] = GENRES.map((genre) => ({
+    id: genre.id,
+    title: genre.value,
+  }));
 
   constructor(searchQuery: SearchQuery<SearchMetadata>) {
     super();
@@ -128,7 +121,7 @@ export class KaliScanAdvancedSearchForm extends AdvancedSearchForm {
         id: "genre_mode",
         layout: "flow",
         value: this.genreMode,
-        items: toTags(GENRE_MODE_OPTIONS),
+        items: GENRE_MODE_OPTIONS,
         minItemCount: 1,
         maxItemCount: 1,
       }),
