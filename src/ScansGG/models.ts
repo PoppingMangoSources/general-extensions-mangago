@@ -26,6 +26,9 @@ export const API_URL_KEY = "scansgg.apiUrlOverride";
 export const CONTENT_PREFERENCE_KEY = "scansgg.contentPreference";
 export const HIDDEN_GENRES_KEY = "scansgg.hiddenGenres";
 
+// Pinned UA: the Cloudflare clearance cookie is bound to the identity that
+// solved the challenge, so the same UA must be used for every request, the
+// webview, and the CloudflareError.
 export const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) " +
   "Chrome/138.0.0.0 Safari/537.36";

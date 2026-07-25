@@ -200,9 +200,7 @@ const featuredInfoItems = (series: SeriesDto): FeaturedCarouselItem["infoItems"]
     group ? { symbol: "person.2.fill", text: group } : undefined,
   ].filter((item): item is { symbol: string; text: string } => Boolean(item));
   if (items.length === 0) return undefined;
-  return (
-    items.length === 1 ? [items[0]] : [items[0], items[1]]
-  ) as FeaturedCarouselItem["infoItems"];
+  return items as FeaturedCarouselItem["infoItems"];
 };
 
 const toPaperbackRating = (
