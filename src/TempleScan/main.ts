@@ -24,8 +24,8 @@ import { getShowPaidChapters, TempleScanAdvancedSearchForm, TempleScanSettingsFo
 import {
   DISCOVER_SECTIONS,
   PAGE_SIZE,
+  SECTIONS,
   SORTING_OPTIONS,
-  TRENDING_RANGES,
   type BrowseSeries,
   type HomeSections,
   type PageMetadata,
@@ -49,9 +49,11 @@ import {
   parseSeriesData,
   parseTrending,
   toFeaturedItems,
+  toNewSeriesItems,
   toSearchResultItem,
   toSourceManga,
   toTrendingItems,
+  toTrendingSections,
   toUpdateItems,
   withFeaturedCovers,
 } from "./parsers";
@@ -128,35 +130,18 @@ export class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfi
     _metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
-      case "featured":
+      case SECTIONS.FEATURED:
         return { items: await this.getFeaturedItems() };
-      case "new-series": {
+      case SECTIONS.NEW_SERIES: {
         const home = await this.getHomeSections();
-        return {
-          items: home.newSeries.map((series) => ({
-            type: "simpleCarouselItem",
-            mangaId: series.series_slug,
-            title: series.title,
-            imageUrl: series.thumbnail ?? "",
-            subtitle: series.badge ?? undefined,
-          })),
-        };
+        return { items: toNewSeriesItems(home.newSeries) };
       }
-      case "latest": {
+      case SECTIONS.LATEST: {
         const home = await this.getHomeSections();
         return { items: toUpdateItems(home.updates) };
       }
-      case "trending":
-        return {
-          items: TRENDING_RANGES.map((range) => ({
-            type: "genresCarouselItem",
-            name: range.title,
-            searchQuery: {
-              title: "",
-              metadata: { trending: range.id } satisfies SearchMetadata,
-            },
-          })),
-        };
+      case SECTIONS.TRENDING:
+        return { items: toTrendingSections() };
       default:
         return { items: [] };
     }

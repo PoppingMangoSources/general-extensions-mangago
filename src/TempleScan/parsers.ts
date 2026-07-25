@@ -13,10 +13,12 @@ import {
 
 import {
   DOMAIN,
+  TRENDING_RANGES,
   type BrowseSeries,
   type FeaturedEntry,
   type HomeSections,
   type HomeSeries,
+  type SearchMetadata,
   type SeasonChapter,
   type SeriesData,
   type TrendingEntry,
@@ -279,6 +281,15 @@ export const parseHomeSections = (payload: string): HomeSections => ({
     ) ?? [],
 });
 
+export const toNewSeriesItems = (series: HomeSeries[]): DiscoverSectionItem[] =>
+  series.map((entry) => ({
+    type: "simpleCarouselItem",
+    mangaId: entry.series_slug,
+    title: entry.title,
+    imageUrl: entry.thumbnail ?? "",
+    subtitle: entry.badge ?? undefined,
+  }));
+
 export const toUpdateItems = (updates: HomeSeries[]): DiscoverSectionItem[] =>
   updates.flatMap((series) => {
     // Prefer the newest free chapter so update cards open something readable.
@@ -344,6 +355,16 @@ export const toSearchResultItem = (series: BrowseSeries): SearchResultItem => ({
   subtitle: series.total_views ? `▲ ${formatCount(series.total_views)}` : undefined,
   contentRating: ContentRating.ADULT,
 });
+
+export const toTrendingSections = (): DiscoverSectionItem[] =>
+  TRENDING_RANGES.map((range) => ({
+    type: "genresCarouselItem",
+    name: range.title,
+    searchQuery: {
+      title: "",
+      metadata: { trending: range.id } satisfies SearchMetadata,
+    },
+  }));
 
 export const parseTrending = (response: string, range: TrendingRange): TrendingEntry[] => {
   let parsed: TrendingResponse;

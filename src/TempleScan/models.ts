@@ -121,9 +121,16 @@ export const TRENDING_RANGES: { id: TrendingRange; title: string }[] = [
   { id: "month", title: "Monthly" },
 ];
 
+export const SECTIONS = {
+  FEATURED: "featured",
+  NEW_SERIES: "new-series",
+  LATEST: "latest",
+  TRENDING: "trending",
+} as const;
+
 export const DISCOVER_SECTIONS: DiscoverSection[] = [
-  { id: "featured", title: "Featured", type: DiscoverSectionType.featured },
-  { id: "new-series", title: "New Series", type: DiscoverSectionType.simpleCarousel },
-  { id: "latest", title: "Latest Updates", type: DiscoverSectionType.chapterUpdates },
-  { id: "trending", title: "Trending", type: DiscoverSectionType.genres },
+  { id: SECTIONS.FEATURED, title: "Featured", type: DiscoverSectionType.featured },
+  { id: SECTIONS.NEW_SERIES, title: "New Series", type: DiscoverSectionType.simpleCarousel },
+  { id: SECTIONS.LATEST, title: "Latest Updates", type: DiscoverSectionType.chapterUpdates },
+  { id: SECTIONS.TRENDING, title: "Trending", type: DiscoverSectionType.genres },
 ];
