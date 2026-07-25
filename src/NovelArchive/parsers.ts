@@ -129,6 +129,11 @@ const escapeXml = (value: string): string =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
 
+// Fold non-ASCII (curly quotes, dashes, special spaces) into numeric entities so
+// the pure-ASCII XHTML can't be mis-decoded as Latin-1 ("a" mojibake).
+const toAsciiEntities = (value: string): string =>
+  value.replace(/[\u{80}-\u{10FFFF}]/gu, (char) => `&#${char.codePointAt(0)};`);
+
 const dotJoin = (...parts: (string | undefined)[]): string =>
   parts.filter((part): part is string => Boolean(part)).join(" • ");
 
@@ -357,7 +362,8 @@ export const parseSourceChapters = (
 // The reader parses chapters as XHTML, so escape content into closed tags.
 const wrapXhtml = (bodyHtml: string, heading: string): string => {
   const title = heading ? `<h2>${escapeXml(heading)}</h2>` : "";
-  return `<html xmlns="http://www.w3.org/1999/xhtml"><head></head><body>${title}${bodyHtml}</body></html>`;
+  const doc = `<html xmlns="http://www.w3.org/1999/xhtml"><head><meta charset="utf-8"/></head><body>${title}${bodyHtml}</body></html>`;
+  return toAsciiEntities(doc);
 };
 
 // Native chapters arrive as plain text; each line becomes a paragraph.
