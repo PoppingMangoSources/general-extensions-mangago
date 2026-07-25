@@ -25,6 +25,7 @@ import { RanobesSettingsForm } from "./forms/settings";
 import {
   DISCOVER_SECTIONS,
   DOMAIN,
+  MIRRORS,
   PAGE_SIZE,
   SECTIONS,
   SORT_ORDERS,
@@ -35,7 +36,6 @@ import {
 } from "./models";
 import {
   buildSearchPath,
-  canonicalUrl,
   cookieStorage,
   fetchChapterListPage,
   fetchHtml,
@@ -162,12 +162,14 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   };
 
   async initialise(): Promise<void> {
-    cookieStorage.setCookie({
-      name: "browser_check",
-      value: "1",
-      domain: "ranobes.net",
-      path: "/",
-    });
+    for (const mirror of MIRRORS) {
+      cookieStorage.setCookie({
+        name: "browser_check",
+        value: "1",
+        domain: mirror.replace(/^https?:\/\//, ""),
+        path: "/",
+      });
+    }
     cookieStorage.registerInterceptor();
     this.mainRateLimiter.registerInterceptor();
     this.requestManager.registerInterceptor();
@@ -185,7 +187,7 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     this.taxonomyPromise = undefined;
     this.chapterPagesCache = undefined;
     for (const cookie of cookies) {
-      if (cookie.domain.includes("ranobes.net")) cookieStorage.setCookie(cookie);
+      if (cookie.domain.includes("ranobes.")) cookieStorage.setCookie(cookie);
     }
   }
 
@@ -259,7 +261,7 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
-    return parseMangaDetails(cheerio.load(await fetchHtml(canonicalUrl(mangaId))), mangaId);
+    return parseMangaDetails(cheerio.load(await fetchHtml(mangaId)), mangaId);
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
@@ -285,10 +287,7 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    return parseChapterDetails(
-      cheerio.load(await fetchHtml(canonicalUrl(chapter.chapterId))),
-      chapter,
-    );
+    return parseChapterDetails(cheerio.load(await fetchHtml(chapter.chapterId)), chapter);
   }
 
   private async getRankingItems(

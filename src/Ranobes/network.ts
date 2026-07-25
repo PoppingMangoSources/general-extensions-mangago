@@ -10,11 +10,12 @@ import {
   type SortingOption,
 } from "@paperback/types";
 
-import { DOMAIN, SORT_ORDERS, type SearchMetadata } from "./models";
+import { DOMAIN, MIRRORS, SORT_ORDERS, type SearchMetadata } from "./models";
 
-// Requests may arrive with IDs pointing at a mirror host; route them to the canonical domain.
-export const canonicalUrl = (url: string): string =>
-  url.replace(/^https?:\/\/(?:www\.)?ranobes\.[a-z.]+/i, DOMAIN);
+const MIRROR_HOST = /^https?:\/\/(?:www\.)?ranobes\.[a-z.]+/i;
+
+// Reuse whichever mirror last answered so a working host isn't re-probed.
+let activeMirror = MIRRORS[0];
 
 export const toFilterOptionId = (title: string): string =>
   encodeURIComponent(title).replace(
@@ -95,11 +96,12 @@ export const dropRotatingClearance = (): void => {
 
 export class RanobesInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
+    const origin = request.url.match(MIRROR_HOST)?.[0] ?? DOMAIN;
     return {
       ...request,
       headers: {
         ...request.headers,
-        referer: `${DOMAIN}/`,
+        referer: `${origin}/`,
         "user-agent": await Application.getDefaultUserAgent(),
       },
     };
@@ -138,7 +140,7 @@ const responseText = (response: Response, buffer: ArrayBuffer, url: string): str
   return text;
 };
 
-export const fetchHtml = async (url: string): Promise<string> => {
+const requestText = async (url: string): Promise<string> => {
   try {
     const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
     return responseText(response, buffer, url);
@@ -150,6 +152,27 @@ export const fetchHtml = async (url: string): Promise<string> => {
     const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
     return responseText(response, buffer, url);
   }
+};
+
+// A block on one mirror fails over to the next; the Cloudflare bypass only
+// surfaces once every mirror is challenged, so a single blocked host is
+// transparent to the reader.
+export const fetchHtml = async (url: string): Promise<string> => {
+  const ordered = [activeMirror, ...MIRRORS.filter((mirror) => mirror !== activeMirror)];
+  let challenge: CloudflareError | undefined;
+  let lastError: unknown;
+  for (const mirror of ordered) {
+    try {
+      const text = await requestText(url.replace(MIRROR_HOST, mirror));
+      activeMirror = mirror;
+      return text;
+    } catch (error: unknown) {
+      if (error instanceof CloudflareError) challenge = error;
+      lastError = error;
+    }
+  }
+  if (challenge) throw challenge;
+  throw lastError ?? new Error(`Ranobes: all mirrors failed for ${url}`);
 };
 
 export const fetchListingPage = (path: string, page = 1): Promise<string> =>
