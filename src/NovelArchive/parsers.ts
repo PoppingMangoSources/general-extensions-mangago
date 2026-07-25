@@ -284,7 +284,7 @@ export const parseMangaDetails = (novel: Novel): SourceManga => {
       contentType: "novel",
       tagGroups: tags.length > 0 ? [{ id: "genres", title: "Genres", tags }] : undefined,
       additionalInfo,
-      shareUrl: `${DOMAIN}/novel/${novel.id}`,
+      shareUrl: `${DOMAIN}/novel?id=${novel.id}`,
     },
   };
 };
