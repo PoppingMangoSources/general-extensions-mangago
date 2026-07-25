@@ -25,7 +25,7 @@ import {
   type MangaStreamSearchMetadata,
 } from "./generic/models";
 import { getFilterTagsBySection, getIncludedTagBySection } from "./generic/parsers";
-import { DOMAIN, RANKING_RANGES } from "./models";
+import { DOMAIN, RANKING_RANGES, SECTIONS } from "./models";
 import { parseRelativeDate } from "./parsers";
 import pbconfig from "./pbconfig";
 import { getBaseUrlOverride, RokariComicsSettings } from "./settings";
@@ -51,7 +51,7 @@ class RokariComicsExtension extends MangaStreamGeneric {
 
   override configureSections() {
     const hero: MangaStreamDiscoverSection = {
-      id: "featured",
+      id: SECTIONS.FEATURED,
       title: "Featured",
       type: DiscoverSectionType.featured,
       selectorFunc: ($: CheerioAPI) => $("div.slider-wrapper div.swiper-slide"),
@@ -63,7 +63,7 @@ class RokariComicsExtension extends MangaStreamGeneric {
     };
 
     const popularToday: MangaStreamDiscoverSection = {
-      id: "popular",
+      id: SECTIONS.POPULAR,
       title: "Popular Today",
       type: DiscoverSectionType.prominentCarousel,
       selectorFunc: ($: CheerioAPI) => $("div.popularslider div.bsx"),
@@ -76,7 +76,7 @@ class RokariComicsExtension extends MangaStreamGeneric {
     };
 
     const latest: MangaStreamDiscoverSection = {
-      id: "latest_updates",
+      id: SECTIONS.LATEST_UPDATES,
       title: "Latest Updates",
       type: DiscoverSectionType.chapterUpdates,
       selectorFunc: ($: CheerioAPI) => $(".bixbox:has(h2:contains(Latest)) .bs .bsx"),
@@ -89,7 +89,7 @@ class RokariComicsExtension extends MangaStreamGeneric {
     };
 
     const recommendation: MangaStreamDiscoverSection = {
-      id: "recommendation",
+      id: SECTIONS.RECOMMENDATION,
       title: "Recommendation",
       type: DiscoverSectionType.simpleCarousel,
       selectorFunc: ($: CheerioAPI) => $("div.series-gen div.listupd div.bsx"),
@@ -102,7 +102,7 @@ class RokariComicsExtension extends MangaStreamGeneric {
     };
 
     const popularRanking: MangaStreamDiscoverSection = {
-      id: "popular_ranking",
+      id: SECTIONS.POPULAR_RANKING,
       title: "Popular",
       type: DiscoverSectionType.genres,
       selectorFunc: ($: CheerioAPI) => $(),
@@ -119,7 +119,7 @@ class RokariComicsExtension extends MangaStreamGeneric {
     section: DiscoverSection,
     metadata: MangaStreamSearchMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    if (section.id === "popular_ranking") {
+    if (section.id === SECTIONS.POPULAR_RANKING) {
       return {
         items: RANKING_RANGES.map((range) => ({
           type: "genresCarouselItem",
@@ -139,11 +139,11 @@ class RokariComicsExtension extends MangaStreamGeneric {
     const $ = cheerio.load(Application.arrayBufferToUTF8String(buffer));
 
     switch (section.id) {
-      case "featured":
+      case SECTIONS.FEATURED:
         return { items: await this.parseFeatured($), metadata };
-      case "latest_updates":
+      case SECTIONS.LATEST_UPDATES:
         return { items: await this.parseLatest($), metadata };
-      case "recommendation":
+      case SECTIONS.RECOMMENDATION:
         return { items: await this.parseRecommendation($), metadata };
       default: {
         const configured =
