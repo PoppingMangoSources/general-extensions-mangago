@@ -280,7 +280,7 @@ export const toLatestItems = (entries: LuaSeries[]): DiscoverSectionItem[] =>
     ];
   });
 
-export const toRankedItems = (entries: (LuaTrendingItem | LuaSeries)[]): DiscoverSectionItem[] =>
+export const toRankedItems = (entries: LuaSeries[]): DiscoverSectionItem[] =>
   entries.map((entry, index) => {
     const chapters = chapterCount(entry.meta);
     const subtitle = [`#${index + 1}`, chapters ? `${chapters} ch` : undefined]

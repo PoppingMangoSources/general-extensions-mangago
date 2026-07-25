@@ -19,7 +19,6 @@ export class LuaComicAdvancedSearchForm extends AdvancedSearchForm {
   private status: string[];
   private genres: Record<string, "included" | "excluded">;
 
-  private readonly statusOptions: Tag[] = STATUS_OPTIONS;
   private readonly genreOptions: Tag[];
 
   constructor(searchQuery: SearchQuery<SearchMetadata>, genreOptions: OptionItem[]) {
@@ -38,7 +37,7 @@ export class LuaComicAdvancedSearchForm extends AdvancedSearchForm {
           title: "Series Status",
           layout: "flow",
           value: this.status,
-          items: this.statusOptions,
+          items: STATUS_OPTIONS,
           minItemCount: 0,
           maxItemCount: 1,
           onValueChange: Application.Selector(

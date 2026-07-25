@@ -13,15 +13,13 @@ export const getShowAdultContent = (): boolean => Application.getState(SHOW_ADUL
 export class LuaComicSettingsForm extends Form {
   override getSections() {
     return [
-      Section("chapters", [
+      Section("content", [
         ToggleRow("showPaid", {
           title: "Show paid chapters",
           subtitle: "Shows coin chapters with a 🔒. Unlock them on the website before reading.",
           value: getShowPaidChapters(),
           onValueChange: Application.Selector(this as LuaComicSettingsForm, "handleShowPaidChange"),
         }),
-      ]),
-      Section("content", [
         ToggleRow("showAdult", {
           title: "Show adult content",
           subtitle: "Includes adult series in browse and search results.",
@@ -41,5 +39,6 @@ export class LuaComicSettingsForm extends Form {
 
   async handleShowAdultChange(value: boolean): Promise<void> {
     Application.setState(value, SHOW_ADULT_KEY);
+    Application.invalidateDiscoverSections();
   }
 }

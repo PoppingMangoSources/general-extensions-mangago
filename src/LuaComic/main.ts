@@ -117,24 +117,18 @@ export class LuaComicExtension implements ExtensionImpl<typeof LuaComicConfig> {
     switch (section.id) {
       case SECTIONS.POPULAR:
         return this.getPopularSection();
-      case SECTIONS.FEATURED: {
-        const home = await this.getHomePage();
-        return { items: toBannerItems(home.banners), metadata: undefined };
-      }
-      case SECTIONS.RECOMMENDED: {
-        const home = await this.getHomePage();
-        return { items: toRecommendedItems(home.recommended), metadata: undefined };
-      }
+      case SECTIONS.FEATURED:
+        return this.getFeaturedSection();
+      case SECTIONS.RECOMMENDED:
+        return this.getRecommendedSection();
       case SECTIONS.LATEST:
         return this.getLatestSection(metadata);
       case SECTIONS.TRENDING:
-        return { items: this.trendingChipItems(), metadata: undefined };
-      case SECTIONS.EDITORS: {
-        const home = await this.getHomePage();
-        return { items: toRankedItems(home.editors), metadata: undefined };
-      }
+        return this.getTrendingSection();
+      case SECTIONS.EDITORS:
+        return this.getEditorsSection();
       case SECTIONS.GENRES:
-        return { items: await this.genreChipItems(), metadata: undefined };
+        return this.getGenresSection();
       default:
         return { items: [], metadata: undefined };
     }
@@ -143,6 +137,21 @@ export class LuaComicExtension implements ExtensionImpl<typeof LuaComicConfig> {
   private async getPopularSection(): Promise<PagedResults<DiscoverSectionItem>> {
     const data = await this.fetchQuery({ page: 1, orderBy: "total_views" });
     return { items: toPopularItems(data.data ?? []), metadata: undefined };
+  }
+
+  private async getFeaturedSection(): Promise<PagedResults<DiscoverSectionItem>> {
+    const home = await this.getHomePage();
+    return { items: toBannerItems(home.banners), metadata: undefined };
+  }
+
+  private async getRecommendedSection(): Promise<PagedResults<DiscoverSectionItem>> {
+    const home = await this.getHomePage();
+    return { items: toRecommendedItems(home.recommended), metadata: undefined };
+  }
+
+  private async getEditorsSection(): Promise<PagedResults<DiscoverSectionItem>> {
+    const home = await this.getHomePage();
+    return { items: toRankedItems(home.editors), metadata: undefined };
   }
 
   private async getLatestSection(
@@ -157,8 +166,8 @@ export class LuaComicExtension implements ExtensionImpl<typeof LuaComicConfig> {
     };
   }
 
-  private trendingChipItems(): DiscoverSectionItem[] {
-    return TRENDING_RANGES.map((range) => ({
+  private getTrendingSection(): PagedResults<DiscoverSectionItem> {
+    const items: DiscoverSectionItem[] = TRENDING_RANGES.map((range) => ({
       type: "genresCarouselItem",
       name: range.title,
       searchQuery: {
@@ -167,11 +176,12 @@ export class LuaComicExtension implements ExtensionImpl<typeof LuaComicConfig> {
       },
       metadata: undefined,
     }));
+    return { items, metadata: undefined };
   }
 
-  private async genreChipItems(): Promise<DiscoverSectionItem[]> {
+  private async getGenresSection(): Promise<PagedResults<DiscoverSectionItem>> {
     const genres = await this.getGenreOptions();
-    return genres.map((genre) => ({
+    const items: DiscoverSectionItem[] = genres.map((genre) => ({
       type: "genresCarouselItem",
       name: genre.value,
       searchQuery: {
@@ -180,6 +190,7 @@ export class LuaComicExtension implements ExtensionImpl<typeof LuaComicConfig> {
       },
       metadata: undefined,
     }));
+    return { items, metadata: undefined };
   }
 
   async getSortingOptions(_query: SearchQuery<SearchMetadata>): Promise<SortingOption[]> {
