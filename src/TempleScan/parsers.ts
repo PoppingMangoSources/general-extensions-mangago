@@ -204,7 +204,6 @@ export const toSourceManga = (data: SeriesData, mangaId: string): SourceManga =>
       author: data.author ?? undefined,
       artist: data.studio ?? undefined,
       status: statusLabel(data.status),
-      rating: undefined,
       contentRating: ContentRating.ADULT,
       tagGroups: tags.length > 0 ? [{ id: "genres", title: "Genres", tags }] : undefined,
       shareUrl: `${DOMAIN}/comic/${mangaId}`,
