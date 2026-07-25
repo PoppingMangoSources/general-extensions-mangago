@@ -31,7 +31,6 @@ import {
   SORT_ORDERS,
   type FilterTaxonomy,
   type PageMetadata,
-  type RanobesListing,
   type SearchMetadata,
 } from "./models";
 import {
@@ -48,98 +47,16 @@ import {
   parseChapterDetails,
   parseChapterPage,
   parseChapters,
-  parseContentRating,
   parseFilterTaxonomy,
   parseListings,
   parseMangaDetails,
+  toChapterUpdateItem,
+  toCompletedItem,
+  toFeaturedItem,
+  toRankingItem,
+  toSearchResult,
 } from "./parsers";
 import type RanobesConfig from "./pbconfig";
-
-const formatCount = (value: number): string => value.toLocaleString("en-US");
-
-const toFeaturedItem = (listing: RanobesListing): DiscoverSectionItem => ({
-  type: "featuredCarouselItem",
-  mangaId: listing.mangaId,
-  title: listing.title,
-  imageUrl: listing.imageUrl,
-  summary: listing.description,
-  infoItems:
-    listing.rating !== undefined && listing.views !== undefined
-      ? [
-          {
-            symbol: "star.fill",
-            text: `${listing.rating.toFixed(1)}${
-              listing.ratingCount ? ` (${listing.ratingCount})` : ""
-            }`,
-          },
-          { symbol: "eye.fill", text: formatCount(listing.views) },
-        ]
-      : listing.rating !== undefined
-        ? [
-            {
-              symbol: "star.fill",
-              text: `${listing.rating.toFixed(1)}${
-                listing.ratingCount ? ` (${listing.ratingCount})` : ""
-              }`,
-            },
-          ]
-        : listing.views !== undefined
-          ? [{ symbol: "eye.fill", text: formatCount(listing.views) }]
-          : undefined,
-  contentRating: parseContentRating(listing.genres ?? []),
-});
-
-const toChapterUpdateItem = (listing: RanobesListing): DiscoverSectionItem | undefined => {
-  if (!listing.chapterId) return undefined;
-  return {
-    type: "chapterUpdatesCarouselItem",
-    mangaId: listing.mangaId,
-    chapterId: listing.chapterId,
-    title: listing.title,
-    imageUrl: listing.imageUrl,
-    subtitle: listing.chapterTitle || undefined,
-    publishDate: listing.publishDate,
-  };
-};
-
-const toRankingItem = (
-  listing: RanobesListing,
-  rank: number,
-  useRating: boolean,
-): DiscoverSectionItem => ({
-  type: "prominentCarouselItem",
-  mangaId: listing.mangaId,
-  title: listing.title,
-  imageUrl: listing.imageUrl,
-  subtitle: useRating
-    ? `#${rank} • ★ ${listing.rating?.toFixed(1) ?? "—"}${
-        listing.ratingCount ? ` (${listing.ratingCount})` : ""
-      }`
-    : `#${rank} • ${formatCount(listing.views ?? 0)} views`,
-  contentRating: parseContentRating(listing.genres ?? []),
-});
-
-const toCompletedItem = (listing: RanobesListing): DiscoverSectionItem => ({
-  type: "prominentCarouselItem",
-  mangaId: listing.mangaId,
-  title: listing.title,
-  imageUrl: listing.imageUrl,
-  subtitle:
-    listing.views !== undefined
-      ? `${formatCount(listing.views)} views`
-      : listing.rating !== undefined
-        ? `★ ${listing.rating.toFixed(1)}`
-        : undefined,
-  contentRating: parseContentRating(listing.genres ?? []),
-});
-
-const toSearchResult = (listing: RanobesListing): SearchResultItem => ({
-  mangaId: listing.mangaId,
-  title: listing.title,
-  imageUrl: listing.imageUrl,
-  subtitle: listing.rating !== undefined ? `★ ${listing.rating.toFixed(1)}` : undefined,
-  contentRating: parseContentRating(listing.genres ?? []),
-});
 
 export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   mainRateLimiter = new BasicRateLimiter("main", {

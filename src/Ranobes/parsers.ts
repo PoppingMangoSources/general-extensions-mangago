@@ -144,7 +144,7 @@ export const parseContentRating = (genres: string[]): ContentRating => {
   return ContentRating.EVERYONE;
 };
 
-export const formatCount = (value: number): string => value.toLocaleString("en-US");
+const formatCount = (value: number): string => value.toLocaleString("en-US");
 
 export const toFeaturedItem = (listing: RanobesListing): DiscoverSectionItem => ({
   type: "featuredCarouselItem",
@@ -414,12 +414,12 @@ const parseChapterDate = (value: string): Date | undefined => {
   return date.getTime() > Date.now() ? new Date() : date;
 };
 
-const parseChapterTitle = (value: string): { number: number; title?: string } => {
+const parseChapterTitle = (value: string): { chapNum: number; title?: string } => {
   const title = cleanText(value);
   const match = /^chapter\s+(\d+(?:\.\d+)?)\s*(?:[:.\-–—]\s*)?(.*)$/i.exec(title);
-  if (!match) return { number: 0, title };
+  if (!match) return { chapNum: 0, title };
   const subtitle = cleanText(match[2]);
-  return { number: Number(match[1]), title: subtitle || undefined };
+  return { chapNum: Number(match[1]), title: subtitle || undefined };
 };
 
 export const parseChapters = (pages: RanobesChapterPage[], sourceManga: SourceManga): Chapter[] => {
@@ -439,7 +439,7 @@ export const parseChapters = (pages: RanobesChapterPage[], sourceManga: SourceMa
       chapterId: absoluteUrl(entry.link),
       sourceManga,
       langCode: "en",
-      chapNum: chapter.number || total - index,
+      chapNum: chapter.chapNum || total - index,
       ...(chapter.title ? { title: chapter.title } : {}),
       volume: 0,
       sortingIndex: total - index,
