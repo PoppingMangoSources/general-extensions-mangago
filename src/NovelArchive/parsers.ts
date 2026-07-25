@@ -19,7 +19,6 @@ import {
   MATURE_RATING_GENRES,
   DOMAIN,
   GENRES,
-  NATIVE_VERSION,
   type ChapterContentResponse,
   type Novel,
   type NovelListItem,
@@ -355,7 +354,8 @@ export const parseChapters = (
       langCode: "en",
       chapNum: chapterNumber,
       title: title || `Chapter ${chapterNumber}`,
-      version: NATIVE_VERSION,
+      // Marks native chapters apart from mirror-source ones (which use the mirror's label).
+      version: "NovelArchive",
       volume: 0,
       sortingIndex: index,
       publishDate,
