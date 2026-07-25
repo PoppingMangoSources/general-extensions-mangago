@@ -64,7 +64,7 @@ These sources **compose capabilities by mixin, not inheritance**: each capabilit
 - Prefer native array methods (`.map`/`.filter`/`.reduce`); `for...of` is also fine. Use `cheerio` for HTML — never hand-rolled parsing.
 - **Define single-consumer option arrays in their final shape.** If a list feeds exactly one consumer (e.g. `getSortingOptions`), declare it as `{ id, label }` in `models.ts` and return it directly — don't store `{ id, value }` and remap it in `main.ts`. (niclimcy)
 - **Don't thread state through functions that don't use it.** Pass a settings value only into the function that actually reads it, not down through `parseMangaDetails(...)`/parser params it ignores. (niclimcy)
-- **Don't invent wrapper abstractions over the SDK** — mirror a reference source (Anilist for GraphQL query building, Mgeko for error handling) instead of a home-grown wrapper. (niclimcy)
+- **Don't invent wrapper abstractions over the SDK** — mirror a reference source (AniList for GraphQL query building, Mgeko for error handling) instead of a home-grown wrapper. (niclimcy) AniList lives in a different repo — `inkdex/tracker-extensions` at `0.9/stable/src/AniList` — not general-extensions.
 
 ### Comments & naming
 
