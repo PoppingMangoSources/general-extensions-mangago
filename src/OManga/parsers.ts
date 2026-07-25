@@ -126,11 +126,8 @@ const resolveFlightTextReference = (
   return value;
 };
 
-const filterValidCatalogItems = (items: CatalogItem[] | undefined): CatalogItem[] =>
+export const parseCatalogItems = (items: CatalogItem[] | undefined): CatalogItem[] =>
   (items ?? []).filter((item) => Boolean(item.slug) && Boolean(item.title));
-
-export const parseCatalogItems = (items: CatalogItem[]): CatalogItem[] =>
-  filterValidCatalogItems(items);
 
 export const getContentRatingForGenres = (genres: string[] | undefined): ContentRating => {
   const lower = (genres ?? []).map((genre) => genre.toLowerCase());
@@ -189,7 +186,7 @@ export const parseHomeSection = (html: string, title: string): CatalogItem[] => 
   const blob = extractBalancedJson(payload, arrayStart + '"items":'.length);
   if (!blob) return [];
   try {
-    return filterValidCatalogItems(JSON.parse(blob) as CatalogItem[]);
+    return parseCatalogItems(JSON.parse(blob) as CatalogItem[]);
   } catch {
     return [];
   }
@@ -200,7 +197,7 @@ export const parseHomeTopSeries = (html: string, country: TopSeriesCountry): Cat
     decodeFlightPayload(html),
     '{"korea":[',
   );
-  return filterValidCatalogItems(groups?.[country]);
+  return parseCatalogItems(groups?.[country]);
 };
 
 export const toHomeCarouselItem = (item: CatalogItem): DiscoverSectionItem => ({
