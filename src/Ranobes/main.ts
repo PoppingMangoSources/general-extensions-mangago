@@ -3,6 +3,7 @@
 
 import {
   BasicRateLimiter,
+  CloudflareError,
   type AdvancedSearchForm,
   type Chapter,
   type ChapterDetails,
@@ -194,19 +195,43 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
       return parseChapters(cached.pages, sourceManga);
     }
 
-    const firstPage = parseChapterPage(cheerio.load(await fetchChapterListPage(novelId)));
-    // Cap the crawl so a pathologically long list can't fire dozens of requests
-    // back-to-back and trip DDoS-Guard (25 chapters/page → ~1250 chapters).
-    const pageCount = Math.min(MAX_CHAPTER_PAGES, Math.max(1, firstPage.pages_count ?? 1));
+    try {
+      const firstPage = parseChapterPage(cheerio.load(await fetchChapterListPage(novelId)));
+      // Cap the crawl so a pathologically long list can't fire dozens of
+      // requests back-to-back and trip DDoS-Guard (25 chapters/page → ~1250).
+      const pageCount = Math.min(MAX_CHAPTER_PAGES, Math.max(1, firstPage.pages_count ?? 1));
 
-    // Fetch pages one at a time: a parallel burst reads as automation, and a
-    // challenge mid-list should halt the rest instead of firing them all.
-    const pages = [firstPage];
-    for (let page = 2; page <= pageCount; page++) {
-      pages.push(parseChapterPage(cheerio.load(await fetchChapterListPage(novelId, page))));
+      // Fetch pages one at a time: a parallel burst reads as automation, and a
+      // challenge mid-list should halt the rest instead of firing them all.
+      const pages = [firstPage];
+      for (let page = 2; page <= pageCount; page++) {
+        pages.push(parseChapterPage(cheerio.load(await fetchChapterListPage(novelId, page))));
+      }
+      this.chapterPagesCache = { novelId, pages, fetchedAt: Date.now() };
+      return parseChapters(pages, sourceManga);
+    } catch (error) {
+      if (!(error instanceof CloudflareError)) throw error;
+      // The /chapters/ endpoint is the path DDoS-Guard blocks first, and a
+      // challenge here renders as a dead "0 Chapters" card with no button to
+      // solve it. The novel page itself loads without a challenge and embeds
+      // the latest chapters, so fall back to it to keep the list from being
+      // empty. The full backlog appears once the bypass is cleared (via Search
+      // or the Discover banner) and the novel is refreshed.
+      const seeded = await this.seedChaptersFromNovelPage(sourceManga);
+      if (seeded.length > 0) return seeded;
+      throw error;
     }
-    this.chapterPagesCache = { novelId, pages, fetchedAt: Date.now() };
-    return parseChapters(pages, sourceManga);
+  }
+
+  // Best-effort chapters from the un-challenged novel page; empty if it embeds
+  // none, in which case the caller re-raises so the bypass still registers.
+  private async seedChaptersFromNovelPage(sourceManga: SourceManga): Promise<Chapter[]> {
+    try {
+      const page = parseChapterPage(cheerio.load(await fetchHtml(sourceManga.mangaId)));
+      return page.chapters?.length ? parseChapters([page], sourceManga) : [];
+    } catch {
+      return [];
+    }
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
