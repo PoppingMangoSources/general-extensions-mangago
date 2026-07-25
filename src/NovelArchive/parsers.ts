@@ -131,23 +131,34 @@ const escapeXml = (value: string): string =>
 
 // Some mirrors serve calibre-converted EPUB text whose UTF-8 bytes were re-read
 // as Latin-1 and re-encoded (double-encoded), so spaces and curly quotes arrive
-// as garbled sequences. Reinterpret each char as its original byte and re-decode
-// as UTF-8; bail unless the whole string is cleanly double-encoded so genuinely
-// accented text is never corrupted.
+// as garbled sequences. Repair each maximal run of high Latin-1 bytes that forms
+// valid UTF-8 when reinterpreted as its original bytes; runs that do not (e.g.
+// genuinely accented text) are left untouched, so mixed content is safe.
 const repairMojibake = (value: string): string => {
-  const bytes = new Uint8Array(value.length);
-  let hasHighByte = false;
-  for (let i = 0; i < value.length; i++) {
+  let out = "";
+  let i = 0;
+  while (i < value.length) {
     const code = value.charCodeAt(i);
-    if (code > 0xff) return value; // real Unicode present: not double-encoded
-    if (code > 0x7f) hasHighByte = true; // high Latin-1 byte: a repair candidate
-    bytes[i] = code;
+    if (code <= 0x7f || code > 0xff) {
+      out += value[i];
+      i++;
+      continue;
+    }
+    let end = i;
+    while (end < value.length) {
+      const byte = value.charCodeAt(end);
+      if (byte <= 0x7f || byte > 0xff) break;
+      end++;
+    }
+    const bytes = new Uint8Array(end - i);
+    for (let k = 0; k < bytes.length; k++) bytes[k] = value.charCodeAt(i + k);
+    const decoded = Application.arrayBufferToUTF8String(bytes.buffer);
+    // A replacement char means the run was not valid UTF-8, so it was not
+    // double-encoded; keep the original bytes rather than mangle them.
+    out += decoded.includes(String.fromCharCode(0xfffd)) ? value.slice(i, end) : decoded;
+    i = end;
   }
-  if (!hasHighByte) return value; // pure ASCII: nothing to fix
-  const decoded = Application.arrayBufferToUTF8String(bytes.buffer);
-  // A stray replacement char means the bytes were not valid UTF-8, so the text
-  // was not cleanly double-encoded; leave it untouched rather than mangle it.
-  return decoded.includes(String.fromCharCode(0xfffd)) ? value : decoded;
+  return out;
 };
 
 const dotJoin = (...parts: (string | undefined)[]): string =>

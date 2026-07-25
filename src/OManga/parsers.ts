@@ -330,7 +330,11 @@ export const parseSeriesProps = (html: string, slug: string): SeriesProps => {
   return { ...props, description: resolveFlightTextReference(payload, props.description) };
 };
 
+// The series props carry a null thumbnail and og:image now points at a social-card
+// generator, so prefer the real cover from the JSON-LD structured data; fall back to
+// the og:image meta only if that is missing.
 export const parseCoverUrl = (html: string): string =>
+  html.match(/"image":"(https:\/\/[^"]+\.(?:jpe?g|png|webp|gif|avif))"/i)?.[1] ??
   html.match(/property="og:image"\s+content="([^"]+)"/)?.[1] ??
   html.match(/"og:image","content":"([^"]+)"/)?.[1] ??
   "";
