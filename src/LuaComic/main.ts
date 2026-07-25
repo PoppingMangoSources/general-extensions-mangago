@@ -4,7 +4,6 @@
 import {
   BasicRateLimiter,
   CloudflareError,
-  ContentRating,
   CookieStorageInterceptor,
   DiscoverSectionType,
   URL,
@@ -57,6 +56,7 @@ import {
   toRankedItems,
   toRecommendedItems,
   toSearchResultItems,
+  toTrendingSearchItems,
 } from "./parsers";
 import type LuaComicConfig from "./pbconfig";
 
@@ -205,22 +205,7 @@ export class LuaComicExtension implements ExtensionImpl<typeof LuaComicConfig> {
         .setQueryItem("type", trending)
         .toString();
       const entries = await fetchJSON<LuaTrendingItem[]>(url);
-      return {
-        items: entries.map((entry, index) => {
-          const chapters = parseInt(String(entry.meta?.chapters_count ?? ""), 10);
-          const subtitle = [`#${index + 1}`, Number.isFinite(chapters) ? `${chapters} ch` : ""]
-            .filter(Boolean)
-            .join(" • ");
-          return {
-            mangaId: encodeSlugId(entry.series_slug),
-            title: entry.title,
-            imageUrl: entry.thumbnail ?? "",
-            subtitle,
-            contentRating: ContentRating.MATURE,
-          };
-        }),
-        metadata: undefined,
-      };
+      return { items: toTrendingSearchItems(entries), metadata: undefined };
     }
 
     const page = metadata?.page ?? 1;

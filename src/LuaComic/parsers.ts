@@ -306,6 +306,21 @@ export const toSearchResultItems = (entries: LuaSeries[]): SearchResultItem[] =>
     contentRating: contentRatingForSeries(series),
   }));
 
+export const toTrendingSearchItems = (entries: LuaTrendingItem[]): SearchResultItem[] =>
+  entries.map((entry, index) => {
+    const chapters = parseInt(String(entry.meta?.chapters_count ?? ""), 10);
+    const subtitle = [`#${index + 1}`, Number.isFinite(chapters) ? `${chapters} ch` : ""]
+      .filter(Boolean)
+      .join(" • ");
+    return {
+      mangaId: encodeSlugId(entry.series_slug),
+      title: entry.title,
+      imageUrl: entry.thumbnail ?? "",
+      subtitle,
+      contentRating: ContentRating.MATURE,
+    };
+  });
+
 export const parseMangaDetails = (series: LuaSeries): SourceManga => {
   const primaryTitle = cleanText(series.title) || "Untitled";
   const secondaryTitles: string[] = [];
