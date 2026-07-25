@@ -156,9 +156,6 @@ const repairMojibake = (value: string): string => {
   return out;
 };
 
-const joinWithBullet = (...parts: (string | undefined)[]): string =>
-  parts.filter((part): part is string => Boolean(part)).join(" • ");
-
 export const parseNovelList = (novels: Novel[]): NovelListItem[] =>
   novels.map((novel) => {
     // Native chapters are addressed by 1-based position, so the count is the
@@ -231,7 +228,9 @@ export const toCardItem = (
     mangaId: item.mangaId,
     imageUrl: item.imageUrl,
     title: item.title,
-    subtitle: joinWithBullet(lead, item.genres[0]) || undefined,
+    subtitle:
+      [lead, item.genres[0]].filter((value): value is string => Boolean(value)).join(" • ") ||
+      undefined,
     contentRating: item.contentRating,
   };
 };
@@ -244,7 +243,10 @@ export const toChapterUpdateItem = (item: NovelListItem): DiscoverSectionItem | 
     chapterId: String(item.chapterCount),
     imageUrl: item.imageUrl,
     title: item.title,
-    subtitle: joinWithBullet(`Ch. ${item.chapterCount}`, item.genres[0]) || undefined,
+    subtitle:
+      [`Ch. ${item.chapterCount}`, item.genres[0]]
+        .filter((value): value is string => Boolean(value))
+        .join(" • ") || undefined,
     publishDate: item.publishDate,
     contentRating: item.contentRating,
   };
@@ -265,10 +267,9 @@ export const toSearchResultItem = (item: NovelListItem): SearchResultItem => ({
   title: item.title,
   imageUrl: item.imageUrl,
   subtitle:
-    joinWithBullet(
-      item.rating != null ? `★ ${item.rating.toFixed(1)}` : undefined,
-      item.genres[0],
-    ) || undefined,
+    [item.rating != null ? `★ ${item.rating.toFixed(1)}` : undefined, item.genres[0]]
+      .filter((value): value is string => Boolean(value))
+      .join(" • ") || undefined,
   contentRating: item.contentRating,
 });
 
