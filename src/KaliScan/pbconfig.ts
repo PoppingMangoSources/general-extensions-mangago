@@ -7,7 +7,7 @@ export default {
   name: "KaliScan",
   description: "Extension that pulls manga from kaliscan.io.",
   version: "1.0.0-alpha.6",
-  icon: "icons.png",
+  icon: "icon.png",
   language: "en",
   contentRating: ContentRating.ADULT,
   capabilities: [
