@@ -58,6 +58,9 @@ import {
 } from "./parsers";
 import type RanobesConfig from "./pbconfig";
 
+// Safety ceiling for the chapter-list crawl; matches the mature Aidoku source.
+const MAX_CHAPTER_PAGES = 50;
+
 export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   // ranobes.net sits behind DDoS-Guard, which starts challenging when pages
   // arrive too fast — long chapter lists are dozens of sequential fetches. The
@@ -192,7 +195,9 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     }
 
     const firstPage = parseChapterPage(cheerio.load(await fetchChapterListPage(novelId)));
-    const pageCount = Math.max(1, firstPage.pages_count ?? 1);
+    // Cap the crawl so a pathologically long list can't fire dozens of requests
+    // back-to-back and trip DDoS-Guard (25 chapters/page → ~1250 chapters).
+    const pageCount = Math.min(MAX_CHAPTER_PAGES, Math.max(1, firstPage.pages_count ?? 1));
 
     // Fetch pages one at a time: a parallel burst reads as automation, and a
     // challenge mid-list should halt the rest instead of firing them all.
