@@ -348,8 +348,9 @@ export const parseChapters = (
     const { chapNum, title } = cleanChapterName((rawName ?? "").trim());
     const chapterNumber = chapNum ?? index + 1;
     return {
-      // Native chapters are addressed by list position, so it is the id.
-      chapterId: String(index + 1),
+      // The API's content endpoint and prev/next navigation are keyed by chapter
+      // number, not list position, so the number is the id.
+      chapterId: String(chapterNumber),
       sourceManga,
       langCode: "en",
       chapNum: chapterNumber,
