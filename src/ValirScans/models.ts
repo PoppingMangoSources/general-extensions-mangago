@@ -57,7 +57,6 @@ export interface ValirSeries {
 export interface ValirSeriesPage {
   series: ValirSeries;
   chapters?: ValirChapterItem[];
-  currentPage?: number;
   totalPages?: number;
 }
 
@@ -67,8 +66,6 @@ export interface ValirReaderPage {
 }
 
 export interface ValirChapterData {
-  number?: number | string;
-  title?: string;
   content?: string | null;
   pages?: ValirReaderPage[];
 }
