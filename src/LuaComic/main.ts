@@ -265,8 +265,11 @@ export class LuaComicExtension implements ExtensionImpl<typeof LuaComicConfig> {
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
-    const series = await this.fetchSeries(sourceManga.mangaId);
-    const chapters = await this.fetchAllChapters(series.id);
+    const slug = decodeSlugId(sourceManga.mangaId);
+    const [series, chapters] = await Promise.all([
+      this.fetchSeries(sourceManga.mangaId),
+      this.fetchAllChapters(slug),
+    ]);
     series.free_chapters = chapters.filter((chapter) => (chapter.price ?? 0) <= 0);
     series.paid_chapters = chapters.filter((chapter) => (chapter.price ?? 0) > 0);
     return parseChapterList(series, sourceManga, getShowPaidChapters());
@@ -285,28 +288,13 @@ export class LuaComicExtension implements ExtensionImpl<typeof LuaComicConfig> {
     return parseSeriesPage(html, slug);
   }
 
-  private async fetchAllChapters(seriesId: number): Promise<LuaChapter[]> {
-    const chapters: LuaChapter[] = [];
-    let page = 1;
-    let lastPage = 1;
-
-    do {
-      const url = new URL(API_URL)
-        .addPathComponent("chapter")
-        .addPathComponent("query")
-        .setQueryItem("page", page.toString())
-        .setQueryItem("perPage", "100")
-        .setQueryItem("query", "")
-        .setQueryItem("order", "desc")
-        .setQueryItem("series_id", seriesId.toString())
-        .toString();
-      const response = await fetchJSON<{ meta?: { last_page?: number | null }; data?: LuaChapter[] | null }>(url);
-      chapters.push(...(response.data ?? []));
-      lastPage = Math.max(1, response.meta?.last_page ?? 1);
-      page++;
-    } while (page <= lastPage);
-
-    return chapters;
+  private async fetchAllChapters(slug: string): Promise<LuaChapter[]> {
+    const url = new URL(API_URL)
+      .addPathComponent("chapter")
+      .addPathComponent("all")
+      .addPathComponent(slug)
+      .toString();
+    return fetchJSON<LuaChapter[]>(url);
   }
 
   private getHomePage(): Promise<LuaHomePage> {
