@@ -65,7 +65,7 @@ import type NovelArchiveConfig from "./pbconfig";
 export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> {
   private globalRateLimiter = new BasicRateLimiter("rateLimiter", {
     numberOfRequests: 20,
-    bufferInterval: 5,
+    bufferInterval: 10,
     ignoreImages: true,
   });
   private requestManager = new NovelArchiveInterceptor("main");
