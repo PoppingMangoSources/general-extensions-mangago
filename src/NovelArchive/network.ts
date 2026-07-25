@@ -81,8 +81,7 @@ export class NovelArchiveInterceptor extends PaperbackInterceptor {
   }
 }
 
-// Identical concurrent GETs share one request instead of firing duplicates,
-// mirroring the site's own inFlightGetRequests map.
+// Identical concurrent GETs share one request instead of firing duplicates.
 const inFlightRequests = new Map<string, Promise<unknown>>();
 
 export const fetchApi = async <T>(url: string): Promise<T> => {
@@ -130,7 +129,7 @@ export const fetchNovel = async (mangaId: string): Promise<Novel> => {
   return "novel" in data && data.novel ? data.novel : (data as Novel);
 };
 
-export const fetchNovelArray = async (url: string): Promise<Novel[]> => {
+export const fetchNovels = async (url: string): Promise<Novel[]> => {
   const data = await fetchApi<Novel[] | NovelListResponse>(url);
   return Array.isArray(data) ? data : (data.novels ?? []);
 };

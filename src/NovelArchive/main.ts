@@ -35,7 +35,7 @@ import {
   fetchApi,
   fetchBrowse,
   fetchNovel,
-  fetchNovelArray,
+  fetchNovels,
   fetchSourceChapters,
   fetchSources,
   novelsFeedUrl,
@@ -146,7 +146,7 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
   }
 
   private async getLatestSection(): Promise<PagedResults<DiscoverSectionItem>> {
-    const novels = await fetchNovelArray(novelsFeedUrl("recently-updated", 30));
+    const novels = await fetchNovels(novelsFeedUrl("recently-updated", 30));
     return {
       items: parseNovelList(novels).flatMap((item) => {
         const card = toChapterUpdateItem(item);
@@ -160,7 +160,7 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
     variant: "trending" | "editors",
     limit?: number,
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    const novels = await fetchNovelArray(novelsFeedUrl(segment, limit));
+    const novels = await fetchNovels(novelsFeedUrl(segment, limit));
     return {
       items: parseNovelList(novels).map((item, index) => toFeaturedItem(item, index, variant)),
     };

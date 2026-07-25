@@ -30,11 +30,13 @@ import {
   type TriState,
 } from "./models";
 
+// Tag slugs use the app's stricter tag-id charset; manga/chapter ids use the wider
+// SAFE_ID_REGEX below so their odd characters stay percent-encoded and recoverable.
+const SAFE_TAG_REGEX = /[^a-zA-Z0-9._\-@()[\]]/g;
 const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
 
-// Slugs for tag ids only; manga/chapter ids use the encode helpers below to stay URL-recoverable.
 const sanitizeId = (value: string): string =>
-  value.toLowerCase().replace(SAFE_ID_REGEX, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  value.toLowerCase().replace(SAFE_TAG_REGEX, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 
 // API ids double as Paperback ids; odd characters are percent-encoded so the original is recoverable.
 export const encodeId = (value: string): string =>
