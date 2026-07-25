@@ -2,8 +2,8 @@ import { type TestLogger } from "@paperback/types";
 import { DiscoverSectionType } from "@paperback/types";
 import { expect } from "chai";
 
+import { getDomain } from "../OManga/forms/settings.js";
 import { OManga, OMangaExtension } from "../OManga/main.js";
-import { getDomain } from "../OManga/models.js";
 import { parseHomeLinkSection, parseSeriesProps } from "../OManga/parsers.js";
 import sourceInfo from "../OManga/pbconfig.js";
 import { TestSuite, registerDefaultTests } from "./suite.js";
