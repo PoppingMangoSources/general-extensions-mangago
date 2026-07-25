@@ -2,7 +2,6 @@
 /* Copyright © 2026 Inkdex */
 
 import {
-  BasicRateLimiter,
   CloudflareError,
   PaperbackInterceptor,
   URL,
@@ -26,18 +25,6 @@ import {
   type SourceListResponse,
 } from "./models";
 import { decodeId, dedupe, encodeId, parseMangaDetails, pickGenreValues } from "./parsers";
-
-// The cover endpoint (/api/novels/{id}/cover?...&format=webp) has no dotted image
-// extension, so the limiter's image regex misses it — skip it here so covers,
-// the bulk of requests, aren't throttled. It still needs the /api header profile.
-const isCoverUrl = (url: string): boolean => /\/cover(\?|$)/.test(url);
-
-export class NovelArchiveRateLimiter extends BasicRateLimiter {
-  override async interceptRequest(request: Request): Promise<Request> {
-    if (isCoverUrl(request.url)) return request;
-    return super.interceptRequest(request);
-  }
-}
 
 export class NovelArchiveInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
