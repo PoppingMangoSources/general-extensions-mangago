@@ -1,14 +1,14 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
+import { type ExtensionInfo } from "@paperback/types";
+
 import { basePbConfig } from "./generic/config";
 
-const pbConfig = {
+export default {
   ...basePbConfig,
   name: "RokariComics",
   description: "Extension that pulls content from rokaricomics.com.",
   version: "1.0.0-alpha.12",
   developers: [{ name: "PopMango", github: "https://github.com/PoppingMangoSources" }],
-};
-
-export default pbConfig;
+} satisfies ExtensionInfo;
