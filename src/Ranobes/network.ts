@@ -116,8 +116,11 @@ export class RanobesInterceptor extends PaperbackInterceptor {
     const body = contentType.includes("text/html") ? Application.arrayBufferToUTF8String(data) : "";
     if (isChallengeResponse(response, body)) {
       dropRotatingClearance();
+      // Bounce every challenge to the site root so concurrent discover fetches
+      // (ranking, updates, …) collapse into a single bypass prompt whose
+      // clearance then covers the whole domain.
       throw new CloudflareError({
-        url: request.url.replace(MIRROR_HOST, DOMAIN),
+        url: `${DOMAIN}/`,
         method: "GET",
         headers: {
           referer: `${DOMAIN}/`,
