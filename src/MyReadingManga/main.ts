@@ -32,6 +32,7 @@ import {
 } from "./forms";
 import {
   LISTING_PATHS,
+  SECTIONS,
   SORTING_OPTIONS,
   TAXONOMIES,
   type FilterTaxonomies,
@@ -135,7 +136,7 @@ export class MyReadingMangaExtension implements ExtensionImpl<typeof MyReadingMa
     section: DiscoverSection,
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    if (section.id === "genres") {
+    if (section.id === SECTIONS.GENRES) {
       return this.getGenresSection();
     }
 
@@ -148,7 +149,7 @@ export class MyReadingMangaExtension implements ExtensionImpl<typeof MyReadingMa
       excludeClasses: this.hiddenClasses(),
     });
     const items: DiscoverSectionItem[] = cards.map((card) =>
-      section.id === "popular"
+      section.id === SECTIONS.POPULAR
         ? {
             type: "featuredCarouselItem",
             mangaId: card.mangaId,

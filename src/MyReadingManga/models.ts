@@ -10,6 +10,17 @@ import {
 
 export const DOMAIN = "https://myreadingmanga.info";
 
+// Discover section ids, centralized so no inline string literals leak into the
+// dispatcher or section definitions.
+export const SECTIONS = {
+  POPULAR: "popular",
+  LATEST: "latest",
+  MANGA: "manga",
+  BARA: "bara",
+  RANDOM: "random",
+  GENRES: "genres",
+} as const;
+
 export interface MangaCard {
   mangaId: string;
   title: string;
@@ -98,18 +109,18 @@ export const SORTING_OPTIONS: SortingOption[] = [
 
 // Listing paths mirror the site's browse entries; all paginate via /page/N/.
 export const LISTING_PATHS = {
-  latest: "/",
-  popular: "/popular/",
-  manga: "/yaoi-manga/",
-  bara: "/genre/bara/",
-  random: "/?ep_sort=rand&s=",
+  [SECTIONS.LATEST]: "/",
+  [SECTIONS.POPULAR]: "/popular/",
+  [SECTIONS.MANGA]: "/yaoi-manga/",
+  [SECTIONS.BARA]: "/genre/bara/",
+  [SECTIONS.RANDOM]: "/?ep_sort=rand&s=",
 } as const;
 
 export const DISCOVER_SECTIONS: DiscoverSection[] = [
-  { id: "popular", title: "Popular", type: DiscoverSectionType.featured },
-  { id: "latest", title: "Latest", type: DiscoverSectionType.simpleCarousel },
-  { id: "manga", title: "Manga", type: DiscoverSectionType.simpleCarousel },
-  { id: "bara", title: "Bara", type: DiscoverSectionType.simpleCarousel },
-  { id: "random", title: "Random", type: DiscoverSectionType.simpleCarousel },
-  { id: "genres", title: "Genres", type: DiscoverSectionType.genres },
+  { id: SECTIONS.POPULAR, title: "Popular", type: DiscoverSectionType.featured },
+  { id: SECTIONS.LATEST, title: "Latest", type: DiscoverSectionType.simpleCarousel },
+  { id: SECTIONS.MANGA, title: "Manga", type: DiscoverSectionType.simpleCarousel },
+  { id: SECTIONS.BARA, title: "Bara", type: DiscoverSectionType.simpleCarousel },
+  { id: SECTIONS.RANDOM, title: "Random", type: DiscoverSectionType.simpleCarousel },
+  { id: SECTIONS.GENRES, title: "Genres", type: DiscoverSectionType.genres },
 ];
