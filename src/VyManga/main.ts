@@ -209,7 +209,7 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
       .setQueryItem("q", title)
       .setQueryItem("page", page.toString())
       .setQueryItem("search_po", meta.searchType?.[0] ?? "0")
-      .setQueryItem("author_po", meta.authorType?.[0] ?? "0");
+      .setQueryItem("author_po", "0");
 
     if (meta.author) builder.setQueryItem("author", meta.author);
     if (meta.status?.[0]) builder.setQueryItem("completed", meta.status[0]);

@@ -17,7 +17,6 @@ export const SECTIONS = {
 } as const;
 
 export const BROWSE_SORT: Record<string, string> = {
-  [SECTIONS.POPULAR]: "viewed",
   [SECTIONS.LATEST_UPDATES]: "updated_at",
   [SECTIONS.TOP_RATED]: "scored",
   [SECTIONS.NEWEST]: "created_at",
@@ -52,7 +51,6 @@ export type PageMetadata = {
 export type SearchMetadata = {
   author?: string;
   searchType?: string[];
-  authorType?: string[];
   searchDescription?: boolean;
   status?: string[];
   sort?: string[];
