@@ -10,12 +10,9 @@ import {
   type SortingOption,
 } from "@paperback/types";
 
-import { DOMAIN, MIRRORS, SORT_ORDERS, type SearchMetadata, type TriState } from "./models";
+import { DOMAIN, SORT_ORDERS, type SearchMetadata, type TriState } from "./models";
 
 const MIRROR_HOST = /^https?:\/\/(?:www\.)?ranobes\.[a-z.]+/i;
-
-// Reuse whichever mirror last answered so a working host isn't re-probed.
-let activeMirror = MIRRORS[0];
 
 export const toFilterOptionId = (title: string): string =>
   encodeURIComponent(title).replace(
@@ -81,14 +78,20 @@ export const buildSearchPath = (
 
 export const cookieStorage = new CookieStorageInterceptor({ storage: "stateManager" });
 
-// The protection signs a short-lived cookie pair and stalls any client that
-// replays a stale one; a stalled request never receives the refreshed pair,
-// so dropping it is the only way back to a clean state.
 const ROTATING_CLEARANCE = ["__ddg8_", "__ddg10_"];
 
 export const dropRotatingClearance = (): void => {
   const stale = cookieStorage.cookies.filter((cookie) => ROTATING_CLEARANCE.includes(cookie.name));
   for (const cookie of stale) cookieStorage.deleteCookie(cookie);
+};
+
+const isChallengeResponse = (response: Response, body: string): boolean => {
+  const status = response.status;
+  if (response.headers?.["cf-mitigated"] === "challenge") return true;
+  if ([403, 429, 503].includes(status)) return true;
+  return /(?:vb_challenge|cf-turnstile|<title>Just a moment|ddos-guard|checking your browser|enable javascript and cookies|__ddg\d+_)/i.test(
+    body,
+  );
 };
 
 export class RanobesInterceptor extends PaperbackInterceptor {
@@ -111,17 +114,15 @@ export class RanobesInterceptor extends PaperbackInterceptor {
   ): Promise<ArrayBuffer> {
     const contentType = response.headers?.["content-type"] ?? "";
     const body = contentType.includes("text/html") ? Application.arrayBufferToUTF8String(data) : "";
-    if (
-      response.headers?.["cf-mitigated"] === "challenge" ||
-      /(?:vb_challenge|cf-turnstile|<title>Just a moment)/i.test(body)
-    ) {
+    if (isChallengeResponse(response, body)) {
       dropRotatingClearance();
-      // Solving on the site root clears the domain-wide clearance, and the
-      // root is a page the bypass webview can always render the challenge on.
       throw new CloudflareError({
-        url: `${DOMAIN}/`,
+        url: request.url.replace(MIRROR_HOST, DOMAIN),
         method: "GET",
-        headers: { "user-agent": await Application.getDefaultUserAgent() },
+        headers: {
+          referer: `${DOMAIN}/`,
+          "user-agent": await Application.getDefaultUserAgent(),
+        },
       });
     }
     return data;
@@ -138,42 +139,29 @@ const responseText = (response: Response, buffer: ArrayBuffer, url: string): str
 };
 
 const requestText = async (url: string): Promise<string> => {
-  try {
-    const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
-    return responseText(response, buffer, url);
-  } catch (error: unknown) {
-    if (error instanceof CloudflareError) throw error;
-    // A request that dies without a response usually replayed a stale
-    // clearance pair; retry once as a clean client so it can be re-issued.
-    dropRotatingClearance();
-    const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
-    return responseText(response, buffer, url);
-  }
+  const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
+  return responseText(response, buffer, url);
 };
 
-// A block on one mirror fails over to the next; the Cloudflare bypass only
-// surfaces once every mirror is challenged, so a single blocked host is
-// transparent to the reader.
-export const fetchHtml = async (url: string): Promise<string> => {
-  const ordered = [activeMirror, ...MIRRORS.filter((mirror) => mirror !== activeMirror)];
-  let challenge: CloudflareError | undefined;
-  let lastError: unknown;
-  for (const mirror of ordered) {
-    try {
-      const text = await requestText(url.replace(MIRROR_HOST, mirror));
-      activeMirror = mirror;
-      return text;
-    } catch (error: unknown) {
-      if (error instanceof CloudflareError) challenge = error;
-      lastError = error;
-    }
-  }
-  if (challenge) throw challenge;
-  throw lastError ?? new Error(`Ranobes: all mirrors failed for ${url}`);
+// Keep chapter-list crawling gentle. Very long novels require many sequential
+// pages, and ddos-guard starts challenging when those pages arrive too quickly.
+let nextChapterListRequestAt = 0;
+const waitForChapterListSlot = async (): Promise<void> => {
+  const now = Date.now();
+  const wait = Math.max(0, nextChapterListRequestAt - now);
+  nextChapterListRequestAt = Math.max(now, nextChapterListRequestAt) + 1100;
+  if (wait > 0) await new Promise<void>((resolve) => setTimeout(resolve, wait));
 };
+
+// ranobe.top is intentionally not used. Its clearance is independent and
+// repeatedly causes a second challenge cycle after ranobes.net succeeds.
+export const fetchHtml = async (url: string): Promise<string> =>
+  requestText(url.replace(MIRROR_HOST, DOMAIN));
 
 export const fetchListingPage = (path: string, page = 1): Promise<string> =>
   fetchHtml(`${DOMAIN}${path}${page > 1 ? `page/${page}/` : ""}`);
 
-export const fetchChapterListPage = (novelId: string, page = 1): Promise<string> =>
-  fetchHtml(`${DOMAIN}/chapters/${novelId}/${page > 1 ? `page/${page}/` : ""}`);
+export const fetchChapterListPage = async (novelId: string, page = 1): Promise<string> => {
+  await waitForChapterListSlot();
+  return fetchHtml(`${DOMAIN}/chapters/${novelId}/${page > 1 ? `page/${page}/` : ""}`);
+};
