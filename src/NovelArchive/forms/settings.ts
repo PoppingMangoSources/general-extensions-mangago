@@ -11,8 +11,10 @@ const STATE_KEYS = {
   genres: "novelarchive_genres",
 } as const;
 
+// Defaults off — NovelArchive is an adult-rated source, so adult titles show
+// unless the user opts to hide them (the app's global filter still applies).
 export const getHideAdultContent = (): boolean =>
-  (Application.getState(STATE_KEYS.hideAdult) as boolean | undefined) ?? true;
+  (Application.getState(STATE_KEYS.hideAdult) as boolean | undefined) ?? false;
 
 export const getDefaultAiMode = (): string =>
   (Application.getState(STATE_KEYS.aiMode) as string | undefined) ?? "include";
