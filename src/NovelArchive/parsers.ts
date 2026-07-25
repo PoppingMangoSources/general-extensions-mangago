@@ -318,11 +318,11 @@ export const parseMangaDetails = (novel: Novel): SourceManga => {
   };
 };
 
-const CHAPTER_LEAD = /^\s*(?:chapter|chap\.?|ch\.?|episode|ep\.?)?\s*(\d+(?:\.\d+)?)\s*[-:–.]?\s*/i;
-
 const cleanChapterName = (name: string): { chapNum?: number; title: string } => {
   const decoded = Application.decodeHTMLEntities(name);
-  const match = decoded.match(CHAPTER_LEAD);
+  const match = decoded.match(
+    /^\s*(?:chapter|chap\.?|ch\.?|episode|ep\.?)?\s*(\d+(?:\.\d+)?)\s*[-:–.]?\s*/i,
+  );
   const parsed = match ? parseFloat(match[1]) : NaN;
   const title = (match ? decoded.slice(match[0].length) : decoded)
     .replace(/^\d+(?:\.\d+)?\s*[-:–.]\s*/, "")

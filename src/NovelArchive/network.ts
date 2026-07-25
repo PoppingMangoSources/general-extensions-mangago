@@ -139,18 +139,16 @@ export const fetchBrowse = async (url: string): Promise<{ novels: Novel[]; hasNe
   return { novels: data.novels ?? [], hasNext: data.pagination?.has_next ?? false };
 };
 
-// Optional mirror list; its failure must not sink native chapters. /sources is
-// flaky and can hang ~30s before a 504, so cap the wait and fall back to native-only.
-const SOURCES_TIMEOUT_SECONDS = 8;
-
+// Optional mirror list; its failure must not sink native chapters.
 export const fetchSources = async (id: string): Promise<NovelSource[]> => {
   const request = fetchApi<NovelSource[] | SourceListResponse>(novelsUrl(id, "sources"));
   // Swallow a late 504 so it doesn't surface as an unhandled rejection after the timeout wins.
   request.catch(() => undefined);
   try {
+    // /sources is flaky and can hang ~30s before a 504, so cap the wait at 8s and fall back to native-only.
     const data = await Promise.race([
       request,
-      Application.sleep(SOURCES_TIMEOUT_SECONDS).then(() => [] as NovelSource[]),
+      Application.sleep(8).then(() => [] as NovelSource[]),
     ]);
     return Array.isArray(data) ? data : (data.sources ?? []);
   } catch (error: unknown) {
