@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-25T13:27:38.566Z",
+  "buildTime": "2026-07-25T14:04:44.369Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -104,7 +104,7 @@
     {
       "name": "NovelArchive",
       "description": "Extension that pulls light novels from novelarchive.cc.",
-      "version": "1.0.0-alpha.21",
+      "version": "1.0.0-alpha.22",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
@@ -133,7 +133,7 @@
     {
       "name": "oManga",
       "description": "Extension that pulls content from omanga.to.",
-      "version": "1.0.0-alpha.15",
+      "version": "1.0.0-alpha.16",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
