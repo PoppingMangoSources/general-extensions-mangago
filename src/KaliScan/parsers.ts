@@ -11,7 +11,7 @@ import {
   type Tag,
 } from "@paperback/types";
 import * as cheerio from "cheerio";
-import { type AnyNode } from "domhandler";
+import type { AnyNode } from "domhandler";
 
 import { getBaseUrl } from "./forms";
 import { ADULT_GENRES, type KaliCard, type KaliGridEntry } from "./models";
@@ -43,7 +43,7 @@ const cleanText = (value: string): string =>
   Application.decodeHTMLEntities(value).replace(/\s+/g, " ").trim();
 
 // Card links arrive as /manga/{id-slug} or manga/{id-slug}; keep only the slug.
-export const mangaSlugFromUrl = (url: string): string | undefined =>
+const mangaSlugFromUrl = (url: string): string | undefined =>
   /(?:^|\/)manga\/([^/?#]+)/.exec(url)?.[1];
 
 const absoluteUrl = (url: string): string => {
@@ -65,7 +65,7 @@ const chapterNumberFrom = (value: string): number | undefined => {
 
 // Site timestamps are zoneless and mostly relative ("2 hours ago"); parse both
 // forms as UTC and clamp anything ahead of the clock so ages never go negative.
-export const parseSiteDate = (value: string): Date | undefined => {
+const parseSiteDate = (value: string): Date | undefined => {
   const text = value.trim().toLowerCase();
   if (!text) return undefined;
   if (text === "just now" || text.includes("less than")) return new Date();
