@@ -68,8 +68,7 @@ export class NovelArchiveInterceptor extends PaperbackInterceptor {
   }
 }
 
-// Identical concurrent GETs (library-update scans, discover rails, the same
-// title's details+chapters pair) share one request instead of firing duplicates,
+// Identical concurrent GETs share one request instead of firing duplicates,
 // mirroring the site's own inFlightGetRequests map.
 const inFlightRequests = new Map<string, Promise<unknown>>();
 
@@ -128,10 +127,8 @@ export const fetchBrowse = async (url: string): Promise<{ novels: Novel[]; hasNe
   return { novels: data.novels ?? [], hasNext: data.pagination?.has_next ?? false };
 };
 
-// Mirror listings are optional; their failure must not sink the native chapter
-// list. The /sources endpoint is flaky and can hang ~30s before a 504 (it sends
-// Retry-After), so cap the wait and fall back to native-only chapters rather
-// than blocking the list on it.
+// Optional mirror list; its failure must not sink native chapters. /sources is
+// flaky and can hang ~30s before a 504, so cap the wait and fall back to native-only.
 const SOURCES_TIMEOUT_SECONDS = 8;
 
 export const fetchSources = async (id: string): Promise<NovelSource[]> => {

@@ -32,13 +32,11 @@ import {
 
 const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
 
-// Human-readable slugs for tag ids only; manga and chapter ids use the
-// encoding helpers below so they can be recovered for request URLs.
+// Slugs for tag ids only; manga/chapter ids use the encode helpers below to stay URL-recoverable.
 const sanitizeId = (value: string): string =>
   value.toLowerCase().replace(SAFE_ID_REGEX, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 
-// API identifiers double as Paperback ids; unusual characters are
-// percent-encoded so the original value can always be recovered.
+// API ids double as Paperback ids; odd characters are percent-encoded so the original is recoverable.
 export const encodeId = (value: string): string =>
   value.replace(SAFE_ID_REGEX, (char) => {
     const encoded = encodeURIComponent(char);

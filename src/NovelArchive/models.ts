@@ -88,8 +88,8 @@ export interface Novel {
   chapter_names?: string[] | null;
 }
 
-// Normalized listing shape produced once by parseNovelList; the discover and
-// search handlers map it to their specific item type at the call site.
+// Normalized listing shape from parseNovelList; discover/search handlers map it
+// to their specific item type.
 export interface NovelListItem {
   mangaId: string;
   title: string;
