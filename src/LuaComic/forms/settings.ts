@@ -39,6 +39,5 @@ export class LuaComicSettingsForm extends Form {
 
   async handleShowAdultChange(value: boolean): Promise<void> {
     Application.setState(value, SHOW_ADULT_KEY);
-    Application.invalidateDiscoverSections();
   }
 }
