@@ -129,11 +129,8 @@ const escapeXml = (value: string): string =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
 
-// Some mirrors serve calibre-converted EPUB text whose UTF-8 bytes were re-read
-// as Latin-1 and re-encoded (double-encoded), so spaces and curly quotes arrive
-// as garbled sequences. Repair each maximal run of high Latin-1 bytes that forms
-// valid UTF-8 when reinterpreted as its original bytes; runs that do not (e.g.
-// genuinely accented text) are left untouched, so mixed content is safe.
+// Some mirrors double-encode their EPUB text (UTF-8 bytes re-read as Latin-1), so
+// repair each run of high bytes that decodes back to valid UTF-8; others are kept.
 const repairMojibake = (value: string): string => {
   let out = "";
   let i = 0;
