@@ -26,11 +26,16 @@ import {
 } from "./models";
 import { decodeId, dedupe, encodeId, parseMangaDetails, pickGenreValues } from "./parsers";
 
+// The cover endpoint content-negotiates: it 404s for a JSON/`*/*` Accept and only
+// 302-redirects to the image for an image Accept, so covers get a browser image profile.
+const isCoverUrl = (url: string): boolean => /\/cover(\?|$)/.test(url);
+
 export class NovelArchiveInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
-    // Every /api/ request — including the cover endpoint, which 404s without it —
-    // needs the browser header profile; other requests get only referer + UA.
-    const isApi = request.url.startsWith(API_URL);
+    const isCover = isCoverUrl(request.url);
+    // JSON API calls need the browser's JSON accept profile; covers need an image
+    // accept; everything else gets only referer + UA.
+    const isApi = request.url.startsWith(API_URL) && !isCover;
     return {
       ...request,
       headers: {
@@ -43,7 +48,9 @@ export class NovelArchiveInterceptor extends PaperbackInterceptor {
               accept: "application/json, text/plain, */*",
               "accept-language": "en-US,en;q=0.5",
             }
-          : {}),
+          : isCover
+            ? { accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8" }
+            : {}),
       },
     };
   }
