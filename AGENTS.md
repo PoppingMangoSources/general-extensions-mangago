@@ -231,7 +231,18 @@ const genres = await (this.genresPromise ??= fetchGenres());
 ## 7. pbconfig & Metadata
 
 - **Version scheme `1.0.0-alpha.N`, bumped on every change.** Every modified existing source gets a bump (PR-template requirement); a new source starts at `alpha.1`; a revived source bumps from its old version, not a reset. (celarye) [policy]
-- **Consistent `capabilities` ordering** across sources. ALL_CAPS constants throughout.
+- **Consistent `capabilities` ordering** across sources. ALL_CAPS constants throughout. Each `SourceIntents` value obliges the class to implement its methods (the compiler enforces this via `ExtensionImpl<typeof pbconfig>`):
+
+  | Capability                     | Required methods                                                                                      | Optional                                                                            |
+  | ------------------------------ | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+  | `CHAPTER_PROVIDING`            | `getChapters`, `getChapterDetails`                                                                    | `processTitlesForUpdates`                                                           |
+  | `DISCOVER_SECTION_PROVIDING`   | `getDiscoverSections`, `getDiscoverSectionItems`                                                      | —                                                                                   |
+  | `SEARCH_RESULT_PROVIDING`      | `getSearchResults`                                                                                    | `getSortingOptions`, `getAdvancedSearchForm`                                        |
+  | `SETTINGS_FORM_PROVIDING`      | `getSettingsForm`                                                                                     | —                                                                                   |
+  | `CLOUDFLARE_BYPASS_PROVIDING`  | —                                                                                                     | `cloudflareBypassCompleted` (use this; `saveCloudflareBypassCookies` is deprecated) |
+  | `PROGRESS_PROVIDING`           | `getMangaProgressManagementForm`, `getMangaProgress`, `processChapterReadActionQueue`                 | —                                                                                   |
+  | `MANAGED_COLLECTION_PROVIDING` | `getManagedLibraryCollections`, `commitManagedCollectionChanges`, `getSourceMangaInManagedCollection` | —                                                                                   |
+
 - **Single-line import:** `import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/types";`.
 - **Single consistent developers block:** `{ name: "PopMango", github: "https://github.com/PoppingMangoSources" }`. Real, useful support contact — no bare non-copyable URLs.
 - `contentRating` and `language` are **per-site**. `language` is a lowercase ISO code (`en`), no flags/uppercase. Source-level `contentRating` is MATURE/ADULT if any meaningful subset is.
