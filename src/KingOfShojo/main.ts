@@ -40,6 +40,7 @@ import {
   MANGA_DIR,
   NEXT_PAGE_SELECTOR,
   POPULAR_RANGE_OPTIONS,
+  SECTIONS,
   SORTING_OPTIONS,
   type OptionItem,
   type PageMetadata,
@@ -60,8 +61,6 @@ import {
   proxyImage,
 } from "./parsers";
 import type KingOfShojoConfig from "./pbconfig";
-
-const ensureTrailingSlash = (url: string): string => (url.endsWith("/") ? url : `${url}/`);
 
 export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoConfig> {
   globalRateLimiter = new BasicRateLimiter("rateLimiter", {
@@ -127,11 +126,19 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
-      { id: "popular_today", title: "Popular Today", type: DiscoverSectionType.featured },
-      { id: "latest_update", title: "Latest Update", type: DiscoverSectionType.chapterUpdates },
-      { id: "recommendation", title: "Recommendation", type: DiscoverSectionType.simpleCarousel },
-      { id: "popular_series", title: "Popular Series", type: DiscoverSectionType.genres },
-      { id: "genres", title: "Genres", type: DiscoverSectionType.genres },
+      { id: SECTIONS.POPULAR_TODAY, title: "Popular Today", type: DiscoverSectionType.featured },
+      {
+        id: SECTIONS.LATEST_UPDATE,
+        title: "Latest Update",
+        type: DiscoverSectionType.chapterUpdates,
+      },
+      {
+        id: SECTIONS.RECOMMENDATION,
+        title: "Recommendation",
+        type: DiscoverSectionType.simpleCarousel,
+      },
+      { id: SECTIONS.POPULAR_SERIES, title: "Popular Series", type: DiscoverSectionType.genres },
+      { id: SECTIONS.GENRES, title: "Genres", type: DiscoverSectionType.genres },
     ];
   }
 
@@ -141,7 +148,7 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const rating = this.contentRating;
 
-    if (section.id === "genres") {
+    if (section.id === SECTIONS.GENRES) {
       const genres = await this.getGenres();
       const items: DiscoverSectionItem[] = genres
         .filter((genre) => genre.id)
@@ -157,7 +164,7 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
       return { items, metadata: undefined };
     }
 
-    if (section.id === "popular_series") {
+    if (section.id === SECTIONS.POPULAR_SERIES) {
       const items: DiscoverSectionItem[] = POPULAR_RANGE_OPTIONS.map((range) => ({
         type: "genresCarouselItem",
         name: range.value,
@@ -170,7 +177,7 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
       return { items, metadata: undefined };
     }
 
-    if (section.id === "popular_today") {
+    if (section.id === SECTIONS.POPULAR_TODAY) {
       return { items: await this.buildFeaturedItems(), metadata: undefined };
     }
 
@@ -178,7 +185,7 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
     let items: DiscoverSectionItem[] = [];
 
     switch (section.id) {
-      case "recommendation":
+      case SECTIONS.RECOMMENDATION:
         items = parseWidgetCards($, this.baseUrl, "Recommendation").map((card) => ({
           type: "simpleCarouselItem",
           mangaId: card.mangaId,
@@ -188,7 +195,7 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
           contentRating: rating,
         }));
         break;
-      case "latest_update":
+      case SECTIONS.LATEST_UPDATE:
         items = parseLatestUpdate($, this.baseUrl)
           .filter((card) => card.chapterId)
           .map((card) => ({
@@ -323,7 +330,7 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    const url = ensureTrailingSlash(
+    const url = this.ensureTrailingSlash(
       new URL(this.baseUrl).addPathComponent(chapter.chapterId).toString(),
     );
     const $ = await fetchCheerio({ url, method: "GET" });
@@ -336,9 +343,13 @@ export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoCon
   }
 
   private mangaUrl(mangaId: string): string {
-    return ensureTrailingSlash(
+    return this.ensureTrailingSlash(
       new URL(this.baseUrl).addPathComponent(MANGA_DIR).addPathComponent(mangaId).toString(),
     );
+  }
+
+  private ensureTrailingSlash(url: string): string {
+    return url.endsWith("/") ? url : `${url}/`;
   }
 
   private async getHomepage(): Promise<CheerioAPI> {

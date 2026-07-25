@@ -9,6 +9,14 @@ export const FEATURED_LIMIT = 10;
 
 export const NEXT_PAGE_SELECTOR = "div.pagination .next, div.hpage .r, a:has(img[alt=Next])";
 
+export const SECTIONS = {
+  POPULAR_TODAY: "popular_today",
+  LATEST_UPDATE: "latest_update",
+  RECOMMENDATION: "recommendation",
+  POPULAR_SERIES: "popular_series",
+  GENRES: "genres",
+} as const;
+
 export const ADULT_GENRE_NAMES: ReadonlySet<string> = new Set([
   "adult",
   "adult content",
