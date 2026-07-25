@@ -33,6 +33,7 @@ import {
   SECTIONS,
   SORTING_OPTIONS,
   TRENDING_RANGES,
+  type LuaChapter,
   type LuaHomePage,
   type LuaQueryResponse,
   type LuaSeries,
@@ -49,6 +50,7 @@ import {
   parseChapterPages,
   parseHomePage,
   parseMangaDetails,
+  parseSeriesPage,
   tagNames,
   toBannerItems,
   toLatestItems,
@@ -264,6 +266,9 @@ export class LuaComicExtension implements ExtensionImpl<typeof LuaComicConfig> {
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
     const series = await this.fetchSeries(sourceManga.mangaId);
+    const chapters = await this.fetchAllChapters(series.id);
+    series.free_chapters = chapters.filter((chapter) => (chapter.price ?? 0) <= 0);
+    series.paid_chapters = chapters.filter((chapter) => (chapter.price ?? 0) > 0);
     return parseChapterList(series, sourceManga, getShowPaidChapters());
   }
 
@@ -276,10 +281,32 @@ export class LuaComicExtension implements ExtensionImpl<typeof LuaComicConfig> {
 
   private async fetchSeries(mangaId: string): Promise<LuaSeries> {
     const slug = decodeSlugId(mangaId);
-    const data = await this.fetchQuery({ page: 1, search: slug });
-    const series = (data.data ?? []).find((entry) => entry.series_slug === slug);
-    if (!series) throw new Error(`Series not found: ${mangaId}`);
-    return series;
+    const html = await fetchText(`${DOMAIN}/series/${slug}`);
+    return parseSeriesPage(html, slug);
+  }
+
+  private async fetchAllChapters(seriesId: number): Promise<LuaChapter[]> {
+    const chapters: LuaChapter[] = [];
+    let page = 1;
+    let lastPage = 1;
+
+    do {
+      const url = new URL(API_URL)
+        .addPathComponent("chapter")
+        .addPathComponent("query")
+        .setQueryItem("page", page.toString())
+        .setQueryItem("perPage", "100")
+        .setQueryItem("query", "")
+        .setQueryItem("order", "desc")
+        .setQueryItem("series_id", seriesId.toString())
+        .toString();
+      const response = await fetchJSON<{ meta?: { last_page?: number | null }; data?: LuaChapter[] | null }>(url);
+      chapters.push(...(response.data ?? []));
+      lastPage = Math.max(1, response.meta?.last_page ?? 1);
+      page++;
+    } while (page <= lastPage);
+
+    return chapters;
   }
 
   private getHomePage(): Promise<LuaHomePage> {
