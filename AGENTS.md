@@ -62,10 +62,13 @@ These sources **compose capabilities by mixin, not inheritance**: each capabilit
 - Delete dead/uncalled code aggressively (builders, constants, types, helpers). [policy]
 - Inline single-use constants and trivial wrappers (a body that just renames, `?? default`, unwraps, or delegates one call). Collapse wrapper-of-wrapper helpers. Return new objects rather than mutating inputs.
 - Prefer native array methods (`.map`/`.filter`/`.reduce`); `for...of` is also fine. Use `cheerio` for HTML — never hand-rolled parsing.
+- **Define single-consumer option arrays in their final shape.** If a list feeds exactly one consumer (e.g. `getSortingOptions`), declare it as `{ id, label }` in `models.ts` and return it directly — don't store `{ id, value }` and remap it in `main.ts`. (niclimcy)
+- **Don't thread state through functions that don't use it.** Pass a settings value only into the function that actually reads it, not down through `parseMangaDetails(...)`/parser params it ignores. (niclimcy)
+- **Don't invent wrapper abstractions over the SDK** — mirror a reference source (Anilist for GraphQL query building, Mgeko for error handling) instead of a home-grown wrapper. (niclimcy)
 
 ### Comments & naming
 
-- Terse, non-obvious "why" comments only. **No boilerplate / "standard across all extensions" comments** — the top review tell. Document a shared pattern once at most, never per-file. No commented-out code (use a real `// TODO` or delete). No decorative dividers or empty docblocks.
+- Terse, non-obvious "why" comments only. **No boilerplate / "standard across all extensions" comments** — the top review tell. Document a shared pattern once at most, never per-file. No commented-out code (use a real `// TODO` or delete). No decorative dividers, empty docblocks, "left it here to remember" notes, or stray blank lines. **Stripping these is the single most frequent review comment on new-source PRs** — do it before submitting. (niclimcy)
 - Clean, grammatical, typo-free names. Avoid names that read as a JS global (`data`, not `json`). PascalCase dirs/classes; ALL_CAPS option constants; kebab-case implementation subdirs.
 - **Prefix unused interface-mandated params with `_`** (`_metadata`, `_response`, `_localStorage`) — or `void param;`, but keep one style per file, not both.
 - Name parsed-JSON payload interfaces `<Thing>Response`/`<Thing>Dto`; anything passed as search/discover metadata must `extend JSONObject`.
@@ -105,6 +108,7 @@ Extensions run in a JS runtime that is **not a browser** — several globals are
 - **Don't clamp a curated feed to a fixed count.** A curated endpoint (e.g. editor's choice) should return exactly what the site lists; make the `limit` optional and append it only when one is genuinely needed, so entries the site later adds or removes track automatically instead of being frozen at a hardcoded number.
 - **`hasMore` derives from the UNFILTERED server count/length.** When filtering locally, filter first, then slice/page from the filtered candidate set. (niclimcy)
 - **Keep search metadata sparse** — `getSearchQueryMetadata` returns only non-empty fields; no empty arrays or empty genre maps.
+- **Default `query.metadata` once with a full object**, then read fields off it: `const meta = query.metadata ?? { genres: [], statuses: [], orderIsDescending: false }`. Avoid non-null assertions (`query.metadata!`) or per-field null checks. (niclimcy)
 - **URL-paste lookup is an optional fast path.** Match only supported source URLs, encode the slug once, and return `undefined` when it can't resolve so ordinary text search continues. Do not use blanket error suppression on normal API/parser/reader paths.
 - **Use the SDK's pagination sentinels.** Return the `EndOfPageResults` constant (or `undefined` next-page metadata) at the end instead of a hand-rolled flag; a `{ completed }` metadata field can short-circuit the next call; thread `collectedIds` through metadata to dedupe across pages when the site repeats entries. Build the `URL` with `.setQueryItem(key, values[])` (it accepts a `string[]`) for repeated params instead of indexed `key[0]`/`key[1]` keys.
 
@@ -130,6 +134,8 @@ Extensions run in a JS runtime that is **not a browser** — several globals are
 - **Every catch on a request/parse/reader path must re-throw Cloudflare and let lock/paid errors propagate.** In each such catch: `if (error instanceof CloudflareError) throw error;`. Never a blanket `catch {}` and never a `Promise.any`-style swallow that hides a coin/lock/paid/empty-reader error the user needs to see. (niclimcy)
 - Errors that must reach the user are **thrown** with a useful message and the original preserved as `cause` (`new Error(msg, { cause })`) — never hidden in `console.log`/`console.error`. Keep the parsing try/catch tight. Request-level catches for deliberate retry/fallback/state cleanup are legitimate; logs for intentionally non-fatal background work are fine. The rule is "don't hide a failure the user needs," not "never catch a request."
 - Reserve `try/catch` for operations that genuinely throw (`decodeURIComponent`, `new URL`, network). Do not wrap non-throwing SDK calls (`Application.setState`/`getState`).
+- **No `try/catch` that only stringifies-and-rethrows** — `catch (e) { throw new Error(String(e)) }` is a 0.8-legacy tell; delete it and let the error propagate (see Mgeko's reader). Keep a catch only for genuine retry / fallback / state cleanup. (niclimcy)
+- **Don't add per-call Cloudflare handling that `interceptResponse` already does.** The interceptor throws `CloudflareError` centrally; a second CF check inside `getChapterDetails`/`getChapters` is redundant — remove it. (niclimcy)
 
 ### Centralized Cloudflare detection
 
@@ -245,7 +251,8 @@ const genres = await (this.genresPromise ??= fetchGenres());
 
 - **Single-line import:** `import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/types";`.
 - **Single consistent developers block:** `{ name: "PopMango", github: "https://github.com/PoppingMangoSources" }`. Real, useful support contact — no bare non-copyable URLs.
-- `contentRating` and `language` are **per-site**. `language` is a lowercase ISO code (`en`), no flags/uppercase. Source-level `contentRating` is MATURE/ADULT if any meaningful subset is.
+- `contentRating` and `language` are **per-site**. `language` is a valid IETF (BCP 47) tag — lowercase, no flags/uppercase (`en`, `es`, `zh-hans`, `multi`). Source-level `contentRating` is MATURE/ADULT if any meaningful subset is.
+- **Set a correct default content rating up front** — a wrong/blurred default (source-level or a "hide adult" setting's default) is a recurring post-merge fix. Pick the sensible default when you write pbconfig/settings, not after a bug report.
 - **Per-title `mangaInfo.contentRating`** comes from that title's own data, set once at the app-return boundary; source default only as fallback. This is distinct from the pbconfig source-level rating.
 - **Derive it with one shared pure `contentRatingForGenres(names)`** — lowercase the title's genres and escalate `EVERYONE → MATURE → ADULT` against adult/mature name lists (or an on-page 18+ badge). Reuse the same function for both the details boundary and discover/search items so badges match; items whose listing carries no genres default to `EVERYONE` (comment why) or the source's global adult toggle.
 - **Floor per-title ratings only against a genuine per-title floor** — a theme base's `defaultContentRating` field that means "every title here is at least this" (`defaultContentRating === ADULT ? ADULT : derive(...)`). The pbconfig source-level `contentRating` is different: it is a source-wide presence flag ("this source contains some adult content"), NOT a per-title floor, so a title can still resolve to `EVERYONE` on a source whose pbconfig rating is `ADULT` — do not clamp per-title ratings up to it.
@@ -254,7 +261,8 @@ const genres = await (this.genresPromise ??= fetchGenres());
 - Forms: `SelectRow` uses `items` + `layout` (not deprecated `options`); `maxItemCount` reflects real selection semantics (`1` for single-select), not the option count. No `FormState` class pattern. Use current `ExtensionImpl` and non-deprecated `SourceIntents` only; use Paperback types directly (no re-export/re-wrap); use the `URL` class for dynamic path building.
 - **Wire every form-row callback with `Application.Selector(this as <ConcreteForm>, "handleX")`** (or a `closureSelector(this, "id", async (v) => …)` for inline handlers — one style per form). The `this as <ConcreteForm>` self-cast is required, and the named handler must be a real `async` method on that class. Tri-state genre filters use `TriStateSelectRow` (`allowExclusion`/`allowEmptySelection`, value `Record<string, "included" | "excluded">`).
 - **AdvancedSearchForm skeleton:** one private field per metadata key seeded from `searchQuery.metadata ?? {}` in the constructor, one `handleXChange` per field, and a sparse `getSearchQueryMetadata()`. Prefer the native `AdvancedSearchForm` over the `@paperback/types/lib/compat/0.8` `SearchFilterForm` shim (a temporary migration wrapper).
-- **Sorting:** keep the site's sort token as `value` on an `as const` `SORT_OPTIONS`; `getSortingOptions` exposes only `{ id, label }`; translate id→token with a small mapper at the call site.
+- **Sorting:** keep the site's sort token as `value` on an `as const` `SORT_OPTIONS`; `getSortingOptions` exposes only `{ id, label }`; translate id→token with a small mapper at the call site. If `SORT_OPTIONS` has exactly one consumer, declare it as `{ id, label }` in `models.ts` and return it directly instead (see the single-consumer rule in [§2](#2-file-organization)).
+- **Group settings into correctly-named sections** — combine related rows under one section named for what it controls (e.g. language + browse filters → "Browse Settings"; title-view options → "View Settings"), rather than scattering one-row sections. (niclimcy/celarye)
 - **pbconfig specifics** (per the Inkdex dev guide): `name` avoids spaces and matches the directory (`anilist.co → AniList`, never the raw domain); the const in `main.ts` (`export const <Name> = new <Name>Extension()`) must equal the directory name; `description` reads `Extension that pulls content from <domain>.`; `language` is a lowercase ISO 639-1 code, `multi` for multi-language; a developer entry needs only `name` (`website` and `github` optional — if both are given only `website` shows).
 
 ---
@@ -289,7 +297,8 @@ Every extension implementation file starts with (generated `src/tests/*` are exe
 
 ### Commits
 
-- Conventional Commits, **scope = the source name**. Commit type = highest semver impact: `feat`/`refactor` > `fix` > `chore`.
+- Conventional Commits, **scope = the source name**. Commit type = highest semver impact: `feat`/`refactor` > `fix` > `chore`. Branch names follow Conventional Branch 1.0.0; versions follow Semantic Versioning 2.0.0.
+- Toolchain: Node.js **v22+** (latest LTS) + `npm install` after cloning; the repo's `.oxfmtrc.json`/`.oxlintrc.json` govern format/lint — use them, not your IDE's own formatter (a churned import sort is an instant review flag).
 
 ### Verification gate (run before declaring work done / opening a PR)
 
