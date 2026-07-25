@@ -33,6 +33,7 @@ import {
   GENRES_KEY,
   NEXT_PAGE_SELECTOR,
   SEARCH_PATH,
+  SECTIONS,
   SORTING_OPTIONS,
   type OptionItem,
   type PageMetadata,
@@ -100,11 +101,15 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
-      { id: "popular", title: "Popular", type: DiscoverSectionType.featured },
-      { id: "latest_updates", title: "Latest Updates", type: DiscoverSectionType.simpleCarousel },
-      { id: "top_rated", title: "Top Rated", type: DiscoverSectionType.simpleCarousel },
-      { id: "newest", title: "Newest", type: DiscoverSectionType.simpleCarousel },
-      { id: "genres", title: "Genres", type: DiscoverSectionType.genres },
+      { id: SECTIONS.POPULAR, title: "Popular", type: DiscoverSectionType.featured },
+      {
+        id: SECTIONS.LATEST_UPDATES,
+        title: "Latest Updates",
+        type: DiscoverSectionType.simpleCarousel,
+      },
+      { id: SECTIONS.TOP_RATED, title: "Top Rated", type: DiscoverSectionType.simpleCarousel },
+      { id: SECTIONS.NEWEST, title: "Newest", type: DiscoverSectionType.simpleCarousel },
+      { id: SECTIONS.GENRES, title: "Genres", type: DiscoverSectionType.genres },
     ];
   }
 
@@ -112,26 +117,36 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
     section: DiscoverSection,
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    if (section.id === "genres") {
-      const genres = await this.getGenres();
-      const items: DiscoverSectionItem[] = genres
-        .filter((genre) => genre.id)
-        .map((genre) => ({
-          type: "genresCarouselItem",
-          name: genre.value,
-          searchQuery: {
-            title: "",
-            metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
-          },
-          metadata: undefined,
-        }));
-      return { items, metadata: undefined };
+    switch (section.id) {
+      case SECTIONS.GENRES:
+        return this.getGenresCarousel();
+      case SECTIONS.POPULAR:
+        return { items: await this.buildFeaturedItems(), metadata: undefined };
+      default:
+        return this.getBrowseCarousel(section, metadata);
     }
+  }
 
-    if (section.id === "popular") {
-      return { items: await this.buildFeaturedItems(), metadata: undefined };
-    }
+  private async getGenresCarousel(): Promise<PagedResults<DiscoverSectionItem>> {
+    const genres = await this.getGenres();
+    const items: DiscoverSectionItem[] = genres
+      .filter((genre) => genre.id)
+      .map((genre) => ({
+        type: "genresCarouselItem",
+        name: genre.value,
+        searchQuery: {
+          title: "",
+          metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
+        },
+        metadata: undefined,
+      }));
+    return { items, metadata: undefined };
+  }
 
+  private async getBrowseCarousel(
+    section: DiscoverSection,
+    metadata: PageMetadata | undefined,
+  ): Promise<PagedResults<DiscoverSectionItem>> {
     const sort = BROWSE_SORT[section.id] ?? "updated_at";
     const page = metadata?.page ?? 1;
     const $ = await fetchCheerio({ url: this.browseUrl(sort, page), method: "GET" });

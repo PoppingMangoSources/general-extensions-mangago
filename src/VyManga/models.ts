@@ -8,11 +8,19 @@ export const SEARCH_PATH = "search";
 export const GENRES_KEY = "vymanga_genres";
 export const FEATURED_LIMIT = 8;
 
+export const SECTIONS = {
+  POPULAR: "popular",
+  LATEST_UPDATES: "latest_updates",
+  TOP_RATED: "top_rated",
+  NEWEST: "newest",
+  GENRES: "genres",
+} as const;
+
 export const BROWSE_SORT: Record<string, string> = {
-  popular: "viewed",
-  latest_updates: "updated_at",
-  top_rated: "scored",
-  newest: "created_at",
+  [SECTIONS.POPULAR]: "viewed",
+  [SECTIONS.LATEST_UPDATES]: "updated_at",
+  [SECTIONS.TOP_RATED]: "scored",
+  [SECTIONS.NEWEST]: "created_at",
 };
 
 export const CARD_LINK_SELECTOR = "a";
