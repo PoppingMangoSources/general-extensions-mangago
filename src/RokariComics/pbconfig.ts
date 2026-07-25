@@ -9,6 +9,6 @@ export default {
   ...basePbConfig,
   name: "RokariComics",
   description: "Extension that pulls content from rokaricomics.com.",
-  version: "1.0.0-alpha.12",
+  version: "1.0.0-alpha.13",
   developers: [{ name: "PopMango", github: "https://github.com/PoppingMangoSources" }],
 } satisfies ExtensionInfo;
