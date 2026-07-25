@@ -173,23 +173,16 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
     return this.requestManager.prepareRedirect(request, response);
   }
 
-  async saveCloudflareBypassCookies(cookies: Cookie[]): Promise<void> {
-    await this.cloudflareBypassCompleted({ url: `${DOMAIN}/`, method: "GET" }, cookies, {});
-  }
-
   async cloudflareBypassCompleted(
     _request: Request,
     cookies: Cookie[],
     _localStorage: Record<string, string>,
   ): Promise<void> {
+    // OniSaga is server-rendered (Laravel): the challenge binds to the session
+    // cookies (onisaga_session/XSRF-TOKEN), not just cf*. Forward all of them —
+    // dropping the session makes every post-bypass request 403.
     for (const cookie of cookies) {
-      if (
-        cookie.name.startsWith("cf") ||
-        cookie.name.startsWith("_cf") ||
-        cookie.name.startsWith("__cf")
-      ) {
-        this.cookieStorageInterceptor.setCookie(cookie);
-      }
+      this.cookieStorageInterceptor.setCookie(cookie);
     }
   }
 
