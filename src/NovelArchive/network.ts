@@ -217,13 +217,8 @@ export const resolveUrlQuery = async (
     trimmed.match(/[?&](?:id|novel)=([^&#]+)/i)?.[1] ?? trimmed.match(/\/novels?\/([^/?#]+)/i)?.[1];
   if (!id) return undefined;
 
-  let decoded = id;
-  try {
-    decoded = decodeURIComponent(id);
-  } catch {
-    // A malformed escape in a pasted URL falls back to the raw value.
-  }
-  const manga = parseMangaDetails(await fetchNovel(encodeId(decoded)));
+  // decodeId falls back to the raw value if a pasted URL has a malformed escape.
+  const manga = parseMangaDetails(await fetchNovel(encodeId(decodeId(id))));
   return {
     items: [
       {
