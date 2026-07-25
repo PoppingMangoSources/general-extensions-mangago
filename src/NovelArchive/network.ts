@@ -2,6 +2,7 @@
 /* Copyright © 2026 Inkdex */
 
 import {
+  BasicRateLimiter,
   CloudflareError,
   PaperbackInterceptor,
   URL,
@@ -26,10 +27,24 @@ import {
 } from "./models";
 import { decodeId, dedupe, encodeId, parseMangaDetails, pickGenreValues } from "./parsers";
 
+// Covers are served from extensionless /api/novels/{id}/cover URLs, so they are
+// image requests that must not get the JSON accept profile or be rate-limited.
+const isCoverUrl = (url: string): boolean => /\/cover(\?|$)/.test(url);
+
+// The rate limiter's image regex only skips URLs with an image extension, which
+// the extensionless cover endpoint lacks — skip it explicitly so covers, the bulk
+// of requests, aren't throttled.
+export class NovelArchiveRateLimiter extends BasicRateLimiter {
+  override async interceptRequest(request: Request): Promise<Request> {
+    if (isCoverUrl(request.url)) return request;
+    return super.interceptRequest(request);
+  }
+}
+
 export class NovelArchiveInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
-    // API calls need the browser's JSON accept profile; other requests get only referer + UA.
-    const isApi = request.url.startsWith(API_URL);
+    // API calls need the browser's JSON accept profile; covers and other requests get only referer + UA.
+    const isApi = request.url.startsWith(API_URL) && !isCoverUrl(request.url);
     return {
       ...request,
       headers: {

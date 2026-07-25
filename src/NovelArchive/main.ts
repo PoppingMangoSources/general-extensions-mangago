@@ -2,7 +2,6 @@
 /* Copyright © 2026 Inkdex */
 
 import {
-  BasicRateLimiter,
   CookieStorageInterceptor,
   DiscoverSectionType,
   type AdvancedSearchForm,
@@ -42,6 +41,7 @@ import {
   novelsFeedUrl,
   novelsUrl,
   NovelArchiveInterceptor,
+  NovelArchiveRateLimiter,
   resolveUrlQuery,
 } from "./network";
 import {
@@ -63,7 +63,7 @@ import {
 import type NovelArchiveConfig from "./pbconfig";
 
 export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> {
-  private globalRateLimiter = new BasicRateLimiter("rateLimiter", {
+  private globalRateLimiter = new NovelArchiveRateLimiter("rateLimiter", {
     numberOfRequests: 20,
     bufferInterval: 5,
     ignoreImages: true,
