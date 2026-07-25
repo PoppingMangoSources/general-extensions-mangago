@@ -51,7 +51,7 @@ export const decodeId = (value: string): string => {
   }
 };
 
-const parseCover = (novel: Novel): string => {
+const parseCoverUrl = (novel: Novel): string => {
   const path = novel.cover_url ?? novel.image_url ?? novel.novel_image;
   if (!path) return "";
   return path.startsWith("http") ? path : `${DOMAIN}${path.startsWith("/") ? "" : "/"}${path}`;
@@ -85,15 +85,13 @@ const formatCount = (count: number): string => {
   return count.toString();
 };
 
-const titleCase = (value: string): string =>
-  value
+const parseStatus = (novel: Novel): string | undefined => {
+  const status = (novel.release_status ?? novel.ongoing)?.trim();
+  if (!status) return undefined;
+  return status
     .toLowerCase()
     .replace(/_/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
-
-const parseStatus = (novel: Novel): string | undefined => {
-  const status = novel.release_status ?? novel.ongoing;
-  return status ? titleCase(status.trim()) : undefined;
 };
 
 const cleanDescription = (value?: string | null): string => {
@@ -158,7 +156,7 @@ const repairMojibake = (value: string): string => {
   return out;
 };
 
-const dotJoin = (...parts: (string | undefined)[]): string =>
+const joinWithBullet = (...parts: (string | undefined)[]): string =>
   parts.filter((part): part is string => Boolean(part)).join(" • ");
 
 export const parseNovelList = (novels: Novel[]): NovelListItem[] =>
@@ -175,7 +173,7 @@ export const parseNovelList = (novels: Novel[]): NovelListItem[] =>
     return {
       mangaId: encodeId(String(novel.id)),
       title: decodeText(novel.title),
-      imageUrl: parseCover(novel),
+      imageUrl: parseCoverUrl(novel),
       contentRating: contentRatingForGenres(genres),
       genres,
       summary: cleanDescription(novel.description) || undefined,
@@ -233,7 +231,7 @@ export const toCardItem = (
     mangaId: item.mangaId,
     imageUrl: item.imageUrl,
     title: item.title,
-    subtitle: dotJoin(lead, item.genres[0]) || undefined,
+    subtitle: joinWithBullet(lead, item.genres[0]) || undefined,
     contentRating: item.contentRating,
   };
 };
@@ -246,7 +244,7 @@ export const toChapterUpdateItem = (item: NovelListItem): DiscoverSectionItem | 
     chapterId: String(item.chapterCount),
     imageUrl: item.imageUrl,
     title: item.title,
-    subtitle: dotJoin(`Ch. ${item.chapterCount}`, item.genres[0]) || undefined,
+    subtitle: joinWithBullet(`Ch. ${item.chapterCount}`, item.genres[0]) || undefined,
     publishDate: item.publishDate,
     contentRating: item.contentRating,
   };
@@ -267,8 +265,10 @@ export const toSearchResultItem = (item: NovelListItem): SearchResultItem => ({
   title: item.title,
   imageUrl: item.imageUrl,
   subtitle:
-    dotJoin(item.rating != null ? `★ ${item.rating.toFixed(1)}` : undefined, item.genres[0]) ||
-    undefined,
+    joinWithBullet(
+      item.rating != null ? `★ ${item.rating.toFixed(1)}` : undefined,
+      item.genres[0],
+    ) || undefined,
   contentRating: item.contentRating,
 });
 
@@ -302,7 +302,7 @@ export const parseMangaDetails = (novel: Novel): SourceManga => {
     mangaInfo: {
       primaryTitle,
       secondaryTitles,
-      thumbnailUrl: parseCover(novel),
+      thumbnailUrl: parseCoverUrl(novel),
       synopsis: cleanDescription(novel.description),
       author: decodeText(novel.author) || undefined,
       status: parseStatus(novel),
