@@ -22,14 +22,11 @@ import {
   type LuaTrendingItem,
 } from "./models";
 
-// Paperback rejects ids containing characters outside this set.
 const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
 
 const sanitizeId = (value: string): string =>
   value.toLowerCase().replace(SAFE_ID_REGEX, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 
-// Slugs double as ids; unusual characters are percent-encoded so the original
-// slug can always be recovered for request URLs.
 export const encodeSlugId = (slug: string): string =>
   slug.replace(SAFE_ID_REGEX, (char) => encodeURIComponent(char));
 
@@ -94,16 +91,12 @@ const chapterCount = (
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 };
 
-// Page data arrives split across script-string chunks with escaped quotes;
-// joining the chunks before unescaping keeps embedded arrays parseable.
 const flightPayload = (html: string): string =>
   html
     .replace(/"\]\)\s*;?\s*(?:<\/script>\s*<script>\s*)?self\.__next_f\.push\(\[1,\s*"/g, "")
     .replace(/\\"/g, '"')
     .replace(/\\\\/g, "\\");
 
-// Walks a JSON array starting at `from`, tracking string state so brackets
-// inside values do not desync the depth counter.
 const sliceJsonArray = (text: string, from: number): string | undefined => {
   let depth = 0;
   let inString = false;
@@ -137,8 +130,6 @@ const extractArray = <T>(payload: string, key: string): T[] => {
   }
 };
 
-// Long strings arrive as row references ("$1d") pointing at a `1d:T<hexlen>,`
-// text row elsewhere in the payload; inline values pass through unchanged.
 const resolveFlightText = (
   payload: string,
   value: string | null | undefined,
@@ -158,8 +149,6 @@ const resolveFlightText = (
   const length = parseInt(payload.slice(index + marker.length, comma), 16);
   if (!Number.isFinite(length) || length <= 0) return undefined;
 
-  // The declared length counts bytes of the raw stream; cut at the next row
-  // boundary as well so multi-byte text can't bleed into the following row.
   const chunk = payload.slice(comma + 1, comma + 1 + length);
   const boundary = chunk.search(/\n[0-9a-f]{1,4}:/i);
   return (boundary === -1 ? chunk : chunk.slice(0, boundary)).trim() || undefined;
@@ -183,6 +172,65 @@ export const parseHomePage = (html: string): LuaHomePage => {
     editors: extractArray<LuaSeries>(payload, "pinned_series").map((series) =>
       resolveSeriesText(payload, series),
     ),
+  };
+};
+
+const parseMetaContent = (html: string, property: string): string | undefined => {
+  const escaped = property.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = html.match(
+    new RegExp(`<meta[^>]+(?:name|property)=["']${escaped}["'][^>]+content=["']([^"']*)["']`, "i"),
+  );
+  return match?.[1] ? Application.decodeHTMLEntities(match[1]) : undefined;
+};
+
+const parseJsonNumber = (payload: string, key: string): number | undefined => {
+  const match = payload.match(new RegExp(`"${key}"\\s*:\\s*(\\d+)`));
+  if (!match) return undefined;
+  const value = parseInt(match[1], 10);
+  return Number.isFinite(value) ? value : undefined;
+};
+
+const parseJsonString = (payload: string, key: string): string | undefined => {
+  const match = payload.match(new RegExp(`"${key}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`));
+  if (!match) return undefined;
+  try {
+    return JSON.parse(`"${match[1]}"`) as string;
+  } catch {
+    return match[1];
+  }
+};
+
+export const parseSeriesPage = (html: string, slug: string): LuaSeries => {
+  const payload = flightPayload(html);
+  const titleFromMeta = parseMetaContent(html, "og:title")?.replace(/\s+-\s+Lua Comic$/i, "");
+  const descriptionFromMeta = parseMetaContent(html, "og:description")?.replace(
+    new RegExp(`^Read\\s+${(titleFromMeta ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s+on\\s+Lua Comic\\s*-\\s*`, "i"),
+    "",
+  );
+
+  const id = parseJsonNumber(payload, "id");
+  const seriesSlug = parseJsonString(payload, "series_slug") ?? slug;
+  if (!id) throw new Error(`Series id not found: ${slug}`);
+
+  return {
+    id,
+    title: titleFromMeta ?? parseJsonString(payload, "title") ?? slug,
+    description: descriptionFromMeta ?? parseJsonString(payload, "description") ?? null,
+    alternative_names: parseJsonString(payload, "alternative_names") ?? null,
+    series_type: parseJsonString(payload, "series_type") ?? "Comic",
+    series_slug: seriesSlug,
+    thumbnail: parseMetaContent(html, "og:image") ?? parseJsonString(payload, "thumbnail") ?? null,
+    total_views: parseJsonNumber(payload, "total_views") ?? null,
+    status: parseJsonString(payload, "status") ?? null,
+    created_at: parseJsonString(payload, "created_at") ?? null,
+    updated_at: parseJsonString(payload, "updated_at") ?? null,
+    badge: parseJsonString(payload, "badge") ?? null,
+    author: parseJsonString(payload, "author") ?? null,
+    rating: parseJsonNumber(payload, "rating") ?? null,
+    tags: extractArray<{ name?: string | null }>(payload, "tags"),
+    meta: {
+      chapters_count: parseJsonNumber(payload, "chapters_count") ?? null,
+    },
   };
 };
 
@@ -227,9 +275,7 @@ export const toBannerItems = (banners: LuaBanner[]): DiscoverSectionItem[] =>
         infoItems:
           views == null
             ? undefined
-            : ([
-                { symbol: "eye.fill", text: formatCount(views) },
-              ] as FeaturedCarouselItem["infoItems"]),
+            : ([{ symbol: "eye.fill", text: formatCount(views) }] as FeaturedCarouselItem["infoItems"]),
         contentRating: ContentRating.MATURE,
       },
     ];
@@ -396,8 +442,6 @@ export const parseChapterList = (
 };
 
 export const parseChapterPages = (html: string, chapter: Chapter): ChapterDetails => {
-  // Reader pages embed their image list in the page payload under
-  // "chapter_data":{"images":[...]}; fall back to DOM <img> sources.
   const payload = flightPayload(html);
   let pages: string[] = [];
 
