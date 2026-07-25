@@ -27,11 +27,11 @@ import {
 } from "./models";
 import { decodeId, dedupe, encodeId, parseMangaDetails, pickGenreValues } from "./parsers";
 
-// Covers come from extensionless /api/novels/{id}/cover URLs — images, not JSON.
+// The cover endpoint (/api/novels/{id}/cover?...&format=webp) has no dotted image
+// extension, so the limiter's image regex misses it — skip it here so covers,
+// the bulk of requests, aren't throttled. It still needs the /api header profile.
 const isCoverUrl = (url: string): boolean => /\/cover(\?|$)/.test(url);
 
-// The limiter's image regex needs an extension, so extensionless covers would be
-// throttled; skip them since covers are the bulk of requests.
 export class NovelArchiveRateLimiter extends BasicRateLimiter {
   override async interceptRequest(request: Request): Promise<Request> {
     if (isCoverUrl(request.url)) return request;
@@ -41,8 +41,9 @@ export class NovelArchiveRateLimiter extends BasicRateLimiter {
 
 export class NovelArchiveInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
-    // API calls need the browser's JSON accept profile; covers and other requests get only referer + UA.
-    const isApi = request.url.startsWith(API_URL) && !isCoverUrl(request.url);
+    // Every /api/ request — including the cover endpoint, which 404s without it —
+    // needs the browser header profile; other requests get only referer + UA.
+    const isApi = request.url.startsWith(API_URL);
     return {
       ...request,
       headers: {
