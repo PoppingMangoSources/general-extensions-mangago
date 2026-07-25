@@ -1,13 +1,15 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
+import type { ContentRating, SortingOption } from "@paperback/types";
+
 export const DOMAIN = "https://novelarchive.cc";
-export const API_URL = "https://novelarchive.cc/api";
+export const API_URL = `${DOMAIN}/api`;
 export const PAGE_SIZE = 24;
 
-// The house mark distinguishes chapters hosted by the site itself from
-// chapters mirrored in from its alternate sources.
-export const NATIVE_VERSION = "NovelArchive 𖠿";
+// Distinguishes chapters hosted by the site itself from chapters mirrored
+// in from its alternate sources.
+export const NATIVE_VERSION = "NovelArchive";
 
 export const SECTIONS = {
   TRENDING: "trending",
@@ -36,18 +38,20 @@ export const ADULT_EXCLUSIONS = [
   "Pornographic",
 ];
 
+// Lowercased genres that classify a title's contentRating (distinct from
+// ADULT_EXCLUSIONS above, which are display names sent to the filter).
 export const ADULT_RATING_GENRES = [
   "adult",
   "smut",
-  "mature",
   "erotica",
-  "ecchi",
   "hentai",
   "explicit",
   "nsfw",
   "r-18",
   "lewd",
 ];
+
+export const MATURE_RATING_GENRES = ["mature", "ecchi"];
 
 export type PageMetadata = { page?: number };
 
@@ -80,35 +84,34 @@ export interface Novel {
   views_number?: number | null;
   rating?: number | null;
   rating_count?: number | null;
-  latest_release?: string | null;
   release_status?: string | null;
   ongoing?: string | null;
   updated_at?: string | null;
   chapter_names?: string[] | null;
 }
 
-export interface Pagination {
-  page: number;
-  per_page: number;
-  total: number;
-  total_pages: number;
-  has_prev: boolean;
-  has_next: boolean;
+// Normalized listing shape produced once by parseNovelList; the discover and
+// search handlers map it to their specific item type at the call site.
+export interface NovelListItem {
+  mangaId: string;
+  title: string;
+  imageUrl: string;
+  contentRating: ContentRating;
+  genres: string[];
+  summary?: string;
+  rating?: number;
+  views?: number;
+  chapterCount: number;
+  publishDate?: Date;
 }
 
 export interface NovelListResponse {
   novels?: Novel[];
-  pagination?: Pagination;
-}
-
-export interface ChapterContent {
-  number?: number;
-  name?: string;
-  content?: string | null;
+  pagination?: { has_next?: boolean };
 }
 
 export interface ChapterContentResponse {
-  chapter?: ChapterContent;
+  chapter?: { content?: string | null };
   content?: string | null;
 }
 
@@ -136,12 +139,13 @@ export interface SourceChapterContentResponse {
   chapter?: { content_html?: string | null; content?: string | null } | null;
 }
 
-export const SORT_OPTIONS: OptionItem[] = [
-  { id: "recent", value: "Recent" },
-  { id: "popular", value: "Popular" },
-  { id: "rating", value: "Top Rated" },
-  { id: "chapters", value: "Chapters" },
-  { id: "views", value: "Most Viewed" },
+// Single consumer (getSortingOptions), so declared in its final shape.
+export const SORT_OPTIONS: SortingOption[] = [
+  { id: "recent", label: "Recent" },
+  { id: "popular", label: "Popular" },
+  { id: "rating", label: "Top Rated" },
+  { id: "chapters", label: "Chapters" },
+  { id: "views", label: "Most Viewed" },
 ];
 
 export const STATUS_OPTIONS: OptionItem[] = [
