@@ -312,9 +312,8 @@ export const parseMangaDetails = (series: SeriesDto): SourceManga => {
   };
 };
 
-// Some uploads pack the release into the title as "<name> • <group>", where
-// <name> is often just a bare "Chapter N" restatement. Separate the group so it
-// shows as the scanlator, and keep the title only when it adds real information.
+// Some uploads pack the release as "<name> • <group>"; split off the group as
+// scanlator and keep the title only when it's more than a bare "Chapter N".
 const parseChapterTitle = (chapter: ChapterDto): { title?: string; group?: string } => {
   const raw = chapter.title?.trim();
   if (!raw) return {};

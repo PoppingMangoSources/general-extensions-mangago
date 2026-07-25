@@ -69,7 +69,7 @@ export class OMangaInterceptor extends PaperbackInterceptor {
       response.headers?.["cf-mitigated"] === "challenge" ||
       (response.status === 403 && request.url.startsWith(getDomain()));
     if (challenged) {
-      // Throw to the site root: API/RSC paths can't render the interstitial, and solving it there clears the clearance cookie domain-wide.
+      // Solve at the site root: API/RSC paths can't render the challenge, and clearing it there frees the cookie domain-wide.
       throw new CloudflareError({
         url: `${getDomain()}/`,
         method: "GET",

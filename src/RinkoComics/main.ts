@@ -218,9 +218,8 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
     const $ = await fetchCheerio({ url: this.mangaUrl(sourceManga.mangaId), method: "GET" });
 
-    // Collect every chapter (locked included) so AJAX pages made up entirely
-    // of locked chapters don't look like end-of-data; the hide-locked filter
-    // is applied once over the final list instead.
+    // Collect every chapter (locked included) so all-locked AJAX pages don't
+    // look like end-of-data; hide-locked is applied once over the final list.
     const chapters = new Map<string, Chapter>();
     const addAll = (items: Chapter[]) => {
       for (const chapter of items) {

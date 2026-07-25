@@ -28,8 +28,7 @@ import { decodeId, dedupe, encodeId, parseMangaDetails, pickGenreValues } from "
 
 export class NovelArchiveInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
-    // API calls carry the browser's JSON profile (the backend answers those
-    // faster); everything else carries only the referer and user agent.
+    // API calls need the browser's JSON accept profile; other requests get only referer + UA.
     const isApi = request.url.startsWith(API_URL);
     return {
       ...request,
@@ -55,8 +54,8 @@ export class NovelArchiveInterceptor extends PaperbackInterceptor {
   ): Promise<ArrayBuffer> {
     const cfMitigated = response.headers?.["cf-mitigated"];
     if (cfMitigated === "challenge") {
-      // API paths can't render the challenge; solving it on the site root
-      // clears the clearance cookie domain-wide, funneling every hit to one bypass.
+      // API paths can't render the challenge; bounce to the site root so one
+      // bypass clears the clearance cookie domain-wide.
       throw new CloudflareError({
         url: `${DOMAIN}/`,
         method: "GET",
@@ -114,8 +113,7 @@ export const fetchBrowse = async (url: string): Promise<{ novels: Novel[]; hasNe
   return { novels: data.novels ?? [], hasNext: data.pagination?.has_next ?? false };
 };
 
-// Mirror listings are optional extras; their absence should not take the
-// native chapter list down with them.
+// Mirror listings are optional; their failure must not sink the native chapter list.
 export const fetchSources = async (id: string): Promise<NovelSource[]> => {
   try {
     const data = await fetchApi<NovelSource[] | SourceListResponse>(novelsUrl(id, "sources"));
@@ -162,8 +160,7 @@ export const buildNovelsUrl = (opts: {
   if (opts.status && opts.status !== "all") url.setQueryItem("status", opts.status);
   if (opts.genreMatch) url.setQueryItem("genre_match", opts.genreMatch);
 
-  // The API matches genre filters against lowercased names, so send lowercase
-  // values (as the site does) to keep the NSFW/genre filters reliable.
+  // The API matches genre filters on lowercased names, so send lowercase (as the site does).
   const defaults = getDefaultGenres();
   const includes = dedupe(
     [...(opts.genresInclude ?? []), ...pickGenreValues(defaults, "included")].map((genre) =>

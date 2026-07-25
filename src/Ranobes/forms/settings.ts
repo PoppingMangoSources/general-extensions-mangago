@@ -52,8 +52,7 @@ export class RanobesSettingsForm extends Form {
 
   async handleWebViewCancel(): Promise<void> {}
 
-  // A stale clearance can make the protection stall requests outright; wiping
-  // the stored session lets the next solve start clean.
+  // Stale clearance can stall requests; wiping the session lets the next solve start clean.
   async handleResetSession(): Promise<void> {
     this.cookieStorage.cookies = [];
   }

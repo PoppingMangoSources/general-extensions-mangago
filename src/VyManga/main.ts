@@ -309,8 +309,7 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
     const $ = await fetchCheerio({ url: this.browseUrl("viewed", 1), method: "GET" });
     const cards = parseCards($, this.baseUrl).slice(0, FEATURED_LIMIT);
 
-    // Built from the "most viewed" browse listing alone — no per-card detail
-    // fetch. Author and synopsis are not present on the listing cards.
+    // "Most viewed" listing only; cards carry no author or synopsis.
     const items = cards.map(
       (card): DiscoverSectionItem => ({
         type: "featuredCarouselItem",

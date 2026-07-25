@@ -69,9 +69,8 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
 
   private taxonomyPromise?: Promise<FilterTaxonomy>;
 
-  // A long novel's chapter list spans dozens of sequential page fetches; the
-  // protection reads repeating that crawl on every visit as automation, so
-  // one successful crawl is reused for a while.
+  // A long chapter list spans dozens of sequential fetches; repeating that
+  // crawl every visit reads as automation, so one crawl is cached for a while.
   private chapterPagesCache?: {
     novelId: string;
     pages: ReturnType<typeof parseChapterPage>[];
@@ -192,9 +191,8 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     const firstPage = parseChapterPage(cheerio.load(await fetchChapterListPage(novelId)));
     const pageCount = Math.max(1, firstPage.pages_count ?? 1);
 
-    // Pages are fetched one at a time: a parallel burst of sequential page
-    // numbers reads as automation to the site's protection, and a challenge
-    // mid-list should stop the remaining requests instead of firing them all.
+    // Fetch pages one at a time: a parallel burst reads as automation, and a
+    // challenge mid-list should halt the rest instead of firing them all.
     const pages = [firstPage];
     for (let page = 2; page <= pageCount; page++) {
       pages.push(parseChapterPage(cheerio.load(await fetchChapterListPage(novelId, page))));

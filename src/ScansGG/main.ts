@@ -153,8 +153,7 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
     }
 
     if (section.id === SECTIONS.POPULAR) {
-      // Built from the monthly-popular listing alone; content rating still
-      // comes from each series' own tags, so adult filtering is unaffected.
+      // Monthly-popular listing only; ratings still come from each series' tags, so adult filtering is unaffected.
       const monthly = await this.fetchPopularSeries("monthly", undefined, contentFilters);
       return {
         items: monthly.slice(0, TOP_MANGA_SIZE).map(toFeaturedItem).filter(hasImage),
@@ -424,8 +423,7 @@ export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
       return toDetails(await Promise.any(attempts));
     } catch (error) {
       if (error instanceof CloudflareError) throw error;
-      // Promise.any rejects with an AggregateError; surface a challenge from
-      // any individual attempt instead of falling through to the webview.
+      // Promise.any wraps failures in AggregateError; surface any challenge instead of falling through to the webview.
       if (error instanceof AggregateError) {
         const challenge = error.errors.find((cause) => cause instanceof CloudflareError);
         if (challenge) throw challenge;

@@ -297,8 +297,7 @@ export const isLastListingPage = ($: cheerio.CheerioAPI): boolean =>
 
 const parseSynopsis = ($: cheerio.CheerioAPI): string => {
   const container = $(".r-desription .cont-text").first().clone();
-  // Some titles carry their genre and tag links inside the description
-  // container; they belong to the tag list, not the prose.
+  // Some titles put genre/tag links in the description container; they belong to tags, not prose.
   container.find('a[href*="/genre"], a[href*="/tags/"], a[href*="/category/"]').remove();
   const html = container.html() ?? "";
   return cleanText(
@@ -386,9 +385,8 @@ export const parseChapterPage = ($: cheerio.CheerioAPI): RanobesChapterPage => {
   }
 };
 
-// Chapter timestamps arrive zoneless in the site's own clock; reading them as
-// device-local time makes fresh chapters sit in the future and render as
-// negative ages. Treat them as UTC and clamp any remaining zone gap to now.
+// Chapter timestamps arrive zoneless; treating them as device-local makes fresh
+// ones render as negative ages. Read as UTC and clamp any remaining gap to now.
 const parseChapterDate = (value: string): Date | undefined => {
   const text = value.trim();
   if (!text) return undefined;
@@ -431,7 +429,7 @@ export const parseChapters = (pages: RanobesChapterPage[], sourceManga: SourceMa
     );
   if (!entries.length) throw new Error(`Ranobes: no chapters found for ${sourceManga.mangaId}`);
 
-  // The site lists chapters newest-first; keep that order and give the newest the highest index.
+  // Site lists chapters newest-first; keep that order, newest gets the highest index.
   const total = entries.length;
   return entries.map((entry, index) => {
     const chapter = parseChapterTitle(entry.title);

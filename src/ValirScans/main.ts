@@ -195,9 +195,8 @@ export class ValirScansExtension implements ExtensionImpl<typeof ValirScansConfi
     return this.taxonomyPromise;
   }
 
-  // Every homepage discover section is fed by the same document; sharing one
-  // in-flight fetch keeps a refresh burst to a single request while still
-  // re-fetching fresh data on the next refresh.
+  // Every homepage section is fed by one document; share the in-flight fetch so
+  // a refresh burst is a single request, while still refetching on next refresh.
   private getHomeSections(): Promise<HomeSections> {
     this.homePromise ??= fetchHomePage()
       .then(parseHomeSections)

@@ -17,59 +17,46 @@ import {
 } from "./models";
 import { getPageDelaySeconds } from "./utils/helpers";
 
-// Matches a reader page-API url and captures the chapter id and page order,
-// e.g. https://onisaga.com/api/chapter/3718181/page/0 -> ["3718181", "0"].
+// Reader page-API url; captures chapter id + page order.
 const PAGE_API_REGEX = /\/api\/chapter\/([^/]+)\/page\/(\d+)/;
 
-// Marks the source's internal page-API lookup. The marker is removed in
-// interceptRequest before anything is sent to onisaga; it only prevents the
-// nested lookup from recursively trying to resolve itself.
+// Marks the internal page-API lookup; stripped in interceptRequest, prevents the
+// nested lookup from recursively resolving itself.
 const PAGE_RESOLVE_HEADER = "x-pb-page-resolve";
 
-// Kept internal to the lazy resolver. A nested scheduleRequest challenge must
-// be promoted to the outer page response before Paperback can launch bypass.
+// A nested scheduleRequest challenge must be promoted to the outer page response
+// before Paperback can launch bypass.
 class PageResolverCloudflareChallengeError extends Error {}
 
-// Bounds re-entrant page retries (the retry re-runs both interceptors); matches
-// keiyoushi's `attempt < 3` retry cap.
+// Bounds re-entrant page retries; matches keiyoushi's `attempt < 3` cap.
 const PAGE_RETRY_HEADER = "x-pb-page-retry";
 const PAGE_RETRY_LIMIT = 3;
-// Fallback wait when a 429 carries no Retry-After — the even-spacing delay, like
-// keiyoushi's `rateLimitDelay` fallback.
+// Fallback wait when a 429 carries no Retry-After (keiyoushi's `rateLimitDelay`).
 const RATE_LIMIT_FALLBACK_MS = 2000;
-// Ceiling for ordinary, non-reader Retry-After values. The protected page API's
-// much longer block is handled by the separate rolling-budget circuit below.
+// Ceiling for ordinary, non-reader Retry-After values; the page API's much longer
+// block uses the separate rolling-budget circuit below.
 const MAX_COOLDOWN_MS = 90_000;
 
-// A signed CDN URL is valid ~10 min; reuse a cached one for up to 9 (matching
-// the site reader's _cdnUrls window) so scroll-back and re-opens spend no
-// page-API call, leaving a safe margin before the signature expires.
+// Signed CDN URL valid ~10 min; cache 9 min (site reader's _cdnUrls window) so
+// scroll-back/re-opens spend no page-API call, with margin before expiry.
 const SIGNED_URL_TTL_MS = 9 * 60 * 1000;
-// Cap the signed-URL cache so a long binge across many chapters can't grow it
-// without bound; the oldest entry is evicted first (Map keeps insertion order).
+// Cap the signed-URL cache; oldest evicted first (Map keeps insertion order).
 const SIGNED_URL_CACHE_MAX = 512;
 
-// Two field runs isolated a second, long reader budget that is unrelated to the
-// advertised 300-request counter: a clean binge first 429ed around protected
-// lookup 389, stayed blocked after new Laravel sessions/tokens, and recovered
-// after the oldest requests were over an hour old. Keep 50 calls of headroom
-// below the observed ~400 ceiling for reader-page loads, token refreshes and
-// clock/window uncertainty. The 65-minute window adds a five-minute boundary
-// margin.
+// A second long reader budget, unrelated to the advertised 300-request counter:
+// field runs 429ed near protected lookup ~389 and only recovered once the oldest
+// requests aged past an hour. Keep 50 headroom below the observed ~400 ceiling;
+// the 65-minute window adds a boundary margin.
 export const PAGE_BUDGET_WINDOW_MS = 65 * 60 * 1000;
 export const PAGE_BUDGET_MAX_REQUESTS = 350;
 
-// Allow a normal chapter/prefetch run to start quickly, then refill at a rate
-// that mathematically stays inside 350 requests in any 65-minute window:
-// 30 initial tokens + 320 refills over the window. The existing rolling history
-// remains a hard backstop and safely covers migration from alpha.16.
+// Start fast, then refill at a rate that stays inside 350/65-min: 30 burst tokens
+// + 320 refills. The rolling history remains a hard backstop (covers alpha.16).
 export const PAGE_BURST_CAPACITY = 30;
 export const PAGE_TOKEN_REFILL_INTERVAL_MS =
   PAGE_BUDGET_WINDOW_MS / (PAGE_BUDGET_MAX_REQUESTS - PAGE_BURST_CAPACITY);
 
-// Short pacing delays are worth hiding behind prefetch. A wait longer than this
-// is surfaced immediately with a countdown so Paperback never sits at 0% for
-// most of an hour with no explanation.
+// Waits longer than this surface a countdown instead of holding Paperback at 0%.
 export const PAGE_MAX_INLINE_WAIT_MS = 30_000;
 
 export type PageTokenBucketState = {
@@ -77,14 +64,12 @@ export type PageTokenBucketState = {
   updatedAt: number;
 };
 
-// Shared page-API circuit. An unexpected 429 parks the retry and every queued
-// prefetch page for the measured long safety window, preventing one response
-// from turning into minute-by-minute probes against the still-saturated quota.
+// Shared page-API circuit: a 429 parks the retry and all queued pages for the
+// long safety window, avoiding minute-by-minute probes against a saturated quota.
 const pageCooldown = { until: 0 };
 
-// Paperback currently reports a bare iOS WebView UA. Cloudflare can treat that
-// differently from the full Safari UA used by its challenge WebView, so complete
-// only the missing browser tokens while preserving the device/OS fingerprint.
+// Paperback reports a bare iOS WebView UA; Cloudflare treats it differently from
+// the challenge WebView's full Safari UA, so fill only the missing browser tokens.
 export function completeMobileSafariUserAgent(userAgent: string): string {
   if (!/\b(?:iPhone|iPad|iPod)\b/.test(userAgent) || /\bSafari\//.test(userAgent)) {
     return userAgent;
@@ -134,10 +119,9 @@ export function getRetryDelayMs(headers: Record<string, string> | undefined): nu
   return Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : RATE_LIMIT_FALLBACK_MS;
 }
 
-// Cloudflare normally labels a managed challenge with `cf-mitigated`, as in
-// the captured reader 403. Keep a narrow HTML fallback for proxies/runtimes that
-// omit that header, without mistaking onisaga's ordinary JSON token 403s for a
-// challenge just because the site itself is proxied through Cloudflare.
+// Cloudflare marks managed challenges with `cf-mitigated`; keep a narrow HTML
+// fallback for runtimes that omit it, without mistaking onisaga's JSON token 403s
+// for a challenge just because the site sits behind Cloudflare.
 export function isCloudflareChallengeResponse(
   url: string,
   status: number,
@@ -170,9 +154,8 @@ export function normalisePageRequestStarts(value: unknown, now: number): number[
     .slice(-PAGE_BUDGET_MAX_REQUESTS);
 }
 
-// Earliest safe start under the persisted rolling budget. Returning `now` means
-// the request may proceed immediately; at capacity, the oldest charged lookup
-// must age out first.
+// Earliest safe start under the rolling budget; at capacity the oldest charged
+// lookup must age out first.
 export function pageBudgetReadyAt(starts: number[], now: number): number {
   const recent = normalisePageRequestStarts(starts, now);
   if (recent.length < PAGE_BUDGET_MAX_REQUESTS) return now;
@@ -203,10 +186,9 @@ function isPageTokenBucketState(value: unknown, now: number): value is PageToken
   );
 }
 
-// Restore the persisted bucket and reconcile any history entries written after
-// it (for example if the app stopped between the two state writes). On first
-// alpha.17 launch, replay the retained alpha.16 history from a full bucket so a
-// busy existing install does not receive a fresh 30-request burst.
+// Restore the bucket and reconcile history entries written after it (e.g. the app
+// stopped between the two writes). On first alpha.17 launch, replay alpha.16
+// history from a full bucket so a busy install doesn't get a fresh 30-request burst.
 export function normalisePageTokenBucket(
   value: unknown,
   starts: number[],
@@ -272,8 +254,8 @@ function rememberLongPageBlock(now: number): number {
 }
 
 export class OniSagaInterceptor extends PaperbackInterceptor {
-  // Per-chapter reader sessions (chapterId -> token + reader-page referer) set
-  // by getChapterDetails; the page API wants both, like the site's own reader.
+  // Per-chapter reader sessions (chapterId -> token + reader-page referer) set by
+  // getChapterDetails; the page API wants both, like the site's own reader.
   private readerSessions = new Map<
     string,
     {

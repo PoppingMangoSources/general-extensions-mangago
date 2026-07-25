@@ -73,8 +73,7 @@ export const fetchText = async (url: string): Promise<string> => {
   return Application.arrayBufferToUTF8String(buffer);
 };
 
-// The site's own tags endpoint has historically returned an empty list; callers
-// fall back to a static genre list when this yields nothing.
+// The tags endpoint has historically returned an empty list; callers fall back to static genres.
 export const fetchTags = async (): Promise<OptionItem[]> => {
   const url = new URL(API_URL).addPathComponent("tags").toString();
   const raw = await fetchJSON<LuaTag[] | { data?: LuaTag[] }>(url);

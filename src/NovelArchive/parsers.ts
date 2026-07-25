@@ -319,8 +319,7 @@ export const parseChapters = (
     const { chapNum, title } = cleanChapterName((rawName ?? "").trim());
     const chapterNumber = chapNum ?? index + 1;
     return {
-      // The API addresses native chapters by list position, so the position
-      // is the canonical chapter identifier.
+      // Native chapters are addressed by list position, so it is the id.
       chapterId: String(index + 1),
       sourceManga,
       langCode: "en",
@@ -357,8 +356,7 @@ export const parseSourceChapters = (
     };
   });
 
-// The heading gives each rendered chapter a visible title, and the reader
-// parses the chapter as XHTML, so all content is escaped into closed tags.
+// The reader parses chapters as XHTML, so escape content into closed tags.
 const wrapXhtml = (bodyHtml: string, heading: string): string => {
   const title = heading ? `<h2>${escapeXml(heading)}</h2>` : "";
   return `<html xmlns="http://www.w3.org/1999/xhtml"><head></head><body>${title}${bodyHtml}</body></html>`;

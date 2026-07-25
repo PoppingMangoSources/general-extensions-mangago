@@ -32,10 +32,8 @@ const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
 const sanitizeId = (value: string): string =>
   value.toLowerCase().replace(SAFE_ID_REGEX, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 
-// ValirScans is a Next.js App Router site: page data ships as an RSC flight
-// stream whose JSON is embedded inside escaped JS string literals. Undo the
-// string-literal escaping once, then slice balanced JSON values out of the
-// stream anchored by their property keys.
+// Page data ships in a Next.js RSC flight stream as escaped JS string literals;
+// undo that escaping so JSON values can later be sliced out by their keys.
 const decodeFlightPayload = (html: string): string =>
   html.replace(/\\"/g, '"').replace(/\\\\/g, "\\");
 
@@ -145,9 +143,8 @@ export const parseHomeSections = (html: string): HomeSections => {
   };
 };
 
-// The browse page's filter component receives the full genre and tag lists as
-// flat `{ id, name, slug }` records; series cards nest genres differently, so
-// matching on top-level name+slug isolates the taxonomy lists.
+// The filter component holds the full genre/tag lists as flat `{ name, slug }`
+// records; match on top-level name+slug to isolate them from nested card data.
 export const parseFilterTaxonomy = (html: string): FilterTaxonomy => {
   const payload = decodeFlightPayload(html);
   const pick = (key: string): FilterOption[] =>
@@ -255,9 +252,8 @@ export const parseChapters = (
 const fixVoidElements = (html: string): string =>
   html.replace(/<(br|hr|img|input|meta|link)((?:[^>"']|"[^"]*"|'[^']*')*?)\/?>/gi, "<$1$2 />");
 
-// Novel prose is emitted as a Next.js flight text chunk referenced by a
-// pointer (e.g. `"content":"$1b"` → row `1b:T<hexlen>,<utf8 bytes>`). Resolve
-// the pointer and slice exactly the chunk's byte length out of the stream.
+// Novel prose is a flight text chunk referenced by a pointer
+// (e.g. `"content":"$1b"` → row `1b:T<hexlen>,<bytes>`); resolve and slice it.
 const resolveContentRef = (payload: string, ref: string): string | undefined => {
   const header = new RegExp(`(?:^|\\n)${ref.slice(1)}:T([0-9a-f]+),`).exec(payload);
   if (!header) return undefined;
@@ -282,9 +278,8 @@ export const parseChapterDetails = (html: string, chapter: Chapter): ChapterDeta
     throw new Error(`ValirScans: no chapter data found for chapter ${chapter.chapterId}`);
   }
 
-  // Novels ship their prose in `content`; comics ship image `pages`. Prefer
-  // the text body so a novel that also carries placeholder page entries still
-  // reads as a novel.
+  // Novels ship prose in `content`, comics ship image `pages`; prefer the text
+  // body so a novel with placeholder page entries still reads as a novel.
   let content = data.content?.trim();
   if (content?.startsWith("$")) {
     content = resolveContentRef(payload, content)?.trim();

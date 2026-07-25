@@ -7,8 +7,7 @@ export const DOMAIN = "https://novelarchive.cc";
 export const API_URL = `${DOMAIN}/api`;
 export const PAGE_SIZE = 24;
 
-// Distinguishes chapters hosted by the site itself from chapters mirrored
-// in from its alternate sources.
+// Marks native chapters apart from ones mirrored in from alternate sources.
 export const NATIVE_VERSION = "NovelArchive";
 
 export const SECTIONS = {
@@ -21,8 +20,7 @@ export const SECTIONS = {
   GENRES: "genres",
 } as const;
 
-// Sent to the API's genres_exclude parameter, which matches the display
-// names the site uses for genres.
+// Sent to the API's genres_exclude param; matches the site's genre display names.
 export const ADULT_EXCLUSIONS = [
   "Adult",
   "Smut",
@@ -139,7 +137,6 @@ export interface SourceChapterContentResponse {
   chapter?: { content_html?: string | null; content?: string | null } | null;
 }
 
-// Single consumer (getSortingOptions), so declared in its final shape.
 export const SORT_OPTIONS: SortingOption[] = [
   { id: "recent", label: "Recent" },
   { id: "popular", label: "Popular" },
