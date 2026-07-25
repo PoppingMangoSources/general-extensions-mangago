@@ -18,6 +18,7 @@ import {
   TRANSLATION_STATUS_OPTIONS,
   type FilterTaxonomy,
   type SearchMetadata,
+  type TriState,
 } from "../models";
 
 export class RanobesAdvancedSearchForm extends AdvancedSearchForm {
@@ -258,10 +259,7 @@ export class RanobesAdvancedSearchForm extends AdvancedSearchForm {
     ];
   }
 
-  private async triStateChange(
-    key: keyof SearchMetadata,
-    value: Record<string, "included" | "excluded">,
-  ): Promise<void> {
+  private async triStateChange(key: keyof SearchMetadata, value: TriState): Promise<void> {
     this.setMetadata(key, Object.keys(value).length ? value : undefined);
   }
 
@@ -281,15 +279,15 @@ export class RanobesAdvancedSearchForm extends AdvancedSearchForm {
     this.setMetadata(key, value || undefined);
   }
 
-  async handleGenresChange(value: Record<string, "included" | "excluded">): Promise<void> {
+  async handleGenresChange(value: TriState): Promise<void> {
     return this.triStateChange("genres", value);
   }
 
-  async handleEventsChange(value: Record<string, "included" | "excluded">): Promise<void> {
+  async handleEventsChange(value: TriState): Promise<void> {
     return this.triStateChange("events", value);
   }
 
-  async handleLanguagesChange(value: Record<string, "included" | "excluded">): Promise<void> {
+  async handleLanguagesChange(value: TriState): Promise<void> {
     return this.triStateChange("languages", value);
   }
 

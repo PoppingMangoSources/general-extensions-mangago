@@ -10,7 +10,7 @@ import {
   type SortingOption,
 } from "@paperback/types";
 
-import { DOMAIN, MIRRORS, SORT_ORDERS, type SearchMetadata } from "./models";
+import { DOMAIN, MIRRORS, SORT_ORDERS, type SearchMetadata, type TriState } from "./models";
 
 const MIRROR_HOST = /^https?:\/\/(?:www\.)?ranobes\.[a-z.]+/i;
 
@@ -40,10 +40,7 @@ export const buildSearchPath = (
   const add = (key: string, value?: string) => {
     if (value) segments.push(`${key}=${encodeURIComponent(value).replace(/%20/g, "+")}`);
   };
-  const selected = (
-    values: Record<string, "included" | "excluded"> | undefined,
-    state: "included" | "excluded",
-  ) =>
+  const selected = (values: TriState | undefined, state: "included" | "excluded") =>
     Object.entries(values ?? {})
       .filter(([, value]) => value === state)
       .map(([id]) => filterTitle(id))
