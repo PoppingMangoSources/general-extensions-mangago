@@ -8,11 +8,14 @@ The repository's own sources are currently available from `0.9/test` while they 
 
 | Source                                        | Website               |
 | --------------------------------------------- | --------------------- |
-| [HiveScans](https://hivetoons.org)            | `hivetoons.org`       |
+| [KaliScan](https://kaliscan.io)               | `kaliscan.io`         |
 | [KingOfShojo](https://kingofshojo.com)        | `kingofshojo.com`     |
+| [Lua Comic](https://luacomic.org)             | `luacomic.org`        |
 | [MyReadingManga](https://myreadingmanga.info) | `myreadingmanga.info` |
+| [NovelArchive](https://novelarchive.cc)       | `novelarchive.cc`     |
 | [oManga](https://omanga.to)                   | `omanga.to`           |
 | [OniSaga](https://onisaga.com)                | `onisaga.com`         |
+| [Ranobes](https://ranobes.net)                | `ranobes.net`         |
 | [RinkoComics](https://rinkocomics.com)        | `rinkocomics.com`     |
 | [RokariComics](https://rokaricomics.com)      | `rokaricomics.com`    |
 | [Scans.GG](https://scans.gg)                  | `scans.gg`            |
