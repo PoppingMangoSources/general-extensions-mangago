@@ -107,6 +107,11 @@ export class RanobesInterceptor extends PaperbackInterceptor {
     return {
       ...request,
       headers: {
+        // DDoS-Guard fingerprints the request, so present a full browser-shaped
+        // header set (not just UA + referer) to look like the challenge-solving
+        // webview that earned the clearance cookie.
+        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "accept-language": "en-US,en;q=0.9,ru;q=0.8",
         ...request.headers,
         referer: `${origin}/`,
         "user-agent": await Application.getDefaultUserAgent(),

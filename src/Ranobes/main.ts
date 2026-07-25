@@ -59,8 +59,11 @@ import {
 import type RanobesConfig from "./pbconfig";
 
 export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
+  // ranobes.net sits behind DDoS-Guard, which starts challenging when pages
+  // arrive too fast — long chapter lists are dozens of sequential fetches. The
+  // mature Aidoku source settled on 2 req/s for exactly this reason.
   mainRateLimiter = new BasicRateLimiter("main", {
-    numberOfRequests: 4,
+    numberOfRequests: 2,
     bufferInterval: 1,
     ignoreImages: true,
   });
