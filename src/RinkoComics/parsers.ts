@@ -77,7 +77,7 @@ const absoluteUrl = (src: string): string => {
   return s.startsWith("/") ? `${DOMAIN}${s}` : `${DOMAIN}/${s}`;
 };
 
-const imageFromElement = ($: CheerioAPI, img: Cheerio<AnyNode>): string => {
+const imageFromElement = (img: Cheerio<AnyNode>): string => {
   const src = img.attr("data-src") || img.attr("data-lazy-src") || img.attr("src") || "";
   return absoluteUrl(src);
 };
@@ -131,7 +131,7 @@ export const toHotItems = ($: CheerioAPI): DiscoverSectionItem[] => {
       type: "featuredCarouselItem",
       mangaId,
       title,
-      imageUrl: imageFromElement($, card.find(".comic-cover img").first()),
+      imageUrl: imageFromElement(card.find(".comic-cover img").first()),
       supertitle: rank ? `#${rank}` : undefined,
       summary: genres.length > 0 ? genres.join(" · ") : undefined,
       infoItems:
@@ -175,7 +175,7 @@ const toProminentItems = (
       type: "prominentCarouselItem",
       mangaId,
       title,
-      imageUrl: imageFromElement($, card.find(selectors.imageSelector).first()),
+      imageUrl: imageFromElement(card.find(selectors.imageSelector).first()),
       subtitle: card.find(".chapter-badge").first().text().trim() || undefined,
       contentRating: ContentRating.EVERYONE,
     });
@@ -215,7 +215,7 @@ export const toLatestItems = ($: CheerioAPI): DiscoverSectionItem[] => {
       mangaId,
       chapterId: parsePath(chapter.attr("href") || ""),
       title,
-      imageUrl: imageFromElement($, card.find(".comic-card__cover img").first()),
+      imageUrl: imageFromElement(card.find(".comic-card__cover img").first()),
       subtitle: chapter.find("label").first().text().trim() || undefined,
       publishDate: parseRelativeDate(chapter.find("span").first().text()),
       contentRating: ContentRating.EVERYONE,
@@ -253,7 +253,7 @@ export const parseComicCards = ($: CheerioAPI): ComicCard[] => {
     cards.push({
       mangaId,
       title,
-      imageUrl: imageFromElement($, card.find(".ac-thumb img").first()),
+      imageUrl: imageFromElement(card.find(".ac-thumb img").first()),
     });
   }
 
@@ -376,7 +376,7 @@ const elementHref = (el: Cheerio<AnyNode>): string => {
   return (el.find("a").first().attr("href") || "").trim();
 };
 
-const isLocked = ($: CheerioAPI, el: Cheerio<AnyNode>): boolean => {
+const isLocked = (el: Cheerio<AnyNode>): boolean => {
   const reason = (el.attr("data-reason") || "").toLowerCase();
   if (reason && reason !== "free") return true;
   if (el.hasClass("locked-chapter") || el.hasClass("is-locked")) return true;
@@ -400,7 +400,7 @@ export const parseChapterElements = (
     const postId = (el.attr("data-post-id") || "").trim();
     if (!rawUrl && !postId) return;
 
-    const locked = isLocked($, el);
+    const locked = isLocked(el);
 
     let name = Application.decodeHTMLEntities(
       el.find(".chapter-number").first().text().trim() ||
