@@ -89,6 +89,10 @@ const isChallengeResponse = (response: Response, body: string): boolean => {
   const status = response.status;
   if (response.headers?.["cf-mitigated"] === "challenge") return true;
   if ([403, 429, 503].includes(status)) return true;
+  // A page carrying the site's data payload is genuine content — DDoS-Guard
+  // leaves `__ddg` references in inline scripts even after clearance, so the
+  // marker below would otherwise misfire a bypass on a perfectly good page.
+  if (body.includes("window.__DATA__")) return false;
   return /(?:vb_challenge|cf-turnstile|<title>Just a moment|ddos-guard|checking your browser|enable javascript and cookies|__ddg\d+_)/i.test(
     body,
   );
