@@ -8,7 +8,6 @@ export const API_URL = `${DOMAIN}/api`;
 export const PAGE_SIZE = 24;
 
 export const SECTIONS = {
-  TRENDING: "trending",
   POPULAR: "popular",
   LATEST: "latest",
   EDITORS: "editors",

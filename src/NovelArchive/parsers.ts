@@ -155,11 +155,7 @@ export const parseNovelList = (novels: Novel[]): NovelListItem[] =>
 export const filterAdultItems = (items: NovelListItem[], hideAdult: boolean): NovelListItem[] =>
   hideAdult ? items.filter((item) => item.contentRating === ContentRating.EVERYONE) : items;
 
-export const toFeaturedItem = (
-  item: NovelListItem,
-  index: number,
-  variant: "trending" | "editors",
-): DiscoverSectionItem => {
+export const toFeaturedItem = (item: NovelListItem): DiscoverSectionItem => {
   const ratingInfo =
     item.rating === undefined
       ? undefined
@@ -168,23 +164,20 @@ export const toFeaturedItem = (
     item.views === undefined
       ? undefined
       : { symbol: "eye.fill" as const, text: formatCount(item.views) };
-  const secondaryInfo =
-    variant === "trending" ? { symbol: "flame.fill" as const, text: `#${index + 1}` } : viewsInfo;
   const infoItems: FeaturedCarouselItem["infoItems"] =
-    ratingInfo && secondaryInfo
-      ? [ratingInfo, secondaryInfo]
+    ratingInfo && viewsInfo
+      ? [ratingInfo, viewsInfo]
       : ratingInfo
         ? [ratingInfo]
-        : secondaryInfo
-          ? [secondaryInfo]
+        : viewsInfo
+          ? [viewsInfo]
           : undefined;
   return {
     type: "featuredCarouselItem",
     mangaId: item.mangaId,
     imageUrl: item.imageUrl,
     title: item.title,
-    supertitle:
-      variant === "editors" ? item.author : item.genres.slice(0, 3).join(", ") || undefined,
+    supertitle: item.author,
     summary: item.summary,
     infoItems,
     contentRating: item.contentRating,
@@ -193,20 +186,16 @@ export const toFeaturedItem = (
 
 export const toCardItem = (
   item: NovelListItem,
-  variant: "rating" | "chapters" | "views",
+  variant: "rating" | "chapters",
 ): DiscoverSectionItem => {
   const lead =
     variant === "chapters"
       ? item.chapterCount > 0
         ? `Ch. ${item.chapterCount}`
         : undefined
-      : variant === "views"
-        ? item.views !== undefined
-          ? `${formatCount(item.views)} views`
-          : undefined
-        : item.rating
-          ? `★ ${item.rating.toFixed(1)}`
-          : undefined;
+      : item.rating
+        ? `★ ${item.rating.toFixed(1)}`
+        : undefined;
   return {
     type: "simpleCarouselItem",
     mangaId: item.mangaId,

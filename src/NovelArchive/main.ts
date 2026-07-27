@@ -107,8 +107,7 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
-      { id: SECTIONS.TRENDING, title: "Trending", type: DiscoverSectionType.featured },
-      { id: SECTIONS.POPULAR, title: "Most Popular", type: DiscoverSectionType.simpleCarousel },
+      { id: SECTIONS.POPULAR, title: "Popular", type: DiscoverSectionType.featured },
       { id: SECTIONS.LATEST, title: "Latest Updates", type: DiscoverSectionType.chapterUpdates },
       { id: SECTIONS.EDITORS, title: "Editor's Choice", type: DiscoverSectionType.featured },
       { id: SECTIONS.TOP_RATED, title: "Top Rated", type: DiscoverSectionType.simpleCarousel },
@@ -130,14 +129,12 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
-      case SECTIONS.TRENDING:
-        return this.getFeaturedItems("trending", "trending");
+      case SECTIONS.POPULAR:
+        return this.getPopularSection(metadata);
       case SECTIONS.EDITORS:
-        return this.getFeaturedItems("editors-choice", "editors");
+        return this.getEditorsSection();
       case SECTIONS.LATEST:
         return this.getLatestSection();
-      case SECTIONS.POPULAR:
-        return this.getCardItems("popular", "views", metadata);
       case SECTIONS.TOP_RATED:
         return this.getCardItems("rating", "rating", metadata);
       case SECTIONS.MOST_CHAPTERS:
@@ -178,22 +175,29 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
     };
   }
 
-  private async getFeaturedItems(
-    segment: string,
-    variant: "trending" | "editors",
+  private async getPopularSection(
+    metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    const { novels } = await fetchApi<NovelListResponse>(novelsUrl(segment));
+    const page = metadata?.page ?? 1;
+    const data = await fetchApi<NovelListResponse>(buildNovelsUrl({ page, sort: "popular" }));
     const hideAdult = (Application.getState(STATE_KEYS.HIDE_ADULT) as boolean | undefined) ?? false;
     return {
-      items: filterAdultItems(parseNovelList(novels), hideAdult).map((item, index) =>
-        toFeaturedItem(item, index, variant),
-      ),
+      items: filterAdultItems(parseNovelList(data.novels), hideAdult).map(toFeaturedItem),
+      metadata: data.pagination?.has_next ? { page: page + 1 } : undefined,
+    };
+  }
+
+  private async getEditorsSection(): Promise<PagedResults<DiscoverSectionItem>> {
+    const { novels } = await fetchApi<NovelListResponse>(novelsUrl("editors-choice"));
+    const hideAdult = (Application.getState(STATE_KEYS.HIDE_ADULT) as boolean | undefined) ?? false;
+    return {
+      items: filterAdultItems(parseNovelList(novels), hideAdult).map(toFeaturedItem),
     };
   }
 
   private async getCardItems(
     sort: string,
-    variant: "rating" | "chapters" | "views",
+    variant: "rating" | "chapters",
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const page = metadata?.page ?? 1;
