@@ -24,7 +24,6 @@ import { NovelCoolAdvancedSearchForm } from "./forms";
 import {
   SECTIONS,
   SORT_OPTIONS,
-  TYPE_OPTIONS,
   type PageMetadata,
   type SearchMetadata,
   type SearchOptions,
@@ -50,6 +49,7 @@ import {
   toLatestItem,
   toSearchResultItem,
   toSimpleItem,
+  typeTags,
 } from "./parsers";
 import type NovelCoolConfig from "./pbconfig";
 
@@ -117,13 +117,7 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
       case SECTIONS.COMPLETED:
         return this.getCompletedSection(metadata);
       case SECTIONS.TYPES:
-        return {
-          items: TYPE_OPTIONS.map((type) => ({
-            type: "genresCarouselItem",
-            name: type.title,
-            searchQuery: { title: "", metadata: { type: [type.id] } satisfies SearchMetadata },
-          })),
-        };
+        return this.getTypeSection();
       default:
         return { items: [] };
     }
@@ -165,6 +159,19 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
     };
   }
 
+  private async getTypeSection(): Promise<PagedResults<DiscoverSectionItem>> {
+    return {
+      items: typeTags(await this.getSearchOptions()).map((tag) => ({
+        type: "genresCarouselItem",
+        name: tag.title,
+        searchQuery: {
+          title: "",
+          metadata: { genres: { [tag.id]: "included" } } satisfies SearchMetadata,
+        },
+      })),
+    };
+  }
+
   async getSortingOptions(_query: SearchQuery<SearchMetadata>): Promise<SortingOption[]> {
     return SORT_OPTIONS;
   }
@@ -183,13 +190,14 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
     const document = await fetchSearchPage({
       page,
       title: (query.title ?? "").trim() || undefined,
+      nameMethod: searchMetadata.nameMethod?.[0],
       author: searchMetadata.author,
+      authorMethod: searchMetadata.authorMethod?.[0],
       status: searchMetadata.status?.[0],
       genresInclude: pickTriState(searchMetadata.genres, "included"),
       genresExclude: pickTriState(searchMetadata.genres, "excluded"),
-      type: searchMetadata.type?.[0],
       year: searchMetadata.year?.[0],
-      alphabet: searchMetadata.alphabet?.[0],
+      rating: searchMetadata.rating?.[0],
       sort: sortingOption?.id,
     });
     return {
