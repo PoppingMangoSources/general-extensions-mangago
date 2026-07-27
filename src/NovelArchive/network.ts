@@ -11,12 +11,14 @@ import {
   type SearchResultItem,
 } from "@paperback/types";
 
-import { getDefaultAiMode, getDefaultGenres, getHideAdultContent } from "./forms/settings";
+import { getDefaultGenres, getHideAdultContent } from "./forms/settings";
 import {
   ADULT_EXCLUSIONS,
   API_URL,
   DOMAIN,
   PAGE_SIZE,
+  type GenreListResponse,
+  type GenreOptionDto,
   type Novel,
   type NovelListResponse,
   type NovelSource,
@@ -24,7 +26,7 @@ import {
   type SourceChapterListResponse,
   type SourceListResponse,
 } from "./models";
-import { decodeId, dedupe, encodeId, parseMangaDetails, pickGenreValues } from "./parsers";
+import { decodeId, encodeId, parseMangaDetails, pickGenreValues } from "./parsers";
 
 // The cover endpoint content-negotiates: it 404s for a JSON/`*/*` Accept and only
 // 302-redirects to the image for an image Accept, so covers get a browser image profile.
@@ -33,8 +35,6 @@ const isCoverUrl = (url: string): boolean => /\/cover(\?|$)/.test(url);
 export class NovelArchiveInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
     const isCover = isCoverUrl(request.url);
-    // JSON API calls need the browser's JSON accept profile; covers need an image
-    // accept; everything else gets only referer + UA.
     const isApi = request.url.startsWith(API_URL) && !isCover;
     return {
       ...request,
@@ -56,7 +56,7 @@ export class NovelArchiveInterceptor extends PaperbackInterceptor {
   }
 
   override async interceptResponse(
-    _request: Request,
+    request: Request,
     response: Response,
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
@@ -66,7 +66,7 @@ export class NovelArchiveInterceptor extends PaperbackInterceptor {
       // bypass clears the clearance cookie domain-wide.
       throw new CloudflareError({
         url: `${DOMAIN}/`,
-        method: "GET",
+        method: request.method ?? "GET",
         headers: {
           "user-agent": await Application.getDefaultUserAgent(),
         },
@@ -76,42 +76,25 @@ export class NovelArchiveInterceptor extends PaperbackInterceptor {
   }
 }
 
-// Identical concurrent GETs share one request instead of firing duplicates.
-const inFlightRequests = new Map<string, Promise<unknown>>();
-
 export const fetchApi = async <T>(url: string): Promise<T> => {
-  const existing = inFlightRequests.get(url);
-  if (existing) return existing as Promise<T>;
-
-  const promise = (async (): Promise<T> => {
-    const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
-    if (response.status !== 200) {
-      throw new Error(`Request failed with status ${response.status}: ${url}`);
-    }
-    const data = Application.arrayBufferToUTF8String(buffer);
-    try {
-      return JSON.parse(data) as T;
-    } catch (error: unknown) {
-      const reason = error instanceof Error ? error.message : String(error);
-      throw new Error(`Failed to parse JSON from ${url}: ${reason}`, { cause: error });
-    }
-  })();
-
-  inFlightRequests.set(url, promise);
+  const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
+  if (response.status !== 200) {
+    throw new Error(`Request failed with status ${response.status}: ${url}`);
+  }
+  const data = Application.arrayBufferToUTF8String(buffer);
   try {
-    return await promise;
-  } finally {
-    inFlightRequests.delete(url);
+    return JSON.parse(data) as T;
+  } catch (error: unknown) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to parse JSON from ${url}: ${reason}`, { cause: error });
   }
 };
 
-export const novelsUrl = (...segments: string[]): string =>
-  segments
-    .reduce(
-      (url, segment) => url.addPathComponent(segment),
-      new URL(API_URL).addPathComponent("novels"),
-    )
-    .toString();
+export const novelsUrl = (...segments: string[]): string => {
+  const url = new URL(API_URL).addPathComponent("novels");
+  for (const segment of segments) url.addPathComponent(segment);
+  return url.toString();
+};
 
 export const novelsFeedUrl = (segment: string, limit?: number): string => {
   const url = new URL(API_URL).addPathComponent("novels").addPathComponent(segment);
@@ -132,6 +115,11 @@ export const fetchNovels = async (url: string): Promise<Novel[]> => {
 export const fetchBrowse = async (url: string): Promise<{ novels: Novel[]; hasNext: boolean }> => {
   const data = await fetchApi<NovelListResponse>(url);
   return { novels: data.novels ?? [], hasNext: data.pagination?.has_next ?? false };
+};
+
+export const fetchGenres = async (): Promise<GenreOptionDto[]> => {
+  const data = await fetchApi<GenreListResponse>(novelsUrl("genres"));
+  return data.genres ?? [];
 };
 
 // Optional mirror list; its failure must not sink native chapters.
@@ -172,7 +160,6 @@ export const buildNovelsUrl = (opts: {
   search?: string;
   sort?: string;
   status?: string;
-  ai?: string;
   genreMatch?: string;
   genresInclude?: string[];
   genresExclude?: string[];
@@ -180,37 +167,44 @@ export const buildNovelsUrl = (opts: {
   const url = new URL(API_URL)
     .addPathComponent("novels")
     .setQueryItem("page", opts.page.toString())
-    .setQueryItem("per_page", PAGE_SIZE.toString())
-    .setQueryItem("ai_generated", opts.ai ?? getDefaultAiMode());
+    .setQueryItem("per_page", PAGE_SIZE.toString());
 
-  if (opts.search) url.setQueryItem("search", opts.search);
-  if (opts.sort) url.setQueryItem("sort", opts.sort);
+  if (opts.search) {
+    url.setQueryItem("search", opts.search);
+    url.setQueryItem("fuzzy", "1");
+  }
+  if (opts.sort && opts.sort !== "recent") url.setQueryItem("sort", opts.sort);
   if (opts.status && opts.status !== "all") url.setQueryItem("status", opts.status);
-  if (opts.genreMatch) url.setQueryItem("genre_match", opts.genreMatch);
+  if (opts.genreMatch === "any") url.setQueryItem("genre_match", "any");
 
-  // The API matches genre filters on lowercased names, so send lowercase (as the site does).
   const defaults = getDefaultGenres();
-  const includes = dedupe(
-    [...(opts.genresInclude ?? []), ...pickGenreValues(defaults, "included")].map((genre) =>
-      genre.toLowerCase(),
-    ),
-  );
+  const normalize = (values: string[]): string[] =>
+    values.map((genre) => genre.trim().toLowerCase()).filter(Boolean);
+  const explicitIncludes = normalize(opts.genresInclude ?? []);
+  const explicitExcludes = normalize(opts.genresExclude ?? []);
+  const defaultIncludes = normalize(pickGenreValues(defaults, "included"));
+  const defaultExcludes = normalize(pickGenreValues(defaults, "excluded"));
+
+  const includes = [
+    ...new Set([
+      ...explicitIncludes,
+      ...defaultIncludes.filter((genre) => !explicitExcludes.includes(genre)),
+    ]),
+  ];
   if (includes.length > 0) url.setQueryItem("genres_include", includes.join(","));
 
-  const excludes = dedupe(
-    [
-      ...(opts.genresExclude ?? []),
-      ...pickGenreValues(defaults, "excluded"),
-      ...(getHideAdultContent() ? ADULT_EXCLUSIONS : []),
-    ].map((genre) => genre.toLowerCase()),
-  );
+  const excludes = [
+    ...new Set(
+      [...explicitExcludes, ...defaultExcludes, ...(getHideAdultContent() ? ADULT_EXCLUSIONS : [])]
+        .map((genre) => genre.trim().toLowerCase())
+        .filter((genre) => genre && !explicitIncludes.includes(genre)),
+    ),
+  ];
   if (excludes.length > 0) url.setQueryItem("genres_exclude", excludes.join(","));
 
   return url.toString();
 };
 
-// A pasted novel/reader URL is an optional fast path to that single title;
-// an unmatched query returns undefined so ordinary search continues.
 export const resolveUrlQuery = async (
   query: string,
 ): Promise<PagedResults<SearchResultItem> | undefined> => {
@@ -222,16 +216,22 @@ export const resolveUrlQuery = async (
     trimmed.match(/[?&](?:id|novel)=([^&#]+)/i)?.[1] ?? trimmed.match(/\/novels?\/([^/?#]+)/i)?.[1];
   if (!id) return undefined;
 
-  // decodeId falls back to the raw value if a pasted URL has a malformed escape.
-  const manga = parseMangaDetails(await fetchNovel(encodeId(decodeId(id))));
-  return {
-    items: [
-      {
-        mangaId: manga.mangaId,
-        title: manga.mangaInfo.primaryTitle,
-        imageUrl: manga.mangaInfo.thumbnailUrl,
-        contentRating: manga.mangaInfo.contentRating,
-      },
-    ],
-  };
+  // Re-encode the decoded URL value so the Paperback id remains safe and self-sufficient.
+  const mangaId = encodeId(decodeId(id));
+  try {
+    const manga = parseMangaDetails(await fetchNovel(mangaId), mangaId);
+    return {
+      items: [
+        {
+          mangaId: manga.mangaId,
+          title: manga.mangaInfo.primaryTitle,
+          imageUrl: manga.mangaInfo.thumbnailUrl,
+          contentRating: manga.mangaInfo.contentRating,
+        },
+      ],
+    };
+  } catch (error: unknown) {
+    if (error instanceof CloudflareError) throw error;
+    return undefined;
+  }
 };

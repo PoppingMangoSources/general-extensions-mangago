@@ -1,13 +1,12 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import { Form, Section, SelectRow, ToggleRow, TriStateSelectRow, type Tag } from "@paperback/types";
+import { Form, Section, ToggleRow, TriStateSelectRow, type Tag } from "@paperback/types";
 
-import { AI_OPTIONS, GENRES, type OptionItem, type TriState } from "../models";
+import type { TriState } from "../models";
 
 const STATE_KEYS = {
   hideAdult: "novelarchive_hide_adult",
-  aiMode: "novelarchive_ai_mode",
   genres: "novelarchive_genres",
 } as const;
 
@@ -16,29 +15,27 @@ const STATE_KEYS = {
 export const getHideAdultContent = (): boolean =>
   (Application.getState(STATE_KEYS.hideAdult) as boolean | undefined) ?? false;
 
-export const getDefaultAiMode = (): string =>
-  (Application.getState(STATE_KEYS.aiMode) as string | undefined) ?? "include";
-
 export const getDefaultGenres = (): TriState =>
   (Application.getState(STATE_KEYS.genres) as TriState | undefined) ?? {};
 
-export const toTags = (options: OptionItem[]): Tag[] =>
-  options.map((option) => ({ id: option.id, title: option.value }));
-
 export class NovelArchiveSettingsForm extends Form {
   private hideAdultContent = getHideAdultContent();
-  private aiMode = [getDefaultAiMode()];
   private genres = getDefaultGenres();
 
-  private readonly aiOptions: Tag[] = toTags(AI_OPTIONS);
-  private readonly genreOptions: Tag[] = toTags(GENRES);
+  private readonly genreOptions: Tag[];
+
+  constructor(genres: Tag[]) {
+    super();
+    this.genreOptions = genres;
+  }
 
   override getSections() {
     return [
       Section(
         {
-          id: "content",
-          footer: "Hides adult, smut and explicit titles from discover and search.",
+          id: "browse",
+          header: "Browse Settings",
+          footer: "Used as defaults for browse and search.",
         },
         [
           ToggleRow("hide_adult", {
@@ -49,27 +46,8 @@ export class NovelArchiveSettingsForm extends Form {
               "handleHideAdultChange",
             ),
           }),
-        ],
-      ),
-      Section({ id: "ai", footer: "Default handling of AI-written novels everywhere." }, [
-        SelectRow("ai", {
-          title: "AI generated",
-          layout: "flow",
-          value: this.aiMode,
-          items: this.aiOptions,
-          minItemCount: 1,
-          maxItemCount: 1,
-          onValueChange: Application.Selector(this as NovelArchiveSettingsForm, "handleAiChange"),
-        }),
-      ]),
-      Section(
-        {
-          id: "genres",
-          footer: "Always include or exclude these genres. Tap once to include, twice to exclude.",
-        },
-        [
           TriStateSelectRow("genres", {
-            title: "Genres",
+            title: "Default genres",
             layout: "flow",
             value: this.genres,
             items: this.genreOptions,
@@ -88,13 +66,6 @@ export class NovelArchiveSettingsForm extends Form {
   async handleHideAdultChange(value: boolean): Promise<void> {
     this.hideAdultContent = value;
     Application.setState(value, STATE_KEYS.hideAdult);
-    // These preferences drive the discover/genre queries, so drop the cached sections.
-    Application.invalidateDiscoverSections();
-  }
-
-  async handleAiChange(value: string[]): Promise<void> {
-    this.aiMode = value;
-    if (value.length > 0) Application.setState(value[0], STATE_KEYS.aiMode);
     Application.invalidateDiscoverSections();
   }
 

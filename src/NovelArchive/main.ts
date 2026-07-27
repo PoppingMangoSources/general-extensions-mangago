@@ -19,11 +19,13 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
+  type Tag,
 } from "@paperback/types";
 
 import { NovelArchiveAdvancedSearchForm } from "./forms/search";
 import { getHideAdultContent, NovelArchiveSettingsForm } from "./forms/settings";
 import {
+  FEED_LIMITS,
   SECTIONS,
   SORT_OPTIONS,
   type ChapterContentResponse,
@@ -35,6 +37,7 @@ import {
   buildNovelsUrl,
   fetchApi,
   fetchBrowse,
+  fetchGenres,
   fetchNovel,
   fetchNovels,
   fetchSourceChapters,
@@ -46,9 +49,12 @@ import {
 } from "./network";
 import {
   decodeId,
+  filterAdultItems,
+  mergeChapterVersions,
   novelUpdatedAt,
   parseChapterDetails,
   parseChapters,
+  parseGenreOptions,
   parseMangaDetails,
   parseNovelList,
   parseSourceChapterDetails,
@@ -62,13 +68,14 @@ import {
 } from "./parsers";
 import type NovelArchiveConfig from "./pbconfig";
 
-export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> {
+class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> {
   private globalRateLimiter = new BasicRateLimiter("rateLimiter", {
     numberOfRequests: 20,
     bufferInterval: 10,
     ignoreImages: true,
   });
   private requestManager = new NovelArchiveInterceptor("main");
+  private genresPromise?: Promise<Tag[]>;
   cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
 
   async initialise(): Promise<void> {
@@ -83,6 +90,7 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
     _localStorage: Record<string, string>,
   ): Promise<void> {
     for (const cookie of cookies) {
+      if (cookie.expires && cookie.expires.getTime() <= Date.now()) continue;
       if (
         cookie.name.startsWith("cf") ||
         cookie.name.startsWith("_cf") ||
@@ -91,10 +99,11 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
         this.cookieStorageInterceptor.setCookie(cookie);
       }
     }
+    this.genresPromise = undefined;
   }
 
   async getSettingsForm(): Promise<Form> {
-    return new NovelArchiveSettingsForm();
+    return new NovelArchiveSettingsForm(await this.getGenres());
   }
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
@@ -123,13 +132,13 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
       case SECTIONS.TRENDING:
-        return this.getFeaturedItems("trending", "trending", 11);
+        return this.getFeaturedItems("trending", "trending", FEED_LIMITS.trending);
       case SECTIONS.EDITORS:
         return this.getFeaturedItems("editors-choice", "editors");
       case SECTIONS.LATEST:
         return this.getLatestSection();
       case SECTIONS.POPULAR:
-        return this.getCardItems("popular", "rating", metadata);
+        return this.getCardItems("popular", "views", metadata);
       case SECTIONS.TOP_RATED:
         return this.getCardItems("rating", "rating", metadata);
       case SECTIONS.MOST_CHAPTERS:
@@ -141,14 +150,20 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
     }
   }
 
-  private getGenresSection(): PagedResults<DiscoverSectionItem> {
-    return { items: toGenreCarouselItems(getHideAdultContent()) };
+  private getGenres(): Promise<Tag[]> {
+    return (this.genresPromise ??= fetchGenres().then(parseGenreOptions));
+  }
+
+  private async getGenresSection(): Promise<PagedResults<DiscoverSectionItem>> {
+    return {
+      items: toGenreCarouselItems(await this.getGenres(), getHideAdultContent()),
+    };
   }
 
   private async getLatestSection(): Promise<PagedResults<DiscoverSectionItem>> {
-    const novels = await fetchNovels(novelsFeedUrl("recently-updated", 30));
+    const novels = await fetchNovels(novelsFeedUrl("recently-updated", FEED_LIMITS.latestUpdates));
     return {
-      items: parseNovelList(novels).flatMap((item) => {
+      items: filterAdultItems(parseNovelList(novels), getHideAdultContent()).flatMap((item) => {
         const card = toChapterUpdateItem(item);
         return card ? [card] : [];
       }),
@@ -162,13 +177,15 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const novels = await fetchNovels(novelsFeedUrl(segment, limit));
     return {
-      items: parseNovelList(novels).map((item, index) => toFeaturedItem(item, index, variant)),
+      items: filterAdultItems(parseNovelList(novels), getHideAdultContent()).map((item, index) =>
+        toFeaturedItem(item, index, variant),
+      ),
     };
   }
 
   private async getCardItems(
     sort: string,
-    variant: "rating" | "chapters",
+    variant: "rating" | "chapters" | "views",
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const page = metadata?.page ?? 1;
@@ -180,7 +197,7 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
   }
 
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
-    return new NovelArchiveAdvancedSearchForm(query);
+    return new NovelArchiveAdvancedSearchForm(query, await this.getGenres());
   }
 
   async getSearchResults(
@@ -200,7 +217,6 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
       search: search || undefined,
       sort: sortingOption?.id,
       status: meta?.status?.[0],
-      ai: meta?.ai?.[0],
       genreMatch: meta?.genreMatch?.[0],
       genresInclude: pickGenreValues(meta?.genres, "included"),
       genresExclude: pickGenreValues(meta?.genres, "excluded"),
@@ -214,7 +230,7 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
-    return parseMangaDetails(await fetchNovel(mangaId));
+    return parseMangaDetails(await fetchNovel(mangaId), mangaId);
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
@@ -234,13 +250,14 @@ export class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveC
       ),
     );
 
-    return [...chapters, ...perSource.flat()];
+    return mergeChapterVersions(chapters, ...perSource);
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
     const id = decodeId(chapter.sourceManga.mangaId);
     const separator = chapter.chapterId.lastIndexOf(":");
 
+    // Mirror ids encode the source and chapter number around the final colon.
     if (separator >= 0) {
       const sourceId = decodeId(chapter.chapterId.slice(0, separator));
       const chapterNumber = decodeId(chapter.chapterId.slice(separator + 1));

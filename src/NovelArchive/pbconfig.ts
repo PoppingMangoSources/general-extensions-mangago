@@ -5,8 +5,8 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 
 export default {
   name: "NovelArchive",
-  description: "Extension that pulls light novels from novelarchive.cc.",
-  version: "1.0.0-alpha.40",
+  description: "Extension that pulls content from novelarchive.cc.",
+  version: "1.0.0-alpha.41",
   icon: "icon.png",
   language: "en",
   contentRating: ContentRating.ADULT,
@@ -20,7 +20,7 @@ export default {
   badges: [{ label: "Novel", textColor: "#ffffff", backgroundColor: "#3baf4b" }],
   developers: [
     {
-      name: "PopMango",
+      name: "Popmango",
       github: "https://github.com/PoppingMangoSources",
     },
   ],
