@@ -95,10 +95,9 @@ Some merged sharded sources compose capabilities through provider classes and mi
 
 - Terse, non-obvious "why" comments only. **No boilerplate / "standard across all extensions" comments.** Document a shared pattern once at most, never per-file. No commented-out code (use a real `// TODO` or delete), decorative dividers, empty docblocks, memory-aid notes, or stray blank lines. Removing explanatory boilerplate is a recurring new-source review request. [review]
 - Clean, grammatical, typo-free names. Avoid local names visually confused with globals (`data`, not `json` beside `JSON`). PascalCase dirs/classes; ALL_CAPS option constants; kebab-case implementation subdirs.
-- Name API payload records after their domain role (`Novel`, `NovelSource`, `ChapterItem`) and reserve the `Response` suffix for endpoint envelopes. Do not mix `Dto` suffixes with domain names inside one source. [niclimcy]
+- Name API payload records after their domain role (`Novel`, `NovelSource`, `ChapterItem`) and reserve the `Response` suffix for endpoint envelopes. Do not use or mix `Dto` suffixes within a source. Anything passed as search/discover metadata must `extend JSONObject`. [niclimcy]
 - **URL-returning helpers carry a `Url` suffix.** A `parse*`/`format*`/`fix*`/`to*` helper that returns an absolute URL string is named `parseCoverUrl` / `formatImageUrl` / `fixImageUrl` / `toAbsoluteUrl` — not `parseCover` / `imageFromElement` / `getImageSrc`. (Merged: MangaFire `fixImageUrl`, RoyalRoad `formatImageUrl`; our `parseCoverUrl`.)
 - **Prefix unused interface-mandated params with `_`** (`_metadata`, `_response`, `_localStorage`) — or `void param;`, but keep one style per file, not both.
-- Name parsed-JSON payload interfaces `<Thing>Response`/`<Thing>Dto`; anything passed as search/discover metadata must `extend JSONObject`.
 - Cheerio typing: root `$: cheerio.CheerioAPI`; elements `cheerio.Cheerio<AnyNode>` (`import type { AnyNode } from "domhandler"`). **Never `Cheerio<any>`.** (`Cheerio<Element>` from domhandler is off-spec — use `AnyNode`.)
 
 ### On-device runtime constraints

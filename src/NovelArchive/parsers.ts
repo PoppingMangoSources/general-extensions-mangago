@@ -271,10 +271,7 @@ export const parseMangaDetails = (novel: Novel, mangaId: string): SourceManga =>
 
   const genres = parseGenres(novel);
   const tags: Tag[] = genres.map((genre) => ({
-    id: genre
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, ""),
+    id: encodeId(genre.toLowerCase()),
     title: genre,
   }));
 
