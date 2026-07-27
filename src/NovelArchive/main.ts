@@ -108,9 +108,9 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
       { id: SECTIONS.POPULAR, title: "Popular", type: DiscoverSectionType.featured },
+      { id: SECTIONS.TOP_RATED, title: "Top Rated", type: DiscoverSectionType.simpleCarousel },
       { id: SECTIONS.LATEST, title: "Latest Updates", type: DiscoverSectionType.chapterUpdates },
       { id: SECTIONS.EDITORS, title: "Editor's Choice", type: DiscoverSectionType.featured },
-      { id: SECTIONS.TOP_RATED, title: "Top Rated", type: DiscoverSectionType.simpleCarousel },
       {
         id: SECTIONS.MOST_CHAPTERS,
         title: "Most Chapters",

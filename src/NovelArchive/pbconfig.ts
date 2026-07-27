@@ -6,7 +6,7 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "NovelArchive",
   description: "Extension that pulls content from novelarchive.cc.",
-  version: "1.0.0-alpha.48",
+  version: "1.0.0-alpha.49",
   icon: "icon.png",
   language: "en",
   contentRating: ContentRating.ADULT,
