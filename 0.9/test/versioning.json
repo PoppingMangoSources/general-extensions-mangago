@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-27T16:53:09.188Z",
+  "buildTime": "2026-07-27T16:53:31.710Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -58,7 +58,7 @@
     {
       "name": "LikeManga",
       "description": "Extension that pulls content from likemanga.ink.",
-      "version": "1.0.0-alpha.2",
+      "version": "1.0.0-alpha.3",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
