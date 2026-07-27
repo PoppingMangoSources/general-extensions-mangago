@@ -52,7 +52,6 @@ import {
   encodeId,
   filterAdultItems,
   mergeChapterVersions,
-  novelUpdatedAt,
   parseChapterDetails,
   parseChapters,
   parseGenreOptions,
@@ -292,16 +291,10 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
       fetchSources(novelId),
     ]);
 
-    const publishDate = novelUpdatedAt(data.novel);
-    const chapters = parseChapters(data.novel, sourceManga, publishDate);
+    const chapters = parseChapters(data.novel, sourceManga);
     const sourceChapterLists = await Promise.all(
       sources.map(async (source) =>
-        parseSourceChapters(
-          source,
-          await fetchSourceChapters(novelId, source.id),
-          sourceManga,
-          publishDate,
-        ),
+        parseSourceChapters(source, await fetchSourceChapters(novelId, source.id), sourceManga),
       ),
     );
 

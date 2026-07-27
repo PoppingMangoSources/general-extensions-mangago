@@ -325,20 +325,7 @@ const cleanChapterName = (name: string): { chapNum?: number; title: string } => 
   return { chapNum: Number.isFinite(parsedNumber) ? parsedNumber : undefined, title };
 };
 
-// The API exposes no per-chapter dates; callers pass one shared stable
-// timestamp so chapter ages don't drift to when the list was fetched.
-export const novelUpdatedAt = (novel: Novel): Date | undefined => {
-  if (!novel.updated_at) return undefined;
-  const date = new Date(novel.updated_at);
-  if (Number.isNaN(date.getTime()) || date.getTime() > Date.now()) return undefined;
-  return date;
-};
-
-export const parseChapters = (
-  novel: Novel,
-  sourceManga: SourceManga,
-  publishDate?: Date,
-): Chapter[] =>
+export const parseChapters = (novel: Novel, sourceManga: SourceManga): Chapter[] =>
   (novel.chapter_names ?? []).map((rawName, index) => {
     const { chapNum, title } = cleanChapterName((rawName ?? "").trim());
     const chapterNumber = chapNum ?? index + 1;
@@ -352,7 +339,6 @@ export const parseChapters = (
       version: "NovelArchive",
       volume: 0,
       sortingIndex: index,
-      publishDate,
     };
   });
 
@@ -360,7 +346,6 @@ export const parseSourceChapters = (
   novelSource: NovelSource,
   chapters: SourceChapter[],
   sourceManga: SourceManga,
-  publishDate?: Date,
 ): Chapter[] => {
   const displayName =
     novelSource.id === "fucknovelpia"
@@ -383,7 +368,6 @@ export const parseSourceChapters = (
       version: displayName,
       volume: 0,
       sortingIndex: index,
-      publishDate,
     };
   });
 };
