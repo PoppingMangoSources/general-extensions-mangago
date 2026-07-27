@@ -10,6 +10,7 @@ The repository's own sources are currently available from `0.9/test` while they 
 | --------------------------------------------- | --------------------- |
 | [KaliScan](https://kaliscan.io)               | `kaliscan.io`         |
 | [KingOfShojo](https://kingofshojo.com)        | `kingofshojo.com`     |
+| [LikeManga](https://likemanga.ink)            | `likemanga.ink`       |
 | [Lua Comic](https://luacomic.org)             | `luacomic.org`        |
 | [MyReadingManga](https://myreadingmanga.info) | `myreadingmanga.info` |
 | [NovelArchive](https://novelarchive.cc)       | `novelarchive.cc`     |
@@ -19,6 +20,7 @@ The repository's own sources are currently available from `0.9/test` while they 
 | [RinkoComics](https://rinkocomics.com)        | `rinkocomics.com`     |
 | [RokariComics](https://rokaricomics.com)      | `rokaricomics.com`    |
 | [Scans.GG](https://scans.gg)                  | `scans.gg`            |
+| [StoneScape](https://stonescape.xyz)          | `stonescape.xyz`      |
 | [Temple Scan](https://templetoons.com)        | `templetoons.com`     |
 | [ValirScans](https://valirscans.org)          | `valirscans.org`      |
 | [VyManga](https://vymanga.com)                | `vymanga.com`         |
