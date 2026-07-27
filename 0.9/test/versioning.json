@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-27T15:23:31.973Z",
+  "buildTime": "2026-07-27T15:54:11.847Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -58,7 +58,7 @@
     {
       "name": "LikeManga",
       "description": "Extension that pulls content from likemanga.ink.",
-      "version": "1.0.0-alpha.1",
+      "version": "1.0.0-alpha.2",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
@@ -299,7 +299,7 @@
     {
       "name": "StoneScape",
       "description": "Extension that pulls content from stonescape.xyz.",
-      "version": "1.0.0-alpha.1",
+      "version": "1.0.0-alpha.2",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
