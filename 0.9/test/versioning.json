@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-26T10:28:53.988Z",
+  "buildTime": "2026-07-27T09:44:55.782Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -103,8 +103,8 @@
     },
     {
       "name": "NovelArchive",
-      "description": "Extension that pulls light novels from novelarchive.cc.",
-      "version": "1.0.0-alpha.40",
+      "description": "Extension that pulls content from novelarchive.cc.",
+      "version": "1.0.0-alpha.41",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
@@ -124,7 +124,7 @@
       ],
       "developers": [
         {
-          "name": "PopMango",
+          "name": "Popmango",
           "github": "https://github.com/PoppingMangoSources"
         }
       ],
