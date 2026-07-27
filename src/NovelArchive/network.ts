@@ -90,6 +90,12 @@ export const novelsUrl = (...segments: string[]): string => {
   return url.toString();
 };
 
+export const novelsFeedUrl = (segment: string, limit?: number): string => {
+  const url = new URL(novelsUrl(segment));
+  if (limit !== undefined) url.setQueryItem("limit", limit.toString());
+  return url.toString();
+};
+
 export const fetchGenres = async (): Promise<GenreOption[]> => {
   const data = await fetchApi<GenreListResponse>(novelsUrl("genres"));
   return data.genres;

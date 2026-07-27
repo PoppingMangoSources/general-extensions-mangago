@@ -155,29 +155,37 @@ export const parseNovelList = (novels: Novel[]): NovelListItem[] =>
 export const filterAdultItems = (items: NovelListItem[], hideAdult: boolean): NovelListItem[] =>
   hideAdult ? items.filter((item) => item.contentRating === ContentRating.EVERYONE) : items;
 
-export const toFeaturedItem = (item: NovelListItem): DiscoverSectionItem => {
+export const toFeaturedItem = (
+  item: NovelListItem,
+  variant: "popular" | "editors",
+): DiscoverSectionItem => {
   const ratingInfo =
     item.rating === undefined
       ? undefined
       : { symbol: "star.fill" as const, text: item.rating.toFixed(1) };
-  const viewsInfo =
-    item.views === undefined
-      ? undefined
-      : { symbol: "eye.fill" as const, text: formatCount(item.views) };
+  const secondaryInfo =
+    variant === "popular"
+      ? item.author
+        ? { symbol: "person.fill" as const, text: item.author }
+        : undefined
+      : item.views === undefined
+        ? undefined
+        : { symbol: "eye.fill" as const, text: formatCount(item.views) };
   const infoItems: FeaturedCarouselItem["infoItems"] =
-    ratingInfo && viewsInfo
-      ? [ratingInfo, viewsInfo]
+    ratingInfo && secondaryInfo
+      ? [ratingInfo, secondaryInfo]
       : ratingInfo
         ? [ratingInfo]
-        : viewsInfo
-          ? [viewsInfo]
+        : secondaryInfo
+          ? [secondaryInfo]
           : undefined;
   return {
     type: "featuredCarouselItem",
     mangaId: item.mangaId,
     imageUrl: item.imageUrl,
     title: item.title,
-    supertitle: item.author,
+    supertitle:
+      variant === "editors" ? item.author : item.genres.slice(0, 3).join(", ") || undefined,
     summary: item.summary,
     infoItems,
     contentRating: item.contentRating,

@@ -26,6 +26,7 @@ import {
 import { NovelArchiveAdvancedSearchForm } from "./forms/search";
 import { NovelArchiveSettingsForm } from "./forms/settings";
 import {
+  PAGE_SIZE,
   SECTIONS,
   SORT_OPTIONS,
   STATE_KEYS,
@@ -42,6 +43,7 @@ import {
   fetchGenres,
   fetchSourceChapters,
   fetchSources,
+  novelsFeedUrl,
   novelsUrl,
   NovelArchiveInterceptor,
 } from "./network";
@@ -165,7 +167,9 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
   }
 
   private async getLatestSection(): Promise<PagedResults<DiscoverSectionItem>> {
-    const { novels } = await fetchApi<NovelListResponse>(novelsUrl("recently-updated"));
+    const { novels } = await fetchApi<NovelListResponse>(
+      novelsFeedUrl("recently-updated", PAGE_SIZE),
+    );
     const hideAdult = (Application.getState(STATE_KEYS.HIDE_ADULT) as boolean | undefined) ?? false;
     return {
       items: filterAdultItems(parseNovelList(novels), hideAdult).flatMap((item) => {
@@ -182,16 +186,20 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
     const data = await fetchApi<NovelListResponse>(buildNovelsUrl({ page, sort: "popular" }));
     const hideAdult = (Application.getState(STATE_KEYS.HIDE_ADULT) as boolean | undefined) ?? false;
     return {
-      items: filterAdultItems(parseNovelList(data.novels), hideAdult).map(toFeaturedItem),
+      items: filterAdultItems(parseNovelList(data.novels), hideAdult).map((item) =>
+        toFeaturedItem(item, "popular"),
+      ),
       metadata: data.pagination?.has_next ? { page: page + 1 } : undefined,
     };
   }
 
   private async getEditorsSection(): Promise<PagedResults<DiscoverSectionItem>> {
-    const { novels } = await fetchApi<NovelListResponse>(novelsUrl("editors-choice"));
+    const { novels } = await fetchApi<NovelListResponse>(novelsFeedUrl("editors-choice"));
     const hideAdult = (Application.getState(STATE_KEYS.HIDE_ADULT) as boolean | undefined) ?? false;
     return {
-      items: filterAdultItems(parseNovelList(novels), hideAdult).map(toFeaturedItem),
+      items: filterAdultItems(parseNovelList(novels), hideAdult).map((item) =>
+        toFeaturedItem(item, "editors"),
+      ),
     };
   }
 
