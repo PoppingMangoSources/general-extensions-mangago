@@ -5,37 +5,30 @@ import {
   CloudflareError,
   PaperbackInterceptor,
   URL,
-  type PagedResults,
   type Request,
   type Response,
-  type SearchResultItem,
 } from "@paperback/types";
 
-import { getDefaultGenres, getHideAdultContent } from "./forms/settings";
 import {
   ADULT_EXCLUSIONS,
   API_URL,
   DOMAIN,
   PAGE_SIZE,
+  STATE_KEYS,
   type GenreListResponse,
   type GenreOptionDto,
-  type NovelDto,
-  type NovelDetailResponse,
-  type NovelListResponse,
   type NovelSourceDto,
   type SourceChapterDto,
   type SourceChapterListResponse,
   type SourceListResponse,
+  type TriState,
 } from "./models";
-import { decodeId, encodeId, parseMangaDetails, pickGenreValues } from "./parsers";
-
-// The cover endpoint content-negotiates: it 404s for a JSON/`*/*` Accept and only
-// 302-redirects to the image for an image Accept, so covers get a browser image profile.
-const isCoverUrl = (url: string): boolean => /\/cover(\?|$)/.test(url);
+import { pickGenreValues } from "./parsers";
 
 export class NovelArchiveInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
-    const isCover = isCoverUrl(request.url);
+    // The cover endpoint redirects only when the request accepts images.
+    const isCover = /\/cover(\?|$)/.test(request.url);
     const isApi = request.url.startsWith(API_URL) && !isCover;
     return {
       ...request,
@@ -97,23 +90,6 @@ export const novelsUrl = (...segments: string[]): string => {
   return url.toString();
 };
 
-export const fetchNovel = async (mangaId: string): Promise<NovelDto> => {
-  const data = await fetchApi<NovelDetailResponse>(novelsUrl(decodeId(mangaId)));
-  return data.novel;
-};
-
-export const fetchNovels = async (url: string): Promise<NovelDto[]> => {
-  const data = await fetchApi<NovelListResponse>(url);
-  return data.novels;
-};
-
-export const fetchBrowse = async (
-  url: string,
-): Promise<{ novels: NovelDto[]; hasNext: boolean }> => {
-  const data = await fetchApi<NovelListResponse>(url);
-  return { novels: data.novels, hasNext: data.pagination?.has_next ?? false };
-};
-
 export const fetchGenres = async (): Promise<GenreOptionDto[]> => {
   const data = await fetchApi<GenreListResponse>(novelsUrl("genres"));
   return data.genres;
@@ -168,12 +144,13 @@ export const buildNovelsUrl = (opts: {
   if (opts.status && opts.status !== "all") url.setQueryItem("status", opts.status);
   if (opts.genreMatch === "any") url.setQueryItem("genre_match", "any");
 
-  const defaults = getDefaultGenres();
+  const defaults = (Application.getState(STATE_KEYS.DEFAULT_GENRES) as TriState | undefined) ?? {};
   const explicitIncludes = opts.genresInclude ?? [];
   const explicitExcludes = opts.genresExclude ?? [];
   const defaultIncludes = pickGenreValues(defaults, "included");
   const defaultExcludes = pickGenreValues(defaults, "excluded");
-  const adultExcludes = getHideAdultContent() ? ADULT_EXCLUSIONS : [];
+  const hideAdult = (Application.getState(STATE_KEYS.HIDE_ADULT) as boolean | undefined) ?? false;
+  const adultExcludes = hideAdult ? ADULT_EXCLUSIONS : [];
 
   const includes = [
     ...new Set([
@@ -197,35 +174,4 @@ export const buildNovelsUrl = (opts: {
   if (excludes.length > 0) url.setQueryItem("genres_exclude", excludes.join(","));
 
   return url.toString();
-};
-
-export const resolveUrlQuery = async (
-  query: string,
-): Promise<PagedResults<SearchResultItem> | undefined> => {
-  const trimmed = query.trim();
-  if (!/^https?:\/\/(?:www\.)?novelarchive\.cc\//i.test(trimmed)) return undefined;
-  // The novel page carries the id in ?id=, the reader in ?novel=; a path slug
-  // is the older form.
-  const id =
-    trimmed.match(/[?&](?:id|novel)=([^&#]+)/i)?.[1] ?? trimmed.match(/\/novels?\/([^/?#]+)/i)?.[1];
-  if (!id) return undefined;
-
-  // Re-encode the decoded URL value so the Paperback id remains safe and self-sufficient.
-  const mangaId = encodeId(decodeId(id));
-  try {
-    const manga = parseMangaDetails(await fetchNovel(mangaId), mangaId);
-    return {
-      items: [
-        {
-          mangaId: manga.mangaId,
-          title: manga.mangaInfo.primaryTitle,
-          imageUrl: manga.mangaInfo.thumbnailUrl,
-          contentRating: manga.mangaInfo.contentRating,
-        },
-      ],
-    };
-  } catch (error: unknown) {
-    if (error instanceof CloudflareError) throw error;
-    return undefined;
-  }
 };

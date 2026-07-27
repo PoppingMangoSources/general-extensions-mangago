@@ -3,24 +3,13 @@
 
 import { Form, Section, ToggleRow, TriStateSelectRow, type Tag } from "@paperback/types";
 
-import type { TriState } from "../models";
-
-const STATE_KEYS = {
-  hideAdult: "novelarchive_hide_adult",
-  defaultGenres: "novelarchive_default_genres",
-} as const;
-
-// Defaults off — NovelArchive is an adult-rated source, so adult titles show
-// unless the user opts to hide them (the app's global filter still applies).
-export const getHideAdultContent = (): boolean =>
-  (Application.getState(STATE_KEYS.hideAdult) as boolean | undefined) ?? false;
-
-export const getDefaultGenres = (): TriState =>
-  (Application.getState(STATE_KEYS.defaultGenres) as TriState | undefined) ?? {};
+import { STATE_KEYS, type TriState } from "../models";
 
 export class NovelArchiveSettingsForm extends Form {
-  private hideAdultContent = getHideAdultContent();
-  private genres = getDefaultGenres();
+  // Adult titles remain visible unless the user opts to hide them.
+  private hideAdultContent =
+    (Application.getState(STATE_KEYS.HIDE_ADULT) as boolean | undefined) ?? false;
+  private genres = (Application.getState(STATE_KEYS.DEFAULT_GENRES) as TriState | undefined) ?? {};
 
   private readonly genreOptions: Tag[];
 
@@ -65,13 +54,13 @@ export class NovelArchiveSettingsForm extends Form {
 
   async handleHideAdultChange(value: boolean): Promise<void> {
     this.hideAdultContent = value;
-    Application.setState(value, STATE_KEYS.hideAdult);
+    Application.setState(value, STATE_KEYS.HIDE_ADULT);
     Application.invalidateDiscoverSections();
   }
 
   async handleGenresChange(value: TriState): Promise<void> {
     this.genres = value;
-    Application.setState(value, STATE_KEYS.defaultGenres);
+    Application.setState(value, STATE_KEYS.DEFAULT_GENRES);
     Application.invalidateDiscoverSections();
   }
 }

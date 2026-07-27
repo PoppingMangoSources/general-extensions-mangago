@@ -17,6 +17,12 @@ export const SECTIONS = {
   GENRES: "genres",
 } as const;
 
+export const STATE_KEYS = {
+  DEFAULT_GENRES: "novelarchive_default_genres",
+  GENRES: "novelarchive_genres",
+  HIDE_ADULT: "novelarchive_hide_adult",
+} as const;
+
 export const ADULT_EXCLUSIONS = [
   "adult",
   "smut",
@@ -34,7 +40,8 @@ export const ADULT_EXCLUSIONS = [
 
 export const MATURE_RATING_GENRES = ["mature", "ecchi"];
 
-export const NON_GENRE_TAGS = new Set([
+// The site client treats these navigation labels as non-genres.
+export const NON_GENRE_VALUES = new Set([
   "browse",
   "completed novel",
   "completed novels",

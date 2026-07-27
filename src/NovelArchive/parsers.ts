@@ -17,7 +17,7 @@ import {
   ADULT_EXCLUSIONS,
   DOMAIN,
   MATURE_RATING_GENRES,
-  NON_GENRE_TAGS,
+  NON_GENRE_VALUES,
   type ChapterContentResponse,
   type GenreOptionDto,
   type NovelDto,
@@ -30,6 +30,7 @@ import {
 } from "./models";
 import { repairMojibake } from "./utils";
 
+// Paperback rejects ids containing characters outside this set.
 const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
 
 export const encodeId = (value: string): string =>
@@ -59,7 +60,7 @@ const parseGenres = (novel: NovelDto): string[] => {
     .map((genre) => genre.trim())
     .filter((genre) => {
       const key = genre.toLowerCase();
-      if (!genre || NON_GENRE_TAGS.has(key) || seen.has(key)) return false;
+      if (!genre || NON_GENRE_VALUES.has(key) || seen.has(key)) return false;
       seen.add(key);
       return true;
     });
@@ -252,7 +253,7 @@ export const toSearchResultItem = (item: NovelListItem): SearchResultItem => ({
   contentRating: item.contentRating,
 });
 
-export const parseMangaDetails = (novel: NovelDto, mangaId?: string): SourceManga => {
+export const parseMangaDetails = (novel: NovelDto, mangaId: string): SourceManga => {
   const primaryTitle = decodeText(novel.title) || "Untitled";
   const seen = new Set([primaryTitle.toLowerCase()]);
   const secondaryTitles: string[] = [];
@@ -284,7 +285,7 @@ export const parseMangaDetails = (novel: NovelDto, mangaId?: string): SourceMang
         };
 
   return {
-    mangaId: mangaId ?? encodeId(String(novel.id)),
+    mangaId,
     mangaInfo: {
       primaryTitle,
       secondaryTitles,
@@ -390,10 +391,9 @@ const wrapXhtml = (bodyHtml: string, heading: string): string => {
   return `<html xmlns="http://www.w3.org/1999/xhtml"><head><meta charset="utf-8"/></head><body>${title}${bodyHtml}</body></html>`;
 };
 
-// Native chapters arrive as plain text; each line becomes a paragraph.
 const textToXhtml = (text: string, heading: string): string =>
   wrapXhtml(
-    text
+    Application.decodeHTMLEntities(text)
       .replace(/\u00a0/g, " ")
       .split(/\r?\n+/)
       .map((line) => line.trim())
@@ -449,7 +449,7 @@ export const parseGenreOptions = (genres: GenreOptionDto[]): Tag[] => {
   return genres.flatMap((genre) => {
     const value = genre.value.trim();
     const key = value.toLowerCase();
-    if (!value || NON_GENRE_TAGS.has(key) || seen.has(key)) return [];
+    if (!value || NON_GENRE_VALUES.has(key) || seen.has(key)) return [];
     seen.add(key);
     return [{ id: encodeId(value), title: decodeText(genre.label) || value }];
   });

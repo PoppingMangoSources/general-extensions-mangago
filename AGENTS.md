@@ -4,7 +4,7 @@ The authoritative standards for authoring, refactoring, and reviewing Paperback 
 
 Target: Paperback 0.9 / `@paperback/types` v1.0.0-alpha (the `ExtensionImpl` API), on the `0.9/*` branches. NOT the old 0.8 `Source`/`APIWrapper` style. `@paperback/types` is alpha and shifts — verify exact signatures against the installed version and the target repo's `tsconfig.json` rather than assuming.
 
-Rules carry an attribution where a maintainer specifically owns them: **(niclimcy)** = code-review preference, **(celarye)** = standardization/tooling, **(both)** = jointly enforced, **[policy]** = enforced by CONTRIBUTING/PR template/CI and blocks merge.
+The supplied **Agent Guidelines & Extension Code Style** from niclimcy are authoritative review rules. Attributions identify supporting evidence; they do not make every line in a reference source a standard. **[review]** marks additional maintainer review direction, while **[policy]** is reserved for CONTRIBUTING, the PR template, or CI. Current reviewer direction outranks inferred conventions when they conflict.
 
 ---
 
@@ -18,9 +18,24 @@ Rules carry an attribution where a maintainer specifically owns them: **(niclimc
 
 ### Reference selection
 
-- Choose a reference by problem, not contributor reputation. Mgeko is a useful compact error-handling reference; Atsumaru, MangaTaro, and QiScans show LucifersCircle's recent source organization; LNori and MangaDot show Sinon's API/form patterns. Re-check each example against current rules before copying it.
-- MangaDot's TTL-backed genre cache and deprecated `SelectRow.options` are not current patterns. Prefer a session memo promise and `items`. MangaDex and Comix have specialized architectures and are not default templates for an ordinary bespoke source.
-- HiveToons is useful for its memoized live-genre fetch and shared price-lock predicate. It is already merged and must not be changed as part of unrelated cleanup.
+- Choose a reference by the same site contract and complexity. Compare behavior and boundaries; never rewrite a source line by line merely to resemble another source.
+- Useful `0.9/stable` references include niclimcy's compact Mgeko and MangaFire sources, Sinon/Catta1997's LNori and MangaDot API/form patterns, and LucifersCircle's capability-sharded Atsumaru organization. MangaTaro and QiScans provide additional sharded examples. celarye's repository-wide tooling and generated-test work is also part of the merge standard.
+- Re-check every example against the authoritative rules, newer review direction, and current SDK types. MangaDot is a strong API/form reference, and its persisted genre flow remains valid for that source. New or refactored caching still follows niclimcy's no-TTL state-plus-memo rule unless a reviewer approves a source-specific exception. If current types require a newer form prop name, modernize only that API surface while preserving valid behavior. MangaDex and Comix have specialized architectures and are not ordinary-source templates.
+- HiveToons is a close reference for an API-backed novel source with session-memoized live genres: use its session promise, Cloudflare reset, and shared access predicate where the same contract applies. It is already merged and must not be changed during unrelated cleanup.
+
+### Review evidence
+
+Merged review threads and cleanup commits establish the concrete requests summarized in this guide:
+
+- Remove console logs, start new sources at `alpha.1`, and keep fetch functions in `network.ts`.
+- Avoid names confused with globals, keep shared constants in `models.ts`, and reserve utils for real functional helpers.
+- Add licenses/README entries for new sources, avoid mutable request state and circular imports, and wire every exposed filter.
+- Use `ExtensionImpl`, keep constants in models, and fold trivial utils into a cohesive parser or owning layer.
+- Deduplicate constants, remove boilerplate comments/wrappers/redundant Cloudflare checks, and inline single-use data.
+- Use IETF language tags, repository formatting, generated baseline tests, and separate conformance checks.
+- Remove dead code, avoid low-value caching, consolidate meaningful mappers, and keep fetches in network.
+
+The PR template, not an individual maintainer preference, makes source version bumps mandatory.
 
 ---
 
@@ -28,56 +43,58 @@ Rules carry an attribution where a maintainer specifically owns them: **(niclimc
 
 ### Canonical per-extension layout (flat — most sources)
 
-| File                   | Holds                                                                            | Hard rule                                                   |
-| ---------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `main.ts`              | the extension class **only**, plus `export const <Name> = new <Name>Extension()` | nothing else lives here                                     |
-| `pbconfig.ts`          | metadata, default-exported `satisfies ExtensionInfo`                             | `name` = site branding, exactly                             |
-| `static/icon.png`      | source icon                                                                      | square PNG, taken from the site                             |
-| `models.ts`            | types, constants, data structures, search-metadata types, option arrays          | data only; `DOMAIN`/`API_URL` defined **once** here         |
-| `network.ts`           | `PaperbackInterceptor` subclass(es) + rate limiter (fetch + interceptor)         | interceptor class name unique per source                    |
-| `parsers.ts`           | all parsing (Cheerio / JSON) **and** every `toX` mapper/formatter                | standalone functions or a parser class — match the neighbor |
-| `forms.ts` or `forms/` | `Form`/`AdvancedSearchForm` subclasses **and** settings-store accessors          | see accessor rule below                                     |
-| `utils.ts` or `utils/` | heavy machinery **only**                                                         | see Utils Scope                                             |
+| File                   | Holds                                                                   | Review rule                                              |
+| ---------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------- |
+| `main.ts`              | extension class plus `export const <Name> = new <Name>Extension()`      | orchestration only                                       |
+| `models.ts`            | types, constants, data structures, search-metadata types, option arrays | data only; define each `DOMAIN`/`API_URL` once           |
+| `network.ts`           | request helpers and `PaperbackInterceptor` subclasses                   | all site requests originate here                         |
+| `parsers.ts`           | Cheerio/JSON parsing and `toX` mappers/formatters                       | free functions or one cohesive parser class              |
+| `forms.ts` or `forms/` | `Form`/`AdvancedSearchForm` subclasses and settings state               | use a directory only when separate forms improve clarity |
+| `utils.ts` or `utils/` | substantial isolated machinery                                          | no constants, ordinary fetches, or trivial wrappers      |
+| `pbconfig.ts`          | metadata, default-exported `satisfies ExtensionInfo`                    | `name` matches site branding                             |
+| `static/icon.png`      | source icon                                                             | square site-derived PNG                                  |
 
-- **main.ts holds ONLY the extension class.** All `toX` mappers and formatters live in `parsers.ts`, not `main.ts`. Standalone constants, types, and functions move out to their layer. Helper _methods_ on the class are fine. (niclimcy) [policy]
-- **File-layer boundaries are hard** (niclimcy):
+- **Keep `main.ts` focused on orchestration.** Move `toX` mappers and formatters to `parsers.ts`, fetch functions to `network.ts`, and standalone data to `models.ts`. Cohesive private handler methods are appropriate on the extension class. [review]
+- **Respect file-layer boundaries** [review]:
   - `models.ts` = types / constants / data structures only.
   - `network.ts` = fetch + interceptor.
   - `parsers.ts` = parsing and mappers.
-  - `forms.ts` / `forms/` = `Form` subclasses **and** the settings-store accessors — the `getX`/`setX` helpers for base-url, domain, and preferences. **Settings accessors go in forms, NOT in models.**
+  - `forms.ts` / `forms/` = `Form` subclasses and their settings state. Inline trivial `getState`/`setState` wrappers at their consumers; never move settings logic to utils.
   - `utils/` = heavy machinery only.
-- **No new top-level filenames outside the canonical set.** Canonical files may become directories (`forms/search.ts`, `forms/settings.ts`, `utils/crypto.ts`) once sub-files improve clarity, but do not introduce a new top-level name. (niclimcy)
-- **Utils scope.** `utils/` is strictly for substantial, isolated machinery: descramblers, decryptors, cipher/crypto, webview logic. An ordinary API fetch does **not** earn a util module. Thin filter, formatting, picker, or settings-store helpers must fold into their proper layer or call site — never a `utils/` module.
+- New sources default to this flat set. A capability-sharded source may add established capability directories; any other top-level file needs a concrete ownership reason. Do not preserve a legacy filename merely because an older merged source has one.
+- **Utils scope.** `utils/` is for substantial, isolated machinery such as descrambling, decryption, byte repair, or webview logic. An ordinary API fetch does not earn a util module. Fold thin filters, formatters, pickers, constants, and settings accessors into their owning layer. A single substantial helper belongs in `utils.ts`; do not create a one-file directory to influence GitHub's alphabetical tree display.
 
 ### Capability-sharded layout (large sources only)
 
-Very large sources use `implementations/<capability>/` (kebab-case, e.g. `chapter-providing/`, `discover-section/`, `search-results/`, `settings-form/`, `manga/`, `shared/`), each with its own `main.ts`/`models.ts`/`parsers.ts` (+ `forms.ts`/`utils.ts` where relevant), plus a top-level `main.ts`, `pbconfig.ts`, `static/icon.png`, and the interceptor in `services/network.ts`. Follow a neighboring sharded source; the subdir names track capabilities but aren't a mechanical 1:1 of pbconfig intents.
+Very large sources use `implementations/<capability>/` with the current capability names (`chapter-providing/`, `discover-section-providing/`, `manga-details-providing/`, `search-results-providing/`, `settings-form-providing/`, `shared/`). Each capability owns its `main.ts`/`models.ts`/`parsers.ts` plus `forms.ts`/`utils.ts` where relevant; the source retains top-level `main.ts`, `pbconfig.ts`, `static/icon.png`, and `services/network.ts`. Follow Atsumaru's current vocabulary rather than QiScans/MangaTaro's older shortened directory names.
 
-These sources **compose capabilities by mixin, not inheritance**: each capability is a `XProvider` class (`SearchProvider`, `MangaProvider`, `ChapterProvider`, `DiscoverProvider`), the top-level class `implements Omit<Extension, keyof MangaProviding>` with a declaration-merged interface, and `applyMixins(XExtension, [...providers])` (a small prototype-copy helper in `implementations/shared/`) glues them. Reuse one provider from another by instantiating it (`new SearchProvider().getSearchResults(...)`), not by subclassing. This mixin form and the config-driven theme base ([§8](#8-theme-placement)) are the only sanctioned exceptions to "classes only when the framework requires them."
+Some merged sharded sources compose capabilities through provider classes and mixins. Treat that as existing source-specific architecture, not the default for new work: niclimcy's function-based rule still limits new classes to framework-required `ExtensionImpl` and `PaperbackInterceptor` subclasses unless current reviewer direction explicitly requires the sharded pattern.
 
-### Function-based design
+### Function and class design
 
-- Parsers and API logic are free exported arrow functions (`parseX`, `buildX`, `toX`); file-local helpers are `const` arrow functions.
-- **Classes only when the framework requires them:** the `PaperbackInterceptor` subclass and the `ExtensionImpl` subclass. No "Api" class for plain REST/Next.js GETs — use plain fetch helpers (`fetchNextData<T>`) + URL builders. No base classes to share small utility methods; use free functions taking instance args (`saveSetting(form, key, value)`).
+- Parser and API logic uses exported arrow functions (`parseX`, `buildX`, `toX`), with file-local `const` arrow helpers. [niclimcy]
+- Classes are limited to framework-required `ExtensionImpl` and `PaperbackInterceptor` subclasses. Do not introduce parser, API, base, or state-holder classes merely for namespacing or reuse. [niclimcy]
+- Do not add an `Api` class for ordinary REST/Next.js GETs, or a base class just to share utility methods; use focused fetch helpers and explicit parameters. Existing classes in an older merged source are not permission to copy the pattern. [niclimcy]
 - **A typed fetch helper takes a fully-built URL string, not a `Request`.** One `fetchApi<T>(url)` does the GET, status check, and JSON parse; callers pass a URL assembled by small `URL`-class builders (`novelsUrl(...segments)`, `novelsFeedUrl(segment, limit?)`) rather than interpolating path/query strings by hand. Wrap only the JSON parse in `try/catch` and surface the failing URL. (Matches MangaFire's `fetchApi`. Several older sources instead pass a `Request` object — the URL-string form is the target.)
-- **Bind the class to its config: `implements ExtensionImpl<typeof XConfig>`**, with `import type XConfig from "./pbconfig"`. This is the standard `ExtensionImpl` form; the class type-checks against its own pbconfig capabilities.
+- **Bind a flat source class to its config: `implements ExtensionImpl<typeof XConfig>`**, with `import type XConfig from "./pbconfig"`. Capability-mixin sources use the corresponding `Extension`/`Omit` form.
 - **HTML sources get the same fetch helper, one layer down.** The HTML analog of the JSON `fetchApi<T>` destructures `Application.scheduleRequest({ url, method: "GET" })` as `[response, buffer]`, checks `response.status`, decodes the buffer with `Application.arrayBufferToUTF8String(buffer)`, then returns the string or `cheerio.load(...)` (the docs' minimal `fetchText`/`fetchJSON<T>` discard the response as `[, buffer]`). Do not inline that `scheduleRequest → arrayBufferToUTF8String` dance at each call site.
 - **Always route requests through `Application.scheduleRequest`**, never a raw fetch — it is what lets interceptors, the rate limiter, and dynamic cookies apply. Model a stable JSON response shape as a `<Thing>Response` interface in `models.ts` and fetch it as `fetchJSON<ThatType>(url)`.
 
 ### Simplification
 
-- Delete dead/uncalled code aggressively (builders, constants, types, helpers). [policy]
+- Delete dead/uncalled code aggressively (builders, constants, types, helpers).
 - Inline single-use constants and trivial wrappers (a body that just renames, `?? default`, unwraps, or delegates one call). Collapse wrapper-of-wrapper helpers. Return new objects rather than mutating inputs.
+- Consolidate structurally identical mappers when the helper has a domain purpose; do not replace them with a generic one-line wrapper.
 - **Inline trivial separator-joins even when reused — don't hoist a generic joiner.** A subtitle/label built by `[a, b].filter((value): value is string => Boolean(value)).join(" • ")` is written inline at each call site, not abstracted into a generic `dotJoin(...parts)`/`joinWithBullet` helper; merged sources (HiveToons) repeat the inline form rather than share a joiner. Reach for a helper only when it bundles real logic (title-casing, clamping, rank/rating assembly), and then give it a **purpose** name (`formatSeriesSubtitle`, `statSubtitle`), never a generic "join" name.
 - Prefer native array methods (`.map`/`.filter`/`.reduce`); `for...of` is also fine. Use `cheerio` for HTML — never hand-rolled parsing.
-- **Define single-consumer option arrays in their final shape.** If a list feeds exactly one consumer (e.g. `getSortingOptions`), declare it as `{ id, label }` in `models.ts` and return it directly — don't store `{ id, value }` and remap it in `main.ts`. (niclimcy)
-- **Don't thread state through functions that don't use it.** Pass a settings value only into the function that actually reads it, not down through `parseMangaDetails(...)`/parser params it ignores. (niclimcy)
-- **Don't invent wrapper abstractions over the SDK** — mirror a reference source (AniList for GraphQL query building, Mgeko for error handling) instead of a home-grown wrapper. (niclimcy) AniList lives in a different repo — `inkdex/tracker-extensions` at `0.9/stable/src/AniList` — not general-extensions.
+- **Define single-consumer option arrays in their final shape.** If a list feeds exactly one consumer (e.g. `getSortingOptions`), declare it as `{ id, label }` in `models.ts` and return it directly — don't store `{ id, value }` and remap it in `main.ts`. [review]
+- **Don't thread state through functions that don't use it.** Pass a settings value only into the function that actually reads it, not down through `parseMangaDetails(...)`/parser params it ignores. [review]
+- **Don't invent wrapper abstractions over the SDK** — mirror a reference source (AniList for GraphQL query building, Mgeko for error handling) instead of a home-grown wrapper. AniList lives in a different repo — `inkdex/tracker-extensions` at `0.9/stable/src/AniList` — not general-extensions. [review]
 
 ### Comments & naming
 
-- Terse, non-obvious "why" comments only. **No boilerplate / "standard across all extensions" comments** — the top review tell. Document a shared pattern once at most, never per-file. No commented-out code (use a real `// TODO` or delete). No decorative dividers, empty docblocks, "left it here to remember" notes, or stray blank lines. **Stripping these is the single most frequent review comment on new-source PRs** — do it before submitting. (niclimcy)
-- Clean, grammatical, typo-free names. Avoid names that read as a JS global (`data`, not `json`). PascalCase dirs/classes; ALL_CAPS option constants; kebab-case implementation subdirs.
+- Terse, non-obvious "why" comments only. **No boilerplate / "standard across all extensions" comments.** Document a shared pattern once at most, never per-file. No commented-out code (use a real `// TODO` or delete), decorative dividers, empty docblocks, memory-aid notes, or stray blank lines. Removing explanatory boilerplate is a recurring new-source review request. [review]
+- Clean, grammatical, typo-free names. Avoid local names visually confused with globals (`data`, not `json` beside `JSON`). PascalCase dirs/classes; ALL_CAPS option constants; kebab-case implementation subdirs.
 - **URL-returning helpers carry a `Url` suffix.** A `parse*`/`format*`/`fix*`/`to*` helper that returns an absolute URL string is named `parseCoverUrl` / `formatImageUrl` / `fixImageUrl` / `toAbsoluteUrl` — not `parseCover` / `imageFromElement` / `getImageSrc`. (Merged: MangaFire `fixImageUrl`, RoyalRoad `formatImageUrl`; our `parseCoverUrl`.)
 - **Prefix unused interface-mandated params with `_`** (`_metadata`, `_response`, `_localStorage`) — or `void param;`, but keep one style per file, not both.
 - Name parsed-JSON payload interfaces `<Thing>Response`/`<Thing>Dto`; anything passed as search/discover metadata must `extend JSONObject`.
@@ -98,26 +115,27 @@ Extensions run in a JS runtime that is **not a browser** — several globals are
 
 ### Discover dispatch
 
-- **`getDiscoverSectionItems` is a thin `section.id` switch** that delegates to focused handler methods. No inline fetch/parse/map in the dispatcher. (niclimcy) [policy]
-- **`SECTIONS` is an `as const` object in `models.ts`.** No inline section-id string literals anywhere; reference `SECTIONS.POPULAR` etc. Prefer one grouped `as const` object over parallel `SECTION_*` constants. (both) The same applies to `Application` state keys — centralize them in an `as const` object and derive the union type (`type X = (typeof KEYS)[keyof typeof KEYS]`).
+- **`getDiscoverSectionItems` is a thin `section.id` switch** that delegates to focused handler methods. No inline fetch/parse/map in the dispatcher. [review] [policy]
+- **`SECTIONS` is an `as const` object in `models.ts`.** No inline section-id string literals anywhere; reference `SECTIONS.POPULAR` etc. Prefer one grouped `as const` object over parallel `SECTION_*` constants. The same applies to `Application` state keys — centralize them in an `as const` object and derive the union type (`type X = (typeof KEYS)[keyof typeof KEYS]`). [review]
 - **A `Record<sectionId, () => Promise<...>>` dispatch map is an accepted alternative to the switch** — either form is fine as long as the dispatcher itself does no inline fetch/parse/map.
+- Finite taxonomy/genre sections return their items without next-page metadata. Do not invent pagination for a complete list.
 - **Know the `DiscoverSectionItem.type` values:** `featuredCarouselItem`, `prominentCarouselItem`, `simpleCarouselItem`, `chapterUpdatesCarouselItem`, `genresCarouselItem`. A genres/tags section emits `genresCarouselItem`s whose embedded `searchQuery { title: "", metadata }` re-enters search rather than fetching. `featuredCarouselItem.infoItems` carry SF-Symbol `symbol` names (`star.fill`, `flame.fill`, `book.fill`, `eye.fill`).
 - **Settings-toggled sections:** build `getDiscoverSections()` conditionally on `Application.getState("<section>_enabled") as boolean | undefined ?? true`, and call `Application.invalidateDiscoverSections()` whenever such a toggle changes.
 
 ### No per-item detail fan-out
 
-- **Never fan out into one detail request per carousel/listing item** (`Promise.all(cards.map(getDetails))`). Build carousels/listings from the listing payload, which already carries the needed fields. An N+1 section stalls the whole carousel and amplifies rate-limit/Cloudflare failures. (niclimcy) See the documented exception in [Project-Specific Deviations](#10-project-specific-deviations).
+- **Never fan out into one detail request per carousel/listing item** (`Promise.all(cards.map(getDetails))`). Build carousels/listings from the listing payload, which already carries the needed fields. An N+1 section stalls the whole carousel and amplifies rate-limit/Cloudflare failures. See the documented exception in [Project-Specific Deviations](#10-project-specific-deviations). [review]
 
 ### Search & pagination
 
-- **Omit empty query params.** Never send placeholders like `searchTerm=""`, `s=""`, or `author=""`. Add an optional param only when it has a value. (niclimcy)
-- **Use server-side filters when the API has them** — send both included and excluded genre IDs. Only crawl-and-filter client-side when the API genuinely lacks the filter. (niclimcy)
+- **Omit empty query params.** Never send placeholders like `searchTerm=""`, `s=""`, or `author=""`. Add an optional param only when it has a value. [review]
+- **Use server-side filters when the API has them** — send both included and excluded genre IDs. Only crawl-and-filter client-side when the API genuinely lacks the filter. [review]
 - **Send filter values in the site's exact casing and spelling.** Copy a real filtered request off the live site and mirror its parameter names and value case (e.g. lowercase `genres_exclude` values, not Title Case). A case/spelling mismatch is silently ignored by the server, so the filter appears wired up but does nothing.
 - **Pagination derives from the API contract.** Read incoming page metadata, request the configured page size, and return next-page metadata from `totalCount`/the site's cursor. Don't hardcode page 1, cap with `.slice()`, or use an arbitrary smaller page size unless the UI contract requires it.
 - **Don't clamp a curated feed to a fixed count.** A curated endpoint (e.g. editor's choice) should return exactly what the site lists; make the `limit` optional and append it only when one is genuinely needed, so entries the site later adds or removes track automatically instead of being frozen at a hardcoded number.
-- **`hasMore` derives from the UNFILTERED server count/length.** When filtering locally, filter first, then slice/page from the filtered candidate set. (niclimcy)
+- **`hasMore` derives from the UNFILTERED server count/length.** When filtering locally, filter first, then slice/page from the filtered candidate set. [review]
 - **Keep search metadata sparse** — `getSearchQueryMetadata` returns only non-empty fields; no empty arrays or empty genre maps.
-- **Default `query.metadata` once with a full object**, then read fields off it: `const meta = query.metadata ?? { genres: [], statuses: [], orderIsDescending: false }`. Avoid non-null assertions (`query.metadata!`) or per-field null checks. (niclimcy)
+- **Default `query.metadata` once with a full object**, then read fields off it: `const meta = query.metadata ?? { genres: [], statuses: [], orderIsDescending: false }`. Avoid non-null assertions (`query.metadata!`) or per-field null checks. [review]
 - **URL-paste lookup is an optional fast path.** Match only supported source URLs, encode the slug once, and return `undefined` when it can't resolve so ordinary text search continues. Do not use blanket error suppression on normal API/parser/reader paths.
 - **Use the SDK's pagination sentinels.** Return the `EndOfPageResults` constant (or `undefined` next-page metadata) at the end instead of a hand-rolled flag; a `{ completed }` metadata field can short-circuit the next call; thread `collectedIds` through metadata to dedupe across pages when the site repeats entries. Build the `URL` with `.setQueryItem(key, values[])` (it accepts a `string[]`) for repeated params instead of indexed `key[0]`/`key[1]` keys.
 
@@ -131,7 +149,7 @@ Extensions run in a JS runtime that is **not a browser** — several globals are
 
 ### User-facing state
 
-- **Functional information is text first.** Do not place emoji, flag emoji, stars, triangles, or other decorative Unicode icons anywhere in functional titles, subtitles, settings, sorting labels, version labels, or errors. Write `Paid`, `Locked`, `Rating 8.9`, `18K views`, and `English` explicitly. (celarye)
+- **Functional information is text first.** Do not place emoji, flag emoji, stars, triangles, or other decorative Unicode icons anywhere in functional titles, subtitles, settings, sorting labels, version labels, or errors. Write `Paid`, `Locked`, `Rating 8.9`, `18K views`, and `English` explicitly. [review]
 - SDK-native SF Symbols are appropriate only in fields designed for them (for example `featuredCarouselItem.infoItems`) and must accompany meaningful text. Typographic punctuation used as a separator is not an icon.
 - Do not copy HiveToons' historical lock-emoji title marker. Its merged price fallback is useful evidence for authoritative lock detection, but the emoji is a legacy presentation detail and HiveToons itself is outside this branch's cleanup scope.
 
@@ -148,15 +166,15 @@ Extensions run in a JS runtime that is **not a browser** — several globals are
 
 ### Never swallow meaningful failures
 
-- **Every catch on a request/parse/reader path must re-throw Cloudflare and let lock/paid errors propagate.** In each such catch: `if (error instanceof CloudflareError) throw error;`. Never a blanket `catch {}` and never a `Promise.any`-style swallow that hides a coin/lock/paid/empty-reader error the user needs to see. (niclimcy)
+- **Every catch on a request/parse/reader path must re-throw Cloudflare and let lock/paid errors propagate.** In each such catch: `if (error instanceof CloudflareError) throw error;`. Never a blanket `catch {}` and never a `Promise.any`-style swallow that hides a coin/lock/paid/empty-reader error the user needs to see. [review]
 - Errors that must reach the user are **thrown** with a useful message and the original preserved as `cause` (`new Error(msg, { cause })`) — never hidden in `console.log`/`console.error`. Keep the parsing try/catch tight. Request-level catches for deliberate retry/fallback/state cleanup are legitimate; logs for intentionally non-fatal background work are fine. The rule is "don't hide a failure the user needs," not "never catch a request."
 - Reserve `try/catch` for operations that genuinely throw (`decodeURIComponent`, `new URL`, network). Do not wrap non-throwing SDK calls (`Application.setState`/`getState`).
-- **No `try/catch` that only stringifies-and-rethrows** — `catch (e) { throw new Error(String(e)) }` is a 0.8-legacy tell; delete it and let the error propagate (see Mgeko's reader). Keep a catch only for genuine retry / fallback / state cleanup. (niclimcy)
-- **Don't add per-call Cloudflare handling that `interceptResponse` already does.** The interceptor throws `CloudflareError` centrally; a second CF check inside `getChapterDetails`/`getChapters` is redundant — remove it. (niclimcy)
+- **No `try/catch` that only stringifies-and-rethrows** — `catch (e) { throw new Error(String(e)) }` is a 0.8-legacy tell; delete it and let the error propagate. Keep a catch only for genuine retry / fallback / state cleanup. [review]
+- **Don't add per-call Cloudflare handling that `interceptResponse` already does.** The interceptor throws `CloudflareError` centrally; a second CF check inside `getChapterDetails`/`getChapters` is redundant — remove it. [review]
 
 ### Centralized Cloudflare detection
 
-- **Detect the challenge once, in `interceptResponse`** — not via a scattered per-call `throwOnCF` flag. Throw with the _challenged request's_ url and method, not the bare domain: (niclimcy/both)
+- **Detect the challenge once, in `interceptResponse`** — not via a scattered per-call `throwOnCF` flag. Throw with the _challenged request's_ url and method, not the bare domain: [review]
 
 ```ts
 throw new CloudflareError({
@@ -190,7 +208,7 @@ async cloudflareBypassCompleted(request: Request, cookies: Cookie[], localStorag
 - Interceptor class name is unique per source (e.g. `KingOfShojoInterceptor`).
 - Rate is a per-site choice — guideline presets are strict ≈1/s, balanced ≈3/s, loose ≈10/s; "adjust as needed."
 - **Construct the limiter as `new BasicRateLimiter("<id>", { numberOfRequests, bufferInterval, ignoreImages: true })`** — an inline class field with a stable string id. `ignoreImages: true` keeps page-image loads off the API budget. Field names are **not** standardized across maintainers (`globalRateLimiter`/`rateLimiter`, `requestManager`/`interceptor`) — match a neighbor, don't bikeshed.
-- **`interceptRequest` stamps a baseline on every request:** `referer: \`${DOMAIN}/\``and`"user-agent": await Application.getDefaultUserAgent()`, plus `origin`+ JSON`accept` for API/JSON calls. Spread over the incoming request (`{ ...request, headers: { ...request.headers, ... } }`).
+- **`interceptRequest` stamps a baseline on every request:** set `referer` to the source root and `"user-agent"` to `await Application.getDefaultUserAgent()`. Add `origin` and a JSON `accept` header for API calls. Spread over the incoming request (`{ ...request, headers: { ...request.headers, ... } }`).
 - **Persist cookies with a dedicated `new CookieStorageInterceptor({ storage: "stateManager" })`**, registered in `initialise()` alongside the limiter and request interceptor; in `cloudflareBypassCompleted`, `.setCookie(c)` per incoming cookie (skip expired via `c.expires`). This is the store the `cf*`-filter snippet above writes into.
 - Request body must match its `Content-Type` (URL-encoded string, not an object, for `x-www-form-urlencoded`).
 
@@ -198,7 +216,7 @@ async cloudflareBypassCompleted(request: Request, cookies: Cookie[], localStorag
 
 ## 5. Caching / Memoization
 
-- **Memoized session caches use a class-level promise field**, filled with `??=`, awaited to dedupe concurrent section calls: (celarye)
+- **Memoized session caches use a class-level promise field**, filled with `??=`, awaited to dedupe concurrent section calls:
 
 ```ts
 private genresPromise?: Promise<string[]>;
@@ -208,8 +226,8 @@ const genres = await (this.genresPromise ??= fetchGenres());
 
 - **Reset volatile memos to `undefined` in `cloudflareBypassCompleted`**, and on a base-url change — on base-url change also call `Application.invalidateDiscoverSections()`.
 - **Name the field `…Promise`**, never `…Cache` / `…Request` / `…Items`. Use `undefined`, never `null`.
-- Static reference data (genres/taxonomies) persists per extension load. A volatile homepage memo may self-clear after use.
-- Expose plain fetch functions returning `Promise<T>` **without** a `try/catch`, so Cloudflare-bypass errors propagate. No TTL/timestamp wrapper machinery — store scraped lists in `Application` state directly.
+- Static scraped lists (genres/taxonomies) may persist in `Application` state; the memo promise remains scoped to the extension instance. A volatile homepage memo may self-clear after use.
+- Store scraped lists in `Application` state without TTL/timestamp machinery, expose plain fetch functions returning `Promise<T>` without a catch unless the caller has a deliberate fallback, and deduplicate concurrent reads with the class-level memo promise. Reset the promise after Cloudflare bypass or a base-url change. [niclimcy]
 - No low-value, context-bound caches: an in-memory `Map` dies with the JS context; drop caches for short-lived data or items already shadowed by an earlier check. No request-specific mutable state on the instance (races under out-of-order calls). Parallelize independent fetches with `Promise.all`.
 - **`Application.setState(value, key)` takes the value FIRST, the key SECOND** — `getState(key)` takes the key alone. Reversing them silently writes to the wrong slot (a recurring real bug). Clear a value with `setState(undefined, key)`; namespace keys `<source>_<name>`; read as `(Application.getState(key) as T | undefined) ?? default`.
 - **Call `Application.invalidateDiscoverSections()` from any settings handler that changes discover output** (section toggles, hidden genres, content-type) — not only on a base-url change. After a reset/toggle that changes the form itself, call `this.reloadForm()`.
@@ -218,7 +236,7 @@ const genres = await (this.genresPromise ??= fetchGenres());
 
 ## 6. IDs & Sanitization
 
-- **Sanitize every id at every id-producing call site.** Paperback rejects ids containing characters outside its allowed set, and an unsanitized character (e.g. an apostrophe in a tag slug) crashes the app. Sources are self-contained, so each defines the same canonical constant rather than importing a shared module: (both)
+- **Sanitize every id at every id-producing call site.** Paperback rejects ids containing characters outside its allowed set, and an unsanitized character (e.g. an apostrophe in a tag slug) crashes the app. Sources are self-contained, so each defines the same canonical constant rather than importing a shared module: [review]
 
   ```ts
   // Paperback rejects ids containing characters outside this set.
@@ -233,7 +251,7 @@ const genres = await (this.genresPromise ??= fetchGenres());
 
 ### Parsing correctness
 
-- **Brace/JSON slicing over decoded payloads must be string-aware** — track `inString`/`escaped` so brackets inside string values don't desync bracket depth. Unescape only what the transport escaped. Parse only verified delimiters and field orders. (niclimcy)
+- **Brace/JSON slicing over decoded payloads must be string-aware** — track `inString`/`escaped` so brackets inside string values don't desync bracket depth. Unescape only what the transport escaped. Parse only verified delimiters and field orders. [review]
 - **Parse only verified delimiters.** Don't split titles/creator names on convenient punctuation (commas can be part of a title); use delimiters observed in the live payload (slash, pipe, newline).
 - Avoid speculative cleanup — normalize whitespace and known placeholders, but don't strip site text with unverified regexes.
 - **Synthetic dates must be stable across fetches.** When the payload carries no chapter/update date, anchor ages to the title's own update time, or to a first-load timestamp persisted in `Application` state — never `Date.now()`/`new Date()` at parse time, which makes the whole list re-sort on every refresh.
@@ -242,7 +260,7 @@ const genres = await (this.genresPromise ??= fetchGenres());
 
 ### Defaults & optionals
 
-- **`?? default`, never `|| default`, where `0`/`""`/`false` is a valid value.** (niclimcy) Use the correct default (`?? "or"`, not `?? true`).
+- **`?? default`, never `|| default`, where `0`/`""`/`false` is a valid value.** Use `value != null` or an explicit presence check when zero is meaningful, and use the correct default (`?? "or"`, not `?? true`). [review]
 - Guard optional fields (`chapter.images ?? {}` before `Object.entries`). Never leak `(string | undefined)[]` into a `string[]` field — filter/guard `$(el).attr("src")` maps before assigning to `pages`.
 - **Run scraped display text through `Application.decodeHTMLEntities(...)`** — titles, secondary titles, subtitles, synopsis, author/artist, chapter names — at the parser boundary.
 - **Read cover/thumbnail URLs from lazy-load attrs first** (`data-src`/`data-lazy-src`/`data-cfsrc`/`srcset`) before the placeholder `src`.
@@ -253,7 +271,7 @@ const genres = await (this.genresPromise ??= fetchGenres());
 
 ## 7. pbconfig & Metadata
 
-- **Version scheme `1.0.0-alpha.N`, bumped on every change.** Every modified existing source gets a bump (PR-template requirement); a new source starts at `alpha.1`; a revived source bumps from its old version, not a reset. (celarye) [policy]
+- **Version scheme `1.0.0-alpha.N`, bumped on every change.** Every modified existing source gets a bump (PR-template requirement); a new source starts at `alpha.1`; a revived source bumps from its old version, not a reset. [policy]
 - **Consistent `capabilities` ordering** across sources. ALL_CAPS constants throughout. Each `SourceIntents` value obliges the class to implement its methods (the compiler enforces this via `ExtensionImpl<typeof pbconfig>`):
 
   | Capability                     | Required methods                                                                                      | Optional                                                                            |
@@ -273,13 +291,14 @@ const genres = await (this.genresPromise ??= fetchGenres());
 - **Per-title `mangaInfo.contentRating`** comes from that title's own data, set once at the app-return boundary; source default only as fallback. This is distinct from the pbconfig source-level rating.
 - **Derive it with one shared pure `contentRatingForGenres(names)`** — lowercase the title's genres and escalate `EVERYONE → MATURE → ADULT` against adult/mature name lists (or an on-page 18+ badge). Reuse the same function for both the details boundary and discover/search items so badges match; items whose listing carries no genres default to `EVERYONE` (comment why) or the source's global adult toggle.
 - **Floor per-title ratings only against a genuine per-title floor** — a theme base's `defaultContentRating` field that means "every title here is at least this" (`defaultContentRating === ADULT ? ADULT : derive(...)`). The pbconfig source-level `contentRating` is different: it is a source-wide presence flag ("this source contains some adult content"), NOT a per-title floor, so a title can still resolve to `EVERYONE` on a source whose pbconfig rating is `ADULT` — do not clamp per-title ratings up to it.
-- **Prefer `Application.getDefaultUserAgent()`** over a hardcoded UA unless the site requires a pinned one — document why if so. (celarye)
+- **Prefer `Application.getDefaultUserAgent()`** over a hardcoded UA unless the site requires a pinned one — document why if so.
 - There is no `id`/`author`/`websiteBaseURL` in 0.9 pbconfig — the dir name is the id; the base URL lives in code.
 - Forms: `SelectRow` uses `items` + `layout` (not deprecated `options`); `maxItemCount` reflects real selection semantics (`1` for single-select), not the option count. No `FormState` class pattern. Use current `ExtensionImpl` and non-deprecated `SourceIntents` only; use Paperback types directly (no re-export/re-wrap); use the `URL` class for dynamic path building.
 - **Wire every form-row callback with `Application.Selector(this as <ConcreteForm>, "handleX")`** (or a `closureSelector(this, "id", async (v) => …)` for inline handlers — one style per form). The `this as <ConcreteForm>` self-cast is required, and the named handler must be a real `async` method on that class. Tri-state genre filters use `TriStateSelectRow` (`allowExclusion`/`allowEmptySelection`, value `Record<string, "included" | "excluded">`).
 - **AdvancedSearchForm skeleton:** one private field per metadata key seeded from `searchQuery.metadata ?? {}` in the constructor, one `handleXChange` per field, and a sparse `getSearchQueryMetadata()`. Prefer the native `AdvancedSearchForm` over the `@paperback/types/lib/compat/0.8` `SearchFilterForm` shim (a temporary migration wrapper).
 - **Sorting:** keep the site's sort token as `value` on an `as const` `SORT_OPTIONS`; `getSortingOptions` exposes only `{ id, label }`; translate id→token with a small mapper at the call site. If `SORT_OPTIONS` has exactly one consumer, declare it as `{ id, label }` in `models.ts` and return it directly instead (see the single-consumer rule in [§2](#2-file-organization)).
-- **Group settings into correctly-named sections** — combine related rows under one section named for what it controls (e.g. language + browse filters → "Browse Settings"; title-view options → "View Settings"), rather than scattering one-row sections. (niclimcy/celarye)
+- **Group settings into correctly-named sections** — combine related rows under one section named for what it controls (e.g. language + browse filters → "Browse Settings"; title-view options → "View Settings"), rather than scattering one-row sections. [review]
+- Verify every title, label, footer, and toggle description against the request behavior it controls. Misleading UI copy is a functional bug, not a wording nit.
 - **pbconfig specifics** (per the Inkdex dev guide): `name` avoids spaces and matches the directory (`anilist.co → AniList`, never the raw domain); the const in `main.ts` (`export const <Name> = new <Name>Extension()`) must equal the directory name; `description` reads `Extension that pulls content from <domain>.`; `language` is a lowercase ISO 639-1 code, `multi` for multi-language; a developer entry needs only `name` (`website` and `github` optional — if both are given only `website` shows).
 
 ---
@@ -316,13 +335,13 @@ Every extension implementation file starts with (generated `src/tests/*` are exe
 
 - Conventional Commits, **scope = the source name**. Commit type = highest semver impact: `feat`/`refactor` > `fix` > `chore`. Branch names follow Conventional Branch 1.0.0; versions follow Semantic Versioning 2.0.0.
 - AI-assisted commits include an `Assisted-by: AGENT_NAME:MODEL_VERSION` trailer. [policy]
-- Toolchain: Node.js **v22+** (latest LTS) + `npm install` after cloning; the repo's `.oxfmtrc.json`/`.oxlintrc.json` govern format/lint — use them, not your IDE's own formatter (a churned import sort is an instant review flag).
+- Toolchain: Node.js **24** (matching this repository's workflows) + `npm install` after cloning; the repo's `.oxfmtrc.json`/`.oxlintrc.json` govern format/lint — use them, not your IDE's own formatter (a churned import sort is an instant review flag).
 
 ### Verification gate (run before declaring work done / opening a PR)
 
 - **`npm run conformance` must pass** — `tsc` + `oxlint --type-aware --deny-warnings` + `oxfmt`. This is also the pre-push hook. Type-only imports use `import type`; leave imports in oxfmt's sorted order. No `new Array(n)` (use `Array.from({ length: n })`).
 - **Format with `oxfmt` (`npm run format`), never Prettier.** Prettier's output differs from `oxfmt` (import sorting, wrapping) and fails `format:check`; don't reach for it even when it's the muscle-memory default.
-- **`npm test` must pass.** Generate tests via `npx paperback-cli test --generate <Name>` — don't hand-write fixtures. Default tests cover `initialise → getSortingOptions → getSearchResults → getMangaDetails → getChapters → getChapterDetails` only; **manually verify Discover sections and settings forms in-app.**
+- **`npm test` must pass.** Generate the baseline via `npx paperback-cli test --generate <Name>`. Do not add a custom source fixture when the generated flow already covers the contract (AllManga review); add a focused regression test only for behavior the default flow cannot exercise. Default tests cover `initialise → getSortingOptions → getSearchResults → getMangaDetails → getChapters → getChapterDetails`; manually verify Discover sections and settings forms in-app.
 - **Test on a device with `npm run dev`** (phone + computer on the same network → add the printed `http://<lan-ip>:8080/` as a repo; hit reload to reinstall, no version bump needed). Note Paperback will "update" between any two same-name extensions whose version strings merely differ — even downgrades — so be deliberate with the published `alpha.N`.
 - New source (or removal / branding / domain change) → update the root README "Sources" list. Maintainers block on a missing entry.
 - Don't edit the PR template; explain any test failure under the summary block instead. A green PR still needs ≥1 maintainer approval.
@@ -343,5 +362,5 @@ Every extension implementation file starts with (generated `src/tests/*` are exe
 
 Deliberate, owner-approved departures from the rules above. Do not replicate these into new sources without the same justification.
 
-- **KingOfShojo — per-card detail fetch in `buildFeaturedItems`.** The [no per-item detail fan-out](#no-per-item-detail-fan-out) rule is intentionally violated here: the site's "Popular Today" listing payload carries **no adult signal**, and per-item adult filtering is required, so each featured card is fetched for its details. This is a deliberate, owner-approved deviation — not a template for other carousels. (niclimcy)
+- **KingOfShojo — per-card detail fetch in `buildFeaturedItems`.** The [no per-item detail fan-out](#no-per-item-detail-fan-out) rule is intentionally violated here: the site's "Popular Today" listing payload carries **no adult signal**, and per-item adult filtering is required, so each featured card is fetched for its details. This is a deliberate, owner-approved deviation — not a template for other carousels. [review]
 - **KingOfShojo & RokariComics — theme placement pending.** Both are MangaStream-themed and would normally live in the MangaStream theme repo extending its generic base (RokariComics additionally vendors a local `generic/`). They remain here pending a maintainer placement decision (see [Theme Placement](#8-theme-placement)). Treat their presence as provisional.
