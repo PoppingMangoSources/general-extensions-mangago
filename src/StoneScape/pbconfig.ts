@@ -6,7 +6,7 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "StoneScape",
   description: "Extension that pulls content from stonescape.xyz.",
-  version: "1.0.0-alpha.3",
+  version: "1.0.0-alpha.4",
   icon: "icon.png",
   language: "en",
   contentRating: ContentRating.ADULT,
