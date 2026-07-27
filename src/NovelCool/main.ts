@@ -105,7 +105,11 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
       case SECTIONS.FEATURED:
-        return { items: parseFeatured(await this.getHomePage()).map(toFeaturedItem) };
+        return {
+          items: parseFeatured(await this.getHomePage())
+            .filter((item) => item.imageUrl.length > 0)
+            .map(toFeaturedItem),
+        };
       case SECTIONS.LATEST:
         return this.getListingSection("/category/latest.html", metadata, toLatestItem);
       case SECTIONS.POPULAR:
@@ -141,7 +145,9 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
     const page = metadata?.page ?? 1;
     const document = await fetchCategoryPage(path, page);
     return {
-      items: parseListings(document).map(mapper),
+      items: parseListings(document)
+        .filter((item) => item.imageUrl.length > 0)
+        .map(mapper),
       metadata: hasNextPage(document) ? { page: page + 1 } : undefined,
     };
   }
@@ -152,7 +158,9 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
     const page = metadata?.page ?? 1;
     const document = await fetchSearchPage({ page, status: "2" });
     return {
-      items: parseListings(document).map(toSimpleItem),
+      items: parseListings(document)
+        .filter((item) => item.imageUrl.length > 0)
+        .map(toSimpleItem),
       metadata: hasNextPage(document) ? { page: page + 1 } : undefined,
     };
   }
@@ -185,7 +193,9 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
       sort: sortingOption?.id,
     });
     return {
-      items: parseListings(document).map(toSearchResultItem),
+      items: parseListings(document)
+        .filter((item) => item.imageUrl.length > 0)
+        .map(toSearchResultItem),
       metadata: hasNextPage(document) ? { page: page + 1 } : undefined,
     };
   }
