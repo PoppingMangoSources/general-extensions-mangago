@@ -12,18 +12,43 @@ import * as cheerio from "cheerio";
 import { DOMAIN, type SearchRequest } from "./models";
 
 const IMAGE_EXTENSION_REGEX = /\.(avif|gif|jpe?g|jxl|png|svg|webp)(\/|\?|#|$)/i;
+const DESKTOP_USER_AGENT =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36";
+const REQUIRED_COOKIES = [
+  "novelcool_webp_valid=true",
+  "protocol_cookie_is_show=1",
+  "novelcool_list_num=10",
+] as const;
+
+const mergeRequiredCookies = (value: string): string => {
+  const cookies = value
+    .split(";")
+    .map((cookie) => cookie.trim())
+    .filter(Boolean);
+  const names = new Set(cookies.map((cookie) => cookie.split("=", 1)[0]?.trim().toLowerCase()));
+  for (const cookie of REQUIRED_COOKIES) {
+    const name = cookie.split("=", 1)[0]?.toLowerCase();
+    if (name && !names.has(name)) cookies.push(cookie);
+  }
+  return cookies.join("; ");
+};
 
 export class NovelCoolInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
     const isImage = IMAGE_EXTENSION_REGEX.test(request.url);
+    const headers: Record<string, string> = { ...(request.headers ?? {}) };
+    const cookie = headers.cookie ?? headers.Cookie ?? "";
+    delete headers.Cookie;
+
     return {
       ...request,
       headers: {
-        ...request.headers,
-        referer: request.headers?.referer ?? `${DOMAIN}/`,
-        "user-agent": await Application.getDefaultUserAgent(),
+        ...headers,
+        cookie: mergeRequiredCookies(cookie),
+        referer: `${DOMAIN}/`,
+        "user-agent": DESKTOP_USER_AGENT,
         accept:
-          request.headers?.accept ??
+          headers.accept ??
           (isImage
             ? "image/avif,image/webp,image/png,image/jpeg,image/*,*/*;q=0.8"
             : "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"),
@@ -47,7 +72,7 @@ export class NovelCoolInterceptor extends PaperbackInterceptor {
       throw new CloudflareError({
         url: `${DOMAIN}/`,
         method: "GET",
-        headers: { "user-agent": await Application.getDefaultUserAgent() },
+        headers: { "user-agent": DESKTOP_USER_AGENT },
       });
     }
     return data;
