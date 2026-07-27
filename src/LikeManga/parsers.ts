@@ -115,6 +115,25 @@ export const contentRatingForGenres = (genres: string[]): ContentRating => {
   return ContentRating.EVERYONE;
 };
 
+const chapterNumber = (title: string): number | undefined => {
+  const match = title.match(/\b(?:chapter|ch\.?)\s*([0-9]+(?:\.[0-9]+)?)/i);
+  if (!match) return undefined;
+  const value = Number.parseFloat(match[1]);
+  return Number.isFinite(value) ? value : undefined;
+};
+
+const formatChapterTitle = (title: string): string => {
+  const text = cleanText(title);
+  const match = text.match(/\b(?:chapter|ch\.?)\s*([0-9]+(?:\.[0-9]+)?)/i);
+  if (!match) return text;
+  let rest = cleanText(text.slice((match.index ?? 0) + match[0].length).replace(/^[-:\s•]+/, ""));
+  const duplicate = rest.match(
+    new RegExp(`^[-:\\s•]*(?:chapter|ch\\.?)\\s*${match[1].replace(".", "\\.")}\\b`, "i"),
+  );
+  if (duplicate) rest = cleanText(rest.slice((duplicate.index ?? 0) + duplicate[0].length).replace(/^[-:\s•]+/, ""));
+  return rest;
+};
+
 const parseListingChapter = (
   $: cheerio.CheerioAPI,
   element: AnyNode,
@@ -305,13 +324,6 @@ export const parseChapterPageInfo = ($: cheerio.CheerioAPI): ChapterPageInfo => 
   };
 };
 
-const chapterNumber = (title: string): number | undefined => {
-  const match = title.match(/\b(?:chapter|ch\.?)\s*([0-9]+(?:\.[0-9]+)?)/i);
-  if (!match) return undefined;
-  const value = Number.parseFloat(match[1]);
-  return Number.isFinite(value) ? value : undefined;
-};
-
 export const parseChapters = (
   $: cheerio.CheerioAPI,
   fragments: string[],
@@ -342,10 +354,7 @@ export const parseChapters = (
   const fallbackDate = parseDate($("article > time, #item-detail > time").first().text());
   return entries.map((entry, index) => {
     const number = chapterNumber(entry.name);
-    const matchedName = entry.name.match(/\b(?:chapter|ch\.?)\s*[0-9]+(?:\.[0-9]+)?/i)?.[0];
-    const title = matchedName
-      ? cleanText(entry.name.replace(matchedName, "").replace(/^[-:\s]+/, ""))
-      : entry.name;
+    const title = formatChapterTitle(entry.name);
     return {
       chapterId: entry.chapterId,
       sourceManga,
@@ -414,7 +423,7 @@ export const toFeaturedItem = (item: MangaListItem): FeaturedCarouselItem => {
   const infoItems: NonNullable<FeaturedCarouselItem["infoItems"]>[number][] = [];
   const chapters = item.chapters
     .slice(0, 2)
-    .map((chapter) => chapter.title)
+    .map((chapter) => formatChapterTitle(chapter.title) || chapter.title)
     .join(" • ");
   if (chapters) infoItems.push({ symbol: "book.closed.fill", text: chapters });
   const stats = [
@@ -444,7 +453,10 @@ export const toNewMangaItem = (item: NewMangaItem): DiscoverSectionItem => ({
   mangaId: item.mangaId,
   imageUrl: item.imageUrl,
   title: item.title,
-  subtitle: [item.chapter?.title, "NEW"].filter(Boolean).join(" • "),
+  subtitle: [
+    item.chapter ? formatChapterTitle(item.chapter.title) || item.chapter.title : undefined,
+    "NEW",
+  ].filter(Boolean).join(" • "),
   contentRating: ContentRating.EVERYONE,
 });
 
@@ -459,7 +471,7 @@ export const toLatestReleaseItem = (
     chapterId: chapter.chapterId,
     imageUrl: item.imageUrl,
     title: item.title,
-    subtitle: chapter.title,
+    subtitle: formatChapterTitle(chapter.title) || chapter.title,
     publishDate: parseDate(chapter.dateText) ?? (chapter.isNew ? item.updatedDate : undefined),
     contentRating: contentRatingForGenres(item.genres),
   };
@@ -470,7 +482,10 @@ export const toHotItem = (item: MangaListItem): DiscoverSectionItem => ({
   mangaId: item.mangaId,
   imageUrl: item.imageUrl,
   title: item.title,
-  subtitle: [item.chapters[0]?.title, item.views ? `${item.views} views` : ""]
+  subtitle: [
+    item.chapters[0] ? formatChapterTitle(item.chapters[0].title) || item.chapters[0].title : undefined,
+    item.views ? `${item.views} views` : "",
+  ]
     .filter(Boolean)
     .join(" • "),
   contentRating: contentRatingForGenres(item.genres),
@@ -483,7 +498,7 @@ export const toSearchResultItem = (item: MangaListItem, rank?: number): SearchRe
   subtitle: [
     rank != null ? `#${rank}` : "",
     item.views ? `${item.views} views` : "",
-    item.chapters[0]?.title,
+    item.chapters[0] ? formatChapterTitle(item.chapters[0].title) || item.chapters[0].title : undefined,
   ]
     .filter(Boolean)
     .join(" • "),
