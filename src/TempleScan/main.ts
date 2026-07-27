@@ -24,6 +24,7 @@ import { getShowPaidChapters, TempleScanAdvancedSearchForm, TempleScanSettingsFo
 import {
   DISCOVER_SECTIONS,
   PAGE_SIZE,
+  PAID_CHAPTER_SUFFIX,
   SECTIONS,
   SORTING_OPTIONS,
   type BrowseSeries,
@@ -117,6 +118,9 @@ export class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfi
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
+    if (chapter.chapterId.endsWith(PAID_CHAPTER_SUFFIX)) {
+      throw new Error("This chapter is paid. Unlock it on the website before reading.");
+    }
     const payload = await fetchChapterPage(chapter.sourceManga.mangaId, chapter.chapterId);
     return parseChapterPages(payload, chapter);
   }

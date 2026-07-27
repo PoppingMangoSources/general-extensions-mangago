@@ -16,7 +16,7 @@ export class LuaComicSettingsForm extends Form {
       Section("content", [
         ToggleRow("showPaid", {
           title: "Show paid chapters",
-          subtitle: "Shows coin chapters with a 🔒. Unlock them on the website before reading.",
+          subtitle: "Shows paid chapters. Unlock them on the website before reading.",
           value: getShowPaidChapters(),
           onValueChange: Application.Selector(this as LuaComicSettingsForm, "handleShowPaidChange"),
         }),

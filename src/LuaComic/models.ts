@@ -87,6 +87,7 @@ export const FALLBACK_GENRES: OptionItem[] = [
 ];
 
 export const ADULT_GENRES = ["adult", "smut", "mature", "ecchi", "hentai", "yaoi", "yuri"];
+export const PAID_CHAPTER_SUFFIX = "#paid";
 
 export interface LuaChapter {
   id: number;
@@ -119,7 +120,6 @@ export interface LuaSeries {
   author?: string | null;
   rating?: number | null;
   free_chapters?: LuaChapter[] | null;
-  paid_chapters?: LuaChapter[] | null;
   tags?: (string | LuaTag)[] | null;
   meta?: { chapters_count?: string | number | null } | null;
 }

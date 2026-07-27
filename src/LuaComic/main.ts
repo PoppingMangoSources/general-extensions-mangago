@@ -30,6 +30,7 @@ import {
   DOMAIN,
   FALLBACK_GENRES,
   PAGE_SIZE,
+  PAID_CHAPTER_SUFFIX,
   SECTIONS,
   SORTING_OPTIONS,
   TRENDING_RANGES,
@@ -266,16 +267,13 @@ export class LuaComicExtension implements ExtensionImpl<typeof LuaComicConfig> {
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
     const slug = decodeSlugId(sourceManga.mangaId);
-    const [series, chapters] = await Promise.all([
-      this.fetchSeries(sourceManga.mangaId),
-      this.fetchAllChapters(slug),
-    ]);
-    series.free_chapters = chapters.filter((chapter) => (chapter.price ?? 0) <= 0);
-    series.paid_chapters = chapters.filter((chapter) => (chapter.price ?? 0) > 0);
-    return parseChapterList(series, sourceManga, getShowPaidChapters());
+    return parseChapterList(await this.fetchAllChapters(slug), sourceManga, getShowPaidChapters());
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
+    if (chapter.chapterId.endsWith(PAID_CHAPTER_SUFFIX)) {
+      throw new Error("This chapter is paid. Unlock it on the website before reading.");
+    }
     const seriesSlug = decodeSlugId(chapter.sourceManga.mangaId);
     const chapterSlug = decodeSlugId(chapter.chapterId);
     const html = await fetchText(`${DOMAIN}/series/${seriesSlug}/${chapterSlug}`);

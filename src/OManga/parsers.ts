@@ -158,7 +158,7 @@ export const toProminentCarouselItem = (item: CatalogItem): DiscoverSectionItem 
   imageUrl: item.poster,
   subtitle:
     typeof item.rating === "number" && item.rating > 0
-      ? `★ ${item.rating.toFixed(1)}`
+      ? `Rating ${item.rating.toFixed(1)}`
       : (item.type ?? ""),
   contentRating: getContentRatingForGenres(item.genres),
   metadata: undefined,
@@ -388,7 +388,7 @@ const toChapter = (
 ): Chapter => {
   const teamName = entry.team?.name ?? entry.translator ?? undefined;
   const version =
-    teamName && isOfficialTeam(teamName, entry.team?.slug) ? `★ ${teamName}` : teamName;
+    teamName && isOfficialTeam(teamName, entry.team?.slug) ? `Official - ${teamName}` : teamName;
   const teamSuffix =
     allVersions && entry.team?.slug ? `?team=${encodeURIComponent(entry.team.slug)}` : "";
 

@@ -16,8 +16,6 @@ import { type AnyNode } from "domhandler";
 
 import { DOMAIN, LOCK_SUFFIX, type ComicCard, type Genre } from "./models";
 
-const LOCK_PREFIX = "🔒 ";
-
 const MONTHS: Record<string, number> = {
   jan: 0,
   january: 0,
@@ -202,12 +200,12 @@ export const toLatestItems = ($: CheerioAPI): DiscoverSectionItem[] => {
     );
     if (!mangaId || !title) continue;
 
-    // Skip locked entries (href "#") so update cards open a readable chapter.
+    // Skip locked entries so update cards open a readable chapter.
     const chapter = card
       .find("a.chapter-item")
       .toArray()
       .map((entry) => $(entry))
-      .find((entry) => (entry.attr("href") || "").includes("/chapter/"));
+      .find((entry) => !isLocked(entry) && (entry.attr("href") || "").includes("/chapter/"));
     if (!chapter) continue;
 
     items.push({
@@ -415,7 +413,7 @@ export const parseChapterElements = (
     // synthetic id keeps them listed while staying unreadable.
     let chapterId = rawUrl ? parsePath(rawUrl) : `locked-${postId}`;
     if (locked) {
-      name = `${LOCK_PREFIX}${name}`;
+      name = `Locked - ${name}`;
       chapterId += LOCK_SUFFIX;
     }
 

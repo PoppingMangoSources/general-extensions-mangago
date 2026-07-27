@@ -20,12 +20,12 @@ import {
   NON_GENRE_TAGS,
   type ChapterContentResponse,
   type GenreOptionDto,
-  type Novel,
+  type NovelDto,
   type NovelListItem,
-  type NovelSource,
+  type NovelSourceDto,
   type SearchMetadata,
   type SourceChapterContentResponse,
-  type SourceChapterEntry,
+  type SourceChapterDto,
   type TriState,
 } from "./models";
 import { repairMojibake } from "./utils";
@@ -46,13 +46,13 @@ export const decodeId = (value: string): string => {
   }
 };
 
-const parseCoverUrl = (novel: Novel): string => {
+const parseCoverUrl = (novel: NovelDto): string => {
   const path = novel.cover_url ?? novel.image_url ?? novel.novel_image;
   if (!path) return "";
   return path.startsWith("http") ? path : `${DOMAIN}${path.startsWith("/") ? "" : "/"}${path}`;
 };
 
-const parseGenres = (novel: Novel): string[] => {
+const parseGenres = (novel: NovelDto): string[] => {
   const seen = new Set<string>();
   return (novel.genres ?? "")
     .split(",")
@@ -65,7 +65,7 @@ const parseGenres = (novel: Novel): string[] => {
     });
 };
 
-const parseViews = (novel: Novel): number | undefined => {
+const parseViews = (novel: NovelDto): number | undefined => {
   const raw = novel.views_number ?? novel.views;
   const value = raw == null ? NaN : Number(raw);
   return Number.isFinite(value) ? value : undefined;
@@ -77,7 +77,7 @@ const formatCount = (count: number): string => {
   return count.toString();
 };
 
-const parseStatus = (novel: Novel): string | undefined => {
+const parseStatus = (novel: NovelDto): string | undefined => {
   const status = (novel.release_status ?? novel.ongoing)?.trim();
   if (!status) return undefined;
   return status
@@ -121,7 +121,7 @@ const escapeXml = (value: string): string =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
 
-export const parseNovelList = (novels: Novel[]): NovelListItem[] =>
+export const parseNovelList = (novels: NovelDto[]): NovelListItem[] =>
   novels.map((novel) => {
     // Native chapters are addressed by 1-based position, so the count is the
     // list length; fall back to total_chapters when the array is omitted.
@@ -193,7 +193,7 @@ export const toCardItem = (
           ? `${formatCount(item.views)} views`
           : undefined
         : item.rating
-          ? `★ ${item.rating.toFixed(1)}`
+          ? `Rating ${item.rating.toFixed(1)}`
           : undefined;
   return {
     type: "simpleCarouselItem",
@@ -246,13 +246,13 @@ export const toSearchResultItem = (item: NovelListItem): SearchResultItem => ({
   title: item.title,
   imageUrl: item.imageUrl,
   subtitle:
-    [item.rating ? `★ ${item.rating.toFixed(1)}` : undefined, item.genres[0]]
+    [item.rating ? `Rating ${item.rating.toFixed(1)}` : undefined, item.genres[0]]
       .filter((value): value is string => Boolean(value))
       .join(" • ") || undefined,
   contentRating: item.contentRating,
 });
 
-export const parseMangaDetails = (novel: Novel, mangaId?: string): SourceManga => {
+export const parseMangaDetails = (novel: NovelDto, mangaId?: string): SourceManga => {
   const primaryTitle = decodeText(novel.title) || "Untitled";
   const seen = new Set([primaryTitle.toLowerCase()]);
   const secondaryTitles: string[] = [];
@@ -319,7 +319,7 @@ const cleanChapterName = (name: string): { chapNum?: number; title: string } => 
 
 // The API exposes no per-chapter dates; callers pass one shared stable
 // timestamp so chapter ages don't drift to when the list was fetched.
-export const novelUpdatedAt = (novel: Novel): Date | undefined => {
+export const novelUpdatedAt = (novel: NovelDto): Date | undefined => {
   if (!novel.updated_at) return undefined;
   const date = new Date(novel.updated_at);
   if (Number.isNaN(date.getTime()) || date.getTime() > Date.now()) return undefined;
@@ -327,7 +327,7 @@ export const novelUpdatedAt = (novel: Novel): Date | undefined => {
 };
 
 export const parseChapters = (
-  novel: Novel,
+  novel: NovelDto,
   sourceManga: SourceManga,
   publishDate?: Date,
 ): Chapter[] =>
@@ -349,8 +349,8 @@ export const parseChapters = (
   });
 
 export const parseSourceChapters = (
-  source: NovelSource,
-  entries: SourceChapterEntry[],
+  source: NovelSourceDto,
+  entries: SourceChapterDto[],
   sourceManga: SourceManga,
   publishDate?: Date,
 ): Chapter[] => {

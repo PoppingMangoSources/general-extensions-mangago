@@ -30,7 +30,7 @@ export class TempleScanSettingsForm extends Form {
       Section(
         {
           id: "chapters",
-          footer: "Paid chapters are marked with a lock and need to be unlocked on the website.",
+          footer: "Paid chapters need to be unlocked on the website before reading.",
         },
         [
           ToggleRow("show_paid_chapters", {

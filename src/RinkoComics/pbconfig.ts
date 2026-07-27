@@ -6,7 +6,7 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "RinkoComics",
   description: "Extension that pulls content from rinkocomics.com.",
-  version: "1.0.0-alpha.12",
+  version: "1.0.0-alpha.13",
   icon: "icon.png",
   language: "en",
   contentRating: ContentRating.EVERYONE,
@@ -20,7 +20,7 @@ export default {
   badges: [],
   developers: [
     {
-      name: "PopMango",
+      name: "Popmango",
       github: "https://github.com/PoppingMangoSources",
     },
   ],

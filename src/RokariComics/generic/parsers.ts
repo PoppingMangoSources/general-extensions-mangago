@@ -155,10 +155,7 @@ export class MangaStreamParser {
   ): Chapter[] {
     const chapters: Chapter[] = [];
     let sortingIndex = 0;
-    let language = source.language;
-
-    if (sourceManga.mangaId.toUpperCase().endsWith("-RAW") && source.language == "🇬🇧")
-      language = "🇰🇷";
+    const language = source.language;
 
     for (const chapter of $("li", "div#chapterlist").toArray()) {
       const title = $("span.chapternum", chapter).text().trim().replace(/\s+/g, " ");

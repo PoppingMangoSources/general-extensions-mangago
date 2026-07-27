@@ -1,14 +1,74 @@
-import { type TestLogger } from "@paperback/types";
+import { ContentRating, type SourceManga, type TestLogger } from "@paperback/types";
 import { expect } from "chai";
 
 import { TempleScan } from "../TempleScan/main.js";
-import { toFeaturedItems, withFeaturedCovers } from "../TempleScan/parsers.js";
+import {
+  parseChapters,
+  toFeaturedItems,
+  toUpdateItems,
+  withFeaturedCovers,
+} from "../TempleScan/parsers.js";
 import sourceInfo from "../TempleScan/pbconfig.js";
 import { TestSuite, registerDefaultTests } from "./suite.js";
 
 export async function runTests(logger: TestLogger) {
   const suite = new TestSuite("TempleScan tests", logger);
   registerDefaultTests(suite, TempleScan, sourceInfo);
+
+  suite.test("paid chapters carry guarded ids and plain-text state", async () => {
+    const sourceManga = {
+      mangaId: "test-series",
+      mangaInfo: {
+        primaryTitle: "Test Series",
+        thumbnailUrl: "",
+        synopsis: "",
+        contentRating: ContentRating.ADULT,
+      },
+    } as SourceManga;
+    const chapters = parseChapters(
+      {
+        series_slug: "test-series",
+        title: "Test Series",
+        Season: [
+          {
+            Chapter: [
+              { chapter_slug: "chapter-1", chapter_name: "Chapter 1", price: 0 },
+              { chapter_slug: "chapter-2", chapter_name: "Chapter 2", price: 10 },
+            ],
+          },
+        ],
+      },
+      sourceManga,
+      true,
+    );
+
+    expect(chapters.map((chapter) => chapter.chapterId)).to.deep.equal([
+      "chapter-1",
+      "chapter-2#paid",
+    ]);
+    expect(chapters[1]?.title).to.equal("Paid - Chapter 2");
+
+    let error: unknown;
+    try {
+      await TempleScan.getChapterDetails(chapters[1]);
+    } catch (cause) {
+      error = cause;
+    }
+    expect(error).to.be.instanceOf(Error);
+    expect((error as Error).message).to.contain("paid");
+  });
+
+  suite.test("update cards omit series with only paid chapters", () => {
+    expect(
+      toUpdateItems([
+        {
+          series_slug: "paid-only",
+          title: "Paid Only",
+          Chapter: [{ chapter_slug: "chapter-1", price: 10 }],
+        },
+      ]),
+    ).to.deep.equal([]);
+  });
 
   suite.test("featured cards prefer portrait covers", () => {
     const [item] = toFeaturedItems([

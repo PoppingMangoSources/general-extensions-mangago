@@ -19,11 +19,11 @@ import {
   PAGE_SIZE,
   type GenreListResponse,
   type GenreOptionDto,
-  type Novel,
+  type NovelDto,
   type NovelDetailResponse,
   type NovelListResponse,
-  type NovelSource,
-  type SourceChapterEntry,
+  type NovelSourceDto,
+  type SourceChapterDto,
   type SourceChapterListResponse,
   type SourceListResponse,
 } from "./models";
@@ -97,17 +97,19 @@ export const novelsUrl = (...segments: string[]): string => {
   return url.toString();
 };
 
-export const fetchNovel = async (mangaId: string): Promise<Novel> => {
+export const fetchNovel = async (mangaId: string): Promise<NovelDto> => {
   const data = await fetchApi<NovelDetailResponse>(novelsUrl(decodeId(mangaId)));
   return data.novel;
 };
 
-export const fetchNovels = async (url: string): Promise<Novel[]> => {
+export const fetchNovels = async (url: string): Promise<NovelDto[]> => {
   const data = await fetchApi<NovelListResponse>(url);
   return data.novels;
 };
 
-export const fetchBrowse = async (url: string): Promise<{ novels: Novel[]; hasNext: boolean }> => {
+export const fetchBrowse = async (
+  url: string,
+): Promise<{ novels: NovelDto[]; hasNext: boolean }> => {
   const data = await fetchApi<NovelListResponse>(url);
   return { novels: data.novels, hasNext: data.pagination?.has_next ?? false };
 };
@@ -117,7 +119,7 @@ export const fetchGenres = async (): Promise<GenreOptionDto[]> => {
   return data.genres;
 };
 
-export const fetchSources = async (id: string): Promise<NovelSource[]> => {
+export const fetchSources = async (id: string): Promise<NovelSourceDto[]> => {
   const request = fetchApi<SourceListResponse>(novelsUrl(id, "sources"));
   try {
     // /sources is optional and can hang ~30s before a 504; fall back to native chapters after 8s.
@@ -132,7 +134,7 @@ export const fetchSources = async (id: string): Promise<NovelSource[]> => {
 export const fetchSourceChapters = async (
   id: string,
   sourceId: string,
-): Promise<SourceChapterEntry[]> => {
+): Promise<SourceChapterDto[]> => {
   try {
     const data = await fetchApi<SourceChapterListResponse>(
       novelsUrl(id, "sources", sourceId, "chapters"),

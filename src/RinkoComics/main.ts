@@ -252,13 +252,13 @@ export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsCon
 
     let list = Array.from(chapters.values());
     if (getHideLocked()) {
-      list = list.filter((chapter) => !chapter.chapterId.includes(LOCK_SUFFIX));
+      list = list.filter((chapter) => !chapter.chapterId.endsWith(LOCK_SUFFIX));
     }
     return finalizeChapters(list);
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    if (chapter.chapterId.includes(LOCK_SUFFIX)) {
+    if (chapter.chapterId.endsWith(LOCK_SUFFIX)) {
       throw new Error("This chapter is locked. Use the WebView to purchase it.");
     }
     const $ = await fetchCheerio({ url: this.chapterUrl(chapter.chapterId), method: "GET" });

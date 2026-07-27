@@ -276,7 +276,7 @@ export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   }
 
   // The /top-manga ranking (by reads or rating); its rows carry the read count
-  // and ★ rating that /browse cards lack.
+  // and rating that /browse cards lack.
   private async fetchTopManga(sort: "reads" | "rated"): Promise<TopMangaItem[]> {
     const showNsfw = getShowNsfw();
     const key = `${sort}:${showNsfw}`;

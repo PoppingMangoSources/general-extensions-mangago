@@ -55,27 +55,27 @@ export interface LanguageOption {
   title: string;
 }
 
-// Chapter-language badges → Paperback langCodes (used only to tag each chapter).
+// Chapter-language badges map to Paperback langCodes and readable option titles.
 export const LANGUAGES: LanguageOption[] = [
-  { badge: "EN", langCode: "en", title: "🇬🇧 English" },
-  { badge: "JA", langCode: "ja", title: "🇯🇵 日本語" },
-  { badge: "KO", langCode: "ko", title: "🇰🇷 한국어" },
-  { badge: "ZH", langCode: "zh", title: "🇨🇳 中文" },
-  { badge: "ZH-HANT", langCode: "zh-Hant", title: "🇹🇼 中文 (繁體)" },
-  { badge: "FR", langCode: "fr", title: "🇫🇷 Français" },
-  { badge: "DE", langCode: "de", title: "🇩🇪 Deutsch" },
-  { badge: "IT", langCode: "it", title: "🇮🇹 Italiano" },
-  { badge: "ES", langCode: "es", title: "🇪🇸 Español" },
-  { badge: "ES-LA", langCode: "es-419", title: "🇲🇽 Español (Latinoamérica)" },
-  { badge: "PT", langCode: "pt", title: "🇵🇹 Português" },
-  { badge: "PT-BR", langCode: "pt-br", title: "🇧🇷 Português (Brasil)" },
-  { badge: "RU", langCode: "ru", title: "🇷🇺 Русский" },
-  { badge: "PL", langCode: "pl", title: "🇵🇱 Polski" },
-  { badge: "ID", langCode: "id", title: "🇮🇩 Bahasa Indonesia" },
-  { badge: "TR", langCode: "tr", title: "🇹🇷 Türkçe" },
-  { badge: "AR", langCode: "ar", title: "🇸🇦 العربية" },
-  { badge: "VI", langCode: "vi", title: "🇻🇳 Tiếng Việt" },
-  { badge: "TH", langCode: "th", title: "🇹🇭 ไทย" },
+  { badge: "EN", langCode: "en", title: "English" },
+  { badge: "JA", langCode: "ja", title: "Japanese" },
+  { badge: "KO", langCode: "ko", title: "Korean" },
+  { badge: "ZH", langCode: "zh", title: "Chinese (Simplified)" },
+  { badge: "ZH-HANT", langCode: "zh-Hant", title: "Chinese (Traditional)" },
+  { badge: "FR", langCode: "fr", title: "French" },
+  { badge: "DE", langCode: "de", title: "German" },
+  { badge: "IT", langCode: "it", title: "Italian" },
+  { badge: "ES", langCode: "es", title: "Spanish" },
+  { badge: "ES-LA", langCode: "es-419", title: "Spanish (Latin America)" },
+  { badge: "PT", langCode: "pt", title: "Portuguese" },
+  { badge: "PT-BR", langCode: "pt-br", title: "Portuguese (Brazil)" },
+  { badge: "RU", langCode: "ru", title: "Russian" },
+  { badge: "PL", langCode: "pl", title: "Polish" },
+  { badge: "ID", langCode: "id", title: "Indonesian" },
+  { badge: "TR", langCode: "tr", title: "Turkish" },
+  { badge: "AR", langCode: "ar", title: "Arabic" },
+  { badge: "VI", langCode: "vi", title: "Vietnamese" },
+  { badge: "TH", langCode: "th", title: "Thai" },
 ];
 
 // Content type (Livewire `platform` field).

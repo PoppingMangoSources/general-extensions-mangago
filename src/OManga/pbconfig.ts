@@ -6,7 +6,7 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "oManga",
   description: "Extension that pulls content from omanga.to.",
-  version: "1.0.0-alpha.16",
+  version: "1.0.0-alpha.17",
   icon: "icon.png",
   language: "en",
   contentRating: ContentRating.ADULT,
@@ -18,5 +18,5 @@ export default {
     SourceIntents.SETTINGS_FORM_PROVIDING,
   ],
   badges: [],
-  developers: [{ name: "PopMango", github: "https://github.com/PoppingMangoSources" }],
+  developers: [{ name: "Popmango", github: "https://github.com/PoppingMangoSources" }],
 } satisfies ExtensionInfo;

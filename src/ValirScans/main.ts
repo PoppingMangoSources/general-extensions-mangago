@@ -25,6 +25,7 @@ import { getShowPaidChapters, ValirScansSettingsForm } from "./forms/settings";
 import {
   DISCOVER_SECTIONS,
   GENRES,
+  LOCKED_CHAPTER_PREFIX,
   SECTIONS,
   SORTING_OPTIONS,
   type FilterTaxonomy,
@@ -116,6 +117,9 @@ export class ValirScansExtension implements ExtensionImpl<typeof ValirScansConfi
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
+    if (chapter.chapterId.startsWith(LOCKED_CHAPTER_PREFIX)) {
+      throw new Error("This chapter is locked. Unlock it on the website before reading.");
+    }
     const html = await fetchChapterPage(chapter.sourceManga.mangaId, chapter.chapterId);
     return parseChapterDetails(html, chapter);
   }

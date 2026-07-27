@@ -15,6 +15,7 @@ import {
 import {
   ADULT_GENRES,
   DOMAIN,
+  PAID_CHAPTER_SUFFIX,
   type LuaBanner,
   type LuaChapter,
   type LuaHomePage,
@@ -306,10 +307,14 @@ export const toRecommendedItems = (entries: LuaSeries[]): DiscoverSectionItem[] 
     };
   });
 
+const chapterIsPaid = (chapter: LuaChapter): boolean => (chapter.price ?? 0) > 0;
+
 const newestChapter = (series: LuaSeries): LuaChapter | undefined =>
-  [...(series.free_chapters ?? []), ...(series.paid_chapters ?? [])].sort(
-    (a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime(),
-  )[0];
+  [...(series.free_chapters ?? [])]
+    .filter((chapter) => !chapterIsPaid(chapter))
+    .sort(
+      (a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime(),
+    )[0];
 
 export const toLatestItems = (entries: LuaSeries[]): DiscoverSectionItem[] =>
   entries.flatMap((series): DiscoverSectionItem[] => {
@@ -418,25 +423,21 @@ const chapterNumberOf = (chapter: LuaChapter): number => {
 };
 
 export const parseChapterList = (
-  series: LuaSeries,
+  chapters: LuaChapter[],
   sourceManga: SourceManga,
   showPaid: boolean,
 ): Chapter[] => {
-  const free = (series.free_chapters ?? []).map((chapter) => ({ chapter, locked: false }));
-  const paid = showPaid
-    ? (series.paid_chapters ?? []).map((chapter) => ({ chapter, locked: true }))
-    : [];
+  const sorted = chapters
+    .filter((chapter) => showPaid || !chapterIsPaid(chapter))
+    .sort((a, b) => chapterNumberOf(a) - chapterNumberOf(b));
 
-  const sorted = [...free, ...paid].sort(
-    (a, b) => chapterNumberOf(a.chapter) - chapterNumberOf(b.chapter),
-  );
-
-  return sorted.map(({ chapter, locked }, index) => {
+  return sorted.map((chapter, index) => {
+    const paid = chapterIsPaid(chapter);
     const title = cleanText(chapter.chapter_title ?? "");
     return {
-      chapterId: encodeSlugId(chapter.chapter_slug),
+      chapterId: `${encodeSlugId(chapter.chapter_slug)}${paid ? PAID_CHAPTER_SUFFIX : ""}`,
       sourceManga,
-      title: locked ? `🔒 ${title}`.trim() : title,
+      title: paid ? `Paid${title ? ` - ${title}` : ""}` : title,
       chapNum: chapterNumberOf(chapter),
       volume: 0,
       langCode: "en",

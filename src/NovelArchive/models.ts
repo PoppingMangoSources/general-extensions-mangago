@@ -65,7 +65,7 @@ export interface GenreListResponse {
   genres: GenreOptionDto[];
 }
 
-export interface Novel {
+export interface NovelDto {
   id: number | string;
   title: string;
   author?: string | null;
@@ -87,7 +87,7 @@ export interface Novel {
 }
 
 export interface NovelDetailResponse {
-  novel: Novel;
+  novel: NovelDto;
 }
 
 export interface NovelListItem {
@@ -104,7 +104,7 @@ export interface NovelListItem {
 }
 
 export interface NovelListResponse {
-  novels: Novel[];
+  novels: NovelDto[];
   pagination?: { has_next?: boolean };
 }
 
@@ -113,22 +113,22 @@ export interface ChapterContentResponse {
   content?: string | null;
 }
 
-export interface NovelSource {
+export interface NovelSourceDto {
   id: string;
   label?: string | null;
 }
 
 export interface SourceListResponse {
-  sources: NovelSource[];
+  sources: NovelSourceDto[];
 }
 
-export interface SourceChapterEntry {
+export interface SourceChapterDto {
   number: number | string;
   title?: string | null;
 }
 
 export interface SourceChapterListResponse {
-  chapters: SourceChapterEntry[];
+  chapters: SourceChapterDto[];
 }
 
 export interface SourceChapterContentResponse {

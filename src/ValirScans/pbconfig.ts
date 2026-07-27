@@ -6,7 +6,7 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "ValirScans",
   description: "Extension that pulls comics and novels from valirscans.org.",
-  version: "1.0.0-alpha.10",
+  version: "1.0.0-alpha.11",
   icon: "icon.png",
   language: "en",
   contentRating: ContentRating.MATURE,
@@ -20,7 +20,7 @@ export default {
   badges: [],
   developers: [
     {
-      name: "PopMango",
+      name: "Popmango",
       github: "https://github.com/PoppingMangoSources",
     },
   ],

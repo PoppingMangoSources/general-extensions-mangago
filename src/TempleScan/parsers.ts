@@ -13,6 +13,7 @@ import {
 
 import {
   DOMAIN,
+  PAID_CHAPTER_SUFFIX,
   TRENDING_RANGES,
   type BrowseSeries,
   type FeaturedEntry,
@@ -243,11 +244,13 @@ const chapterNumber = (chapter: SeasonChapter): number => {
   return isNaN(fromIndex) ? 0 : fromIndex;
 };
 
+const chapterIsPaid = (chapter: SeasonChapter): boolean => (chapter.price ?? 0) > 0;
+
 const chapterTitle = (chapter: SeasonChapter): string => {
   const name = chapter.chapter_name?.trim() || `Chapter ${chapterNumber(chapter)}`;
   const title = chapter.chapter_title?.trim();
   const full = title ? `${name}: ${title}` : name;
-  return (chapter.price ?? 0) > 0 ? `🔒 ${full}` : full;
+  return chapterIsPaid(chapter) ? `Paid - ${full}` : full;
 };
 
 export const parseChapters = (
@@ -257,9 +260,9 @@ export const parseChapters = (
 ): Chapter[] =>
   (data.Season ?? [])
     .flatMap((season) => season.Chapter ?? [])
-    .filter((chapter) => chapter.chapter_slug && (showPaidChapters || (chapter.price ?? 0) === 0))
+    .filter((chapter) => chapter.chapter_slug && (showPaidChapters || !chapterIsPaid(chapter)))
     .map((chapter) => ({
-      chapterId: chapter.chapter_slug,
+      chapterId: `${chapter.chapter_slug}${chapterIsPaid(chapter) ? PAID_CHAPTER_SUFFIX : ""}`,
       sourceManga,
       langCode: "en",
       chapNum: chapterNumber(chapter),
@@ -275,9 +278,7 @@ export const parseChapterPages = (payload: string, chapter: Chapter): ChapterDet
     (value) => Array.isArray(value) && (value.length === 0 || typeof value[0] === "string"),
   );
   if (!pages || pages.length === 0) {
-    throw new Error(
-      `Temple Scan: no pages found for chapter ${chapter.chapterId} — it may be paid or unavailable`,
-    );
+    throw new Error(`Temple Scan: no pages found for chapter ${chapter.chapterId}`);
   }
   return {
     id: chapter.chapterId,
@@ -317,8 +318,7 @@ export const toNewSeriesItems = (series: HomeSeries[]): DiscoverSectionItem[] =>
 export const toUpdateItems = (updates: HomeSeries[]): DiscoverSectionItem[] =>
   updates.flatMap((series) => {
     // Prefer the newest free chapter so update cards open something readable.
-    const chapter =
-      (series.Chapter ?? []).find((entry) => (entry.price ?? 0) === 0) ?? series.Chapter?.[0];
+    const chapter = (series.Chapter ?? []).find((entry) => !chapterIsPaid(entry));
     if (!chapter) return [];
     return [
       {
@@ -379,7 +379,7 @@ export const toSearchResultItem = (series: BrowseSeries): SearchResultItem => ({
   mangaId: series.series_slug,
   title: series.title,
   imageUrl: series.thumbnail ?? "",
-  subtitle: series.total_views ? `▲ ${formatCount(series.total_views)}` : undefined,
+  subtitle: series.total_views ? `${formatCount(series.total_views)} views` : undefined,
   contentRating: ContentRating.ADULT,
 });
 
@@ -415,7 +415,7 @@ export const toTrendingItems = (entries: TrendingEntry[]): SearchResultItem[] =>
       mangaId: entry.series_slug,
       title: entry.title,
       imageUrl: entry.thumbnail ?? "",
-      subtitle: [`#${index + 1}`, views ? `▲ ${formatCount(views)}` : ""]
+      subtitle: [`#${index + 1}`, views ? `${formatCount(views)} views` : ""]
         .filter(Boolean)
         .join(" · "),
       contentRating: ContentRating.ADULT,

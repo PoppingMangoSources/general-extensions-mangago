@@ -266,7 +266,7 @@ export const toLatestGridItems = (entries: KaliGridEntry[]): DiscoverSectionItem
     const rating = entry.rating && parseFloat(entry.rating) > 0 ? entry.rating : undefined;
     const subtitle = [
       chapNum !== undefined ? `Ch. ${chapNum}` : entry.chapterName,
-      rating ? `★ ${parseFloat(rating).toFixed(1)}` : undefined,
+      rating ? `Rating ${parseFloat(rating).toFixed(1)}` : undefined,
     ]
       .filter(Boolean)
       .join(" • ");
@@ -294,7 +294,10 @@ export const toLatestItems = (cards: KaliCard[]): DiscoverSectionItem[] =>
     if (!slug || !card.title || chapNum === undefined) return [];
 
     const rating = card.rating && parseFloat(card.rating) > 0 ? card.rating : undefined;
-    const subtitle = [`Ch. ${chapNum}`, rating ? `★ ${parseFloat(rating).toFixed(1)}` : undefined]
+    const subtitle = [
+      `Ch. ${chapNum}`,
+      rating ? `Rating ${parseFloat(rating).toFixed(1)}` : undefined,
+    ]
       .filter(Boolean)
       .join(" • ");
 
@@ -315,7 +318,7 @@ export const toSearchResultItems = (cards: KaliCard[]): SearchResultItem[] =>
   cards.flatMap((card) => {
     const slug = mangaSlugFromUrl(card.url);
     if (!slug || !card.title) return [];
-    const subtitle = [card.rating ? `★ ${card.rating}` : undefined, card.genres[0]]
+    const subtitle = [card.rating ? `Rating ${card.rating}` : undefined, card.genres[0]]
       .filter(Boolean)
       .join(" • ");
 

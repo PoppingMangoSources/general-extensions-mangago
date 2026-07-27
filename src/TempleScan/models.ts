@@ -10,6 +10,7 @@ import {
 
 export const DOMAIN = "https://templetoons.com";
 export const API_URL = "https://api.templetoons.com/api";
+export const PAID_CHAPTER_SUFFIX = "#paid";
 
 export const PAGE_SIZE = 20;
 
@@ -29,7 +30,7 @@ export interface SeasonChapter {
   chapter_name?: string | null;
   chapter_title?: string | null;
   created_at?: string | null;
-  price?: number;
+  price?: number | null;
   index?: string | number;
 }
 

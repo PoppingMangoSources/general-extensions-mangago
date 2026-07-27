@@ -19,6 +19,7 @@ import {
   type FilterOption,
   type FilterTaxonomy,
   type HomeSections,
+  LOCKED_CHAPTER_PREFIX,
   type ValirChapterData,
   type ValirChapterItem,
   type ValirSeries,
@@ -119,8 +120,8 @@ const statSubtitle = (series: ValirSeries, rank?: number): string | undefined =>
   // both trail with view count. Keeping it to two stats stops the subtitle from
   // overflowing the card.
   const lead =
-    rank !== undefined ? `#${rank}` : series.rating ? `★ ${series.rating.toFixed(1)}` : "";
-  const parts = [lead, series.viewCount ? `▲ ${formatCount(series.viewCount)}` : ""].filter(
+    rank !== undefined ? `#${rank}` : series.rating ? `Rating ${series.rating.toFixed(1)}` : "";
+  const parts = [lead, series.viewCount ? `${formatCount(series.viewCount)} views` : ""].filter(
     Boolean,
   );
   return parts.length > 0 ? parts.join(" · ") : undefined;
@@ -227,20 +228,30 @@ export const parseMangaDetails = (page: ValirSeriesPage, mangaId: string): Sourc
 
 const chapterTitle = (chapter: ValirChapterItem): string => {
   const title = chapter.title?.trim() || `Chapter ${chapter.number}`;
-  return chapter.isLocked ? `🔒 ${title}` : title;
+  return chapterIsLocked(chapter) ? `Locked - ${title}` : title;
 };
+
+const chapterIsLocked = (chapter: ValirChapterItem): boolean => chapter.isLocked === true;
 
 export const parseChapters = (
   seriesPages: ValirSeriesPage[],
   sourceManga: SourceManga,
   showPaidChapters: boolean,
-): Chapter[] =>
-  seriesPages
+): Chapter[] => {
+  const seen = new Set<number>();
+  return seriesPages
     .flatMap((page) => page.chapters ?? [])
-    .filter((chapter) => showPaidChapters || !chapter.isLocked)
+    .filter((chapter) => showPaidChapters || !chapterIsLocked(chapter))
+    .filter((chapter) => {
+      if (seen.has(chapter.number)) return false;
+      seen.add(chapter.number);
+      return true;
+    })
     .sort((a, b) => a.number - b.number)
     .map((chapter, index) => ({
-      chapterId: String(chapter.number),
+      chapterId: chapterIsLocked(chapter)
+        ? `${LOCKED_CHAPTER_PREFIX}${chapter.number}`
+        : String(chapter.number),
       sourceManga,
       langCode: "en",
       chapNum: chapter.number,
@@ -249,6 +260,7 @@ export const parseChapters = (
       publishDate: chapter.publishedAt ? new Date(chapter.publishedAt) : undefined,
       sortingIndex: index,
     }));
+};
 
 // Readium renders novel chapters as XHTML, so unclosed void tags must be
 // normalised into their self-closing form first.
@@ -306,9 +318,7 @@ export const parseChapterDetails = (html: string, chapter: Chapter): ChapterDeta
     return { id: chapter.chapterId, mangaId: chapter.sourceManga.mangaId, pages };
   }
 
-  throw new Error(
-    `ValirScans: chapter ${chapter.chapterId} has no readable content — it may be locked`,
-  );
+  throw new Error(`ValirScans: chapter ${chapter.chapterId} has no readable content`);
 };
 
 export const toFeaturedItems = (list: ValirSeries[]): DiscoverSectionItem[] =>
@@ -356,7 +366,7 @@ export const toChapterUpdateItems = (
     .flatMap((series) => {
       // Prefer the newest unlocked chapter so update cards don't lead
       // straight into a paywalled page.
-      const chapter = series.chapters?.find((entry) => !entry.isLocked) ?? series.chapters?.[0];
+      const chapter = series.chapters?.find((entry) => !chapterIsLocked(entry));
       if (!chapter) return [];
       const date = chapter.publishedAt ?? series.lastChapterAt;
       return [
@@ -368,7 +378,7 @@ export const toChapterUpdateItems = (
           title: series.title,
           // Update cards show the chapter number, not its title text (some
           // chapters carry a name after the number that would read oddly here).
-          subtitle: `${chapter.isLocked ? "🔒 " : ""}Chapter ${chapter.number}`,
+          subtitle: `Chapter ${chapter.number}`,
           publishDate: date ? new Date(date) : undefined,
           contentRating: toContentRating(series),
         },
@@ -377,7 +387,7 @@ export const toChapterUpdateItems = (
 
 export const toSearchResultItem = (series: ValirSeries): SearchResultItem => {
   const subtitle = [
-    series.rating ? `★ ${series.rating.toFixed(1)}` : "",
+    series.rating ? `Rating ${series.rating.toFixed(1)}` : "",
     series.type ? toTitleCase(series.type.replaceAll("_", " ")) : "",
   ]
     .filter(Boolean)

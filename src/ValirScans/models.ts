@@ -9,6 +9,7 @@ import {
 } from "@paperback/types";
 
 export const DOMAIN = "https://valirscans.org";
+export const LOCKED_CHAPTER_PREFIX = "locked:";
 
 // Genre entries are wrapped as `{ genre: {...} }` in homepage payloads but
 // flattened to `{ name, slug }` on series detail pages.

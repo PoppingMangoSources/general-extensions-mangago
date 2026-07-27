@@ -13,7 +13,14 @@ Rules carry an attribution where a maintainer specifically owns them: **(niclimc
 - **Pick the right repo before coding.** A site matching a recognized generic theme (MangaStream/MangaReader, Madara, etc.) belongs in that theme's inkdex repo, extending the shared generic base. A bespoke reimplementation of a themed site in general-extensions is a rejection. Only genuinely unique sites are bespoke here. See [Theme Placement](#8-theme-placement).
 - **Verify the live contract first.** Inspect the real page/API response and confirm endpoints, query params, pagination fields, lock flags, delimiters, and error behavior before implementing or reviewing. Don't rely on copied reference implementations.
 - **Follow a merged neighbor.** When a pattern is ambiguous, match a recently merged comparable source's file split, naming, and idioms rather than inventing your own. The stock `ContentTemplate` is an API demonstration, not a style model — it carries inline parsing, boilerplate comments, deprecated form props, and `"EN"` langCodes that these rules tell you to avoid.
+- **Use this evidence order when examples disagree:** the verified live contract, current written policy and maintainer review direction, a recent approved comparable source, then older merged code. A merge proves that a patch was acceptable in its scope; it does not endorse every surrounding design choice. Do not copy a stale pattern merely because it exists on `stable`.
 - **Review behavior and request cost, not just shape.** Count network requests; verify pagination, filtering, lock visibility, URL-paste search, content ratings, and error/fallback behavior.
+
+### Reference selection
+
+- Choose a reference by problem, not contributor reputation. Mgeko is a useful compact error-handling reference; Atsumaru, MangaTaro, and QiScans show LucifersCircle's recent source organization; LNori and MangaDot show Sinon's API/form patterns. Re-check each example against current rules before copying it.
+- MangaDot's TTL-backed genre cache and deprecated `SelectRow.options` are not current patterns. Prefer a session memo promise and `items`. MangaDex and Comix have specialized architectures and are not default templates for an ordinary bespoke source.
+- HiveToons is useful for its memoized live-genre fetch and shared price-lock predicate. It is already merged and must not be changed as part of unrelated cleanup.
 
 ---
 
@@ -116,9 +123,17 @@ Extensions run in a JS runtime that is **not a browser** — several globals are
 
 ### Chapters, access & locked content
 
-- Use authoritative lock flags (`isLocked`/`isPermanentlyLocked`) for visibility; do not require `isAccessible === true` (unlocked chapters may omit it).
+- Build one shared predicate from the site's verified access fields and use it for filtering, labels, update cards, and reader guards. OR every authoritative indicator: `isLocked === true || isPermanentlyLocked === true || price > 0`. A false boolean must not override a positive price. Do not require `isAccessible === true` (unlocked chapters may omit it).
 - A "show locked chapters" setting may reveal records marked locked, but must not bypass non-public status or unrelated access restrictions.
+- If `Chapter` cannot carry access state, encode a reserved paid/locked marker in the chapter ID while preserving existing public IDs. `getChapterDetails` must recognize that marker and throw before making a request. Use `startsWith`/`endsWith` for reserved markers, not broad `includes`.
+- A chapter-update card must open readable content. Select an unlocked chapter or omit the card; do not fall back to a paid chapter just to keep the section populated.
 - Reader methods **throw clear errors** for coin locks, permanent locks, short-link locks, empty page lists, malformed payloads, and failed requests — see [Error Handling](#4-cloudflare--error-handling).
+
+### User-facing state
+
+- **Functional information is text first.** Do not place emoji, flag emoji, stars, triangles, or other decorative Unicode icons anywhere in functional titles, subtitles, settings, sorting labels, version labels, or errors. Write `Paid`, `Locked`, `Rating 8.9`, `18K views`, and `English` explicitly. (celarye)
+- SDK-native SF Symbols are appropriate only in fields designed for them (for example `featuredCarouselItem.infoItems`) and must accompany meaningful text. Typographic punctuation used as a separator is not an icon.
+- Do not copy HiveToons' historical lock-emoji title marker. Its merged price fallback is useful evidence for authoritative lock detection, but the emoji is a legacy presentation detail and HiveToons itself is outside this branch's cleanup scope.
 
 #### Text / novel chapters
 
@@ -252,7 +267,7 @@ const genres = await (this.genresPromise ??= fetchGenres());
   | `MANAGED_COLLECTION_PROVIDING` | `getManagedLibraryCollections`, `commitManagedCollectionChanges`, `getSourceMangaInManagedCollection` | —                                                                                   |
 
 - **Single-line import:** `import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/types";`.
-- **Single consistent developers block:** `{ name: "PopMango", github: "https://github.com/PoppingMangoSources" }`. Real, useful support contact — no bare non-copyable URLs.
+- **Single consistent developers block:** `{ name: "Popmango", github: "https://github.com/PoppingMangoSources" }`. Real, useful support contact — no bare non-copyable URLs.
 - `contentRating` and `language` are **per-site**. `language` is a valid IETF (BCP 47) tag — lowercase, no flags/uppercase (`en`, `es`, `zh-hans`, `multi`). Source-level `contentRating` is MATURE/ADULT if any meaningful subset is.
 - **Set a correct default content rating up front** — a wrong/blurred default (source-level or a "hide adult" setting's default) is a recurring post-merge fix. Pick the sensible default when you write pbconfig/settings, not after a bug report.
 - **Per-title `mangaInfo.contentRating`** comes from that title's own data, set once at the app-return boundary; source default only as fallback. This is distinct from the pbconfig source-level rating.
@@ -300,6 +315,7 @@ Every extension implementation file starts with (generated `src/tests/*` are exe
 ### Commits
 
 - Conventional Commits, **scope = the source name**. Commit type = highest semver impact: `feat`/`refactor` > `fix` > `chore`. Branch names follow Conventional Branch 1.0.0; versions follow Semantic Versioning 2.0.0.
+- AI-assisted commits include an `Assisted-by: AGENT_NAME:MODEL_VERSION` trailer. [policy]
 - Toolchain: Node.js **v22+** (latest LTS) + `npm install` after cloning; the repo's `.oxfmtrc.json`/`.oxlintrc.json` govern format/lint — use them, not your IDE's own formatter (a churned import sort is an instant review flag).
 
 ### Verification gate (run before declaring work done / opening a PR)
@@ -318,6 +334,7 @@ Every extension implementation file starts with (generated `src/tests/*` are exe
 - Test empty search, ordinary text search, pasted source URLs, sorting, included genres, excluded genres.
 - Test public unlocked chapters, optionally-shown locked chapters, non-public chapters, and empty/locked reader responses.
 - Confirm IDs are encoded/decoded exactly once and remain sufficient for later requests.
+- Search user-facing strings for decorative emoji/icons and replace them with plain functional text; allow SDK symbol fields only when paired with text.
 - Verify the required version bump and SPDX headers.
 
 ---

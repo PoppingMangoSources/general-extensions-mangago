@@ -201,7 +201,7 @@ export const toRankingItem = (
   title: listing.title,
   imageUrl: listing.imageUrl,
   subtitle: useRating
-    ? `#${rank} • ★ ${listing.rating?.toFixed(1) ?? "—"}${
+    ? `#${rank} • Rating ${listing.rating?.toFixed(1) ?? "unavailable"}${
         listing.ratingCount ? ` (${listing.ratingCount})` : ""
       }`
     : `#${rank} • ${formatCount(listing.views ?? 0)} views`,
@@ -217,7 +217,7 @@ export const toCompletedItem = (listing: RanobesListing): DiscoverSectionItem =>
     listing.views !== undefined
       ? `${formatCount(listing.views)} views`
       : listing.rating !== undefined
-        ? `★ ${listing.rating.toFixed(1)}`
+        ? `Rating ${listing.rating.toFixed(1)}`
         : undefined,
   contentRating: contentRatingForGenres(listing.genres ?? []),
 });
@@ -226,7 +226,7 @@ export const toSearchResult = (listing: RanobesListing): SearchResultItem => ({
   mangaId: listing.mangaId,
   title: listing.title,
   imageUrl: listing.imageUrl,
-  subtitle: listing.rating !== undefined ? `★ ${listing.rating.toFixed(1)}` : undefined,
+  subtitle: listing.rating !== undefined ? `Rating ${listing.rating.toFixed(1)}` : undefined,
   contentRating: contentRatingForGenres(listing.genres ?? []),
 });
 

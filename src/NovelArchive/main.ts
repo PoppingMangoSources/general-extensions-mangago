@@ -205,7 +205,7 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
     const pasted = await resolveUrlQuery(query.title ?? "");
     if (pasted) return pasted;
 
-    const meta = query.metadata ?? {};
+    const meta = query.metadata ?? { status: [], genreMatch: ["all"], genres: {} };
     const search = (query.title ?? "").trim();
     const page = metadata?.page ?? 1;
 

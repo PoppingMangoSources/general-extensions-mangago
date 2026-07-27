@@ -200,7 +200,7 @@ export function parseMangaCardsFromHtml(
   return { cards, rawCount: starts.length, truncated };
 }
 
-// /top-manga rows carry both the read count and ★ rating that /browse lacks.
+// /top-manga rows carry both the read count and rating that /browse lacks.
 export interface TopMangaItem {
   mangaId: string;
   title: string;
@@ -270,7 +270,7 @@ export function parseTopManga($: CheerioAPI, showNsfw: boolean): TopMangaItem[] 
   podium.sort((a, b) => a.rank - b.rank).forEach((entry) => add(entry.item));
 
   // Ranked list (rank 4+): each <li> anchor has title, genres, and a stat block
-  // (reads then ★ rating).
+  // (reads then rating).
   $("ol li a[href*='/manga/']").each((_, el) => {
     const a = $(el);
     const genres = cleanGenreLine(a.find('[class*="text-accent/45"]').first().text()) || undefined;
@@ -296,16 +296,16 @@ export function parseTopManga($: CheerioAPI, showNsfw: boolean): TopMangaItem[] 
   return items;
 }
 
-// Carousel subtitle: "★ 8.9 · 18,972 reads", or whichever stat/genre is present.
+// Carousel subtitle: "Rating 8.9 · 18,972 reads", or whichever stat is present.
 export function topMangaSubtitle(item: TopMangaItem): string | undefined {
   const parts: string[] = [];
-  if (item.rating) parts.push(`★ ${item.rating}`);
+  if (item.rating) parts.push(`Rating ${item.rating}`);
   if (item.reads) parts.push(`${item.reads} reads`);
   if (parts.length > 0) return parts.join(" · ");
   return item.genres || undefined;
 }
 
-// Featured hero stat pills: ★ rating and read count, when present.
+// Featured hero stat pills: rating and read count, when present.
 export function topMangaInfoItems(item: TopMangaItem): FeaturedCarouselItem["infoItems"] {
   const pills: { symbol: string; text: string }[] = [];
   if (item.rating) pills.push({ symbol: "star.fill", text: item.rating });
