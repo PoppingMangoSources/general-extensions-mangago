@@ -134,6 +134,22 @@ const formatChapterTitle = (title: string): string => {
   return rest;
 };
 
+const formatChapterLabel = (title: string): string => {
+  const cleanedTitle = formatChapterTitle(title);
+  if (cleanedTitle) return cleanedTitle;
+  return cleanText(title).match(/\b(?:chapter|ch\.?)\s*[0-9]+(?:\.[0-9]+)?/i)?.[0] ?? cleanText(title);
+};
+
+const chapterTitleFromLink = (link: cheerio.Cheerio<AnyNode>): string => {
+  const nestedTitle = cleanText(
+    link.find(".chapter-item-title, .chapter-item-headtitle, .chapter-title").first().text(),
+  );
+  if (nestedTitle) return nestedTitle;
+  const clone = link.clone();
+  clone.find("cite, time, .chapter-release-date, .text-danger, script, style").remove();
+  return cleanText(clone.text());
+};
+
 const parseListingChapter = (
   $: cheerio.CheerioAPI,
   element: AnyNode,
@@ -141,7 +157,7 @@ const parseListingChapter = (
   const row = $(element);
   const link = row.find("a.list-2-chap, a").first();
   const href = link.attr("href") ?? "";
-  const title = cleanText(link.attr("title") ?? link.text());
+  const title = chapterTitleFromLink(link);
   if (!href || !title) return undefined;
   const dateNode = row.find("cite").first();
   return {
@@ -213,15 +229,16 @@ export const parseNewManga = ($: cheerio.CheerioAPI): NewMangaItem[] => {
     seen.add(mangaId);
     const chapterLink = item.find(".slide-caption > a").first();
     const chapterHref = chapterLink.attr("href") ?? "";
+    const chapterTitle = chapterTitleFromLink(chapterLink);
     items.push({
       mangaId,
       title,
       imageUrl: imageUrlFrom(item.find("img").first()),
       chapter:
-        chapterHref && chapterLink.text().trim()
+        chapterHref && chapterTitle
           ? {
               chapterId: encodePathId(chapterHref),
-              title: cleanText(chapterLink.text()),
+              title: chapterTitle,
               dateText: cleanText(item.find(".time").text()),
               isNew: item.find(".time .text-danger").length > 0,
             }
@@ -339,7 +356,7 @@ export const parseChapters = (
       const link = row.find("a").first();
       const href = link.attr("href") ?? "";
       const chapterId = encodePathId(href);
-      const name = cleanText(link.text());
+      const name = chapterTitleFromLink(link);
       if (!chapterId || !name || seen.has(chapterId)) continue;
       seen.add(chapterId);
       entries.push({
@@ -423,7 +440,7 @@ export const toFeaturedItem = (item: MangaListItem): FeaturedCarouselItem => {
   const infoItems: NonNullable<FeaturedCarouselItem["infoItems"]>[number][] = [];
   const chapters = item.chapters
     .slice(0, 2)
-    .map((chapter) => formatChapterTitle(chapter.title) || chapter.title)
+    .map((chapter) => formatChapterLabel(chapter.title))
     .join(" • ");
   if (chapters) infoItems.push({ symbol: "book.closed.fill", text: chapters });
   const stats = [
@@ -453,10 +470,9 @@ export const toNewMangaItem = (item: NewMangaItem): DiscoverSectionItem => ({
   mangaId: item.mangaId,
   imageUrl: item.imageUrl,
   title: item.title,
-  subtitle: [
-    item.chapter ? formatChapterTitle(item.chapter.title) || item.chapter.title : undefined,
-    "NEW",
-  ].filter(Boolean).join(" • "),
+  subtitle: [item.chapter ? formatChapterLabel(item.chapter.title) : undefined, "NEW"]
+    .filter(Boolean)
+    .join(" • "),
   contentRating: ContentRating.EVERYONE,
 });
 
@@ -471,7 +487,7 @@ export const toLatestReleaseItem = (
     chapterId: chapter.chapterId,
     imageUrl: item.imageUrl,
     title: item.title,
-    subtitle: formatChapterTitle(chapter.title) || chapter.title,
+    subtitle: formatChapterLabel(chapter.title),
     publishDate: parseDate(chapter.dateText) ?? (chapter.isNew ? item.updatedDate : undefined),
     contentRating: contentRatingForGenres(item.genres),
   };
@@ -482,10 +498,7 @@ export const toHotItem = (item: MangaListItem): DiscoverSectionItem => ({
   mangaId: item.mangaId,
   imageUrl: item.imageUrl,
   title: item.title,
-  subtitle: [
-    item.chapters[0] ? formatChapterTitle(item.chapters[0].title) || item.chapters[0].title : undefined,
-    item.views ? `${item.views} views` : "",
-  ]
+  subtitle: [item.chapters[0] ? formatChapterLabel(item.chapters[0].title) : undefined, item.views ? `${item.views} views` : ""]
     .filter(Boolean)
     .join(" • "),
   contentRating: contentRatingForGenres(item.genres),
@@ -498,7 +511,7 @@ export const toSearchResultItem = (item: MangaListItem, rank?: number): SearchRe
   subtitle: [
     rank != null ? `#${rank}` : "",
     item.views ? `${item.views} views` : "",
-    item.chapters[0] ? formatChapterTitle(item.chapters[0].title) || item.chapters[0].title : undefined,
+    item.chapters[0] ? formatChapterLabel(item.chapters[0].title) : undefined,
   ]
     .filter(Boolean)
     .join(" • "),
