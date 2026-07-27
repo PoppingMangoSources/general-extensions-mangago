@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-27T12:57:03.677Z",
+  "buildTime": "2026-07-27T14:56:17.563Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -273,6 +273,29 @@
         }
       ],
       "id": "ScansGG"
+    },
+    {
+      "name": "StoneScape",
+      "description": "Extension that pulls content from stonescape.xyz.",
+      "version": "1.0.0-alpha.1",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "ADULT",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "StoneScape"
     },
     {
       "name": "Temple Scan",
