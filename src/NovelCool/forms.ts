@@ -8,40 +8,56 @@ import {
   SelectRow,
   TriStateSelectRow,
   type SearchQuery,
-  type Tag,
 } from "@paperback/types";
 
 import {
+  MATCH_OPTIONS,
+  RATING_OPTIONS,
   STATUS_OPTIONS,
-  TYPE_OPTIONS,
   type SearchMetadata,
   type SearchOptions,
   type TriState,
 } from "./models";
 
 export class NovelCoolAdvancedSearchForm extends AdvancedSearchForm {
+  private nameMethod: string[];
   private author: string;
+  private authorMethod: string[];
   private status: string[];
   private genres: TriState;
-  private type: string[];
   private year: string[];
-  private alphabet: string[];
+  private rating: string[];
   private readonly options: SearchOptions;
 
   constructor(searchQuery: SearchQuery<SearchMetadata>, options: SearchOptions) {
     super();
     const metadata = searchQuery.metadata ?? {};
+    this.nameMethod = metadata.nameMethod ?? [];
     this.author = metadata.author ?? "";
+    this.authorMethod = metadata.authorMethod ?? [];
     this.status = metadata.status ?? [];
     this.genres = { ...metadata.genres };
-    this.type = metadata.type ?? [];
     this.year = metadata.year ?? [];
-    this.alphabet = metadata.alphabet ?? [];
+    this.rating = metadata.rating ?? [];
     this.options = options;
   }
 
   override getSections() {
     const sections = [
+      Section("series", [
+        SelectRow("name_method", {
+          title: "Series Match",
+          layout: "flow",
+          value: this.nameMethod,
+          items: MATCH_OPTIONS,
+          minItemCount: 0,
+          maxItemCount: 1,
+          onValueChange: Application.Selector(
+            this as NovelCoolAdvancedSearchForm,
+            "handleNameMethodChange",
+          ),
+        }),
+      ]),
       Section("author", [
         InputRow("author", {
           title: "Author",
@@ -51,18 +67,16 @@ export class NovelCoolAdvancedSearchForm extends AdvancedSearchForm {
             "handleAuthorChange",
           ),
         }),
-      ]),
-      Section("status", [
-        SelectRow("status", {
-          title: "Status",
+        SelectRow("author_method", {
+          title: "Author Match",
           layout: "flow",
-          value: this.status,
-          items: STATUS_OPTIONS,
+          value: this.authorMethod,
+          items: MATCH_OPTIONS,
           minItemCount: 0,
           maxItemCount: 1,
           onValueChange: Application.Selector(
             this as NovelCoolAdvancedSearchForm,
-            "handleStatusChange",
+            "handleAuthorMethodChange",
           ),
         }),
       ]),
@@ -80,17 +94,31 @@ export class NovelCoolAdvancedSearchForm extends AdvancedSearchForm {
           ),
         }),
       ]),
-      Section("type", [
-        SelectRow("type", {
-          title: "Type",
+      Section("status", [
+        SelectRow("status", {
+          title: "Status",
           layout: "flow",
-          value: this.type,
-          items: TYPE_OPTIONS,
+          value: this.status,
+          items: STATUS_OPTIONS,
           minItemCount: 0,
           maxItemCount: 1,
           onValueChange: Application.Selector(
             this as NovelCoolAdvancedSearchForm,
-            "handleTypeChange",
+            "handleStatusChange",
+          ),
+        }),
+      ]),
+      Section("rating", [
+        SelectRow("rating", {
+          title: "Rating",
+          layout: "flow",
+          value: this.rating,
+          items: RATING_OPTIONS,
+          minItemCount: 0,
+          maxItemCount: 1,
+          onValueChange: Application.Selector(
+            this as NovelCoolAdvancedSearchForm,
+            "handleRatingChange",
           ),
         }),
       ]),
@@ -115,30 +143,19 @@ export class NovelCoolAdvancedSearchForm extends AdvancedSearchForm {
       );
     }
 
-    if (this.options.alphabets.length > 0) {
-      sections.push(
-        Section("alphabet", [
-          SelectRow("alphabet", {
-            title: "Alphabet",
-            layout: "flow",
-            value: this.alphabet,
-            items: this.options.alphabets,
-            minItemCount: 0,
-            maxItemCount: 1,
-            onValueChange: Application.Selector(
-              this as NovelCoolAdvancedSearchForm,
-              "handleAlphabetChange",
-            ),
-          }),
-        ]),
-      );
-    }
-
     return sections;
+  }
+
+  async handleNameMethodChange(value: string[]): Promise<void> {
+    this.nameMethod = value;
   }
 
   async handleAuthorChange(value: string): Promise<void> {
     this.author = value.trim();
+  }
+
+  async handleAuthorMethodChange(value: string[]): Promise<void> {
+    this.authorMethod = value;
   }
 
   async handleStatusChange(value: string[]): Promise<void> {
@@ -149,26 +166,23 @@ export class NovelCoolAdvancedSearchForm extends AdvancedSearchForm {
     this.genres = value;
   }
 
-  async handleTypeChange(value: string[]): Promise<void> {
-    this.type = value;
-  }
-
   async handleYearChange(value: string[]): Promise<void> {
     this.year = value;
   }
 
-  async handleAlphabetChange(value: string[]): Promise<void> {
-    this.alphabet = value;
+  async handleRatingChange(value: string[]): Promise<void> {
+    this.rating = value;
   }
 
   override getSearchQueryMetadata(): SearchMetadata {
     const result: SearchMetadata = {};
+    if (this.nameMethod.length > 0) result.nameMethod = this.nameMethod;
     if (this.author) result.author = this.author;
+    if (this.authorMethod.length > 0) result.authorMethod = this.authorMethod;
     if (this.status.length > 0) result.status = this.status;
     if (Object.keys(this.genres).length > 0) result.genres = this.genres;
-    if (this.type.length > 0) result.type = this.type;
     if (this.year.length > 0) result.year = this.year;
-    if (this.alphabet.length > 0) result.alphabet = this.alphabet;
+    if (this.rating.length > 0) result.rating = this.rating;
     return result;
   }
 }
