@@ -26,6 +26,8 @@ import {
 
 const ADULT_GENRES = new Set(["adult", "hentai", "smut"]);
 const MATURE_GENRES = new Set(["ecchi", "mature", "yaoi", "yuri"]);
+const KOREAN_TITLE_REGEX =
+  /[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af][\u1100-\u11ff\u3130-\u318f\uac00-\ud7af0-9\s·-]*/g;
 
 const cleanText = (value?: string | null): string =>
   Application.decodeHTMLEntities(value ?? "")
@@ -75,6 +77,11 @@ const imageUrlFrom = (image: cheerio.Cheerio<AnyNode>): string => {
       image.attr("src"),
   );
 };
+
+const koreanTitleFrom = (value?: string | null): string | undefined =>
+  (cleanText(value).match(KOREAN_TITLE_REGEX) ?? [])
+    .map(cleanText)
+    .sort((left, right) => right.length - left.length)[0];
 
 const labeledValue = (
   $: cheerio.CheerioAPI,
@@ -152,7 +159,7 @@ export const parseMangaList = ($: cheerio.CheerioAPI): MangaListItem[] => {
       mangaId,
       title,
       imageUrl: imageUrlFrom(card.find("img").first()),
-      alternativeTitle: labeledValue($, tooltip, "Alternative") || undefined,
+      alternativeTitle: koreanTitleFrom(labeledValue($, tooltip, "Alternative")),
       description: cleanDescription(tooltip.find(".box_text").first().text()) || undefined,
       genres,
       status: labeledValue($, tooltip, "Status") || undefined,
@@ -212,13 +219,13 @@ export const parseGenreTags = ($: cheerio.CheerioAPI): Tag[] => {
   if (inputs.length > 0) {
     for (const element of inputs.toArray()) {
       const input = $(element);
-      const id = input.attr("value") ?? "";
+      const id = encodePathId(input.attr("value") ?? "");
       const title = cleanText(
         $(`label[for="${input.attr("id") ?? ""}"]`)
           .first()
           .text(),
       );
-      if (!id || !title || seen.has(id)) continue;
+      if (!id || !title || /^genres$/i.test(title) || seen.has(id)) continue;
       seen.add(id);
       tags.push({ id, title });
     }
@@ -228,9 +235,9 @@ export const parseGenreTags = ($: cheerio.CheerioAPI): Tag[] => {
   for (const element of $('a[href*="/genres/"]').toArray()) {
     const link = $(element);
     const href = link.attr("href")?.replace(/\/+$/, "") ?? "";
-    const id = href.split("/").pop() ?? "";
+    const id = encodePathId(href.split("/").pop() ?? "");
     const title = cleanText(link.text());
-    if (!id || !title || seen.has(id)) continue;
+    if (!id || !title || /^genres$/i.test(title) || seen.has(id)) continue;
     seen.add(id);
     tags.push({ id, title });
   }
@@ -250,20 +257,7 @@ export const parseMangaDetails = ($: cheerio.CheerioAPI, mangaId: string): Sourc
   const primaryTitle = cleanText($("#title-detail-manga").first().text());
   if (!primaryTitle) throw new Error(`Unable to parse manga details for ${mangaId}.`);
 
-  const alternativeTitle = cleanText($(".list-info .othername p").eq(1).text());
-  const secondaryTitles =
-    alternativeTitle && !/^updating$/i.test(alternativeTitle)
-      ? alternativeTitle
-          .split(/\s*(?:;|\/)\s*/)
-          .map(cleanText)
-          .filter(
-            (title, index, titles) =>
-              title.length > 0 &&
-              title.toLowerCase() !== primaryTitle.toLowerCase() &&
-              titles.findIndex((candidate) => candidate.toLowerCase() === title.toLowerCase()) ===
-                index,
-          )
-      : [];
+  const koreanTitle = koreanTitleFrom($(".list-info .othername p").eq(1).text());
   const genres = $(".list-info .kind a")
     .map((_, element) => cleanText($(element).text()))
     .toArray()
@@ -283,7 +277,10 @@ export const parseMangaDetails = ($: cheerio.CheerioAPI, mangaId: string): Sourc
     mangaId,
     mangaInfo: {
       primaryTitle,
-      secondaryTitles,
+      secondaryTitles:
+        koreanTitle && koreanTitle.toLowerCase() !== primaryTitle.toLowerCase()
+          ? [koreanTitle]
+          : [],
       thumbnailUrl: imageUrlFrom($(".detail-info img").first()),
       synopsis: cleanDescription($("#summary_shortened").first().text()),
       author: author && !/^updating$/i.test(author) ? author : undefined,
@@ -421,23 +418,19 @@ export const toFeaturedItem = (item: MangaListItem): FeaturedCarouselItem => {
     .join(" • ");
   if (chapters) infoItems.push({ symbol: "book.closed.fill", text: chapters });
   const stats = [
+    `${item.follows || "0"} follows`,
     item.rating != null ? `${item.rating.toFixed(1)} rating` : "",
-    item.follows ? `${item.follows} follows` : "",
   ]
     .filter(Boolean)
     .join(" • ");
-  if (stats)
-    infoItems.push({ symbol: item.rating != null ? "star.fill" : "heart.fill", text: stats });
+  infoItems.push({ symbol: "heart.fill", text: stats });
 
   return {
     type: "featuredCarouselItem",
     mangaId: item.mangaId,
     imageUrl: item.imageUrl,
     title: item.title,
-    supertitle:
-      item.alternativeTitle && !/^updating$/i.test(item.alternativeTitle)
-        ? `Alternative: ${item.alternativeTitle}`
-        : undefined,
+    supertitle: item.alternativeTitle,
     summary: item.description,
     infoItems: infoItems.length
       ? (infoItems.slice(0, 2) as FeaturedCarouselItem["infoItems"])

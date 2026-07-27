@@ -26,6 +26,7 @@ import {
 const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
 const LOCKED_PREFIX = "locked:";
 const NOVEL_PREFIX = "novel:";
+const ANIMATED_IMAGE_REGEX = /\.(gif|apng)(\/|\?|#|$)/i;
 
 export const encodeMangaId = (slug: string): string => slug.replace(SAFE_ID_REGEX, "-");
 
@@ -42,6 +43,14 @@ export const toAbsoluteUrl = (value?: string | null): string => {
   if (value.startsWith("http://") || value.startsWith("https://")) return value;
   if (value.startsWith("//")) return `https:${value}`;
   return `${DOMAIN}${value.startsWith("/") ? "" : "/"}${value}`;
+};
+
+const staticImageUrl = (...values: (string | null | undefined)[]): string => {
+  for (const value of values) {
+    const url = toAbsoluteUrl(value);
+    if (url && !ANIMATED_IMAGE_REGEX.test(url)) return url;
+  }
+  return "";
 };
 
 const decodeText = (value?: string | null): string =>
@@ -109,8 +118,8 @@ export const parseMangaList = (series: Series[]): MangaListItem[] =>
     return {
       mangaId: encodeMangaId(item.slug),
       title: decodeText(item.title),
-      imageUrl: toAbsoluteUrl(item.coverUrl),
-      bannerUrl: toAbsoluteUrl(item.bannerUrl) || undefined,
+      imageUrl: staticImageUrl(item.coverUrl, item.bannerUrl),
+      bannerUrl: staticImageUrl(item.bannerUrl, item.coverUrl) || undefined,
       summary: decodeText(item.description) || undefined,
       author: decodeText(item.author) || undefined,
       status: mapStatus(item.publicationStatus),
@@ -189,7 +198,7 @@ export const toChapterUpdateItem = (
         ? encodeNovelChapterId(series.slug, chapter.chapterNumber)
         : chapter.chapterId.replace(SAFE_ID_REGEX, "-"),
     title: decodeText(series.title),
-    imageUrl: toAbsoluteUrl(series.coverUrl),
+    imageUrl: staticImageUrl(series.coverUrl, series.bannerUrl),
     subtitle: `Ch. ${formatChapterNumber(chapter.chapterNumber)}`,
     publishDate,
     contentRating: contentRatingForGenres(series.genres ?? []),
@@ -213,8 +222,8 @@ export const parseMangaDetails = (series: Series): SourceManga => {
       .replace(/([a-z])([A-Z])/g, "$1 $2")
       .replace(/\b\w/g, (character) => character.toUpperCase()),
   }));
-  const bannerUrl = toAbsoluteUrl(series.bannerUrl);
-  const thumbnailUrl = toAbsoluteUrl(series.coverUrl);
+  const bannerUrl = staticImageUrl(series.bannerUrl, series.coverUrl);
+  const thumbnailUrl = staticImageUrl(series.coverUrl, series.bannerUrl);
 
   return {
     mangaId: encodeMangaId(series.slug),

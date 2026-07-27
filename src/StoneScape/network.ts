@@ -25,7 +25,7 @@ import {
   type SeriesResponse,
 } from "./models";
 
-const IMAGE_EXTENSION_REGEX = /\.(jpe?g|png|webp|gif|avif|svg)(\?|#|$)/i;
+const IMAGE_EXTENSION_REGEX = /\.(jpe?g|png|webp|gif|avif|svg)(\/|\?|#|$)/i;
 
 export class StoneScapeInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {

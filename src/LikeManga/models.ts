@@ -29,7 +29,7 @@ export const SORT_OPTIONS: SortingOption[] = [
 
 export const STATUS_OPTIONS: Tag[] = [
   { id: "Complete", title: "Complete" },
-  { id: "In process", title: "In process" },
+  { id: "In%20process", title: "In process" },
   { id: "Pause", title: "Pause" },
 ];
 
@@ -59,6 +59,7 @@ export interface SearchMetadata extends JSONObject {
   genres?: string[];
   minChapters?: string[];
   status?: string[];
+  keyword?: string;
   topSeriesSort?: TopSeriesSort;
 }
 

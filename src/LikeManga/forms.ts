@@ -3,6 +3,7 @@
 
 import {
   AdvancedSearchForm,
+  InputRow,
   Section,
   SelectRow,
   type SearchQuery,
@@ -15,6 +16,7 @@ export class LikeMangaAdvancedSearchForm extends AdvancedSearchForm {
   private genres: string[];
   private minChapters: string[];
   private status: string[];
+  private keyword: string;
   private readonly genreOptions: Tag[];
 
   constructor(searchQuery: SearchQuery<SearchMetadata>, genreOptions: Tag[]) {
@@ -23,6 +25,7 @@ export class LikeMangaAdvancedSearchForm extends AdvancedSearchForm {
     this.genres = metadata.genres ?? [];
     this.minChapters = metadata.minChapters ?? [];
     this.status = metadata.status ?? [];
+    this.keyword = metadata.keyword ?? "";
     this.genreOptions = genreOptions;
   }
 
@@ -70,6 +73,16 @@ export class LikeMangaAdvancedSearchForm extends AdvancedSearchForm {
           ),
         }),
       ]),
+      Section("keyword", [
+        InputRow("keyword", {
+          title: "Keyword",
+          value: this.keyword,
+          onValueChange: Application.Selector(
+            this as LikeMangaAdvancedSearchForm,
+            "handleKeywordChange",
+          ),
+        }),
+      ]),
     ];
   }
 
@@ -85,6 +98,10 @@ export class LikeMangaAdvancedSearchForm extends AdvancedSearchForm {
     this.status = value;
   }
 
+  async handleKeywordChange(value: string): Promise<void> {
+    this.keyword = value.trim();
+  }
+
   override getSearchQueryMetadata(): SearchMetadata {
     return {
       ...(this.genres.length > 0 && { genres: this.genres }),
@@ -92,6 +109,7 @@ export class LikeMangaAdvancedSearchForm extends AdvancedSearchForm {
         ? { minChapters: this.minChapters }
         : {}),
       ...(this.status.length > 0 && { status: this.status }),
+      ...(this.keyword && { keyword: this.keyword }),
     };
   }
 }

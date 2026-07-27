@@ -33,7 +33,6 @@ import {
   type ContentType,
   type PageMetadata,
   type SearchMetadata,
-  type Series,
 } from "./models";
 import {
   fetchBanner,
@@ -63,8 +62,8 @@ import type StoneScapeConfig from "./pbconfig";
 
 class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
   private rateLimiter = new BasicRateLimiter("rateLimiter", {
-    numberOfRequests: 6,
-    bufferInterval: 2,
+    numberOfRequests: 3,
+    bufferInterval: 1,
     ignoreImages: true,
   });
   private cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
@@ -150,25 +149,14 @@ class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
   private async getFeaturedSection(
     contentType: ContentType,
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    const [banner, catalog, popular] = await Promise.all([
-      fetchBanner(contentType),
-      fetchSeries({ page: 1, limit: 100, contentType }),
-      fetchPopular("year", contentType, 100),
-    ]);
+    const banner = await fetchBanner(contentType);
     if (contentType === "novel" && banner.showNovelSection === false) return { items: [] };
 
-    const catalogBySlug = new Map(catalog.data.map((series) => [series.slug, series]));
-    const popularBySlug = new Map(popular.data.map((series) => [series.slug, series]));
-    const enriched = banner.featuredSeries.map((series): Series => {
-      const popularSeries = popularBySlug.get(series.slug);
-      return {
-        ...popularSeries,
-        ...catalogBySlug.get(series.slug),
-        ...series,
-        totalViews: popularSeries?.totalViews,
-      };
-    });
-    return { items: parseMangaList(enriched).map(toFeaturedItem) };
+    return {
+      items: parseMangaList(banner.featuredSeries)
+        .filter((item) => item.imageUrl.length > 0)
+        .map(toFeaturedItem),
+    };
   }
 
   private getPopularPeriodSection(contentType: ContentType): PagedResults<DiscoverSectionItem> {
@@ -253,18 +241,8 @@ class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
           : undefined;
 
     if (searchMetadata.popularPeriod && selectedContentType) {
-      const [popular, catalog] = await Promise.all([
-        fetchPopular(searchMetadata.popularPeriod, selectedContentType, 100),
-        fetchSeries({ page: 1, limit: 100, contentType: selectedContentType }),
-      ]);
-      const catalogBySlug = new Map(catalog.data.map((series) => [series.slug, series]));
-      const enriched = popular.data.map(
-        (series): Series => ({
-          ...catalogBySlug.get(series.slug),
-          ...series,
-        }),
-      );
-      return { items: parseMangaList(enriched).map(toSearchResultItem) };
+      const popular = await fetchPopular(searchMetadata.popularPeriod, selectedContentType, 100);
+      return { items: parseMangaList(popular.data).map(toSearchResultItem) };
     }
 
     const page = metadata?.page ?? 1;

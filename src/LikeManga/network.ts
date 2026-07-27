@@ -12,7 +12,7 @@ import * as cheerio from "cheerio";
 
 import { DOMAIN, type ChapterAjaxResponse, type SearchRequest } from "./models";
 
-const IMAGE_EXTENSION_REGEX = /\.(avif|gif|jpe?g|jxl|png|svg|webp)(\?|#|$)/i;
+const IMAGE_EXTENSION_REGEX = /\.(avif|gif|jpe?g|jxl|png|svg|webp)(\/|\?|#|$)/i;
 
 const decodePathId = (value: string): string => {
   try {
@@ -92,8 +92,10 @@ export const buildSearchUrl = (request: SearchRequest): string => {
   const url = new URL(DOMAIN).setQueryItem("act", "searchadvance");
   if (request.keyword) url.setQueryItem("f[keyword]", request.keyword);
   if (request.sortBy) url.setQueryItem("f[sortby]", request.sortBy);
-  if (request.status) url.setQueryItem("f[status]", request.status);
-  if (request.genres?.length) url.setQueryItem("f[genres][]", request.genres);
+  if (request.status) url.setQueryItem("f[status]", decodePathId(request.status));
+  if (request.genres?.length) {
+    url.setQueryItem("f[genres][]", request.genres.map(decodePathId));
+  }
   if (request.minChapters && request.minChapters !== "1") {
     url.setQueryItem("f[min_num_chapter]", request.minChapters);
   }
@@ -102,6 +104,9 @@ export const buildSearchUrl = (request: SearchRequest): string => {
 };
 
 export const fetchHomePage = (): Promise<cheerio.CheerioAPI> => fetchCheerio(`${DOMAIN}/`);
+
+export const fetchAdvancedSearchPage = (): Promise<cheerio.CheerioAPI> =>
+  fetchCheerio(`${DOMAIN}/searchadvance/`);
 
 export const fetchSearchPage = (request: SearchRequest): Promise<cheerio.CheerioAPI> =>
   fetchCheerio(buildSearchUrl(request));

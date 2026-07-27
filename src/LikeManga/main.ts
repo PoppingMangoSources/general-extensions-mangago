@@ -33,6 +33,7 @@ import {
 } from "./models";
 import {
   fetchChapterListPage,
+  fetchAdvancedSearchPage,
   fetchContentPage,
   fetchHomePage,
   fetchSearchPage,
@@ -173,7 +174,7 @@ class LikeMangaExtension implements ExtensionImpl<typeof LikeMangaConfig> {
   }
 
   private getGenres(): Promise<Tag[]> {
-    return (this.genresPromise ??= this.getHomePage().then(parseGenreTags));
+    return (this.genresPromise ??= fetchAdvancedSearchPage().then(parseGenreTags));
   }
 
   private async getListingSection(
@@ -229,7 +230,7 @@ class LikeMangaExtension implements ExtensionImpl<typeof LikeMangaConfig> {
     const sortBy = searchMetadata.topSeriesSort ?? sortingOption?.id ?? SORT_OPTIONS[0].id;
     const document = await fetchSearchPage({
       page,
-      keyword: (query.title ?? "").trim() || undefined,
+      keyword: searchMetadata.keyword?.trim() || (query.title ?? "").trim() || undefined,
       sortBy,
       status: searchMetadata.status?.[0],
       genres: searchMetadata.genres,
