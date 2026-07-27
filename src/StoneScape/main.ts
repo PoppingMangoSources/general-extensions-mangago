@@ -60,6 +60,35 @@ import {
 } from "./parsers";
 import type StoneScapeConfig from "./pbconfig";
 
+const contentTypeFilterId = (contentType: ContentType): string =>
+  contentType === "novel" ? "novels" : "manhwa-manga";
+
+const contentTypeFromFilter = (value?: string): ContentType | undefined => {
+  switch (value) {
+    case "novel":
+    case "novels":
+      return "novel";
+    case "manhwa":
+    case "manhwa-manga":
+      return "manhwa";
+    default:
+      return undefined;
+  }
+};
+
+const statusFromFilter = (value?: string): string | undefined => {
+  switch (value) {
+    case "in-process":
+    case "ongoing":
+      return "ongoing";
+    case "completed":
+    case "hiatus":
+      return value;
+    default:
+      return undefined;
+  }
+};
+
 class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
   private rateLimiter = new BasicRateLimiter("rateLimiter", {
     numberOfRequests: 3,
@@ -168,7 +197,7 @@ class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
           searchQuery: {
             title: "",
             metadata: {
-              contentType: [contentType],
+              contentType: [contentTypeFilterId(contentType)],
               popularPeriod: period.id,
             } satisfies SearchMetadata,
           },
@@ -233,12 +262,7 @@ class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
     if (pasted) return pasted;
 
     const searchMetadata = query.metadata ?? {};
-    const selectedContentType =
-      searchMetadata.contentType?.[0] === "novel"
-        ? "novel"
-        : searchMetadata.contentType?.[0] === "manhwa"
-          ? "manhwa"
-          : undefined;
+    const selectedContentType = contentTypeFromFilter(searchMetadata.contentType?.[0]);
 
     if (searchMetadata.popularPeriod && selectedContentType) {
       const popular = await fetchPopular(searchMetadata.popularPeriod, selectedContentType, 100);
@@ -251,7 +275,7 @@ class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
       limit: PAGE_SIZE,
       contentType: selectedContentType,
       genres: searchMetadata.genres,
-      status: searchMetadata.status?.[0],
+      status: statusFromFilter(searchMetadata.status?.[0]),
       search: (query.title ?? "").trim() || undefined,
       sort: sortingOption?.id,
     });
