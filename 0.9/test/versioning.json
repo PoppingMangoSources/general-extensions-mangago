@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-27T10:37:47.040Z",
+  "buildTime": "2026-07-27T11:11:58.595Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -104,7 +104,7 @@
     {
       "name": "NovelArchive",
       "description": "Extension that pulls content from novelarchive.cc.",
-      "version": "1.0.0-alpha.43",
+      "version": "1.0.0-alpha.44",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
