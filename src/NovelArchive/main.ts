@@ -70,7 +70,7 @@ import type NovelArchiveConfig from "./pbconfig";
 class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> {
   private rateLimiter = new BasicRateLimiter("rateLimiter", {
     numberOfRequests: 20,
-    bufferInterval: 10,
+    bufferInterval: 8,
     ignoreImages: true,
   });
   private cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });

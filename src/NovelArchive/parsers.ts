@@ -143,6 +143,7 @@ export const parseNovelList = (novels: Novel[]): NovelListItem[] =>
       imageUrl: parseCoverUrl(novel),
       contentRating: contentRatingForGenres(genres),
       genres,
+      author: decodeText(novel.author) || undefined,
       summary: cleanDescription(novel.description) || undefined,
       rating: novel.rating ?? undefined,
       views: parseViews(novel),
@@ -159,25 +160,31 @@ export const toFeaturedItem = (
   index: number,
   variant: "trending" | "editors",
 ): DiscoverSectionItem => {
+  const ratingInfo =
+    item.rating === undefined
+      ? undefined
+      : { symbol: "star.fill" as const, text: item.rating.toFixed(1) };
   const viewsInfo =
     item.views === undefined
       ? undefined
       : { symbol: "eye.fill" as const, text: formatCount(item.views) };
-  const rankInfo = { symbol: "flame.fill" as const, text: `${index + 1}` };
+  const secondaryInfo =
+    variant === "trending" ? { symbol: "flame.fill" as const, text: `#${index + 1}` } : viewsInfo;
   const infoItems: FeaturedCarouselItem["infoItems"] =
-    variant === "trending"
-      ? viewsInfo
-        ? [rankInfo, viewsInfo]
-        : [rankInfo]
-      : viewsInfo
-        ? [viewsInfo]
-        : undefined;
+    ratingInfo && secondaryInfo
+      ? [ratingInfo, secondaryInfo]
+      : ratingInfo
+        ? [ratingInfo]
+        : secondaryInfo
+          ? [secondaryInfo]
+          : undefined;
   return {
     type: "featuredCarouselItem",
     mangaId: item.mangaId,
     imageUrl: item.imageUrl,
     title: item.title,
-    supertitle: item.genres.slice(0, 3).join(", ") || undefined,
+    supertitle:
+      variant === "editors" ? item.author : item.genres.slice(0, 3).join(", ") || undefined,
     summary: item.summary,
     infoItems,
     contentRating: item.contentRating,
@@ -198,7 +205,7 @@ export const toCardItem = (
           ? `${formatCount(item.views)} views`
           : undefined
         : item.rating
-          ? `Rating ${item.rating.toFixed(1)}`
+          ? `★ ${item.rating.toFixed(1)}`
           : undefined;
   return {
     type: "simpleCarouselItem",
@@ -221,7 +228,7 @@ export const toChapterUpdateItem = (item: NovelListItem): DiscoverSectionItem | 
     imageUrl: item.imageUrl,
     title: item.title,
     subtitle:
-      [`Ch. ${item.chapterCount}`, item.genres[0]]
+      [`Ch. ${item.chapterCount}`, item.author]
         .filter((value): value is string => Boolean(value))
         .join(" • ") || undefined,
     publishDate: item.publishDate,
@@ -251,7 +258,7 @@ export const toSearchResultItem = (item: NovelListItem): SearchResultItem => ({
   title: item.title,
   imageUrl: item.imageUrl,
   subtitle:
-    [item.rating ? `Rating ${item.rating.toFixed(1)}` : undefined, item.genres[0]]
+    [item.rating ? `★ ${item.rating.toFixed(1)}` : undefined, item.genres[0]]
       .filter((value): value is string => Boolean(value))
       .join(" • ") || undefined,
   contentRating: item.contentRating,

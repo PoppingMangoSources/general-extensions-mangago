@@ -103,6 +103,7 @@ export interface NovelListItem {
   imageUrl: string;
   contentRating: ContentRating;
   genres: string[];
+  author?: string;
   summary?: string;
   rating?: number;
   views?: number;

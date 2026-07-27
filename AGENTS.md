@@ -149,8 +149,8 @@ Extensions run in a JS runtime that is **not a browser** — several globals are
 
 ### User-facing state
 
-- **Functional information is text first.** Do not place emoji, flag emoji, stars, triangles, or other decorative Unicode icons anywhere in functional titles, subtitles, settings, sorting labels, version labels, or errors. Write `Paid`, `Locked`, `Rating 8.9`, `18K views`, and `English` explicitly. [review]
-- SDK-native SF Symbols are appropriate only in fields designed for them (for example `featuredCarouselItem.infoItems`) and must accompany meaningful text. Typographic punctuation used as a separator is not an icon.
+- **Functional information is text first.** Do not place emoji, flag emoji, triangles, or other decorative Unicode icons in functional titles, settings, sorting labels, version labels, or errors. Write `Paid`, `Locked`, `18K views`, and `English` explicitly. A star immediately paired with a numeric rating (`★ 8.9`) is an accepted compact rating label. [review]
+- SDK-native SF Symbols are appropriate in fields designed for them (for example `featuredCarouselItem.infoItems`) and must accompany meaningful text. Use `star.fill` with the numeric rating in featured cards. Typographic punctuation used as a separator is not an icon.
 - Do not copy HiveToons' historical lock-emoji title marker. Its merged price fallback is useful evidence for authoritative lock detection, but the emoji is a legacy presentation detail and HiveToons itself is outside this branch's cleanup scope.
 
 #### Text / novel chapters
