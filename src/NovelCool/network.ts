@@ -4,7 +4,6 @@
 import {
   CloudflareError,
   PaperbackInterceptor,
-  URL,
   type Request,
   type Response,
 } from "@paperback/types";
@@ -67,34 +66,38 @@ export const fetchCheerio = async (url: string): Promise<cheerio.CheerioAPI> => 
 };
 
 const absoluteUrl = (path: string): string => {
-  if (/^https?:\/\//i.test(path)) return path;
-  if (path.startsWith("//")) return `https:${path}`;
-  return new URL(DOMAIN).setPath(path).toString();
+  const value = Application.decodeHTMLEntities(path).trim();
+  if (!value) return `${DOMAIN}/`;
+  if (/^https?:\/\//i.test(value)) return encodeURI(value);
+  if (value.startsWith("//")) return encodeURI(`https:${value}`);
+  return encodeURI(`${DOMAIN}${value.startsWith("/") ? "" : "/"}${value}`);
+};
+
+const addQueryItem = (query: string[], key: string, value?: string): void => {
+  const cleanValue = value?.trim();
+  if (cleanValue) query.push(`${encodeURIComponent(key)}=${encodeURIComponent(cleanValue)}`);
 };
 
 export const buildCategoryUrl = (path: string, page: number): string => {
-  if (page <= 1) return absoluteUrl(path);
-  const withoutHtml = path.replace(/\.html$/i, "");
-  return absoluteUrl(`${withoutHtml}_${page}.html`);
+  const cleanPath = path.replace(/[?#].*$/, "").replace(/\/+$/, "");
+  if (page <= 1) return absoluteUrl(cleanPath);
+  return absoluteUrl(`${cleanPath.replace(/\.html$/i, "")}_${page}.html`);
 };
 
 export const buildSearchUrl = (request: SearchRequest): string => {
-  const url = new URL(DOMAIN).addPathComponent("search");
-  if (request.title) url.setQueryItem("name", request.title);
-  if (request.author) url.setQueryItem("author", request.author);
-  if (request.status) url.setQueryItem("completed_series", request.status);
-  if (request.genresInclude?.length) {
-    url.setQueryItem("category_id", `,${request.genresInclude.join(",")}`);
-  }
-  if (request.genresExclude?.length) {
-    url.setQueryItem("out_category_id", `,${request.genresExclude.join(",")}`);
-  }
-  if (request.type) url.setQueryItem("type", request.type);
-  if (request.year) url.setQueryItem("year", request.year);
-  if (request.alphabet) url.setQueryItem("alphabet", request.alphabet);
-  if (request.sort && request.sort !== "index") url.setQueryItem("sort", request.sort);
-  if (request.page > 1) url.setQueryItem("page", request.page.toString());
-  return url.toString();
+  const query = ["type=high"];
+  addQueryItem(query, "name", request.title);
+  addQueryItem(query, "name_method", request.nameMethod);
+  addQueryItem(query, "author", request.author);
+  addQueryItem(query, "author_method", request.authorMethod);
+  if (request.status && request.status !== "0") addQueryItem(query, "completed_series", request.status);
+  if (request.genresInclude?.length) addQueryItem(query, "category_id", `,${request.genresInclude.join(",")}`);
+  if (request.genresExclude?.length) addQueryItem(query, "out_category_id", `,${request.genresExclude.join(",")}`);
+  addQueryItem(query, "publish_year", request.year);
+  addQueryItem(query, "rate", request.rating);
+  if (request.sort && request.sort !== "index") addQueryItem(query, "sort", request.sort);
+  if (request.page > 1) addQueryItem(query, "page", request.page.toString());
+  return `${DOMAIN}/search/?${query.join("&")}`;
 };
 
 export const fetchHomePage = (): Promise<cheerio.CheerioAPI> => fetchCheerio(`${DOMAIN}/`);
