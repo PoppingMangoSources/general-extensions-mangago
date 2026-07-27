@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-27T17:05:40.878Z",
+  "buildTime": "2026-07-27T17:07:03.888Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -155,7 +155,7 @@
     {
       "name": "NovelCool",
       "description": "Extension that pulls content from novelcool.com.",
-      "version": "1.0.0-alpha.2",
+      "version": "1.0.0-alpha.3",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
@@ -332,7 +332,7 @@
     {
       "name": "StoneScape",
       "description": "Extension that pulls content from stonescape.xyz.",
-      "version": "1.0.0-alpha.3",
+      "version": "1.0.0-alpha.4",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
