@@ -19,18 +19,23 @@ export const SORT_OPTIONS: SortingOption[] = [
   { id: "latest", label: "Latest" },
 ];
 
+export const MATCH_OPTIONS: Tag[] = [
+  { id: "contain", title: "Contain" },
+  { id: "begin", title: "Begin" },
+  { id: "end", title: "End" },
+];
+
 export const STATUS_OPTIONS: Tag[] = [
-  { id: "0", title: "All" },
   { id: "1", title: "Ongoing" },
   { id: "2", title: "Completed" },
 ];
 
-export const TYPE_OPTIONS: Tag[] = [
-  { id: "novel", title: "Novel" },
-  { id: "manga", title: "Manga" },
-  { id: "manhwa", title: "Manhwa" },
-  { id: "manhua", title: "Manhua" },
-  { id: "comic", title: "Comic" },
+export const RATING_OPTIONS: Tag[] = [
+  { id: "5", title: "5 stars" },
+  { id: "4", title: "4 stars and up" },
+  { id: "3", title: "3 stars and up" },
+  { id: "2", title: "2 stars and up" },
+  { id: "1", title: "1 star and up" },
 ];
 
 export interface PageMetadata extends JSONObject {
@@ -40,24 +45,26 @@ export interface PageMetadata extends JSONObject {
 export type TriState = Record<string, "included" | "excluded">;
 
 export interface SearchMetadata extends JSONObject {
+  nameMethod?: string[];
   author?: string;
+  authorMethod?: string[];
   status?: string[];
   genres?: TriState;
-  type?: string[];
   year?: string[];
-  alphabet?: string[];
+  rating?: string[];
 }
 
 export interface SearchRequest {
   page: number;
   title?: string;
+  nameMethod?: string;
   author?: string;
+  authorMethod?: string;
   status?: string;
   genresInclude?: string[];
   genresExclude?: string[];
-  type?: string;
   year?: string;
-  alphabet?: string;
+  rating?: string;
   sort?: string;
 }
 
@@ -89,5 +96,4 @@ export interface ChapterEntry {
 export interface SearchOptions {
   genres: Tag[];
   years: Tag[];
-  alphabets: Tag[];
 }
