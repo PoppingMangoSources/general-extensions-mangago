@@ -217,7 +217,15 @@ class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
     return {
       items: response.data.flatMap((series) => {
         const item = toChapterUpdateItem(series, contentType);
-        return item ? [item] : [];
+        if (
+          !item ||
+          !("imageUrl" in item) ||
+          typeof item.imageUrl !== "string" ||
+          !/^https?:\/\/\S+$/i.test(item.imageUrl)
+        ) {
+          return [];
+        }
+        return [item];
       }),
     };
   }
