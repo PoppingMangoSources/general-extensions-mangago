@@ -31,14 +31,14 @@ export type PopularPeriod = (typeof PERIOD_OPTIONS)[number]["id"];
 export type ContentType = "manhwa" | "novel";
 
 export const STATUS_OPTIONS: Tag[] = [
-  { id: "ongoing", title: "Ongoing" },
+  { id: "in-process", title: "In Process" },
   { id: "completed", title: "Completed" },
   { id: "hiatus", title: "Hiatus" },
 ];
 
 export const CONTENT_TYPE_OPTIONS: Tag[] = [
-  { id: "manhwa", title: "Manhwa / Manga" },
-  { id: "novel", title: "Novels" },
+  { id: "manhwa-manga", title: "Comics" },
+  { id: "novels", title: "Novels" },
 ];
 
 export const SORT_OPTIONS: SortingOption[] = [
