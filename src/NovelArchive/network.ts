@@ -16,11 +16,11 @@ import {
   PAGE_SIZE,
   STATE_KEYS,
   type GenreListResponse,
-  type GenreOptionDto,
-  type NovelSourceDto,
-  type SourceChapterDto,
+  type GenreOption,
+  type NovelSource,
+  type NovelSourceListResponse,
+  type SourceChapter,
   type SourceChapterListResponse,
-  type SourceListResponse,
   type TriState,
 } from "./models";
 import { pickGenreValues } from "./parsers";
@@ -90,13 +90,13 @@ export const novelsUrl = (...segments: string[]): string => {
   return url.toString();
 };
 
-export const fetchGenres = async (): Promise<GenreOptionDto[]> => {
+export const fetchGenres = async (): Promise<GenreOption[]> => {
   const data = await fetchApi<GenreListResponse>(novelsUrl("genres"));
   return data.genres;
 };
 
-export const fetchSources = async (id: string): Promise<NovelSourceDto[]> => {
-  const request = fetchApi<SourceListResponse>(novelsUrl(id, "sources"));
+export const fetchSources = async (novelId: string): Promise<NovelSource[]> => {
+  const request = fetchApi<NovelSourceListResponse>(novelsUrl(novelId, "sources"));
   try {
     // /sources is optional and can hang ~30s before a 504; fall back to native chapters after 8s.
     const data = await Promise.race([request, Application.sleep(8).then(() => undefined)]);
@@ -108,12 +108,12 @@ export const fetchSources = async (id: string): Promise<NovelSourceDto[]> => {
 };
 
 export const fetchSourceChapters = async (
-  id: string,
+  novelId: string,
   sourceId: string,
-): Promise<SourceChapterDto[]> => {
+): Promise<SourceChapter[]> => {
   try {
     const data = await fetchApi<SourceChapterListResponse>(
-      novelsUrl(id, "sources", sourceId, "chapters"),
+      novelsUrl(novelId, "sources", sourceId, "chapters"),
     );
     return data.chapters;
   } catch (error: unknown) {
@@ -122,7 +122,7 @@ export const fetchSourceChapters = async (
   }
 };
 
-export const buildNovelsUrl = (opts: {
+export const buildNovelsUrl = (options: {
   page: number;
   search?: string;
   sort?: string;
@@ -133,20 +133,20 @@ export const buildNovelsUrl = (opts: {
 }): string => {
   const url = new URL(API_URL)
     .addPathComponent("novels")
-    .setQueryItem("page", opts.page.toString())
+    .setQueryItem("page", options.page.toString())
     .setQueryItem("per_page", PAGE_SIZE.toString());
 
-  if (opts.search) {
-    url.setQueryItem("search", opts.search);
+  if (options.search) {
+    url.setQueryItem("search", options.search);
     url.setQueryItem("fuzzy", "1");
   }
-  if (opts.sort && opts.sort !== "recent") url.setQueryItem("sort", opts.sort);
-  if (opts.status && opts.status !== "all") url.setQueryItem("status", opts.status);
-  if (opts.genreMatch === "any") url.setQueryItem("genre_match", "any");
+  if (options.sort && options.sort !== "recent") url.setQueryItem("sort", options.sort);
+  if (options.status && options.status !== "all") url.setQueryItem("status", options.status);
+  if (options.genreMatch === "any") url.setQueryItem("genre_match", "any");
 
   const defaults = (Application.getState(STATE_KEYS.DEFAULT_GENRES) as TriState | undefined) ?? {};
-  const explicitIncludes = opts.genresInclude ?? [];
-  const explicitExcludes = opts.genresExclude ?? [];
+  const explicitIncludes = options.genresInclude ?? [];
+  const explicitExcludes = options.genresExclude ?? [];
   const defaultIncludes = pickGenreValues(defaults, "included");
   const defaultExcludes = pickGenreValues(defaults, "excluded");
   const hideAdult = (Application.getState(STATE_KEYS.HIDE_ADULT) as boolean | undefined) ?? false;

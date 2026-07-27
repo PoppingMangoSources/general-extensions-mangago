@@ -29,12 +29,12 @@ import {
   SECTIONS,
   SORT_OPTIONS,
   STATE_KEYS,
-  type ChapterContentResponse,
+  type ChapterDetailResponse,
   type NovelDetailResponse,
   type NovelListResponse,
   type PageMetadata,
   type SearchMetadata,
-  type SourceChapterContentResponse,
+  type SourceChapterDetailResponse,
 } from "./models";
 import {
   buildNovelsUrl,
@@ -216,7 +216,7 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
     const pasted = await this.resolveUrlQuery(query.title ?? "");
     if (pasted) return pasted;
 
-    const meta = query.metadata ?? { status: [], genreMatch: ["all"], genres: {} };
+    const searchMetadata = query.metadata ?? { status: [], genreMatch: ["all"], genres: {} };
     const search = (query.title ?? "").trim();
     const page = metadata?.page ?? 1;
 
@@ -224,10 +224,10 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
       page,
       search: search || undefined,
       sort: sortingOption?.id,
-      status: meta.status?.[0],
-      genreMatch: meta.genreMatch?.[0],
-      genresInclude: pickGenreValues(meta.genres, "included"),
-      genresExclude: pickGenreValues(meta.genres, "excluded"),
+      status: searchMetadata.status?.[0],
+      genreMatch: searchMetadata.genreMatch?.[0],
+      genresInclude: pickGenreValues(searchMetadata.genres, "included"),
+      genresExclude: pickGenreValues(searchMetadata.genres, "excluded"),
     });
 
     const data = await fetchApi<NovelListResponse>(url);
@@ -243,12 +243,12 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
     const trimmed = query.trim();
     if (!/^https?:\/\/(?:www\.)?novelarchive\.cc\//i.test(trimmed)) return undefined;
 
-    const id =
+    const urlId =
       trimmed.match(/[?&](?:id|novel)=([^&#]+)/i)?.[1] ??
       trimmed.match(/\/novels?\/([^/?#]+)/i)?.[1];
-    if (!id) return undefined;
+    if (!urlId) return undefined;
 
-    const mangaId = encodeId(decodeId(id));
+    const mangaId = encodeId(decodeId(urlId));
     try {
       const data = await fetchApi<NovelDetailResponse>(novelsUrl(decodeId(mangaId)));
       const manga = parseMangaDetails(data.novel, mangaId);
@@ -274,44 +274,44 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
-    const id = decodeId(sourceManga.mangaId);
+    const novelId = decodeId(sourceManga.mangaId);
     const [data, sources] = await Promise.all([
-      fetchApi<NovelDetailResponse>(novelsUrl(id)),
-      fetchSources(id),
+      fetchApi<NovelDetailResponse>(novelsUrl(novelId)),
+      fetchSources(novelId),
     ]);
 
     const publishDate = novelUpdatedAt(data.novel);
     const chapters = parseChapters(data.novel, sourceManga, publishDate);
-    const perSource = await Promise.all(
+    const sourceChapterLists = await Promise.all(
       sources.map(async (source) =>
         parseSourceChapters(
           source,
-          await fetchSourceChapters(id, source.id),
+          await fetchSourceChapters(novelId, source.id),
           sourceManga,
           publishDate,
         ),
       ),
     );
 
-    return mergeChapterVersions(chapters, ...perSource);
+    return mergeChapterVersions(chapters, ...sourceChapterLists);
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    const id = decodeId(chapter.sourceManga.mangaId);
+    const novelId = decodeId(chapter.sourceManga.mangaId);
     const separator = chapter.chapterId.lastIndexOf(":");
 
     // Mirror ids encode the source and chapter number around the final colon.
     if (separator >= 0) {
       const sourceId = decodeId(chapter.chapterId.slice(0, separator));
       const chapterNumber = decodeId(chapter.chapterId.slice(separator + 1));
-      const data = await fetchApi<SourceChapterContentResponse>(
-        novelsUrl(id, "sources", sourceId, "chapters", chapterNumber),
+      const data = await fetchApi<SourceChapterDetailResponse>(
+        novelsUrl(novelId, "sources", sourceId, "chapters", chapterNumber),
       );
       return parseSourceChapterDetails(data, chapter);
     }
 
-    const data = await fetchApi<ChapterContentResponse>(
-      novelsUrl(id, "chapters", chapter.chapterId),
+    const data = await fetchApi<ChapterDetailResponse>(
+      novelsUrl(novelId, "chapters", chapter.chapterId),
     );
     return parseChapterDetails(data, chapter);
   }

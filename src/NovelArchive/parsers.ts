@@ -18,14 +18,14 @@ import {
   DOMAIN,
   MATURE_RATING_GENRES,
   NON_GENRE_VALUES,
-  type ChapterContentResponse,
-  type GenreOptionDto,
-  type NovelDto,
+  type ChapterDetailResponse,
+  type GenreOption,
+  type Novel,
   type NovelListItem,
-  type NovelSourceDto,
+  type NovelSource,
   type SearchMetadata,
-  type SourceChapterContentResponse,
-  type SourceChapterDto,
+  type SourceChapter,
+  type SourceChapterDetailResponse,
   type TriState,
 } from "./models";
 import { repairMojibake } from "./utils";
@@ -47,13 +47,13 @@ export const decodeId = (value: string): string => {
   }
 };
 
-const parseCoverUrl = (novel: NovelDto): string => {
+const parseCoverUrl = (novel: Novel): string => {
   const path = novel.cover_url ?? novel.image_url ?? novel.novel_image;
   if (!path) return "";
   return path.startsWith("http") ? path : `${DOMAIN}${path.startsWith("/") ? "" : "/"}${path}`;
 };
 
-const parseGenres = (novel: NovelDto): string[] => {
+const parseGenres = (novel: Novel): string[] => {
   const seen = new Set<string>();
   return (novel.genres ?? "")
     .split(",")
@@ -66,7 +66,7 @@ const parseGenres = (novel: NovelDto): string[] => {
     });
 };
 
-const parseViews = (novel: NovelDto): number | undefined => {
+const parseViews = (novel: Novel): number | undefined => {
   const raw = novel.views_number ?? novel.views;
   const value = raw == null ? NaN : Number(raw);
   return Number.isFinite(value) ? value : undefined;
@@ -78,7 +78,7 @@ const formatCount = (count: number): string => {
   return count.toString();
 };
 
-const parseStatus = (novel: NovelDto): string | undefined => {
+const parseStatus = (novel: Novel): string | undefined => {
   const status = (novel.release_status ?? novel.ongoing)?.trim();
   if (!status) return undefined;
   return status
@@ -104,13 +104,17 @@ const ratingToUnit = (value?: number | null): number | undefined => {
 };
 
 const contentRatingForGenres = (genres: string[]): ContentRating => {
-  const lower = genres.map((genre) => genre.toLowerCase());
+  const normalizedGenres = genres.map((genre) => genre.toLowerCase());
   if (
-    lower.some((genre) => ADULT_EXCLUSIONS.includes(genre) && !MATURE_RATING_GENRES.includes(genre))
+    normalizedGenres.some(
+      (genre) => ADULT_EXCLUSIONS.includes(genre) && !MATURE_RATING_GENRES.includes(genre),
+    )
   ) {
     return ContentRating.ADULT;
   }
-  if (lower.some((genre) => MATURE_RATING_GENRES.includes(genre))) return ContentRating.MATURE;
+  if (normalizedGenres.some((genre) => MATURE_RATING_GENRES.includes(genre))) {
+    return ContentRating.MATURE;
+  }
   return ContentRating.EVERYONE;
 };
 
@@ -122,7 +126,7 @@ const escapeXml = (value: string): string =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
 
-export const parseNovelList = (novels: NovelDto[]): NovelListItem[] =>
+export const parseNovelList = (novels: Novel[]): NovelListItem[] =>
   novels.map((novel) => {
     // Native chapters are addressed by 1-based position, so the count is the
     // list length; fall back to total_chapters when the array is omitted.
@@ -253,7 +257,7 @@ export const toSearchResultItem = (item: NovelListItem): SearchResultItem => ({
   contentRating: item.contentRating,
 });
 
-export const parseMangaDetails = (novel: NovelDto, mangaId: string): SourceManga => {
+export const parseMangaDetails = (novel: Novel, mangaId: string): SourceManga => {
   const primaryTitle = decodeText(novel.title) || "Untitled";
   const seen = new Set([primaryTitle.toLowerCase()]);
   const secondaryTitles: string[] = [];
@@ -309,18 +313,20 @@ const cleanChapterName = (name: string): { chapNum?: number; title: string } => 
     /^\s*(?:chapter|chap\.?|ch\.?|episode|ep\.?)\s*(\d+(?:\.\d+)?)\s*[-:–.]?\s*/i,
   );
   const match = keywordMatch ?? decoded.match(/^\s*(\d+(?:\.\d+)?)\s*[-:–.]\s+/);
-  const parsed = match ? parseFloat(match[1]) : NaN;
+  const parsedNumber = match ? parseFloat(match[1]) : NaN;
   let title = (match ? decoded.slice(match[0].length) : decoded).trim();
-  if (Number.isFinite(parsed)) {
+  if (Number.isFinite(parsedNumber)) {
     const repeated = title.match(/^(\d+(?:\.\d+)?)\s*[-:–.]\s*/);
-    if (repeated && parseFloat(repeated[1]) === parsed) title = title.slice(repeated[0].length);
+    if (repeated && parseFloat(repeated[1]) === parsedNumber) {
+      title = title.slice(repeated[0].length);
+    }
   }
-  return { chapNum: Number.isFinite(parsed) ? parsed : undefined, title };
+  return { chapNum: Number.isFinite(parsedNumber) ? parsedNumber : undefined, title };
 };
 
 // The API exposes no per-chapter dates; callers pass one shared stable
 // timestamp so chapter ages don't drift to when the list was fetched.
-export const novelUpdatedAt = (novel: NovelDto): Date | undefined => {
+export const novelUpdatedAt = (novel: Novel): Date | undefined => {
   if (!novel.updated_at) return undefined;
   const date = new Date(novel.updated_at);
   if (Number.isNaN(date.getTime()) || date.getTime() > Date.now()) return undefined;
@@ -328,7 +334,7 @@ export const novelUpdatedAt = (novel: NovelDto): Date | undefined => {
 };
 
 export const parseChapters = (
-  novel: NovelDto,
+  novel: Novel,
   sourceManga: SourceManga,
   publishDate?: Date,
 ): Chapter[] =>
@@ -350,23 +356,25 @@ export const parseChapters = (
   });
 
 export const parseSourceChapters = (
-  source: NovelSourceDto,
-  entries: SourceChapterDto[],
+  novelSource: NovelSource,
+  chapters: SourceChapter[],
   sourceManga: SourceManga,
   publishDate?: Date,
 ): Chapter[] => {
   const displayName =
-    source.id === "fucknovelpia"
+    novelSource.id === "fucknovelpia"
       ? "Novelpia"
-      : source.label?.trim() ||
-        source.id.replace(/[-_]+/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
-  return entries.map((entry, index) => {
-    const parsed =
-      typeof entry.number === "number" ? entry.number : parseFloat(String(entry.number));
-    const chapNum = Number.isFinite(parsed) ? parsed : index + 1;
-    const { title } = cleanChapterName((entry.title ?? "").trim());
+      : novelSource.label?.trim() ||
+        novelSource.id
+          .replace(/[-_]+/g, " ")
+          .replace(/\b\w/g, (character) => character.toUpperCase());
+  return chapters.map((chapter, index) => {
+    const parsedNumber =
+      typeof chapter.number === "number" ? chapter.number : parseFloat(String(chapter.number));
+    const chapNum = Number.isFinite(parsedNumber) ? parsedNumber : index + 1;
+    const { title } = cleanChapterName((chapter.title ?? "").trim());
     return {
-      chapterId: `${encodeId(source.id)}:${encodeId(String(entry.number))}`,
+      chapterId: `${encodeId(novelSource.id)}:${encodeId(String(chapter.number))}`,
       sourceManga,
       langCode: "en",
       chapNum,
@@ -411,7 +419,7 @@ const htmlToXhtml = (html: string, heading: string): string => {
 };
 
 export const parseChapterDetails = (
-  response: ChapterContentResponse,
+  response: ChapterDetailResponse,
   chapter: Chapter,
 ): ChapterDetails => {
   const content = (response.chapter?.content ?? response.content ?? "").trim();
@@ -427,7 +435,7 @@ export const parseChapterDetails = (
 };
 
 export const parseSourceChapterDetails = (
-  response: SourceChapterContentResponse,
+  response: SourceChapterDetailResponse,
   chapter: Chapter,
 ): ChapterDetails => {
   const html = repairMojibake(
@@ -444,7 +452,7 @@ export const parseSourceChapterDetails = (
   };
 };
 
-export const parseGenreOptions = (genres: GenreOptionDto[]): Tag[] => {
+export const parseGenreOptions = (genres: GenreOption[]): Tag[] => {
   const seen = new Set<string>();
   return genres.flatMap((genre) => {
     const value = genre.value.trim();

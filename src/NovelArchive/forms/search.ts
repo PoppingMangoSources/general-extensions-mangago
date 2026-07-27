@@ -22,10 +22,10 @@ export class NovelArchiveAdvancedSearchForm extends AdvancedSearchForm {
 
   constructor(searchQuery: SearchQuery<SearchMetadata>, genres: Tag[]) {
     super();
-    const meta = searchQuery.metadata ?? {};
-    this.status = meta.status ?? [];
-    this.genreMatch = meta.genreMatch ?? ["all"];
-    this.genres = { ...meta.genres };
+    const metadata = searchQuery.metadata ?? {};
+    this.status = metadata.status ?? [];
+    this.genreMatch = metadata.genreMatch ?? ["all"];
+    this.genres = { ...metadata.genres };
     this.genreOptions = genres;
   }
 

@@ -63,16 +63,16 @@ export interface SearchMetadata extends JSONObject {
   genres?: TriState;
 }
 
-export interface GenreOptionDto {
+export interface GenreOption {
   value: string;
   label: string;
 }
 
 export interface GenreListResponse {
-  genres: GenreOptionDto[];
+  genres: GenreOption[];
 }
 
-export interface NovelDto {
+export interface Novel {
   id: number | string;
   title: string;
   author?: string | null;
@@ -94,7 +94,7 @@ export interface NovelDto {
 }
 
 export interface NovelDetailResponse {
-  novel: NovelDto;
+  novel: Novel;
 }
 
 export interface NovelListItem {
@@ -111,34 +111,34 @@ export interface NovelListItem {
 }
 
 export interface NovelListResponse {
-  novels: NovelDto[];
+  novels: Novel[];
   pagination?: { has_next?: boolean };
 }
 
-export interface ChapterContentResponse {
+export interface ChapterDetailResponse {
   chapter?: { content?: string | null };
   content?: string | null;
 }
 
-export interface NovelSourceDto {
+export interface NovelSource {
   id: string;
   label?: string | null;
 }
 
-export interface SourceListResponse {
-  sources: NovelSourceDto[];
+export interface NovelSourceListResponse {
+  sources: NovelSource[];
 }
 
-export interface SourceChapterDto {
+export interface SourceChapter {
   number: number | string;
   title?: string | null;
 }
 
 export interface SourceChapterListResponse {
-  chapters: SourceChapterDto[];
+  chapters: SourceChapter[];
 }
 
-export interface SourceChapterContentResponse {
+export interface SourceChapterDetailResponse {
   content_html?: string | null;
   content?: string | null;
   chapter?: { content_html?: string | null; content?: string | null } | null;
