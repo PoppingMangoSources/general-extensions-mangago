@@ -18,8 +18,6 @@ export class NovelArchiveAdvancedSearchForm extends AdvancedSearchForm {
   private genreMatch: string[];
   private genres: TriState;
 
-  private readonly statusOptions: Tag[] = STATUS_OPTIONS;
-  private readonly genreMatchOptions: Tag[] = GENRE_MATCH_OPTIONS;
   private readonly genreOptions: Tag[];
 
   constructor(searchQuery: SearchQuery<SearchMetadata>, genres: Tag[]) {
@@ -38,7 +36,7 @@ export class NovelArchiveAdvancedSearchForm extends AdvancedSearchForm {
           title: "Status",
           layout: "flow",
           value: this.status,
-          items: this.statusOptions,
+          items: STATUS_OPTIONS,
           minItemCount: 0,
           maxItemCount: 1,
           onValueChange: Application.Selector(
@@ -66,7 +64,7 @@ export class NovelArchiveAdvancedSearchForm extends AdvancedSearchForm {
         header: "Genre match",
         layout: "flow",
         value: this.genreMatch,
-        items: this.genreMatchOptions,
+        items: GENRE_MATCH_OPTIONS,
         minItemCount: 1,
         maxItemCount: 1,
       }),

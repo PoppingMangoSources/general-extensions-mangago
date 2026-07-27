@@ -15,7 +15,6 @@ import * as cheerio from "cheerio";
 
 import {
   ADULT_EXCLUSIONS,
-  ADULT_RATING_GENRES,
   DOMAIN,
   MATURE_RATING_GENRES,
   NON_GENRE_TAGS,
@@ -31,12 +30,7 @@ import {
 } from "./models";
 import { repairMojibake } from "./utils";
 
-// Human-readable tag slugs use a narrower charset than source identifiers.
-const SAFE_TAG_REGEX = /[^a-zA-Z0-9._\-@()[\]]/g;
 const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
-
-const sanitizeId = (value: string): string =>
-  value.toLowerCase().replace(SAFE_TAG_REGEX, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 
 export const encodeId = (value: string): string =>
   value.replace(SAFE_ID_REGEX, (char) => {
@@ -110,7 +104,11 @@ const ratingToUnit = (value?: number | null): number | undefined => {
 
 const contentRatingForGenres = (genres: string[]): ContentRating => {
   const lower = genres.map((genre) => genre.toLowerCase());
-  if (lower.some((genre) => ADULT_RATING_GENRES.includes(genre))) return ContentRating.ADULT;
+  if (
+    lower.some((genre) => ADULT_EXCLUSIONS.includes(genre) && !MATURE_RATING_GENRES.includes(genre))
+  ) {
+    return ContentRating.ADULT;
+  }
   if (lower.some((genre) => MATURE_RATING_GENRES.includes(genre))) return ContentRating.MATURE;
   return ContentRating.EVERYONE;
 };
@@ -149,14 +147,7 @@ export const parseNovelList = (novels: Novel[]): NovelListItem[] =>
   });
 
 export const filterAdultItems = (items: NovelListItem[], hideAdult: boolean): NovelListItem[] =>
-  hideAdult
-    ? items.filter(
-        (item) =>
-          !item.genres.some((genre) =>
-            ADULT_EXCLUSIONS.some((excluded) => excluded.toLowerCase() === genre.toLowerCase()),
-          ),
-      )
-    : items;
+  hideAdult ? items.filter((item) => item.contentRating === ContentRating.EVERYONE) : items;
 
 export const toFeaturedItem = (
   item: NovelListItem,
@@ -234,16 +225,21 @@ export const toChapterUpdateItem = (item: NovelListItem): DiscoverSectionItem | 
 };
 
 export const toGenreCarouselItems = (genres: Tag[], hideAdult: boolean): DiscoverSectionItem[] =>
-  genres
-    .filter((genre) => !hideAdult || !ADULT_EXCLUSIONS.includes(genre.title))
-    .map((genre) => ({
-      type: "genresCarouselItem",
-      name: genre.title,
-      searchQuery: {
-        title: "",
-        metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
+  genres.flatMap((genre) => {
+    const contentRating = contentRatingForGenres([decodeId(genre.id)]);
+    if (hideAdult && contentRating !== ContentRating.EVERYONE) return [];
+    return [
+      {
+        type: "genresCarouselItem",
+        name: genre.title,
+        searchQuery: {
+          title: "",
+          metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
+        },
+        contentRating,
       },
-    }));
+    ];
+  });
 
 export const toSearchResultItem = (item: NovelListItem): SearchResultItem => ({
   mangaId: item.mangaId,
@@ -269,7 +265,13 @@ export const parseMangaDetails = (novel: Novel, mangaId?: string): SourceManga =
   }
 
   const genres = parseGenres(novel);
-  const tags: Tag[] = genres.map((genre) => ({ id: sanitizeId(genre), title: genre }));
+  const tags: Tag[] = genres.map((genre) => ({
+    id: genre
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, ""),
+    title: genre,
+  }));
 
   const percentage = ratingToUnit(novel.rating);
   const additionalInfo =
@@ -346,8 +348,6 @@ export const parseChapters = (
     };
   });
 
-const SOURCE_DISPLAY_NAMES = new Map([["fucknovelpia", "Novelpia"]]);
-
 export const parseSourceChapters = (
   source: NovelSource,
   entries: SourceChapterEntry[],
@@ -355,9 +355,10 @@ export const parseSourceChapters = (
   publishDate?: Date,
 ): Chapter[] => {
   const displayName =
-    SOURCE_DISPLAY_NAMES.get(source.id) ??
-    source.label?.trim() ??
-    source.id.replace(/[-_]+/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
+    source.id === "fucknovelpia"
+      ? "Novelpia"
+      : source.label?.trim() ||
+        source.id.replace(/[-_]+/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
   return entries.map((entry, index) => {
     const parsed =
       typeof entry.number === "number" ? entry.number : parseFloat(String(entry.number));
@@ -402,9 +403,6 @@ const textToXhtml = (text: string, heading: string): string =>
     heading,
   );
 
-const chapterHeading = (chapter: Chapter): string =>
-  chapter.title ?? (chapter.chapNum ? `Chapter ${chapter.chapNum}` : "");
-
 // Mirror sources arrive as HTML; serialize through cheerio so the original
 // structure survives instead of being flattened to plain text.
 const htmlToXhtml = (html: string, heading: string): string => {
@@ -424,7 +422,7 @@ export const parseChapterDetails = (
     type: "html",
     id: chapter.chapterId,
     mangaId: chapter.sourceManga.mangaId,
-    html: textToXhtml(content, chapterHeading(chapter)),
+    html: textToXhtml(content, chapter.title ?? ""),
   };
 };
 
@@ -442,16 +440,17 @@ export const parseSourceChapterDetails = (
     type: "html",
     id: chapter.chapterId,
     mangaId: chapter.sourceManga.mangaId,
-    html: htmlToXhtml(html, chapterHeading(chapter)),
+    html: htmlToXhtml(html, chapter.title ?? ""),
   };
 };
 
 export const parseGenreOptions = (genres: GenreOptionDto[]): Tag[] => {
   const seen = new Set<string>();
   return genres.flatMap((genre) => {
-    const value = genre.value.trim().toLowerCase();
-    if (!value || NON_GENRE_TAGS.has(value) || seen.has(value)) return [];
-    seen.add(value);
+    const value = genre.value.trim();
+    const key = value.toLowerCase();
+    if (!value || NON_GENRE_TAGS.has(key) || seen.has(key)) return [];
+    seen.add(key);
     return [{ id: encodeId(value), title: decodeText(genre.label) || value }];
   });
 };

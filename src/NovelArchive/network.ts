@@ -20,6 +20,7 @@ import {
   type GenreListResponse,
   type GenreOptionDto,
   type Novel,
+  type NovelDetailResponse,
   type NovelListResponse,
   type NovelSource,
   type SourceChapterEntry,
@@ -96,44 +97,32 @@ export const novelsUrl = (...segments: string[]): string => {
   return url.toString();
 };
 
-export const novelsFeedUrl = (segment: string, limit?: number): string => {
-  const url = new URL(API_URL).addPathComponent("novels").addPathComponent(segment);
-  if (limit !== undefined) url.setQueryItem("limit", limit.toString());
-  return url.toString();
-};
-
 export const fetchNovel = async (mangaId: string): Promise<Novel> => {
-  const data = await fetchApi<Novel | { novel: Novel }>(novelsUrl(decodeId(mangaId)));
-  return "novel" in data && data.novel ? data.novel : (data as Novel);
+  const data = await fetchApi<NovelDetailResponse>(novelsUrl(decodeId(mangaId)));
+  return data.novel;
 };
 
 export const fetchNovels = async (url: string): Promise<Novel[]> => {
-  const data = await fetchApi<Novel[] | NovelListResponse>(url);
-  return Array.isArray(data) ? data : (data.novels ?? []);
+  const data = await fetchApi<NovelListResponse>(url);
+  return data.novels;
 };
 
 export const fetchBrowse = async (url: string): Promise<{ novels: Novel[]; hasNext: boolean }> => {
   const data = await fetchApi<NovelListResponse>(url);
-  return { novels: data.novels ?? [], hasNext: data.pagination?.has_next ?? false };
+  return { novels: data.novels, hasNext: data.pagination?.has_next ?? false };
 };
 
 export const fetchGenres = async (): Promise<GenreOptionDto[]> => {
   const data = await fetchApi<GenreListResponse>(novelsUrl("genres"));
-  return data.genres ?? [];
+  return data.genres;
 };
 
-// Optional mirror list; its failure must not sink native chapters.
 export const fetchSources = async (id: string): Promise<NovelSource[]> => {
-  const request = fetchApi<NovelSource[] | SourceListResponse>(novelsUrl(id, "sources"));
-  // Swallow a late 504 so it doesn't surface as an unhandled rejection after the timeout wins.
-  request.catch(() => undefined);
+  const request = fetchApi<SourceListResponse>(novelsUrl(id, "sources"));
   try {
-    // /sources is flaky and can hang ~30s before a 504, so cap the wait at 8s and fall back to native-only.
-    const data = await Promise.race([
-      request,
-      Application.sleep(8).then(() => [] as NovelSource[]),
-    ]);
-    return Array.isArray(data) ? data : (data.sources ?? []);
+    // /sources is optional and can hang ~30s before a 504; fall back to native chapters after 8s.
+    const data = await Promise.race([request, Application.sleep(8).then(() => undefined)]);
+    return data?.sources ?? [];
   } catch (error: unknown) {
     if (error instanceof CloudflareError) throw error;
     return [];
@@ -145,10 +134,10 @@ export const fetchSourceChapters = async (
   sourceId: string,
 ): Promise<SourceChapterEntry[]> => {
   try {
-    const data = await fetchApi<SourceChapterEntry[] | SourceChapterListResponse>(
+    const data = await fetchApi<SourceChapterListResponse>(
       novelsUrl(id, "sources", sourceId, "chapters"),
     );
-    return Array.isArray(data) ? data : (data.chapters ?? []);
+    return data.chapters;
   } catch (error: unknown) {
     if (error instanceof CloudflareError) throw error;
     return [];
@@ -178,26 +167,29 @@ export const buildNovelsUrl = (opts: {
   if (opts.genreMatch === "any") url.setQueryItem("genre_match", "any");
 
   const defaults = getDefaultGenres();
-  const normalize = (values: string[]): string[] =>
-    values.map((genre) => genre.trim().toLowerCase()).filter(Boolean);
-  const explicitIncludes = normalize(opts.genresInclude ?? []);
-  const explicitExcludes = normalize(opts.genresExclude ?? []);
-  const defaultIncludes = normalize(pickGenreValues(defaults, "included"));
-  const defaultExcludes = normalize(pickGenreValues(defaults, "excluded"));
+  const explicitIncludes = opts.genresInclude ?? [];
+  const explicitExcludes = opts.genresExclude ?? [];
+  const defaultIncludes = pickGenreValues(defaults, "included");
+  const defaultExcludes = pickGenreValues(defaults, "excluded");
+  const adultExcludes = getHideAdultContent() ? ADULT_EXCLUSIONS : [];
 
   const includes = [
     ...new Set([
-      ...explicitIncludes,
-      ...defaultIncludes.filter((genre) => !explicitExcludes.includes(genre)),
+      ...explicitIncludes.filter((genre) => !adultExcludes.includes(genre)),
+      ...defaultIncludes.filter(
+        (genre) => !explicitExcludes.includes(genre) && !adultExcludes.includes(genre),
+      ),
     ]),
   ];
   if (includes.length > 0) url.setQueryItem("genres_include", includes.join(","));
 
   const excludes = [
     ...new Set(
-      [...explicitExcludes, ...defaultExcludes, ...(getHideAdultContent() ? ADULT_EXCLUSIONS : [])]
-        .map((genre) => genre.trim().toLowerCase())
-        .filter((genre) => genre && !explicitIncludes.includes(genre)),
+      [
+        ...explicitExcludes,
+        ...defaultExcludes.filter((genre) => !explicitIncludes.includes(genre)),
+        ...adultExcludes,
+      ].filter(Boolean),
     ),
   ];
   if (excludes.length > 0) url.setQueryItem("genres_exclude", excludes.join(","));

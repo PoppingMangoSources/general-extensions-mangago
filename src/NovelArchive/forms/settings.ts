@@ -7,7 +7,7 @@ import type { TriState } from "../models";
 
 const STATE_KEYS = {
   hideAdult: "novelarchive_hide_adult",
-  genres: "novelarchive_genres",
+  defaultGenres: "novelarchive_default_genres",
 } as const;
 
 // Defaults off — NovelArchive is an adult-rated source, so adult titles show
@@ -16,7 +16,7 @@ export const getHideAdultContent = (): boolean =>
   (Application.getState(STATE_KEYS.hideAdult) as boolean | undefined) ?? false;
 
 export const getDefaultGenres = (): TriState =>
-  (Application.getState(STATE_KEYS.genres) as TriState | undefined) ?? {};
+  (Application.getState(STATE_KEYS.defaultGenres) as TriState | undefined) ?? {};
 
 export class NovelArchiveSettingsForm extends Form {
   private hideAdultContent = getHideAdultContent();
@@ -35,7 +35,7 @@ export class NovelArchiveSettingsForm extends Form {
         {
           id: "browse",
           header: "Browse Settings",
-          footer: "Used as defaults for browse and search.",
+          footer: "Default genres apply to paginated browse sections and search.",
         },
         [
           ToggleRow("hide_adult", {
@@ -71,7 +71,7 @@ export class NovelArchiveSettingsForm extends Form {
 
   async handleGenresChange(value: TriState): Promise<void> {
     this.genres = value;
-    Application.setState(value, STATE_KEYS.genres);
+    Application.setState(value, STATE_KEYS.defaultGenres);
     Application.invalidateDiscoverSections();
   }
 }

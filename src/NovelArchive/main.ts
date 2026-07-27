@@ -25,7 +25,6 @@ import {
 import { NovelArchiveAdvancedSearchForm } from "./forms/search";
 import { getHideAdultContent, NovelArchiveSettingsForm } from "./forms/settings";
 import {
-  FEED_LIMITS,
   SECTIONS,
   SORT_OPTIONS,
   type ChapterContentResponse,
@@ -42,7 +41,6 @@ import {
   fetchNovels,
   fetchSourceChapters,
   fetchSources,
-  novelsFeedUrl,
   novelsUrl,
   NovelArchiveInterceptor,
   resolveUrlQuery,
@@ -132,7 +130,7 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
       case SECTIONS.TRENDING:
-        return this.getFeaturedItems("trending", "trending", FEED_LIMITS.trending);
+        return this.getFeaturedItems("trending", "trending");
       case SECTIONS.EDITORS:
         return this.getFeaturedItems("editors-choice", "editors");
       case SECTIONS.LATEST:
@@ -161,7 +159,7 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
   }
 
   private async getLatestSection(): Promise<PagedResults<DiscoverSectionItem>> {
-    const novels = await fetchNovels(novelsFeedUrl("recently-updated", FEED_LIMITS.latestUpdates));
+    const novels = await fetchNovels(novelsUrl("recently-updated"));
     return {
       items: filterAdultItems(parseNovelList(novels), getHideAdultContent()).flatMap((item) => {
         const card = toChapterUpdateItem(item);
@@ -173,9 +171,8 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
   private async getFeaturedItems(
     segment: string,
     variant: "trending" | "editors",
-    limit?: number,
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    const novels = await fetchNovels(novelsFeedUrl(segment, limit));
+    const novels = await fetchNovels(novelsUrl(segment));
     return {
       items: filterAdultItems(parseNovelList(novels), getHideAdultContent()).map((item, index) =>
         toFeaturedItem(item, index, variant),
@@ -208,7 +205,7 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
     const pasted = await resolveUrlQuery(query.title ?? "");
     if (pasted) return pasted;
 
-    const meta = query.metadata;
+    const meta = query.metadata ?? {};
     const search = (query.title ?? "").trim();
     const page = metadata?.page ?? 1;
 
@@ -216,10 +213,10 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
       page,
       search: search || undefined,
       sort: sortingOption?.id,
-      status: meta?.status?.[0],
-      genreMatch: meta?.genreMatch?.[0],
-      genresInclude: pickGenreValues(meta?.genres, "included"),
-      genresExclude: pickGenreValues(meta?.genres, "excluded"),
+      status: meta.status?.[0],
+      genreMatch: meta.genreMatch?.[0],
+      genresInclude: pickGenreValues(meta.genres, "included"),
+      genresExclude: pickGenreValues(meta.genres, "excluded"),
     });
 
     const { novels, hasNext } = await fetchBrowse(url);

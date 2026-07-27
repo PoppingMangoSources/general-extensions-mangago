@@ -6,7 +6,6 @@ import type { ContentRating, JSONObject, SortingOption, Tag } from "@paperback/t
 export const DOMAIN = "https://novelarchive.cc";
 export const API_URL = `${DOMAIN}/api`;
 export const PAGE_SIZE = 24;
-export const FEED_LIMITS = { trending: 11, latestUpdates: 30 } as const;
 
 export const SECTIONS = {
   TRENDING: "trending",
@@ -19,31 +18,18 @@ export const SECTIONS = {
 } as const;
 
 export const ADULT_EXCLUSIONS = [
-  "Adult",
-  "Smut",
-  "Mature",
-  "Erotica",
-  "Ecchi",
-  "Hentai",
-  "Explicit",
-  "Sexual Content",
-  "NSFW",
-  "R-18",
-  "Lewd",
-  "Pornographic",
-];
-
-export const ADULT_RATING_GENRES = [
   "adult",
   "smut",
+  "mature",
   "erotica",
+  "ecchi",
   "hentai",
   "explicit",
+  "sexual content",
   "nsfw",
   "r-18",
   "lewd",
   "pornographic",
-  "sexual content",
 ];
 
 export const MATURE_RATING_GENRES = ["mature", "ecchi"];
@@ -76,7 +62,7 @@ export interface GenreOptionDto {
 }
 
 export interface GenreListResponse {
-  genres?: GenreOptionDto[];
+  genres: GenreOptionDto[];
 }
 
 export interface Novel {
@@ -100,6 +86,10 @@ export interface Novel {
   chapter_names?: string[] | null;
 }
 
+export interface NovelDetailResponse {
+  novel: Novel;
+}
+
 export interface NovelListItem {
   mangaId: string;
   title: string;
@@ -114,7 +104,7 @@ export interface NovelListItem {
 }
 
 export interface NovelListResponse {
-  novels?: Novel[];
+  novels: Novel[];
   pagination?: { has_next?: boolean };
 }
 
@@ -129,7 +119,7 @@ export interface NovelSource {
 }
 
 export interface SourceListResponse {
-  sources?: NovelSource[];
+  sources: NovelSource[];
 }
 
 export interface SourceChapterEntry {
@@ -138,7 +128,7 @@ export interface SourceChapterEntry {
 }
 
 export interface SourceChapterListResponse {
-  chapters?: SourceChapterEntry[];
+  chapters: SourceChapterEntry[];
 }
 
 export interface SourceChapterContentResponse {
