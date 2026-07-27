@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-27T16:45:02.204Z",
+  "buildTime": "2026-07-27T16:45:19.933Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -155,7 +155,7 @@
     {
       "name": "NovelCool",
       "description": "Extension that pulls content from novelcool.com.",
-      "version": "1.0.0-alpha.1",
+      "version": "1.0.0-alpha.2",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
