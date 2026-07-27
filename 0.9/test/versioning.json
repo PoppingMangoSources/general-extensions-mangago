@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-27T14:56:42.851Z",
+  "buildTime": "2026-07-27T15:23:31.973Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -54,6 +54,28 @@
         }
       ],
       "id": "KingOfShojo"
+    },
+    {
+      "name": "LikeManga",
+      "description": "Extension that pulls content from likemanga.ink.",
+      "version": "1.0.0-alpha.1",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "ADULT",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "LikeManga"
     },
     {
       "name": "Lua Comic",
