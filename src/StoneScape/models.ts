@@ -37,7 +37,7 @@ export const STATUS_OPTIONS: Tag[] = [
 ];
 
 export const CONTENT_TYPE_OPTIONS: Tag[] = [
-  { id: "manhwa", title: "Comics" },
+  { id: "manhwa", title: "Manhwa / Manga" },
   { id: "novel", title: "Novels" },
 ];
 
