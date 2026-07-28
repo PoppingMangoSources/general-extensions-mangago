@@ -9,7 +9,7 @@ export default {
   version: "0.0.1-alpha.2",
   icon: "icon.png",
   language: "en",
-  contentRating: ContentRating.ADULT,
+  contentRating: ContentRating.EVERYONE,
   capabilities: [
     SourceIntents.CHAPTER_PROVIDING,
     SourceIntents.CLOUDFLARE_BYPASS_PROVIDING,
