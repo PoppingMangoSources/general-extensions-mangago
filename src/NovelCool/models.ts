@@ -2,12 +2,23 @@
 /* Copyright © 2026 Inkdex */
 
 import type { JSONObject, SortingOption, Tag } from "@paperback/types";
-import type { CheerioAPI } from "cheerio";
 
 export const DOMAIN = "https://www.novelcool.com";
+export const API_URL = "https://api.novelcool.com";
+export const PAGE_SIZE = 20;
 
-export const DESKTOP_USER_AGENT =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36";
+export const API_HEADERS = {
+  "content-type": "application/x-www-form-urlencoded",
+  "user-agent":
+    "Android/Package:com.zuoyou.novel - Version Name:2.3 - Phone Info:sdk_gphone_x86_64(Android Version:13)",
+} as const;
+
+export const API_PARAMETERS = {
+  appId: "202201290625004",
+  secret: "c73a8590641781f203660afca1d37ada",
+  package_name: "com.zuoyou.novel",
+  lang: "en",
+} as const;
 
 export const REQUIRED_COOKIES = [
   "novelcool_webp_valid=true",
@@ -21,7 +32,7 @@ export const SECTIONS = {
   LATEST: "latest",
   POPULAR: "popular",
   COMPLETED: "completed",
-  TYPES: "types",
+  GENRES: "genres",
 } as const;
 
 export const CATEGORY_PATHS = {
@@ -50,8 +61,8 @@ export const MATCH_OPTIONS: Tag[] = [
 ];
 
 export const STATUS_OPTIONS: Tag[] = [
-  { id: "1", title: "Ongoing" },
-  { id: "2", title: "Completed" },
+  { id: "NO", title: "Ongoing" },
+  { id: "YES", title: "Completed" },
 ];
 
 export const RATING_OPTIONS: Tag[] = [
@@ -73,6 +84,9 @@ export const TYPE_TITLES = new Set([
   "webtoon",
   "webtoons",
 ]);
+
+export type ContentType = "manga" | "novel";
+export type BrowseOrder = "hot" | "latest" | "new_book";
 
 export interface PageMetadata extends JSONObject {
   page: number;
@@ -127,7 +141,66 @@ export interface SearchOptions {
   years: Tag[];
 }
 
-export interface FetchedDocument {
-  $: CheerioAPI;
-  url: string;
+export interface ApiResponse {
+  error_code: string;
+  error_msg?: string;
+}
+
+export interface NovelCoolBook {
+  id: string;
+  book_id?: string;
+  url?: string;
+  visit_path?: string;
+  name: string;
+  alternative?: string;
+  publish_year?: string;
+  author?: string;
+  artist?: string;
+  intro?: string;
+  completed?: string;
+  category_list?: string[];
+  last_chapter_id?: string;
+  last_chapter_title?: string;
+  modify_time?: string;
+  rate_star?: string;
+  all_views?: string;
+  is_novel?: string;
+  cover: string;
+}
+
+export interface BrowseResponse extends ApiResponse {
+  list?: NovelCoolBook[] | null;
+}
+
+export interface BookInfoResponse extends ApiResponse {
+  info?: NovelCoolBook | null;
+}
+
+export interface NovelCoolChapter {
+  id: string;
+  book_id: string;
+  title: string;
+  order_id?: string;
+  last_modify?: string;
+  tf_time?: string;
+  is_locked?: boolean | string | number;
+}
+
+export interface ChapterListResponse extends ApiResponse {
+  list?: NovelCoolChapter[] | null;
+}
+
+export interface NovelCoolPage {
+  pic_path: string;
+  order_id?: number;
+}
+
+export interface NovelCoolChapterInfo extends NovelCoolChapter {
+  content?: string;
+  pic_list?: NovelCoolPage[];
+  url?: string;
+}
+
+export interface ChapterInfoResponse extends ApiResponse {
+  info?: NovelCoolChapterInfo | null;
 }

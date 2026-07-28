@@ -80,6 +80,21 @@ export const cookieStorage = new CookieStorageInterceptor({ storage: "stateManag
 
 const ROTATING_CLEARANCE = ["__ddg8_", "__ddg9_", "__ddg10_"];
 
+const completeMobileSafariUserAgent = (userAgent: string): string => {
+  if (!/\b(?:iPhone|iPad|iPod)\b/.test(userAgent) || /\bSafari\//.test(userAgent)) {
+    return userAgent;
+  }
+  const os = /\bOS (\d+)[_.](\d+)/.exec(userAgent);
+  const version = os ? `${os[1]}.${os[2]}` : "18.0";
+  const withVersion = /\bVersion\//.test(userAgent)
+    ? userAgent
+    : userAgent.replace(/\sMobile\//, ` Version/${version} Mobile/`);
+  return /\bSafari\//.test(withVersion) ? withVersion : `${withVersion} Safari/604.1`;
+};
+
+const getUserAgent = async (): Promise<string> =>
+  completeMobileSafariUserAgent(await Application.getDefaultUserAgent());
+
 export const dropRotatingClearance = (): void => {
   const stale = cookieStorage.cookies.filter((cookie) => ROTATING_CLEARANCE.includes(cookie.name));
   for (const cookie of stale) cookieStorage.deleteCookie(cookie);
@@ -98,16 +113,7 @@ const isChallengeResponse = (response: Response, body: string): boolean => {
   );
 };
 
-// A solved challenge clears the whole domain, so a burst (concurrent discover
-// sections, a chapter crawl) should raise ONE prompt. Within this window every
-// further challenge reuses the first one's URL so the app de-dupes to a single
-// banner — but it stays a real, solvable CloudflareError, never a dead error.
-const CHALLENGE_COOLDOWN = 15_000;
-
 export class RanobesInterceptor extends PaperbackInterceptor {
-  private lastChallengeAt = 0;
-  private lastChallengeUrl = `${DOMAIN}/`;
-
   override async interceptRequest(request: Request): Promise<Request> {
     const origin = request.url.match(MIRROR_HOST)?.[0] ?? DOMAIN;
     return {
@@ -120,35 +126,26 @@ export class RanobesInterceptor extends PaperbackInterceptor {
         "accept-language": "en-US,en;q=0.9,ru;q=0.8",
         ...request.headers,
         referer: `${origin}/`,
-        "user-agent": await Application.getDefaultUserAgent(),
+        "user-agent": await getUserAgent(),
       },
     };
   }
 
   override async interceptResponse(
-    request: Request,
+    _request: Request,
     response: Response,
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
     const contentType = response.headers?.["content-type"] ?? "";
     const body = contentType.includes("text/html") ? Application.arrayBufferToUTF8String(data) : "";
     if (isChallengeResponse(response, body)) {
-      const now = Date.now();
-      const withinBurst = now - this.lastChallengeAt < CHALLENGE_COOLDOWN;
-      if (!withinBurst) {
-        // First challenge of a burst: point the bypass at the URL that was
-        // actually blocked — its challenge page is what the webview renders for
-        // the user to solve — and remember it so the rest of the burst reuses it.
-        this.lastChallengeUrl = request.url.replace(MIRROR_HOST, DOMAIN);
-        dropRotatingClearance();
-      }
-      this.lastChallengeAt = now;
+      dropRotatingClearance();
       throw new CloudflareError({
-        url: this.lastChallengeUrl,
+        url: `${DOMAIN}/`,
         method: "GET",
         headers: {
           referer: `${DOMAIN}/`,
-          "user-agent": await Application.getDefaultUserAgent(),
+          "user-agent": await getUserAgent(),
         },
       });
     }
@@ -188,18 +185,6 @@ const requestText = async (url: string): Promise<string> => {
   }
 };
 
-// Keep chapter-list crawling gentle. Very long novels require many sequential
-// pages, and ddos-guard starts challenging when those pages arrive too quickly.
-// The gap is jittered (1.1–1.7s) so a long crawl doesn't hit the server on a
-// perfectly fixed cadence, which itself reads as a bot.
-let nextChapterListRequestAt = 0;
-const waitForChapterListSlot = async (): Promise<void> => {
-  const now = Date.now();
-  const wait = Math.max(0, nextChapterListRequestAt - now);
-  nextChapterListRequestAt = Math.max(now, nextChapterListRequestAt) + 1100 + Math.random() * 600;
-  if (wait > 0) await new Promise<void>((resolve) => setTimeout(resolve, wait));
-};
-
 // ranobe.top is intentionally not used. Its clearance is independent and
 // repeatedly causes a second challenge cycle after ranobes.net succeeds.
 export const fetchHtml = async (url: string): Promise<string> =>
@@ -208,7 +193,5 @@ export const fetchHtml = async (url: string): Promise<string> =>
 export const fetchListingPage = (path: string, page = 1): Promise<string> =>
   fetchHtml(`${DOMAIN}${path}${page > 1 ? `page/${page}/` : ""}`);
 
-export const fetchChapterListPage = async (novelId: string, page = 1): Promise<string> => {
-  await waitForChapterListSlot();
-  return fetchHtml(`${DOMAIN}/chapters/${novelId}/${page > 1 ? `page/${page}/` : ""}`);
-};
+export const fetchChapterListPage = (novelId: string, page = 1): Promise<string> =>
+  fetchHtml(`${DOMAIN}/chapters/${novelId}/${page > 1 ? `page/${page}/` : ""}`);

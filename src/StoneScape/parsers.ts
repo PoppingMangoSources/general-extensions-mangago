@@ -14,6 +14,7 @@ import * as cheerio from "cheerio";
 
 import {
   DOMAIN,
+  FALLBACK_IMAGE_URL,
   type ChapterPagesResponse,
   type ContentType,
   type MangaListItem,
@@ -50,10 +51,10 @@ export const toAbsoluteUrl = (value?: string | null): string => {
   return /^https?:\/\/[^/\s?#]+(?:[/?#]|$)/i.test(absolute) ? absolute : "";
 };
 
-const imageUrl = (...values: (string | null | undefined)[]): string => {
+const staticImageUrl = (...values: (string | null | undefined)[]): string => {
   for (const value of values) {
     const url = toAbsoluteUrl(value);
-    if (url) return url;
+    if (url && !/\.gif(?:[?#]|$)/i.test(url)) return url;
   }
   return "";
 };
@@ -123,7 +124,8 @@ export const parseMangaList = (series: Series[]): MangaListItem[] =>
     return {
       mangaId: encodeMangaId(item.slug),
       title: decodeText(item.title),
-      imageUrl: imageUrl(item.coverUrl, item.bannerUrl),
+      imageUrl: staticImageUrl(item.coverUrl, item.bannerUrl) || FALLBACK_IMAGE_URL,
+      bannerImageUrl: staticImageUrl(item.bannerUrl, item.coverUrl) || FALLBACK_IMAGE_URL,
       summary: decodeText(item.description) || undefined,
       author: decodeText(item.author) || undefined,
       status: mapStatus(item.publicationStatus),
@@ -149,8 +151,8 @@ export const toFeaturedItem = (item: MangaListItem): DiscoverSectionItem => {
     type: "featuredCarouselItem",
     mangaId: item.mangaId,
     title: item.title,
-    imageUrl: item.imageUrl,
-    supertitle: item.status,
+    imageUrl: item.bannerImageUrl,
+    supertitle: item.status ?? (item.contentType === "novel" ? "Novel" : "Comic"),
     summary: item.summary,
     infoItems:
       ratingInfo && viewsInfo
@@ -202,7 +204,7 @@ export const toChapterUpdateItem = (
         ? encodeNovelChapterId(series.slug, chapter.chapterNumber)
         : chapter.chapterId.replace(SAFE_ID_REGEX, "-"),
     title: decodeText(series.title),
-    imageUrl: imageUrl(series.coverUrl, series.bannerUrl),
+    imageUrl: staticImageUrl(series.coverUrl, series.bannerUrl) || FALLBACK_IMAGE_URL,
     subtitle: `Ch. ${formatChapterNumber(chapter.chapterNumber)}`,
     publishDate,
     contentRating: contentRatingForGenres(series.genres ?? []),
@@ -226,8 +228,7 @@ export const parseMangaDetails = (series: Series): SourceManga => {
       .replace(/([a-z])([A-Z])/g, "$1 $2")
       .replace(/\b\w/g, (character) => character.toUpperCase()),
   }));
-  const thumbnailUrl = imageUrl(series.coverUrl, series.bannerUrl);
-  if (!thumbnailUrl) throw new Error(`No valid cover was returned for ${series.slug}.`);
+  const thumbnailUrl = staticImageUrl(series.coverUrl, series.bannerUrl) || FALLBACK_IMAGE_URL;
 
   return {
     mangaId: encodeMangaId(series.slug),
@@ -290,7 +291,7 @@ export const parseChapterList = (
         sourceManga,
         langCode: "en",
         chapNum: Number.isFinite(number) ? number : index + 1,
-        title: locked ? (rawTitle ? `🔒 ${rawTitle}` : "🔒") : rawTitle || undefined,
+        title: locked ? (rawTitle ? `Paid: ${rawTitle}` : "Paid") : rawTitle || undefined,
         version: contentType === "novel" ? "Novel" : undefined,
         volume: 0,
         sortingIndex: index,

@@ -91,7 +91,7 @@ const statusFromFilter = (value?: string): string | undefined => {
 
 class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
   private rateLimiter = new BasicRateLimiter("rateLimiter", {
-    numberOfRequests: 2,
+    numberOfRequests: 5,
     bufferInterval: 1,
     ignoreImages: true,
   });

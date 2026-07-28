@@ -4,9 +4,6 @@
 import { DiscoverSectionType, type DiscoverSection, type JSONObject } from "@paperback/types";
 
 export const DOMAIN = "https://ranobes.net";
-
-// Mirrors serve identical content; fetches fail over and stick to whichever answers.
-export const MIRRORS = ["https://ranobes.net", "https://ranobes.top"];
 export const PAGE_SIZE = 20;
 
 export const SECTIONS = {

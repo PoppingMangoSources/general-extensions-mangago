@@ -5,6 +5,7 @@ import type { ContentRating, JSONObject, SortingOption, Tag } from "@paperback/t
 
 export const DOMAIN = "https://stonescape.xyz";
 export const API_URL = `${DOMAIN}/api`;
+export const FALLBACK_IMAGE_URL = `${DOMAIN}/logo.png`;
 export const PAGE_SIZE = 20;
 
 export const SECTIONS = {
@@ -169,6 +170,7 @@ export interface MangaListItem {
   mangaId: string;
   title: string;
   imageUrl: string;
+  bannerImageUrl: string;
   summary?: string;
   author?: string;
   status?: string;

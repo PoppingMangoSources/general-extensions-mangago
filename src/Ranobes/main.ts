@@ -3,7 +3,6 @@
 
 import {
   BasicRateLimiter,
-  CloudflareError,
   type AdvancedSearchForm,
   type Chapter,
   type ChapterDetails,
@@ -26,7 +25,6 @@ import { RanobesSettingsForm } from "./forms/settings";
 import {
   DISCOVER_SECTIONS,
   DOMAIN,
-  MIRRORS,
   PAGE_SIZE,
   SECTIONS,
   SORT_ORDERS,
@@ -85,14 +83,12 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   };
 
   async initialise(): Promise<void> {
-    for (const mirror of MIRRORS) {
-      cookieStorage.setCookie({
-        name: "browser_check",
-        value: "1",
-        domain: mirror.replace(/^https?:\/\//, ""),
-        path: "/",
-      });
-    }
+    cookieStorage.setCookie({
+      name: "browser_check",
+      value: "1",
+      domain: "ranobes.net",
+      path: "/",
+    });
     cookieStorage.registerInterceptor();
     this.mainRateLimiter.registerInterceptor();
     this.requestManager.registerInterceptor();
@@ -110,7 +106,8 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     this.taxonomyPromise = undefined;
     this.chapterPagesCache = undefined;
     for (const cookie of cookies) {
-      if (cookie.domain.includes("ranobes.")) cookieStorage.setCookie(cookie);
+      if (cookie.expires && cookie.expires.getTime() <= Date.now()) continue;
+      cookieStorage.setCookie(cookie);
     }
   }
 
@@ -195,43 +192,20 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
       return parseChapters(cached.pages, sourceManga);
     }
 
-    try {
-      const firstPage = parseChapterPage(cheerio.load(await fetchChapterListPage(novelId)));
-      // Cap the crawl so a pathologically long list can't fire dozens of
-      // requests back-to-back and trip DDoS-Guard (25 chapters/page → ~1250).
-      const pageCount = Math.min(MAX_CHAPTER_PAGES, Math.max(1, firstPage.pages_count ?? 1));
-
-      // Fetch pages one at a time: a parallel burst reads as automation, and a
-      // challenge mid-list should halt the rest instead of firing them all.
-      const pages = [firstPage];
-      for (let page = 2; page <= pageCount; page++) {
-        pages.push(parseChapterPage(cheerio.load(await fetchChapterListPage(novelId, page))));
+    const firstPage = parseChapterPage(cheerio.load(await fetchChapterListPage(novelId)));
+    const pageCount = Math.min(MAX_CHAPTER_PAGES, Math.max(1, firstPage.pages_count ?? 1));
+    const pages = [firstPage];
+    for (let start = 2; start <= pageCount; start += 4) {
+      const requests: Promise<ReturnType<typeof parseChapterPage>>[] = [];
+      for (let page = start; page < Math.min(start + 4, pageCount + 1); page++) {
+        requests.push(
+          fetchChapterListPage(novelId, page).then((html) => parseChapterPage(cheerio.load(html))),
+        );
       }
-      this.chapterPagesCache = { novelId, pages, fetchedAt: Date.now() };
-      return parseChapters(pages, sourceManga);
-    } catch (error) {
-      if (!(error instanceof CloudflareError)) throw error;
-      // The /chapters/ endpoint is the path DDoS-Guard blocks first, and a
-      // challenge here renders as a dead "0 Chapters" card with no button to
-      // solve it. The novel page itself loads without a challenge and embeds
-      // the latest chapters, so fall back to it to keep the list from being
-      // empty. The full backlog appears once the bypass is cleared (via Search
-      // or the Discover banner) and the novel is refreshed.
-      const seeded = await this.seedChaptersFromNovelPage(sourceManga);
-      if (seeded.length > 0) return seeded;
-      throw error;
+      pages.push(...(await Promise.all(requests)));
     }
-  }
-
-  // Best-effort chapters from the un-challenged novel page; empty if it embeds
-  // none, in which case the caller re-raises so the bypass still registers.
-  private async seedChaptersFromNovelPage(sourceManga: SourceManga): Promise<Chapter[]> {
-    try {
-      const page = parseChapterPage(cheerio.load(await fetchHtml(sourceManga.mangaId)));
-      return page.chapters?.length ? parseChapters([page], sourceManga) : [];
-    } catch {
-      return [];
-    }
+    this.chapterPagesCache = { novelId, pages, fetchedAt: Date.now() };
+    return parseChapters(pages, sourceManga);
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {

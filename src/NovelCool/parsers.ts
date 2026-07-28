@@ -15,9 +15,17 @@ import {
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
-import { DOMAIN, TYPE_TITLES, type ListingItem, type SearchOptions, type TriState } from "./models";
+import {
+  DOMAIN,
+  TYPE_TITLES,
+  type ListingItem,
+  type NovelCoolBook,
+  type NovelCoolChapter,
+  type NovelCoolChapterInfo,
+  type SearchOptions,
+  type TriState,
+} from "./models";
 
-// Paperback rejects ids containing characters outside this set.
 const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
 const ADULT_GENRES = new Set(["adult", "erotica", "hentai", "pornographic", "smut"]);
 const MATURE_GENRES = new Set([
@@ -43,34 +51,29 @@ const cleanDescription = (value?: string | null): string =>
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
-const normalizedPath = (value: string): string => {
+const encodeBookPathId = (value: string): string => {
   const path = Application.decodeHTMLEntities(value)
     .replace(/^https?:\/\/(?:www\.)?novelcool\.com/i, "")
     .replace(/[?#].*$/, "")
     .replace(/\/+$/, "")
     .trim();
-  return path ? (path.startsWith("/") ? path : `/${path}`) : "";
-};
-
-export const encodePathId = (value: string): string =>
-  encodeURIComponent(normalizedPath(value)).replace(
+  if (!path) return "";
+  return encodeURIComponent(path.startsWith("/") ? path : `/${path}`).replace(
     /[!'*~]/g,
     (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
   );
+};
 
-const resolveUrl = (value?: string | null, baseUrl = DOMAIN): string => {
+const resolveUrl = (value?: string | null): string => {
   const path = Application.decodeHTMLEntities(value ?? "").trim();
   if (!path) return "";
   if (/^https?:\/\//i.test(path)) return encodeURI(path);
   if (path.startsWith("//")) return encodeURI(`https:${path}`);
   if (/^[a-z][a-z0-9+.-]*:/i.test(path)) return "";
-  const origin = baseUrl.match(/^(https?:\/\/[^/]+)/i)?.[1] ?? DOMAIN;
-  if (path.startsWith("/")) return encodeURI(`${origin}${path}`);
-  const directory = baseUrl.replace(/[?#].*$/, "").replace(/\/[^/]*$/, "/");
-  return encodeURI(`${directory}${path}`);
+  return encodeURI(`${DOMAIN}${path.startsWith("/") ? "" : "/"}${path}`);
 };
 
-const imageUrlFrom = (image: cheerio.Cheerio<AnyNode>, baseUrl = DOMAIN): string => {
+const imageUrlFrom = (image: cheerio.Cheerio<AnyNode>): string => {
   const srcset = image.attr("srcset")?.split(",")[0]?.trim().split(/\s+/)[0];
   return resolveUrl(
     image.attr("lazy_url") ??
@@ -79,13 +82,23 @@ const imageUrlFrom = (image: cheerio.Cheerio<AnyNode>, baseUrl = DOMAIN): string
       image.attr("data-cfsrc") ??
       srcset ??
       image.attr("src"),
-    baseUrl,
   );
 };
 
-export const parseDate = (value?: string | null, anchor?: number): Date | undefined => {
+const contentRatingForGenres = (genres: string[]): ContentRating => {
+  const normalized = genres.map((genre) => genre.toLowerCase());
+  if (normalized.some((genre) => ADULT_GENRES.has(genre))) return ContentRating.ADULT;
+  if (normalized.some((genre) => MATURE_GENRES.has(genre))) return ContentRating.MATURE;
+  return ContentRating.EVERYONE;
+};
+
+const parseDate = (value?: string | null, anchor?: number): Date | undefined => {
   const text = cleanText(value);
   if (!text) return undefined;
+  const unixSeconds = Number(text);
+  if (/^\d{9,10}$/.test(text) && Number.isFinite(unixSeconds)) {
+    return new Date(unixSeconds * 1000);
+  }
   const relative = text.match(/^(\d+)\s+(minute|hour|day|week|month|year)s?\s+ago$/i);
   if (relative && anchor != null) {
     const amount = Number.parseInt(relative[1], 10);
@@ -116,11 +129,13 @@ export const parseDate = (value?: string | null, anchor?: number): Date | undefi
   return Number.isNaN(date.getTime()) ? undefined : date;
 };
 
-const contentRatingForGenres = (genres: string[]): ContentRating => {
-  const normalized = genres.map((genre) => genre.toLowerCase());
-  if (normalized.some((genre) => ADULT_GENRES.has(genre))) return ContentRating.ADULT;
-  if (normalized.some((genre) => MATURE_GENRES.has(genre))) return ContentRating.MATURE;
-  return ContentRating.EVERYONE;
+const mappedStatus = (value?: string | null): string | undefined => {
+  const status = cleanText(value).toLowerCase();
+  if (status === "yes" || status.includes("complete")) return "Completed";
+  if (status === "no" || status.includes("ongoing") || status.includes("updating")) {
+    return "Ongoing";
+  }
+  return status ? cleanText(value) : undefined;
 };
 
 const parseBookType = (item: cheerio.Cheerio<AnyNode>): string | undefined => {
@@ -132,41 +147,28 @@ const parseBookType = (item: cheerio.Cheerio<AnyNode>): string | undefined => {
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
       .join(" ");
   }
-  const textType = cleanText(item.find(".book-type, .book-list-type").first().text());
-  if (textType) return textType;
-  return item
-    .find(".book-data-info a, .book-cate a, .book-info a")
-    .toArray()
-    .map((element) => cleanText(item.find(element).text()))
-    .find((title) => TYPE_TITLES.has(title.toLowerCase()));
+  return cleanText(item.find(".book-type, .book-list-type").first().text()) || undefined;
 };
 
-const parseStatus = (item: cheerio.Cheerio<AnyNode>): string | undefined => {
-  const text = cleanText(item.find(".book-status, [class*='book-status']").first().text());
-  const candidate =
-    text ||
-    item
-      .find(".book-data-info a, .book-cate a, .book-info a")
-      .toArray()
-      .map((element) => cleanText(item.find(element).text()))
-      .find((title) => /^(?:ongoing|updating|completed)$/i.test(title)) ||
-    "";
-  if (/complete/i.test(candidate)) return "Completed";
-  if (/ongoing|updating/i.test(candidate)) return "Ongoing";
-  return candidate || undefined;
-};
+const chapterIdFromUrl = (value: string): string =>
+  value.match(/\/(\d+)(?:\.html)?\/?(?:[?#].*)?$/)?.[1] ?? "";
+
+const bookIdFromItem = (item: cheerio.Cheerio<AnyNode>, href: string): string =>
+  cleanText(item.find("[book_id]").first().attr("book_id")) ||
+  href.match(/\/id-(\d+)\.html/i)?.[1] ||
+  encodeBookPathId(href);
 
 const parseListingChapter = (item: cheerio.Cheerio<AnyNode>): ListingItem["latestChapter"] => {
   const link = item.find("a[href*='/chapter/']").first();
-  const href = link.attr("href") ?? "";
+  const chapterId = chapterIdFromUrl(link.attr("href") ?? "");
   const title = cleanText(
     link.attr("title") ??
       link.find(".chapter-item-title, .chapter-item-headtitle").first().text() ??
       link.text(),
   );
-  if (!href || !title) return undefined;
+  if (!chapterId || !title) return undefined;
   return {
-    chapterId: encodePathId(href),
+    chapterId,
     title,
     dateText:
       cleanText(
@@ -177,15 +179,13 @@ const parseListingChapter = (item: cheerio.Cheerio<AnyNode>): ListingItem["lates
 };
 
 export const parseListings = ($: cheerio.CheerioAPI): ListingItem[] => {
-  const items: ListingItem[] = [];
+  const listings: ListingItem[] = [];
   const seen = new Set<string>();
   for (const element of $(".book-list .book-item").toArray()) {
     const item = $(element);
-    const link = item
-      .find(".book-pic a[href*='/novel/'], .book-info a[href*='/novel/'], a[href*='/novel/']")
-      .first();
+    const link = item.find("a[href*='/novel/']").first();
     const href = link.attr("href") ?? "";
-    const mangaId = encodePathId(href);
+    const mangaId = bookIdFromItem(item, href).replace(SAFE_ID_REGEX, "-");
     const image = item.find(".book-pic img, img").first();
     const title = cleanText(
       item.find(".book-pic").first().attr("title") ??
@@ -216,12 +216,13 @@ export const parseListings = ($: cheerio.CheerioAPI): ListingItem[] => {
       latestChapter?.dateText ??
       cleanText(item.find(".book-data-time, time, [itemprop='dateModified']").first().text());
 
-    items.push({
+    listings.push({
       mangaId,
       title,
       imageUrl: imageUrlFrom(image),
       type: parseBookType(item),
-      status: parseStatus(item),
+      status:
+        mappedStatus(item.find(".book-status, [class*='book-status']").first().text()) ?? undefined,
       rating: Number.isFinite(rating) ? rating : undefined,
       description:
         cleanDescription(item.find(".book-desc, .book-summary, .book-intro").first().text()) ||
@@ -231,16 +232,35 @@ export const parseListings = ($: cheerio.CheerioAPI): ListingItem[] => {
       latestChapter,
     });
   }
-  return items;
+  return listings;
 };
 
 export const parseFeatured = ($: cheerio.CheerioAPI): ListingItem[] => {
-  const roots = $(
-    ".popular-book-list .book-item, .popular .book-item, .focus-book-list .book-item, .swiper-slide .book-item, .popular-book-list .swiper-slide",
-  );
-  if (roots.length === 0) return [];
-  return parseListings(cheerio.load(`<div class="book-list">${roots.toString()}</div>`));
+  const items = $(".index-carousel .carousel-item .book-item");
+  if (items.length === 0) return [];
+  return parseListings(cheerio.load(`<div class="book-list">${items.toString()}</div>`));
 };
+
+export const parseApiListings = (books: NovelCoolBook[]): ListingItem[] =>
+  books.map((book) => ({
+    mangaId: (book.book_id || book.id).replace(SAFE_ID_REGEX, "-"),
+    title: cleanText(book.name),
+    imageUrl: resolveUrl(book.cover),
+    type: book.is_novel === "1" ? "Novel" : "Manga",
+    status: mappedStatus(book.completed),
+    rating: Number.isFinite(Number(book.rate_star)) ? Number(book.rate_star) : undefined,
+    description: cleanDescription(book.intro) || undefined,
+    genres: book.category_list ?? [],
+    updatedText: book.modify_time,
+    latestChapter:
+      book.last_chapter_id && book.last_chapter_title
+        ? {
+            chapterId: book.last_chapter_id,
+            title: cleanText(book.last_chapter_title),
+            dateText: book.modify_time,
+          }
+        : undefined,
+  }));
 
 export const parseSearchOptions = ($: cheerio.CheerioAPI): SearchOptions => {
   const genres: Tag[] = [];
@@ -255,8 +275,9 @@ export const parseSearchOptions = ($: cheerio.CheerioAPI): SearchOptions => {
   }
 
   const years: Tag[] = [];
-  const yearNodes = $("select[name='publish_year'] option, [data-year], a[href*='publish_year=']");
-  for (const element of yearNodes.toArray()) {
+  for (const element of $(
+    "select[name='publish_year'] option, [data-year], a[href*='publish_year=']",
+  ).toArray()) {
     const item = $(element);
     const id = cleanText(
       item.attr("value") ??
@@ -278,154 +299,118 @@ export const parseSearchOptions = ($: cheerio.CheerioAPI): SearchOptions => {
   return { genres, years };
 };
 
-const detailValue = ($: cheerio.CheerioAPI, label: string): string => {
-  for (const element of $(".bookinfo-info p, .bookinfo-info li, .bookinfo-desc p").toArray()) {
-    const row = $(element);
-    if (!cleanText(row.text()).toLowerCase().startsWith(label.toLowerCase())) continue;
-    const clone = row.clone();
-    clone.find("label, b:first-child, strong:first-child").remove();
-    return cleanText(clone.text().replace(new RegExp(`^${label}:?`, "i"), ""));
-  }
-  return "";
-};
-
-const detailType = ($: cheerio.CheerioAPI): string | undefined => {
-  const type = parseBookType($(".bookinfo, .bookinfo-pic").first());
-  if (type) return type;
-  const className = $("[class*='book-type-']").first().attr("class") ?? "";
-  const classType = className.match(/\bbook-type-([a-z-]+)/i)?.[1];
-  return classType
-    ? classType.charAt(0).toUpperCase() + classType.slice(1).replace(/-/g, " ")
-    : undefined;
-};
-
-const mappedStatus = (value: string): string | undefined => {
-  if (/complete/i.test(value)) return "Completed";
-  if (/ongoing|updating/i.test(value)) return "Ongoing";
-  return cleanText(value) || undefined;
-};
-
-export const parseMangaDetails = ($: cheerio.CheerioAPI, mangaId: string): SourceManga => {
-  const primaryTitle = cleanText($("h1.bookinfo-title").first().text());
-  if (!primaryTitle) throw new Error(`Unable to parse title details for ${mangaId}.`);
-
-  const status =
-    detailValue($, "Status") ||
-    $(".bookinfo-category-list a")
-      .toArray()
-      .map((element) => cleanText($(element).text()))
-      .find((value) => /^(?:ongoing|updating|completed)$/i.test(value)) ||
-    "";
-  const genres = $(".bookinfo-category-list a")
+export const parseBookId = ($: cheerio.CheerioAPI): string => {
+  const script = $("script")
     .toArray()
-    .map((element) => cleanText($(element).text()))
-    .filter(
-      (genre) =>
-        genre.length > 0 &&
-        !/^(?:ongoing|updating|completed)$/i.test(genre) &&
-        !TYPE_TITLES.has(genre.toLowerCase()),
-    );
+    .map((element) => $(element).html() ?? "")
+    .find((value) => /\bBOOK_ID\s*=/.test(value));
+  const bookId =
+    script?.match(/\bBOOK_ID\s*=\s*["']?(\d+)/)?.[1] ??
+    $("input[name='book_id'], [book_id]").first().attr("value") ??
+    $("input[name='book_id'], [book_id]").first().attr("book_id") ??
+    "";
+  if (!bookId) throw new Error("NovelCool did not expose a book id for this URL.");
+  return bookId;
+};
+
+export const bookIdToUrl = (mangaId: string): string | undefined => {
+  try {
+    const path = decodeURIComponent(mangaId);
+    return /^\/novel\/[^?#]+\.html$/i.test(path) ? resolveUrl(path) : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const cleanCreator = (value?: string | null): string | undefined => {
+  const creator = cleanText(value).replace(/^(?:author|artist):\s*/i, "");
+  return creator && !/^(?:n\/a|unknown)$/i.test(creator) ? creator : undefined;
+};
+
+export const parseMangaDetails = (book: NovelCoolBook, mangaId: string): SourceManga => {
+  const primaryTitle = cleanText(book.name);
+  const thumbnailUrl = resolveUrl(book.cover);
+  if (!primaryTitle) throw new Error(`Unable to parse title details for ${mangaId}.`);
+  if (!thumbnailUrl) throw new Error(`Unable to parse a cover for ${mangaId}.`);
+
+  const genres = book.category_list ?? [];
   const tags = genres.map((genre) => ({
     id: genre.replace(SAFE_ID_REGEX, "-"),
     title: genre,
   }));
-  const rating = Number.parseFloat(
-    cleanText($("[itemprop='ratingValue'], .book-rate-num").first().text()),
-  );
-  const type = detailType($);
-  const thumbnailUrl = imageUrlFrom($(".bookinfo-pic-img, .bookinfo-pic img").first());
-  if (!thumbnailUrl) throw new Error(`Unable to parse a cover for ${mangaId}.`);
-
+  const rating = Number(book.rate_star);
+  const alternative = cleanText(book.alternative);
   return {
     mangaId,
     mangaInfo: {
       primaryTitle,
-      secondaryTitles: [],
+      secondaryTitles:
+        alternative && alternative.toLowerCase() !== primaryTitle.toLowerCase()
+          ? [alternative]
+          : [],
       thumbnailUrl,
-      synopsis: cleanDescription($(".bk-summary-txt").first().text()),
-      author:
-        cleanText(
-          $(".bookinfo-author > a").first().attr("title") ??
-            $(".bookinfo-author > a").first().text(),
-        ) || undefined,
-      status: mappedStatus(status),
+      synopsis: cleanDescription(book.intro),
+      author: cleanCreator(book.author),
+      artist: cleanCreator(book.artist),
+      status: mappedStatus(book.completed),
       rating: Number.isFinite(rating) ? Math.min(1, Math.max(0, rating / 5)) : undefined,
       contentRating: contentRatingForGenres(genres),
-      contentType: type?.toLowerCase().includes("novel") ? "novel" : "comic",
+      contentType: book.is_novel === "1" ? "novel" : "comic",
       tagGroups: tags.length > 0 ? [{ id: "genres", title: "Genres", tags }] : [],
-      shareUrl: resolveUrl(decodeURIComponent(mangaId)),
+      shareUrl:
+        resolveUrl(book.url) ||
+        (book.visit_path
+          ? `${DOMAIN}/novel/${encodeURIComponent(book.visit_path)}.html`
+          : undefined),
     },
   };
 };
 
 const chapterNumber = (value: string): number | undefined => {
-  const match = value.match(/(?:chapter|ch\.?|c)[\s/_-]*(\d+(?:\.\d+)?)/i);
+  const match = value.match(
+    /(?:chapter|chap(?:ter)?|ch\.?|part|episode|ep\.?|cap[ií]tulo)\s*(\d+(?:\.\d+)?)/i,
+  );
   if (!match) return undefined;
   const number = Number.parseFloat(match[1]);
   return Number.isFinite(number) ? number : undefined;
 };
 
-const chapterTitle = (value: string, mangaTitle: string): string | undefined => {
-  const number = chapterNumber(value);
-  let title = cleanText(value);
-  if (title.toLowerCase().startsWith(mangaTitle.toLowerCase())) {
-    title = cleanText(title.slice(mangaTitle.length));
-  }
-  if (number != null) {
-    title = cleanText(
-      title
-        .replace(
-          new RegExp(
-            `^[-:\\s•]*(?:chapter|ch\\.?|c)[\\s/_-]*${number.toString().replace(".", "\\.")}`,
-            "i",
-          ),
-          "",
-        )
-        .replace(/^[-:\s–—•]+/, ""),
-    );
-  }
+const chapterTitle = (value: string): string | undefined => {
+  const title = cleanText(value).replace(
+    /^(?:chapter|chap(?:ter)?|ch\.?|part|episode|ep\.?|cap[ií]tulo)\s*\d+(?:\.\d+)?\s*[-:–—]?\s*/i,
+    "",
+  );
   return title || undefined;
 };
 
-export const parseChapters = ($: cheerio.CheerioAPI, sourceManga: SourceManga): Chapter[] => {
-  const entries = $(".chapter-item-list a")
-    .toArray()
-    .flatMap((element) => {
-      const link = $(element);
-      const href = link.attr("href") ?? "";
-      const name = cleanText(
-        link.attr("title") ?? link.find(".chapter-item-title").first().text() ?? link.text(),
-      );
-      if (!href || !name) return [];
-      return [
-        {
-          chapterId: encodePathId(href),
-          name,
-          dateText: cleanText(link.find(".chapter-item-time").first().text()),
-        },
-      ];
-    });
-  if (entries.length === 0) throw new Error(`No chapters found for ${sourceManga.mangaId}.`);
+const chapterIsLocked = (value?: boolean | string | number): boolean =>
+  value === true || value === 1 || value === "1" || value === "true";
 
-  const seen = new Set<string>();
-  return entries.flatMap((entry, index) => {
-    if (seen.has(entry.chapterId)) return [];
-    seen.add(entry.chapterId);
-    const number =
-      chapterNumber(entry.name) ?? chapterNumber(decodeURIComponent(entry.chapterId)) ?? 0;
-    return [
-      {
-        chapterId: entry.chapterId,
-        sourceManga,
-        langCode: "en",
-        chapNum: number,
-        title: chapterTitle(entry.name, sourceManga.mangaInfo.primaryTitle),
-        version: sourceManga.mangaInfo.contentType === "novel" ? "Novel" : undefined,
-        volume: 0,
-        sortingIndex: entries.length - index,
-        publishDate: parseDate(entry.dateText),
-      },
-    ];
+export const parseChapters = (
+  chapters: NovelCoolChapter[],
+  sourceManga: SourceManga,
+): Chapter[] => {
+  const readable = chapters.filter((chapter) => !chapterIsLocked(chapter.is_locked)).reverse();
+  if (readable.length === 0)
+    throw new Error(`No readable chapters found for ${sourceManga.mangaId}.`);
+
+  return readable.map((chapter, index) => {
+    const order = Number.parseFloat(chapter.order_id ?? "");
+    const chapNum =
+      (Number.isFinite(order) && order > 0 ? order : undefined) ??
+      chapterNumber(chapter.title) ??
+      index + 1;
+    return {
+      chapterId: chapter.id.replace(SAFE_ID_REGEX, "-"),
+      sourceManga,
+      langCode: "en",
+      chapNum,
+      title: chapterTitle(chapter.title),
+      version: sourceManga.mangaInfo.contentType === "novel" ? "Novel" : undefined,
+      volume: 0,
+      sortingIndex: index,
+      publishDate: parseDate(chapter.last_modify ?? chapter.tf_time),
+    };
   });
 };
 
@@ -437,75 +422,38 @@ const escapeXhtml = (value: string): string =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
 
-const imageManifest = ($: cheerio.CheerioAPI, baseUrl: string): string[] => {
-  const script = $("script")
-    .toArray()
-    .map((element) => $(element).html() ?? "")
-    .find((value) => value.includes("all_imgs_url"));
-  if (!script) return [];
-  const arrayContent = script.match(/all_imgs_url\s*:\s*\[([\s\S]*?)\]/)?.[1] ?? "";
-  const pages: string[] = [];
-  for (const match of arrayContent.matchAll(/["']([^"']+)["']/g)) {
-    const page = resolveUrl(match[1].replace(/\\\//g, "/"), baseUrl);
-    if (/^https?:\/\/\S+$/i.test(page) && !pages.includes(page)) pages.push(page);
-  }
-  return pages;
-};
-
-export const parseReaderImages = ($: cheerio.CheerioAPI, baseUrl: string): string[] => {
-  const manifest = imageManifest($, baseUrl);
-  if (manifest.length > 0) return manifest;
-
-  const pages: string[] = [];
-  for (const element of $(
-    ".mangaread-manga-pic, .pic_box source.manga_pic, .pic_box img, .reading-content img",
-  ).toArray()) {
-    const page = imageUrlFrom($(element), baseUrl);
-    if (/^https?:\/\/\S+$/i.test(page) && !pages.includes(page)) pages.push(page);
-  }
-  return pages;
-};
-
-export const parseReaderPageUrls = ($: cheerio.CheerioAPI, baseUrl: string): string[] => {
-  const urls: string[] = [];
-  for (const element of $(
-    ".mangaread-pagenav > .sl-page option, select.sl-page option",
-  ).toArray()) {
-    const url = resolveUrl($(element).attr("value"), baseUrl);
-    if (/^https?:\/\/\S+$/i.test(url) && !urls.includes(url)) urls.push(url);
-  }
-  return urls;
+const contentBody = (value: string): string => {
+  const decoded = Application.decodeHTMLEntities(value).replace(/\r/g, "").trim();
+  if (/<[a-z][\s\S]*>/i.test(decoded)) return decoded;
+  return decoded
+    .replace(/^\*\*([^*]+)\*\*\s*/, "")
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p>${escapeXhtml(paragraph.replace(/\n/g, " ").trim())}</p>`)
+    .join("");
 };
 
 export const parseChapterDetails = (
-  $: cheerio.CheerioAPI,
-  baseUrl: string,
+  info: NovelCoolChapterInfo,
   chapter: Chapter,
-): ChapterDetails | undefined => {
-  const pages = parseReaderImages($, baseUrl);
+): ChapterDetails => {
+  if (chapterIsLocked(info.is_locked)) {
+    throw new Error("This chapter is locked and cannot be read.");
+  }
+
+  const pages = [...(info.pic_list ?? [])]
+    .sort((left, right) => (left.order_id ?? 0) - (right.order_id ?? 0))
+    .map((page) => resolveUrl(page.pic_path))
+    .filter((page) => /^https?:\/\/\S+$/i.test(page));
   if (pages.length > 0) {
     return { id: chapter.chapterId, mangaId: chapter.sourceManga.mangaId, pages };
   }
 
-  const marker = $(".chapter-start-mark").first();
-  if (marker.length === 0) return undefined;
-  const container = marker.parent().clone();
-  container
-    .find(
-      ".chapter-title, .chapter-start-mark, .chapter-end-mark, [model_target_name='report'], script, style",
-    )
-    .remove();
-  container.find("img").each((_, image) => {
-    const node = $(image);
-    const src = imageUrlFrom(node, baseUrl);
-    if (src) node.attr("src", src);
-  });
-  const content = container.html()?.trim();
+  const content = info.content?.trim() ?? "";
   if (!content) throw new Error(`No readable content found for ${chapter.chapterId}.`);
-  const heading = chapter.title
-    ? `<h2>${escapeXhtml(chapter.title)}</h2>`
-    : `<h2>Chapter ${chapter.chapNum}</h2>`;
-  const body = cheerio.load(`${heading}${content}`, null, false).html({ xml: true });
+  const heading = cleanText(info.title) || chapter.title || `Chapter ${chapter.chapNum}`;
+  const $ = cheerio.load(`<h2>${escapeXhtml(heading)}</h2>${contentBody(content)}`, null, false);
+  $("script, style, iframe, form").remove();
+  const body = $.html({ xml: true });
   return {
     type: "html",
     id: chapter.chapterId,
@@ -525,9 +473,6 @@ export const pickTriState = (
     .filter(([, current]) => current === state)
     .map(([id]) => id);
 
-export const typeTags = (options: SearchOptions): Tag[] =>
-  options.genres.filter((genre) => TYPE_TITLES.has(genre.title.toLowerCase()));
-
 const chapterLabel = (title: string): string => {
   const number = chapterNumber(title);
   return number == null ? cleanText(title) : `Ch. ${number}`;
@@ -535,16 +480,14 @@ const chapterLabel = (title: string): string => {
 
 export const toFeaturedItem = (item: ListingItem): FeaturedCarouselItem => {
   const infoItems: NonNullable<FeaturedCarouselItem["infoItems"]>[number][] = [];
-  if (item.rating != null) {
-    infoItems.push({ symbol: "star.fill", text: item.rating.toFixed(1) });
-  }
+  if (item.rating != null) infoItems.push({ symbol: "star.fill", text: item.rating.toFixed(1) });
   if (item.type) infoItems.push({ symbol: "books.vertical.fill", text: item.type });
   return {
     type: "featuredCarouselItem",
     mangaId: item.mangaId,
     imageUrl: item.imageUrl,
     title: item.title,
-    supertitle: item.status,
+    supertitle: item.type ?? item.genres[0] ?? "Popular",
     summary: item.description,
     infoItems: infoItems.length
       ? (infoItems.slice(0, 2) as FeaturedCarouselItem["infoItems"])

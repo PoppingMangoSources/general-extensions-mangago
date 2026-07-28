@@ -15,7 +15,6 @@ import {
   type ExtensionImpl,
   type PagedResults,
   type Request,
-  type Response,
   type SearchQuery,
   type SearchResultItem,
   type SortingOption,
@@ -25,52 +24,54 @@ import {
 import { NovelCoolAdvancedSearchForm } from "./forms";
 import {
   CATEGORY_PATHS,
+  DOMAIN,
+  PAGE_SIZE,
   SECTIONS,
   SORT_OPTIONS,
   STATE_KEYS,
+  type BrowseOrder,
   type PageMetadata,
   type SearchMetadata,
   type SearchOptions,
 } from "./models";
 import {
+  fetchBookChapters,
+  fetchBookInfo,
+  fetchBookSearch,
+  fetchBrowse,
   fetchCategoryPage,
-  fetchChapterPage,
-  fetchContentPage,
-  fetchHomePage,
-  fetchReaderPage,
+  fetchChapterInfo,
   fetchSearchPage,
+  fetchUrlPage,
   NovelCoolInterceptor,
 } from "./network";
 import {
+  bookIdToUrl,
   hasNextPage,
+  parseApiListings,
+  parseBookId,
   parseChapterDetails,
   parseChapters,
-  encodePathId,
   parseFeatured,
   parseListings,
   parseMangaDetails,
-  parseReaderImages,
-  parseReaderPageUrls,
   parseSearchOptions,
   pickTriState,
   toFeaturedItem,
   toLatestItem,
   toSearchResultItem,
   toSimpleItem,
-  typeTags,
 } from "./parsers";
 import type NovelCoolConfig from "./pbconfig";
 
-const categoryPathForSort = (sortId?: string): string => {
+const browseOrderForSort = (sortId?: string): BrowseOrder => {
   switch (sortId) {
     case "popular":
-      return CATEGORY_PATHS.POPULAR;
+      return "hot";
     case "newest":
-      return CATEGORY_PATHS.NEWEST;
-    case "rating":
-      return CATEGORY_PATHS.RATING;
+      return "new_book";
     default:
-      return CATEGORY_PATHS.LATEST;
+      return "latest";
   }
 };
 
@@ -82,23 +83,15 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
   });
   private cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
   private interceptor = new NovelCoolInterceptor("main");
-  private homePromise?: ReturnType<typeof fetchHomePage>;
   private searchOptionsPromise?: Promise<SearchOptions>;
 
   async initialise(): Promise<void> {
     this.rateLimiter.registerInterceptor();
     this.cookieStorageInterceptor.registerInterceptor();
     this.interceptor.registerInterceptor();
-    Application.setRedirectHandler(
-      Application.Selector(this as NovelCoolExtension, "handleRedirect"),
-    );
     if (Application.getState(STATE_KEYS.RELATIVE_DATE_ANCHOR) == null) {
       Application.setState(Date.now(), STATE_KEYS.RELATIVE_DATE_ANCHOR);
     }
-  }
-
-  async handleRedirect(request: Request, response: Response): Promise<Request | undefined> {
-    return this.interceptor.prepareRedirect(request, response);
   }
 
   async cloudflareBypassCompleted(
@@ -110,7 +103,6 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
       if (cookie.expires && cookie.expires.getTime() <= Date.now()) continue;
       this.cookieStorageInterceptor.setCookie(cookie);
     }
-    this.homePromise = undefined;
     this.searchOptionsPromise = undefined;
   }
 
@@ -120,7 +112,7 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
       { id: SECTIONS.LATEST, title: "Latest", type: DiscoverSectionType.chapterUpdates },
       { id: SECTIONS.POPULAR, title: "Popular", type: DiscoverSectionType.simpleCarousel },
       { id: SECTIONS.COMPLETED, title: "Completed", type: DiscoverSectionType.simpleCarousel },
-      { id: SECTIONS.TYPES, title: "Types", type: DiscoverSectionType.genres },
+      { id: SECTIONS.GENRES, title: "Genres", type: DiscoverSectionType.genres },
     ];
   }
 
@@ -134,18 +126,83 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
       case SECTIONS.LATEST:
         return this.getLatestSection(metadata);
       case SECTIONS.POPULAR:
-        return this.getListingSection(CATEGORY_PATHS.POPULAR, metadata, toSimpleItem);
+        return this.getApiSection("hot", metadata, toSimpleItem);
       case SECTIONS.COMPLETED:
-        return this.getListingSection(CATEGORY_PATHS.COMPLETED, metadata, toSimpleItem);
-      case SECTIONS.TYPES:
-        return this.getTypeSection();
+        return this.getHtmlSection(CATEGORY_PATHS.COMPLETED, metadata);
+      case SECTIONS.GENRES:
+        return this.getGenresSection();
       default:
         return { items: [] };
     }
   }
 
-  private getHomePage(): ReturnType<typeof fetchHomePage> {
-    return (this.homePromise ??= fetchHomePage());
+  private async getFeaturedSection(): Promise<PagedResults<DiscoverSectionItem>> {
+    return {
+      items: parseFeatured(await fetchUrlPage(DOMAIN))
+        .filter((item) => item.imageUrl.length > 0)
+        .map(toFeaturedItem),
+    };
+  }
+
+  private getLatestSection(
+    metadata: PageMetadata | undefined,
+  ): Promise<PagedResults<DiscoverSectionItem>> {
+    return this.getApiSection("latest", metadata, (item) => toLatestItem(item, this.dateAnchor()));
+  }
+
+  private async getGenresSection(): Promise<PagedResults<DiscoverSectionItem>> {
+    return {
+      items: (await this.getSearchOptions()).genres.map(
+        (tag): DiscoverSectionItem => ({
+          type: "genresCarouselItem",
+          name: tag.title,
+          searchQuery: {
+            title: "",
+            metadata: { genres: { [tag.id]: "included" } } satisfies SearchMetadata,
+          },
+        }),
+      ),
+    };
+  }
+
+  private async getApiSection(
+    order: BrowseOrder,
+    metadata: PageMetadata | undefined,
+    mapper: (item: ReturnType<typeof parseApiListings>[number]) => DiscoverSectionItem,
+  ): Promise<PagedResults<DiscoverSectionItem>> {
+    const page = metadata?.page ?? 1;
+    const items = await this.getBrowseItems(order, page);
+    return {
+      items: items.filter((item) => item.imageUrl.length > 0).map(mapper),
+      metadata: items.length >= PAGE_SIZE ? { page: page + 1 } : undefined,
+    };
+  }
+
+  private async getHtmlSection(
+    path: string,
+    metadata: PageMetadata | undefined,
+  ): Promise<PagedResults<DiscoverSectionItem>> {
+    const page = metadata?.page ?? 1;
+    const document = await fetchCategoryPage(path, page);
+    return {
+      items: parseListings(document)
+        .filter((item) => item.imageUrl.length > 0)
+        .map(toSimpleItem),
+      metadata: hasNextPage(document) ? { page: page + 1 } : undefined,
+    };
+  }
+
+  private async getBrowseItems(order: BrowseOrder, page: number) {
+    const [novels, manga] = await Promise.all([
+      fetchBrowse(order, "novel", page),
+      fetchBrowse(order, "manga", page),
+    ]);
+    const seen = new Set<string>();
+    return parseApiListings([...(novels.list ?? []), ...(manga.list ?? [])]).filter((item) => {
+      if (seen.has(item.mangaId)) return false;
+      seen.add(item.mangaId);
+      return true;
+    });
   }
 
   private getSearchOptions(): Promise<SearchOptions> {
@@ -158,52 +215,6 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
     const created = Date.now();
     Application.setState(created, STATE_KEYS.RELATIVE_DATE_ANCHOR);
     return created;
-  }
-
-  private async getFeaturedSection(): Promise<PagedResults<DiscoverSectionItem>> {
-    return {
-      items: parseFeatured(await this.getHomePage())
-        .filter((item) => item.imageUrl.length > 0)
-        .map(toFeaturedItem),
-    };
-  }
-
-  private async getLatestSection(
-    metadata: PageMetadata | undefined,
-  ): Promise<PagedResults<DiscoverSectionItem>> {
-    return this.getListingSection(CATEGORY_PATHS.LATEST, metadata, (item) =>
-      toLatestItem(item, this.dateAnchor()),
-    );
-  }
-
-  private async getListingSection(
-    path: string,
-    metadata: PageMetadata | undefined,
-    mapper: (item: ReturnType<typeof parseListings>[number]) => DiscoverSectionItem,
-  ): Promise<PagedResults<DiscoverSectionItem>> {
-    const page = metadata?.page ?? 1;
-    const document = await fetchCategoryPage(path, page);
-    return {
-      items: parseListings(document)
-        .filter((item) => item.imageUrl.length > 0)
-        .map(mapper),
-      metadata: hasNextPage(document) ? { page: page + 1 } : undefined,
-    };
-  }
-
-  private async getTypeSection(): Promise<PagedResults<DiscoverSectionItem>> {
-    return {
-      items: typeTags(await this.getSearchOptions()).map(
-        (tag): DiscoverSectionItem => ({
-          type: "genresCarouselItem",
-          name: tag.title,
-          searchQuery: {
-            title: "",
-            metadata: { genres: { [tag.id]: "included" } } satisfies SearchMetadata,
-          },
-        }),
-      ),
-    };
   }
 
   async getSortingOptions(_query: SearchQuery<SearchMetadata>): Promise<SortingOption[]> {
@@ -225,28 +236,50 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
     const page = metadata?.page ?? 1;
     const searchMetadata = query.metadata ?? {};
     const title = (query.title ?? "").trim();
-    const hasFilters =
-      Boolean(title) ||
+    const hasAdvancedFilters =
       Boolean(searchMetadata.author) ||
       Boolean(searchMetadata.status?.length) ||
       Boolean(searchMetadata.year?.length) ||
       Boolean(searchMetadata.rating?.length) ||
-      Object.keys(searchMetadata.genres ?? {}).length > 0;
-    const document = hasFilters
-      ? await fetchSearchPage({
-          page,
-          title: title || undefined,
-          nameMethod: searchMetadata.nameMethod?.[0],
-          author: searchMetadata.author,
-          authorMethod: searchMetadata.authorMethod?.[0],
-          status: searchMetadata.status?.[0],
-          genresInclude: pickTriState(searchMetadata.genres, "included"),
-          genresExclude: pickTriState(searchMetadata.genres, "excluded"),
-          year: searchMetadata.year?.[0],
-          rating: searchMetadata.rating?.[0],
-        })
-      : await fetchCategoryPage(categoryPathForSort(sortingOption?.id), page);
+      Object.keys(searchMetadata.genres ?? {}).length > 0 ||
+      Boolean(searchMetadata.nameMethod?.length) ||
+      Boolean(searchMetadata.authorMethod?.length);
 
+    if (title && !hasAdvancedFilters) {
+      const [novels, manga] = await Promise.all([
+        fetchBookSearch(title, "novel", page),
+        fetchBookSearch(title, "manga", page),
+      ]);
+      const items = parseApiListings([...(novels.list ?? []), ...(manga.list ?? [])]);
+      return {
+        items: items.filter((item) => item.imageUrl.length > 0).map(toSearchResultItem),
+        metadata: items.length >= PAGE_SIZE ? { page: page + 1 } : undefined,
+      };
+    }
+
+    if (!title && !hasAdvancedFilters && sortingOption?.id !== "rating") {
+      const items = await this.getBrowseItems(browseOrderForSort(sortingOption?.id), page);
+      return {
+        items: items.filter((item) => item.imageUrl.length > 0).map(toSearchResultItem),
+        metadata: items.length >= PAGE_SIZE ? { page: page + 1 } : undefined,
+      };
+    }
+
+    const document =
+      sortingOption?.id === "rating" && !title && !hasAdvancedFilters
+        ? await fetchCategoryPage(CATEGORY_PATHS.RATING, page)
+        : await fetchSearchPage({
+            page,
+            title: title || undefined,
+            nameMethod: searchMetadata.nameMethod?.[0],
+            author: searchMetadata.author,
+            authorMethod: searchMetadata.authorMethod?.[0],
+            status: searchMetadata.status?.[0],
+            genresInclude: pickTriState(searchMetadata.genres, "included"),
+            genresExclude: pickTriState(searchMetadata.genres, "excluded"),
+            year: searchMetadata.year?.[0],
+            rating: searchMetadata.rating?.[0],
+          });
     return {
       items: parseListings(document)
         .filter((item) => item.imageUrl.length > 0)
@@ -258,13 +291,15 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
   private async resolveUrlQuery(
     query: string,
   ): Promise<PagedResults<SearchResultItem> | undefined> {
-    const path = query
+    const url = query
       .trim()
-      .match(/^https?:\/\/(?:(?:www|en)\.)?novelcool\.com(\/novel\/[^?#]+\.html)\/?$/i)?.[1];
-    if (!path) return undefined;
-    const mangaId = encodePathId(path);
+      .match(/^https?:\/\/(?:(?:www|en)\.)?novelcool\.com(\/novel\/[^?#]+\.html)\/?$/i)?.[0];
+    if (!url) return undefined;
     try {
-      const manga = parseMangaDetails(await fetchContentPage(mangaId), mangaId);
+      const mangaId = parseBookId(await fetchUrlPage(url));
+      const book = (await fetchBookInfo(mangaId)).info;
+      if (!book) return undefined;
+      const manga = parseMangaDetails(book, mangaId);
       return {
         items: [
           {
@@ -282,34 +317,27 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
-    return parseMangaDetails(await fetchContentPage(mangaId), mangaId);
+    const book = (await fetchBookInfo(await this.resolveBookId(mangaId))).info;
+    if (!book) throw new Error(`NovelCool returned no details for book ${mangaId}.`);
+    return parseMangaDetails(book, mangaId);
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
-    return parseChapters(await fetchContentPage(sourceManga.mangaId), sourceManga);
+    const bookId = await this.resolveBookId(sourceManga.mangaId);
+    return parseChapters((await fetchBookChapters(bookId)).list ?? [], sourceManga);
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    const initial = await fetchChapterPage(chapter.chapterId);
-    const direct = parseChapterDetails(initial.$, initial.url, chapter);
-    if (direct) return direct;
+    const info = (await fetchChapterInfo(chapter.chapterId)).info;
+    if (!info) throw new Error(`NovelCool returned no content for chapter ${chapter.chapterId}.`);
+    return parseChapterDetails(info, chapter);
+  }
 
-    const pageUrls = parseReaderPageUrls(initial.$, initial.url);
-    if (pageUrls.length === 0) {
-      throw new Error(`No readable content found for ${chapter.chapterId}.`);
-    }
-    const pages = (
-      await Promise.all(pageUrls.map((url) => fetchReaderPage(url, initial.url)))
-    ).flatMap((page) => parseReaderImages(page.$, page.url));
-    const uniquePages = [...new Set(pages)];
-    if (uniquePages.length === 0) {
-      throw new Error(`No readable pages found for ${chapter.chapterId}.`);
-    }
-    return {
-      id: chapter.chapterId,
-      mangaId: chapter.sourceManga.mangaId,
-      pages: uniquePages,
-    };
+  private async resolveBookId(mangaId: string): Promise<string> {
+    if (/^\d+$/.test(mangaId)) return mangaId;
+    const url = bookIdToUrl(mangaId);
+    if (!url) throw new Error(`NovelCool returned an unsupported book id: ${mangaId}.`);
+    return parseBookId(await fetchUrlPage(url));
   }
 }
 
