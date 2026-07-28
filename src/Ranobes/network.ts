@@ -5,6 +5,7 @@ import {
   CloudflareError,
   CookieStorageInterceptor,
   PaperbackInterceptor,
+  type Cookie,
   type Request,
   type Response,
   type SortingOption,
@@ -78,8 +79,6 @@ export const buildSearchPath = (
 
 export const cookieStorage = new CookieStorageInterceptor({ storage: "stateManager" });
 
-const ROTATING_CLEARANCE = ["__ddg8_", "__ddg9_", "__ddg10_"];
-
 const completeMobileSafariUserAgent = (userAgent: string): string => {
   if (!/\b(?:iPhone|iPad|iPod)\b/.test(userAgent) || /\bSafari\//.test(userAgent)) {
     return userAgent;
@@ -92,22 +91,27 @@ const completeMobileSafariUserAgent = (userAgent: string): string => {
   return /\bSafari\//.test(withVersion) ? withVersion : `${withVersion} Safari/604.1`;
 };
 
-const getUserAgent = async (): Promise<string> =>
+export const getRanobesUserAgent = async (): Promise<string> =>
   completeMobileSafariUserAgent(await Application.getDefaultUserAgent());
 
-export const dropRotatingClearance = (): void => {
-  const stale = cookieStorage.cookies.filter((cookie) => ROTATING_CLEARANCE.includes(cookie.name));
-  for (const cookie of stale) cookieStorage.deleteCookie(cookie);
+export const replaceSessionCookies = (cookies: Cookie[]): void => {
+  cookieStorage.cookies = [];
+  cookieStorage.setCookie({
+    name: "browser_check",
+    value: "1",
+    domain: "ranobes.net",
+    path: "/",
+  });
+  for (const cookie of cookies) {
+    if (cookie.expires && cookie.expires.getTime() <= Date.now()) continue;
+    cookieStorage.setCookie(cookie);
+  }
 };
 
 const isChallengeResponse = (response: Response, body: string): boolean => {
-  const status = response.status;
-  if (response.headers?.["cf-mitigated"] === "challenge") return true;
-  if ([403, 429, 503].includes(status)) return true;
-  // A page carrying the site's data payload is genuine content — DDoS-Guard
-  // leaves `__ddg` references in inline scripts even after clearance, so the
-  // marker below would otherwise misfire a bypass on a perfectly good page.
   if (body.includes("window.__DATA__")) return false;
+  if (response.headers?.["cf-mitigated"] === "challenge") return true;
+  if (response.status === 403) return true;
   return /(?:vb_challenge|cf-turnstile|<title>Just a moment|ddos-guard|checking your browser|enable javascript and cookies|__ddg\d+_)/i.test(
     body,
   );
@@ -126,26 +130,25 @@ export class RanobesInterceptor extends PaperbackInterceptor {
         "accept-language": "en-US,en;q=0.9,ru;q=0.8",
         ...request.headers,
         referer: `${origin}/`,
-        "user-agent": await getUserAgent(),
+        "user-agent": await getRanobesUserAgent(),
       },
     };
   }
 
   override async interceptResponse(
-    _request: Request,
+    request: Request,
     response: Response,
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
     const contentType = response.headers?.["content-type"] ?? "";
     const body = contentType.includes("text/html") ? Application.arrayBufferToUTF8String(data) : "";
     if (isChallengeResponse(response, body)) {
-      dropRotatingClearance();
       throw new CloudflareError({
-        url: `${DOMAIN}/`,
-        method: "GET",
+        url: request.url,
+        method: request.method ?? "GET",
         headers: {
           referer: `${DOMAIN}/`,
-          "user-agent": await getUserAgent(),
+          "user-agent": await getRanobesUserAgent(),
         },
       });
     }

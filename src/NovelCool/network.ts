@@ -14,6 +14,7 @@ import {
   API_HEADERS,
   API_PARAMETERS,
   API_URL,
+  DESKTOP_USER_AGENT,
   DOMAIN,
   PAGE_SIZE,
   REQUIRED_COOKIES,
@@ -27,6 +28,12 @@ import {
 } from "./models";
 
 const URL_SCHEME_REGEX = /^[a-z][a-z0-9+.-]*:/i;
+const isHttpUrl = (value: string): boolean => /^https?:\/\/[^/\s]+/i.test(value);
+
+const isNovelCoolUrl = (value: string): boolean => {
+  const host = value.match(/^https?:\/\/([^/?#]+)/i)?.[1]?.split(":")[0] ?? "";
+  return host === "novelcool.com" || host.endsWith(".novelcool.com");
+};
 
 const mergeRequiredCookies = (value: string): string => {
   const cookies = value
@@ -42,9 +49,7 @@ const mergeRequiredCookies = (value: string): string => {
 };
 
 export class NovelCoolInterceptor extends PaperbackInterceptor {
-  override async interceptRequest(request: Request): Promise<Request> {
-    if (request.url.startsWith(API_URL)) return request;
-
+  private prepareRequest(request: Request, referer?: string): Request {
     const headers = { ...request.headers };
     const cookie = headers.cookie ?? headers.Cookie ?? "";
     delete headers.Cookie;
@@ -53,14 +58,24 @@ export class NovelCoolInterceptor extends PaperbackInterceptor {
       headers: {
         ...headers,
         cookie: mergeRequiredCookies(cookie),
-        referer: headers.referer ?? `${DOMAIN}/`,
-        "user-agent": await Application.getDefaultUserAgent(),
+        referer: referer ?? headers.referer ?? `${DOMAIN}/`,
+        "user-agent": DESKTOP_USER_AGENT,
         accept:
           headers.accept ??
           "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
         "accept-language": "en-US,en;q=0.9",
       },
     };
+  }
+
+  override async interceptRequest(request: Request): Promise<Request> {
+    if (request.url.startsWith(API_URL)) return request;
+    return this.prepareRequest(request);
+  }
+
+  async prepareRedirect(request: Request, response: Response): Promise<Request | undefined> {
+    if (!isHttpUrl(request.url) || !isNovelCoolUrl(request.url)) return undefined;
+    return this.prepareRequest(request, response.url);
   }
 
   override async interceptResponse(
@@ -79,7 +94,7 @@ export class NovelCoolInterceptor extends PaperbackInterceptor {
       throw new CloudflareError({
         url: `${DOMAIN}/`,
         method: request.method ?? "GET",
-        headers: { "user-agent": await Application.getDefaultUserAgent() },
+        headers: { "user-agent": DESKTOP_USER_AGENT },
       });
     }
     return data;

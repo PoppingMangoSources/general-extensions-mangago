@@ -11,9 +11,13 @@ import {
 } from "@paperback/types";
 
 import { DOMAIN } from "../models";
+import { replaceSessionCookies } from "../network";
 
 export class RanobesSettingsForm extends Form {
-  constructor(private readonly cookieStorage: CookieStorageInterceptor) {
+  constructor(
+    private readonly cookieStorage: CookieStorageInterceptor,
+    private readonly userAgent: string,
+  ) {
     super();
   }
 
@@ -31,7 +35,14 @@ export class RanobesSettingsForm extends Form {
         [
           WebViewRow("open_site", {
             title: "Open ranobes.net",
-            request: { url: `${DOMAIN}/`, method: "GET" },
+            request: {
+              url: `${DOMAIN}/`,
+              method: "GET",
+              headers: {
+                referer: `${DOMAIN}/`,
+                "user-agent": this.userAgent,
+              },
+            },
             onComplete: Application.Selector(this as RanobesSettingsForm, "handleWebViewComplete"),
             onCancel: Application.Selector(this as RanobesSettingsForm, "handleWebViewCancel"),
           }),
@@ -45,9 +56,7 @@ export class RanobesSettingsForm extends Form {
   }
 
   async handleWebViewComplete(cookies: Cookie[]): Promise<void> {
-    for (const cookie of cookies) {
-      this.cookieStorage.setCookie(cookie);
-    }
+    replaceSessionCookies(cookies);
   }
 
   async handleWebViewCancel(): Promise<void> {}

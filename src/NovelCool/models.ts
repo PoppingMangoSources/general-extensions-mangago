@@ -5,6 +5,8 @@ import type { JSONObject, SortingOption, Tag } from "@paperback/types";
 
 export const DOMAIN = "https://www.novelcool.com";
 export const API_URL = "https://api.novelcool.com";
+export const DESKTOP_USER_AGENT =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36";
 export const PAGE_SIZE = 20;
 
 export const API_HEADERS = {

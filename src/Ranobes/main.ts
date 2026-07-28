@@ -38,6 +38,8 @@ import {
   fetchChapterListPage,
   fetchHtml,
   fetchListingPage,
+  getRanobesUserAgent,
+  replaceSessionCookies,
   RanobesInterceptor,
 } from "./network";
 import {
@@ -64,13 +66,13 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   // ranobes.net sits behind DDoS-Guard, which starts challenging when pages
   // arrive too fast — long chapter lists are dozens of sequential fetches. The
   // mature Aidoku source settled on 2 req/s for exactly this reason.
-  mainRateLimiter = new BasicRateLimiter("main", {
+  mainRateLimiter = new BasicRateLimiter("ranobes-rate-limiter", {
     numberOfRequests: 2,
     bufferInterval: 1,
     ignoreImages: true,
   });
 
-  requestManager = new RanobesInterceptor("main");
+  requestManager = new RanobesInterceptor("ranobes-interceptor");
 
   private taxonomyPromise?: Promise<FilterTaxonomy>;
 
@@ -95,7 +97,7 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   }
 
   async getSettingsForm(): Promise<Form> {
-    return new RanobesSettingsForm(cookieStorage);
+    return new RanobesSettingsForm(cookieStorage, await getRanobesUserAgent());
   }
 
   async cloudflareBypassCompleted(
@@ -105,10 +107,7 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   ): Promise<void> {
     this.taxonomyPromise = undefined;
     this.chapterPagesCache = undefined;
-    for (const cookie of cookies) {
-      if (cookie.expires && cookie.expires.getTime() <= Date.now()) continue;
-      cookieStorage.setCookie(cookie);
-    }
+    replaceSessionCookies(cookies);
   }
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {

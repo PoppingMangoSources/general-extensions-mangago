@@ -15,6 +15,7 @@ import {
   type ExtensionImpl,
   type PagedResults,
   type Request,
+  type Response,
   type SearchQuery,
   type SearchResultItem,
   type SortingOption,
@@ -89,9 +90,16 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
     this.rateLimiter.registerInterceptor();
     this.cookieStorageInterceptor.registerInterceptor();
     this.interceptor.registerInterceptor();
+    Application.setRedirectHandler(
+      Application.Selector(this as NovelCoolExtension, "handleRedirect"),
+    );
     if (Application.getState(STATE_KEYS.RELATIVE_DATE_ANCHOR) == null) {
       Application.setState(Date.now(), STATE_KEYS.RELATIVE_DATE_ANCHOR);
     }
+  }
+
+  async handleRedirect(request: Request, response: Response): Promise<Request | undefined> {
+    return this.interceptor.prepareRedirect(request, response);
   }
 
   async cloudflareBypassCompleted(

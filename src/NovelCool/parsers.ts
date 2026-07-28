@@ -276,11 +276,12 @@ export const parseSearchOptions = ($: cheerio.CheerioAPI): SearchOptions => {
 
   const years: Tag[] = [];
   for (const element of $(
-    "select[name='publish_year'] option, [data-year], a[href*='publish_year=']",
+    ".category-year-item[cate_year], select[name='publish_year'] option, [data-year], a[href*='publish_year=']",
   ).toArray()) {
     const item = $(element);
     const id = cleanText(
-      item.attr("value") ??
+      item.attr("cate_year") ??
+        item.attr("value") ??
         item.attr("data-year") ??
         item.attr("href")?.match(/[?&]publish_year=([^&#]+)/)?.[1],
     );

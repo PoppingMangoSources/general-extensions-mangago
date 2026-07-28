@@ -16,7 +16,7 @@ export const parseChapters = (chapters: ChapterItem[], sourceManga: SourceManga)
       langCode: chapter.lang || "en",
       chapNum: chapter.number ?? index + 1,
       title: chapterTitle(chapter),
-      volume: Number.isFinite(volume) && volume > 0 ? volume : undefined,
+      volume: Number.isFinite(volume) && volume > 0 ? volume : 0,
       publishDate: Number.isNaN(publishDate.getTime()) ? undefined : publishDate,
       sortingIndex: index,
     };

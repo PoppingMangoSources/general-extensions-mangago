@@ -6,7 +6,7 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "Ranobes",
   description: "Extension that pulls light novels from ranobes.net.",
-  version: "1.0.0-alpha.51",
+  version: "1.0.0-alpha.52",
   icon: "icon.png",
   language: "en",
   contentRating: ContentRating.ADULT,

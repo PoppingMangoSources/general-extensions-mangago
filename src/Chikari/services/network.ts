@@ -151,9 +151,8 @@ export interface SeriesQueryOptions {
 }
 
 const buildSeriesUrl = (options: SeriesQueryOptions): string => {
-  const sort = options.sort === "trending" ? `trending_${options.period ?? "week"}` : options.sort;
   const url = apiUrl("series")
-    .setQueryItem("sort", sort)
+    .setQueryItem("sort", options.sort)
     .setQueryItem("adult", String(options.adult))
     .setQueryItem("content_rating", options.contentRatings.join(","))
     .setQueryItem("limit", String(options.limit ?? PAGE_SIZE))
@@ -172,9 +171,7 @@ const buildSeriesUrl = (options: SeriesQueryOptions): string => {
   if (options.minChapters !== undefined) {
     url.setQueryItem("min_chapters", String(options.minChapters));
   }
-  if (options.period && options.sort !== "trending") {
-    url.setQueryItem("period", options.period);
-  }
+  if (options.period) url.setQueryItem("period", options.period);
   return url.toString();
 };
 
