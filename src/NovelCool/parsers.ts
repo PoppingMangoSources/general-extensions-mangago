@@ -63,6 +63,7 @@ const resolveUrl = (value?: string | null, baseUrl = DOMAIN): string => {
   if (!path) return "";
   if (/^https?:\/\//i.test(path)) return encodeURI(path);
   if (path.startsWith("//")) return encodeURI(`https:${path}`);
+  if (/^[a-z][a-z0-9+.-]*:/i.test(path)) return "";
   const origin = baseUrl.match(/^(https?:\/\/[^/]+)/i)?.[1] ?? DOMAIN;
   if (path.startsWith("/")) return encodeURI(`${origin}${path}`);
   const directory = baseUrl.replace(/[?#].*$/, "").replace(/\/[^/]*$/, "/");
@@ -504,11 +505,12 @@ export const parseChapterDetails = (
   const heading = chapter.title
     ? `<h2>${escapeXhtml(chapter.title)}</h2>`
     : `<h2>Chapter ${chapter.chapNum}</h2>`;
+  const body = cheerio.load(`${heading}${content}`, null, false).html({ xml: true });
   return {
     type: "html",
     id: chapter.chapterId,
     mangaId: chapter.sourceManga.mangaId,
-    html: `<html xmlns="http://www.w3.org/1999/xhtml"><head></head><body>${heading}${content}</body></html>`,
+    html: `<html xmlns="http://www.w3.org/1999/xhtml"><head></head><body>${body}</body></html>`,
   };
 };
 

@@ -6,8 +6,8 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "NovelCool",
   description: "Extension that pulls content from novelcool.com.",
-  version: "1.0.0-alpha.4",
-  icon: "icon.png",
+  version: "1.0.0-alpha.5",
+  icon: "icons.png",
   language: "en",
   contentRating: ContentRating.ADULT,
   capabilities: [

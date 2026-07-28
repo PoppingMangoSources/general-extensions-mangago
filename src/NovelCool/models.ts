@@ -6,6 +6,16 @@ import type { CheerioAPI } from "cheerio";
 
 export const DOMAIN = "https://www.novelcool.com";
 
+export const DESKTOP_USER_AGENT =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36";
+
+export const REQUIRED_COOKIES = [
+  "novelcool_webp_valid=true",
+  "protocol_cookie_is_show=1",
+  "protocol_cookie_is_allow=1",
+  "novelcool_list_num=10",
+] as const;
+
 export const SECTIONS = {
   FEATURED: "featured",
   LATEST: "latest",

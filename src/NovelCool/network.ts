@@ -10,28 +10,77 @@ import {
 } from "@paperback/types";
 import * as cheerio from "cheerio";
 
-import { DOMAIN, type FetchedDocument, type SearchRequest } from "./models";
+import {
+  DESKTOP_USER_AGENT,
+  DOMAIN,
+  REQUIRED_COOKIES,
+  type FetchedDocument,
+  type SearchRequest,
+} from "./models";
 
 const IMAGE_EXTENSION_REGEX = /\.(avif|gif|jpe?g|jxl|png|svg|webp)(\/|\?|#|$)/i;
 const JS_REDIRECT_REGEX = /window\.location\.href\s*=\s*["']([^"']+)["']/i;
+const URL_SCHEME_REGEX = /^[a-z][a-z0-9+.-]*:/i;
+
+const isHttpUrl = (value: string): boolean => /^https?:\/\/[^/\s]+/i.test(value);
+
+const isNovelCoolUrl = (value: string): boolean => {
+  const host = value.match(/^https?:\/\/([^/?#]+)/i)?.[1]?.split(":")[0] ?? "";
+  return host === "novelcool.com" || host.endsWith(".novelcool.com");
+};
+
+const mergeRequiredCookies = (value: string): string => {
+  const cookies = value
+    .split(";")
+    .map((cookie) => cookie.trim())
+    .filter((cookie) => cookie.length > 0 && !/^novelcool_bad_user_\d+=/i.test(cookie));
+  const names = new Set(cookies.map((cookie) => cookie.split("=", 1)[0]?.trim().toLowerCase()));
+  for (const cookie of REQUIRED_COOKIES) {
+    const name = cookie.split("=", 1)[0]?.toLowerCase();
+    if (name && !names.has(name)) cookies.push(cookie);
+  }
+  return cookies.join("; ");
+};
 
 export class NovelCoolInterceptor extends PaperbackInterceptor {
-  override async interceptRequest(request: Request): Promise<Request> {
+  private prepareRequest(request: Request, referer?: string): Request {
+    if (!isHttpUrl(request.url)) {
+      throw new Error("NovelCool returned an unsupported request URL.");
+    }
     const isImage = IMAGE_EXTENSION_REGEX.test(request.url);
+    const headers: Record<string, string> = { ...request.headers };
+    const cookie = headers.cookie ?? headers.Cookie ?? "";
+    delete headers.Cookie;
+
     return {
       ...request,
       headers: {
-        ...request.headers,
-        referer: request.headers?.referer ?? `${DOMAIN}/`,
-        "user-agent": await Application.getDefaultUserAgent(),
+        ...headers,
+        ...(isNovelCoolUrl(request.url) && { cookie: mergeRequiredCookies(cookie) }),
+        referer: referer ?? headers.referer ?? `${DOMAIN}/`,
+        "user-agent": DESKTOP_USER_AGENT,
         accept:
-          request.headers?.accept ??
+          headers.accept ??
           (isImage
             ? "image/avif,image/webp,image/png,image/jpeg,image/*,*/*;q=0.8"
             : "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"),
         "accept-language": "en-US,en;q=0.9",
       },
     };
+  }
+
+  override async interceptRequest(request: Request): Promise<Request> {
+    return this.prepareRequest(request);
+  }
+
+  async prepareRedirect(request: Request, response: Response): Promise<Request | undefined> {
+    if (!isHttpUrl(request.url)) return undefined;
+    const sourceIsReader =
+      /\/chapter\//i.test(response.url) ||
+      IMAGE_EXTENSION_REGEX.test(response.url) ||
+      !isNovelCoolUrl(response.url);
+    if (!sourceIsReader && !isNovelCoolUrl(request.url)) return undefined;
+    return this.prepareRequest(request, response.url);
   }
 
   override async interceptResponse(
@@ -49,7 +98,7 @@ export class NovelCoolInterceptor extends PaperbackInterceptor {
       throw new CloudflareError({
         url: `${DOMAIN}/`,
         method: "GET",
-        headers: { "user-agent": await Application.getDefaultUserAgent() },
+        headers: { "user-agent": DESKTOP_USER_AGENT },
       });
     }
     return data;
@@ -58,15 +107,24 @@ export class NovelCoolInterceptor extends PaperbackInterceptor {
 
 const siteUrl = (path: string): string => {
   const value = Application.decodeHTMLEntities(path).trim();
-  if (/^https?:\/\//i.test(value)) return value;
-  if (value.startsWith("//")) return `https:${value}`;
-  return `${DOMAIN}${value.startsWith("/") ? "" : "/"}${value}`;
+  const url = /^https?:\/\//i.test(value)
+    ? value
+    : value.startsWith("//")
+      ? `https:${value}`
+      : URL_SCHEME_REGEX.test(value)
+        ? ""
+        : `${DOMAIN}${value.startsWith("/") ? "" : "/"}${value}`;
+  if (!url || !isNovelCoolUrl(url)) {
+    throw new Error("NovelCool returned an unsupported content URL.");
+  }
+  return url;
 };
 
 const resolveUrl = (value: string, baseUrl: string): string => {
   const path = Application.decodeHTMLEntities(value).trim();
   if (/^https?:\/\//i.test(path)) return path;
   if (path.startsWith("//")) return `https:${path}`;
+  if (URL_SCHEME_REGEX.test(path)) return "";
   const origin = baseUrl.match(/^(https?:\/\/[^/]+)/i)?.[1] ?? DOMAIN;
   if (path.startsWith("/")) return `${origin}${path}`;
   const directory = baseUrl.replace(/[?#].*$/, "").replace(/\/[^/]*$/, "/");
@@ -74,6 +132,7 @@ const resolveUrl = (value: string, baseUrl: string): string => {
 };
 
 const fetchDocument = async (url: string, referer = `${DOMAIN}/`): Promise<FetchedDocument> => {
+  if (!isHttpUrl(url)) throw new Error("NovelCool returned an unsupported request URL.");
   const [response, buffer] = await Application.scheduleRequest({
     url,
     method: "GET",
@@ -89,7 +148,9 @@ const fetchDocument = async (url: string, referer = `${DOMAIN}/`): Promise<Fetch
   if (/^404 Not Found$/i.test($("title").first().text().trim())) {
     throw new Error(`NovelCool returned its not-found page for ${url}.`);
   }
-  return { $, url: response.url || url };
+  const finalUrl = response.url || url;
+  if (!isHttpUrl(finalUrl)) throw new Error("NovelCool returned an unsupported response URL.");
+  return { $, url: finalUrl };
 };
 
 const followReaderRedirects = async (
@@ -105,13 +166,13 @@ const followReaderRedirects = async (
     .find((value): value is string => Boolean(value));
   if (redirect) {
     const nextUrl = resolveUrl(redirect, page.url);
-    page = await fetchDocument(nextUrl, page.url);
+    if (nextUrl) page = await fetchDocument(nextUrl, page.url);
   }
 
   const serverUrl = page.$("a.vision-button[href]").first().attr("href");
   if (serverUrl) {
     const nextUrl = resolveUrl(serverUrl, page.url);
-    page = await fetchDocument(nextUrl, page.url);
+    if (nextUrl) page = await fetchDocument(nextUrl, page.url);
   }
   return page;
 };

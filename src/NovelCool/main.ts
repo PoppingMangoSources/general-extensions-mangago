@@ -15,6 +15,7 @@ import {
   type ExtensionImpl,
   type PagedResults,
   type Request,
+  type Response,
   type SearchQuery,
   type SearchResultItem,
   type SortingOption,
@@ -88,9 +89,16 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
     this.rateLimiter.registerInterceptor();
     this.cookieStorageInterceptor.registerInterceptor();
     this.interceptor.registerInterceptor();
+    Application.setRedirectHandler(
+      Application.Selector(this as NovelCoolExtension, "handleRedirect"),
+    );
     if (Application.getState(STATE_KEYS.RELATIVE_DATE_ANCHOR) == null) {
       Application.setState(Date.now(), STATE_KEYS.RELATIVE_DATE_ANCHOR);
     }
+  }
+
+  async handleRedirect(request: Request, response: Response): Promise<Request | undefined> {
+    return this.interceptor.prepareRedirect(request, response);
   }
 
   async cloudflareBypassCompleted(
@@ -100,13 +108,7 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
   ): Promise<void> {
     for (const cookie of cookies) {
       if (cookie.expires && cookie.expires.getTime() <= Date.now()) continue;
-      if (
-        cookie.name.startsWith("cf") ||
-        cookie.name.startsWith("_cf") ||
-        cookie.name.startsWith("__cf")
-      ) {
-        this.cookieStorageInterceptor.setCookie(cookie);
-      }
+      this.cookieStorageInterceptor.setCookie(cookie);
     }
     this.homePromise = undefined;
     this.searchOptionsPromise = undefined;
@@ -258,7 +260,7 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
   ): Promise<PagedResults<SearchResultItem> | undefined> {
     const path = query
       .trim()
-      .match(/^https?:\/\/(?:www\.)?novelcool\.com(\/novel\/[^?#]+\.html)\/?$/i)?.[1];
+      .match(/^https?:\/\/(?:(?:www|en)\.)?novelcool\.com(\/novel\/[^?#]+\.html)\/?$/i)?.[1];
     if (!path) return undefined;
     const mangaId = encodePathId(path);
     try {
