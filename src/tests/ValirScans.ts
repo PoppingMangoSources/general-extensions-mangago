@@ -10,7 +10,7 @@ export async function runTests(logger: TestLogger) {
   const suite = new TestSuite("ValirScans tests", logger);
   registerDefaultTests(suite, ValirScans, sourceInfo);
 
-  suite.test("locked chapters carry guarded ids and plain-text state", async () => {
+  suite.test("locked chapters carry guarded ids and lock markers", async () => {
     const sourceManga = {
       mangaId: "test-series",
       mangaInfo: {
@@ -36,7 +36,7 @@ export async function runTests(logger: TestLogger) {
     );
 
     expect(chapters.map((chapter) => chapter.chapterId)).to.deep.equal(["1", "locked:2"]);
-    expect(chapters[1]?.title).to.equal("Locked - After Hours");
+    expect(chapters[1]?.title).to.equal("🔒 After Hours");
 
     let error: unknown;
     try {

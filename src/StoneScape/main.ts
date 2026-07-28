@@ -91,7 +91,7 @@ const statusFromFilter = (value?: string): string | undefined => {
 
 class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
   private rateLimiter = new BasicRateLimiter("rateLimiter", {
-    numberOfRequests: 3,
+    numberOfRequests: 2,
     bufferInterval: 1,
     ignoreImages: true,
   });
@@ -273,7 +273,11 @@ class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
     const selectedContentType = contentTypeFromFilter(searchMetadata.contentType?.[0]);
 
     if (searchMetadata.popularPeriod && selectedContentType) {
-      const popular = await fetchPopular(searchMetadata.popularPeriod, selectedContentType, 100);
+      const popular = await fetchPopular(
+        searchMetadata.popularPeriod,
+        selectedContentType,
+        PAGE_SIZE,
+      );
       return { items: parseMangaList(popular.data).map(toSearchResultItem) };
     }
 
@@ -325,11 +329,11 @@ class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
     const slug = decodeMangaId(sourceManga.mangaId);
-    const [series, response] = await Promise.all([fetchSeriesDetails(slug), fetchChapters(slug)]);
+    const response = await fetchChapters(slug);
     return parseChapterList(
       response.chapters,
       sourceManga,
-      series.contentType === "novel" ? "novel" : "manhwa",
+      sourceManga.mangaInfo.contentType === "novel" ? "novel" : "manhwa",
       getShowLockedChapters(),
     );
   }

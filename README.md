@@ -14,6 +14,7 @@ The repository's own sources are currently available from `0.9/test` while they 
 | [Lua Comic](https://luacomic.org)             | `luacomic.org`        |
 | [MyReadingManga](https://myreadingmanga.info) | `myreadingmanga.info` |
 | [NovelArchive](https://novelarchive.cc)       | `novelarchive.cc`     |
+| [NovelCool](https://www.novelcool.com)        | `novelcool.com`       |
 | [oManga](https://omanga.to)                   | `omanga.to`           |
 | [OniSaga](https://onisaga.com)                | `onisaga.com`         |
 | [Ranobes](https://ranobes.net)                | `ranobes.net`         |

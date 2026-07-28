@@ -10,7 +10,7 @@ export async function runTests(logger: TestLogger) {
   const suite = new TestSuite("LuaComic tests", logger);
   registerDefaultTests(suite, LuaComic, sourceInfo);
 
-  suite.test("paid chapters carry guarded ids and plain-text state", async () => {
+  suite.test("paid chapters carry guarded ids and lock markers", async () => {
     const sourceManga = {
       mangaId: "test-series",
       mangaInfo: {
@@ -39,7 +39,7 @@ export async function runTests(logger: TestLogger) {
       "chapter-1",
       "chapter-2#paid",
     ]);
-    expect(chapters[1]?.title).to.equal("Paid - After Hours");
+    expect(chapters[1]?.title).to.equal("🔒 After Hours");
 
     let error: unknown;
     try {

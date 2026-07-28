@@ -169,7 +169,6 @@ export interface MangaListItem {
   mangaId: string;
   title: string;
   imageUrl: string;
-  bannerUrl?: string;
   summary?: string;
   author?: string;
   status?: string;

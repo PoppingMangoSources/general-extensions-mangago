@@ -250,7 +250,7 @@ const chapterTitle = (chapter: SeasonChapter): string => {
   const name = chapter.chapter_name?.trim() || `Chapter ${chapterNumber(chapter)}`;
   const title = chapter.chapter_title?.trim();
   const full = title ? `${name}: ${title}` : name;
-  return chapterIsPaid(chapter) ? `Paid - ${full}` : full;
+  return chapterIsPaid(chapter) ? `🔒 ${full}` : full;
 };
 
 export const parseChapters = (

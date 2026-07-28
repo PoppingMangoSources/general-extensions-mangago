@@ -23,34 +23,34 @@ export class NovelCoolAdvancedSearchForm extends AdvancedSearchForm {
   private nameMethod: string[];
   private author: string;
   private authorMethod: string[];
-  private status: string[];
   private genres: TriState;
   private year: string[];
+  private status: string[];
   private rating: string[];
   private readonly options: SearchOptions;
 
   constructor(searchQuery: SearchQuery<SearchMetadata>, options: SearchOptions) {
     super();
     const metadata = searchQuery.metadata ?? {};
-    this.nameMethod = metadata.nameMethod ?? [];
+    this.nameMethod = metadata.nameMethod ?? ["contain"];
     this.author = metadata.author ?? "";
-    this.authorMethod = metadata.authorMethod ?? [];
-    this.status = metadata.status ?? [];
+    this.authorMethod = metadata.authorMethod ?? ["contain"];
     this.genres = { ...metadata.genres };
     this.year = metadata.year ?? [];
+    this.status = metadata.status ?? [];
     this.rating = metadata.rating ?? [];
     this.options = options;
   }
 
   override getSections() {
-    const sections = [
+    return [
       Section("series", [
         SelectRow("name_method", {
-          title: "Series Match",
+          title: "Series Name Match",
           layout: "flow",
           value: this.nameMethod,
           items: MATCH_OPTIONS,
-          minItemCount: 0,
+          minItemCount: 1,
           maxItemCount: 1,
           onValueChange: Application.Selector(
             this as NovelCoolAdvancedSearchForm,
@@ -60,7 +60,7 @@ export class NovelCoolAdvancedSearchForm extends AdvancedSearchForm {
       ]),
       Section("author", [
         InputRow("author", {
-          title: "Author",
+          title: "Author Name",
           value: this.author,
           onValueChange: Application.Selector(
             this as NovelCoolAdvancedSearchForm,
@@ -68,11 +68,11 @@ export class NovelCoolAdvancedSearchForm extends AdvancedSearchForm {
           ),
         }),
         SelectRow("author_method", {
-          title: "Author Match",
+          title: "Author Name Match",
           layout: "flow",
           value: this.authorMethod,
           items: MATCH_OPTIONS,
-          minItemCount: 0,
+          minItemCount: 1,
           maxItemCount: 1,
           onValueChange: Application.Selector(
             this as NovelCoolAdvancedSearchForm,
@@ -80,7 +80,7 @@ export class NovelCoolAdvancedSearchForm extends AdvancedSearchForm {
           ),
         }),
       ]),
-      Section({ id: "genres", footer: "Tap once to include, twice to exclude." }, [
+      Section({ id: "genres", footer: "Tap once to include and twice to exclude." }, [
         TriStateSelectRow("genres", {
           title: "Genres",
           layout: "flow",
@@ -91,6 +91,20 @@ export class NovelCoolAdvancedSearchForm extends AdvancedSearchForm {
           onValueChange: Application.Selector(
             this as NovelCoolAdvancedSearchForm,
             "handleGenresChange",
+          ),
+        }),
+      ]),
+      Section("year", [
+        SelectRow("year", {
+          title: "Year",
+          layout: "flow",
+          value: this.year,
+          items: this.options.years,
+          minItemCount: 0,
+          maxItemCount: 1,
+          onValueChange: Application.Selector(
+            this as NovelCoolAdvancedSearchForm,
+            "handleYearChange",
           ),
         }),
       ]),
@@ -123,27 +137,6 @@ export class NovelCoolAdvancedSearchForm extends AdvancedSearchForm {
         }),
       ]),
     ];
-
-    if (this.options.years.length > 0) {
-      sections.push(
-        Section("year", [
-          SelectRow("year", {
-            title: "Year",
-            layout: "flow",
-            value: this.year,
-            items: this.options.years,
-            minItemCount: 0,
-            maxItemCount: 1,
-            onValueChange: Application.Selector(
-              this as NovelCoolAdvancedSearchForm,
-              "handleYearChange",
-            ),
-          }),
-        ]),
-      );
-    }
-
-    return sections;
   }
 
   async handleNameMethodChange(value: string[]): Promise<void> {
@@ -158,10 +151,6 @@ export class NovelCoolAdvancedSearchForm extends AdvancedSearchForm {
     this.authorMethod = value;
   }
 
-  async handleStatusChange(value: string[]): Promise<void> {
-    this.status = value;
-  }
-
   async handleGenresChange(value: TriState): Promise<void> {
     this.genres = value;
   }
@@ -170,19 +159,27 @@ export class NovelCoolAdvancedSearchForm extends AdvancedSearchForm {
     this.year = value;
   }
 
+  async handleStatusChange(value: string[]): Promise<void> {
+    this.status = value;
+  }
+
   async handleRatingChange(value: string[]): Promise<void> {
     this.rating = value;
   }
 
   override getSearchQueryMetadata(): SearchMetadata {
-    const result: SearchMetadata = {};
-    if (this.nameMethod.length > 0) result.nameMethod = this.nameMethod;
-    if (this.author) result.author = this.author;
-    if (this.authorMethod.length > 0) result.authorMethod = this.authorMethod;
-    if (this.status.length > 0) result.status = this.status;
-    if (Object.keys(this.genres).length > 0) result.genres = this.genres;
-    if (this.year.length > 0) result.year = this.year;
-    if (this.rating.length > 0) result.rating = this.rating;
-    return result;
+    const metadata: SearchMetadata = {};
+    if (this.nameMethod[0] && this.nameMethod[0] !== "contain") {
+      metadata.nameMethod = this.nameMethod;
+    }
+    if (this.author) metadata.author = this.author;
+    if (this.authorMethod[0] && this.authorMethod[0] !== "contain") {
+      metadata.authorMethod = this.authorMethod;
+    }
+    if (Object.keys(this.genres).length > 0) metadata.genres = this.genres;
+    if (this.year.length > 0) metadata.year = this.year;
+    if (this.status.length > 0) metadata.status = this.status;
+    if (this.rating.length > 0) metadata.rating = this.rating;
+    return metadata;
   }
 }

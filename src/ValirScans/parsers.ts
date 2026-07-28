@@ -228,7 +228,7 @@ export const parseMangaDetails = (page: ValirSeriesPage, mangaId: string): Sourc
 
 const chapterTitle = (chapter: ValirChapterItem): string => {
   const title = chapter.title?.trim() || `Chapter ${chapter.number}`;
-  return chapterIsLocked(chapter) ? `Locked - ${title}` : title;
+  return chapterIsLocked(chapter) ? `🔒 ${title}` : title;
 };
 
 const chapterIsLocked = (chapter: ValirChapterItem): boolean => chapter.isLocked === true;

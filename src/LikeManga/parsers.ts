@@ -130,14 +130,19 @@ const formatChapterTitle = (title: string): string => {
   const duplicate = rest.match(
     new RegExp(`^[-:\\s•]*(?:chapter|ch\\.?)\\s*${match[1].replace(".", "\\.")}\\b`, "i"),
   );
-  if (duplicate) rest = cleanText(rest.slice((duplicate.index ?? 0) + duplicate[0].length).replace(/^[-:\s•]+/, ""));
+  if (duplicate)
+    rest = cleanText(
+      rest.slice((duplicate.index ?? 0) + duplicate[0].length).replace(/^[-:\s•]+/, ""),
+    );
   return rest;
 };
 
 const formatChapterLabel = (title: string): string => {
   const cleanedTitle = formatChapterTitle(title);
   if (cleanedTitle) return cleanedTitle;
-  return cleanText(title).match(/\b(?:chapter|ch\.?)\s*[0-9]+(?:\.[0-9]+)?/i)?.[0] ?? cleanText(title);
+  return (
+    cleanText(title).match(/\b(?:chapter|ch\.?)\s*[0-9]+(?:\.[0-9]+)?/i)?.[0] ?? cleanText(title)
+  );
 };
 
 const chapterTitleFromLink = (link: cheerio.Cheerio<AnyNode>): string => {
@@ -440,16 +445,13 @@ export const toFeaturedItem = (item: MangaListItem): FeaturedCarouselItem => {
   const infoItems: NonNullable<FeaturedCarouselItem["infoItems"]>[number][] = [];
   const chapters = item.chapters
     .slice(0, 2)
-    .map((chapter) => formatChapterLabel(chapter.title))
+    .map((chapter) => {
+      const number = chapterNumber(chapter.title);
+      return number == null ? formatChapterLabel(chapter.title) : `CH. ${number}`;
+    })
     .join(" • ");
   if (chapters) infoItems.push({ symbol: "book.closed.fill", text: chapters });
-  const stats = [
-    `${item.follows || "0"} follows`,
-    item.rating != null ? `${item.rating.toFixed(1)} rating` : "",
-  ]
-    .filter(Boolean)
-    .join(" • ");
-  infoItems.push({ symbol: "heart.fill", text: stats });
+  infoItems.push({ symbol: "heart.fill", text: item.follows || "0" });
 
   return {
     type: "featuredCarouselItem",
@@ -498,7 +500,10 @@ export const toHotItem = (item: MangaListItem): DiscoverSectionItem => ({
   mangaId: item.mangaId,
   imageUrl: item.imageUrl,
   title: item.title,
-  subtitle: [item.chapters[0] ? formatChapterLabel(item.chapters[0].title) : undefined, item.views ? `${item.views} views` : ""]
+  subtitle: [
+    item.chapters[0] ? formatChapterLabel(item.chapters[0].title) : undefined,
+    item.views ? `${item.views} views` : "",
+  ]
     .filter(Boolean)
     .join(" • "),
   contentRating: contentRatingForGenres(item.genres),

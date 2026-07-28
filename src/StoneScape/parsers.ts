@@ -26,7 +26,6 @@ import {
 const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
 const LOCKED_PREFIX = "locked:";
 const NOVEL_PREFIX = "novel:";
-const ANIMATED_IMAGE_REGEX = /\.(gif|apng)(\/|\?|#|$)/i;
 
 export const encodeMangaId = (slug: string): string => slug.replace(SAFE_ID_REGEX, "-");
 
@@ -39,16 +38,22 @@ export const decodeMangaId = (mangaId: string): string => {
 };
 
 export const toAbsoluteUrl = (value?: string | null): string => {
-  if (!value) return "";
-  if (value.startsWith("http://") || value.startsWith("https://")) return value;
-  if (value.startsWith("//")) return `https:${value}`;
-  return `${DOMAIN}${value.startsWith("/") ? "" : "/"}${value}`;
+  const path = (value ?? "").trim();
+  if (!path) return "";
+  const absolute = (
+    path.startsWith("http://") || path.startsWith("https://")
+      ? path
+      : path.startsWith("//")
+        ? `https:${path}`
+        : `${DOMAIN}${path.startsWith("/") ? "" : "/"}${path}`
+  ).replace(/(\.(?:avif|gif|jpe?g|jxl|png|svg|webp))\/+(?=([?#]|$))/i, "$1");
+  return /^https?:\/\/[^/\s?#]+(?:[/?#]|$)/i.test(absolute) ? absolute : "";
 };
 
-const staticImageUrl = (...values: (string | null | undefined)[]): string => {
+const imageUrl = (...values: (string | null | undefined)[]): string => {
   for (const value of values) {
     const url = toAbsoluteUrl(value);
-    if (url && !ANIMATED_IMAGE_REGEX.test(url)) return url;
+    if (url) return url;
   }
   return "";
 };
@@ -118,8 +123,7 @@ export const parseMangaList = (series: Series[]): MangaListItem[] =>
     return {
       mangaId: encodeMangaId(item.slug),
       title: decodeText(item.title),
-      imageUrl: staticImageUrl(item.coverUrl, item.bannerUrl),
-      bannerUrl: staticImageUrl(item.bannerUrl, item.coverUrl) || undefined,
+      imageUrl: imageUrl(item.coverUrl, item.bannerUrl),
       summary: decodeText(item.description) || undefined,
       author: decodeText(item.author) || undefined,
       status: mapStatus(item.publicationStatus),
@@ -145,7 +149,7 @@ export const toFeaturedItem = (item: MangaListItem): DiscoverSectionItem => {
     type: "featuredCarouselItem",
     mangaId: item.mangaId,
     title: item.title,
-    imageUrl: item.bannerUrl ?? item.imageUrl,
+    imageUrl: item.imageUrl,
     supertitle: item.status,
     summary: item.summary,
     infoItems:
@@ -198,7 +202,7 @@ export const toChapterUpdateItem = (
         ? encodeNovelChapterId(series.slug, chapter.chapterNumber)
         : chapter.chapterId.replace(SAFE_ID_REGEX, "-"),
     title: decodeText(series.title),
-    imageUrl: staticImageUrl(series.coverUrl, series.bannerUrl),
+    imageUrl: imageUrl(series.coverUrl, series.bannerUrl),
     subtitle: `Ch. ${formatChapterNumber(chapter.chapterNumber)}`,
     publishDate,
     contentRating: contentRatingForGenres(series.genres ?? []),
@@ -222,8 +226,8 @@ export const parseMangaDetails = (series: Series): SourceManga => {
       .replace(/([a-z])([A-Z])/g, "$1 $2")
       .replace(/\b\w/g, (character) => character.toUpperCase()),
   }));
-  const bannerUrl = staticImageUrl(series.bannerUrl, series.coverUrl);
-  const thumbnailUrl = staticImageUrl(series.coverUrl, series.bannerUrl);
+  const thumbnailUrl = imageUrl(series.coverUrl, series.bannerUrl);
+  if (!thumbnailUrl) throw new Error(`No valid cover was returned for ${series.slug}.`);
 
   return {
     mangaId: encodeMangaId(series.slug),
@@ -244,8 +248,6 @@ export const parseMangaDetails = (series: Series): SourceManga => {
           : Math.min(1, Math.max(0, series.averageRating / 5)),
       contentRating: contentRatingForGenres(genres),
       contentType: series.contentType === "novel" ? "novel" : "comic",
-      bannerUrl: bannerUrl || undefined,
-      artworkUrls: [bannerUrl, thumbnailUrl].filter((url) => url.length > 0),
       tagGroups: tags.length > 0 ? [{ id: "genres", title: "Genres", tags }] : [],
       shareUrl: `${DOMAIN}/series/${series.slug}`,
     },
@@ -288,7 +290,7 @@ export const parseChapterList = (
         sourceManga,
         langCode: "en",
         chapNum: Number.isFinite(number) ? number : index + 1,
-        title: locked ? (rawTitle ? `Locked: ${rawTitle}` : "Locked") : rawTitle || undefined,
+        title: locked ? (rawTitle ? `🔒 ${rawTitle}` : "🔒") : rawTitle || undefined,
         version: contentType === "novel" ? "Novel" : undefined,
         volume: 0,
         sortingIndex: index,
@@ -325,7 +327,7 @@ export const parseChapterPages = (
         (right.pageNumber ?? Number.MAX_SAFE_INTEGER),
     )
     .map((page) => toAbsoluteUrl(page.url))
-    .filter((url) => url.length > 0);
+    .filter((url) => /^https?:\/\/\S+$/i.test(url));
 
   if (pages.length === 0) {
     throw new Error(`No pages were returned for chapter ${chapter.chapterId}.`);
@@ -356,10 +358,10 @@ export const parseNovelChapter = (
   const content = response.contentHtml?.trim() ?? "";
   const illustrations = [...(response.illustrations ?? [])]
     .sort((left, right) => left.pageNumber - right.pageNumber)
-    .map(
-      (illustration, index) =>
-        `<img src="${escapeXhtml(toAbsoluteUrl(illustration.imageUrl))}" alt="Illustration ${index + 1}"/>`,
-    )
+    .flatMap((illustration, index) => {
+      const url = toAbsoluteUrl(illustration.imageUrl);
+      return url ? [`<img src="${escapeXhtml(url)}" alt="Illustration ${index + 1}"/>`] : [];
+    })
     .join("");
   if (!content && !illustrations) {
     throw new Error(`No novel content was returned for chapter ${chapter.chapterId}.`);

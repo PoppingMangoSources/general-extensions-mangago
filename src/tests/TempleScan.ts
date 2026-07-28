@@ -15,7 +15,7 @@ export async function runTests(logger: TestLogger) {
   const suite = new TestSuite("TempleScan tests", logger);
   registerDefaultTests(suite, TempleScan, sourceInfo);
 
-  suite.test("paid chapters carry guarded ids and plain-text state", async () => {
+  suite.test("paid chapters carry guarded ids and lock markers", async () => {
     const sourceManga = {
       mangaId: "test-series",
       mangaInfo: {
@@ -46,7 +46,7 @@ export async function runTests(logger: TestLogger) {
       "chapter-1",
       "chapter-2#paid",
     ]);
-    expect(chapters[1]?.title).to.equal("Paid - Chapter 2");
+    expect(chapters[1]?.title).to.equal("🔒 Chapter 2");
 
     let error: unknown;
     try {

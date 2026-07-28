@@ -3,6 +3,7 @@
 
 import {
   BasicRateLimiter,
+  CloudflareError,
   CookieStorageInterceptor,
   DiscoverSectionType,
   type AdvancedSearchForm,
@@ -22,8 +23,10 @@ import {
 
 import { NovelCoolAdvancedSearchForm } from "./forms";
 import {
+  CATEGORY_PATHS,
   SECTIONS,
   SORT_OPTIONS,
+  STATE_KEYS,
   type PageMetadata,
   type SearchMetadata,
   type SearchOptions,
@@ -33,6 +36,7 @@ import {
   fetchChapterPage,
   fetchContentPage,
   fetchHomePage,
+  fetchReaderPage,
   fetchSearchPage,
   NovelCoolInterceptor,
 } from "./network";
@@ -40,9 +44,12 @@ import {
   hasNextPage,
   parseChapterDetails,
   parseChapters,
+  encodePathId,
   parseFeatured,
   parseListings,
   parseMangaDetails,
+  parseReaderImages,
+  parseReaderPageUrls,
   parseSearchOptions,
   pickTriState,
   toFeaturedItem,
@@ -52,6 +59,19 @@ import {
   typeTags,
 } from "./parsers";
 import type NovelCoolConfig from "./pbconfig";
+
+const categoryPathForSort = (sortId?: string): string => {
+  switch (sortId) {
+    case "popular":
+      return CATEGORY_PATHS.POPULAR;
+    case "newest":
+      return CATEGORY_PATHS.NEWEST;
+    case "rating":
+      return CATEGORY_PATHS.RATING;
+    default:
+      return CATEGORY_PATHS.LATEST;
+  }
+};
 
 class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
   private rateLimiter = new BasicRateLimiter("rateLimiter", {
@@ -68,6 +88,9 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
     this.rateLimiter.registerInterceptor();
     this.cookieStorageInterceptor.registerInterceptor();
     this.interceptor.registerInterceptor();
+    if (Application.getState(STATE_KEYS.RELATIVE_DATE_ANCHOR) == null) {
+      Application.setState(Date.now(), STATE_KEYS.RELATIVE_DATE_ANCHOR);
+    }
   }
 
   async cloudflareBypassCompleted(
@@ -105,17 +128,13 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
       case SECTIONS.FEATURED:
-        return {
-          items: parseFeatured(await this.getHomePage())
-            .filter((item) => item.imageUrl.length > 0)
-            .map(toFeaturedItem),
-        };
+        return this.getFeaturedSection();
       case SECTIONS.LATEST:
-        return this.getListingSection("/category/latest.html", metadata, toLatestItem);
+        return this.getLatestSection(metadata);
       case SECTIONS.POPULAR:
-        return this.getListingSection("/category/popular.html", metadata, toSimpleItem);
+        return this.getListingSection(CATEGORY_PATHS.POPULAR, metadata, toSimpleItem);
       case SECTIONS.COMPLETED:
-        return this.getCompletedSection(metadata);
+        return this.getListingSection(CATEGORY_PATHS.COMPLETED, metadata, toSimpleItem);
       case SECTIONS.TYPES:
         return this.getTypeSection();
       default:
@@ -129,6 +148,30 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
 
   private getSearchOptions(): Promise<SearchOptions> {
     return (this.searchOptionsPromise ??= fetchSearchPage({ page: 1 }).then(parseSearchOptions));
+  }
+
+  private dateAnchor(): number {
+    const existing = Application.getState(STATE_KEYS.RELATIVE_DATE_ANCHOR) as number | undefined;
+    if (existing != null) return existing;
+    const created = Date.now();
+    Application.setState(created, STATE_KEYS.RELATIVE_DATE_ANCHOR);
+    return created;
+  }
+
+  private async getFeaturedSection(): Promise<PagedResults<DiscoverSectionItem>> {
+    return {
+      items: parseFeatured(await this.getHomePage())
+        .filter((item) => item.imageUrl.length > 0)
+        .map(toFeaturedItem),
+    };
+  }
+
+  private async getLatestSection(
+    metadata: PageMetadata | undefined,
+  ): Promise<PagedResults<DiscoverSectionItem>> {
+    return this.getListingSection(CATEGORY_PATHS.LATEST, metadata, (item) =>
+      toLatestItem(item, this.dateAnchor()),
+    );
   }
 
   private async getListingSection(
@@ -146,29 +189,18 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
     };
   }
 
-  private async getCompletedSection(
-    metadata: PageMetadata | undefined,
-  ): Promise<PagedResults<DiscoverSectionItem>> {
-    const page = metadata?.page ?? 1;
-    const document = await fetchSearchPage({ page, status: "2" });
-    return {
-      items: parseListings(document)
-        .filter((item) => item.imageUrl.length > 0)
-        .map(toSimpleItem),
-      metadata: hasNextPage(document) ? { page: page + 1 } : undefined,
-    };
-  }
-
   private async getTypeSection(): Promise<PagedResults<DiscoverSectionItem>> {
     return {
-      items: typeTags(await this.getSearchOptions()).map((tag) => ({
-        type: "genresCarouselItem",
-        name: tag.title,
-        searchQuery: {
-          title: "",
-          metadata: { genres: { [tag.id]: "included" } } satisfies SearchMetadata,
-        },
-      })),
+      items: typeTags(await this.getSearchOptions()).map(
+        (tag): DiscoverSectionItem => ({
+          type: "genresCarouselItem",
+          name: tag.title,
+          searchQuery: {
+            title: "",
+            metadata: { genres: { [tag.id]: "included" } } satisfies SearchMetadata,
+          },
+        }),
+      ),
     };
   }
 
@@ -185,27 +217,66 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
     metadata: PageMetadata | undefined,
     sortingOption?: SortingOption,
   ): Promise<PagedResults<SearchResultItem>> {
-    const searchMetadata = query.metadata ?? {};
+    const pasted = await this.resolveUrlQuery(query.title ?? "");
+    if (pasted) return pasted;
+
     const page = metadata?.page ?? 1;
-    const document = await fetchSearchPage({
-      page,
-      title: (query.title ?? "").trim() || undefined,
-      nameMethod: searchMetadata.nameMethod?.[0],
-      author: searchMetadata.author,
-      authorMethod: searchMetadata.authorMethod?.[0],
-      status: searchMetadata.status?.[0],
-      genresInclude: pickTriState(searchMetadata.genres, "included"),
-      genresExclude: pickTriState(searchMetadata.genres, "excluded"),
-      year: searchMetadata.year?.[0],
-      rating: searchMetadata.rating?.[0],
-      sort: sortingOption?.id,
-    });
+    const searchMetadata = query.metadata ?? {};
+    const title = (query.title ?? "").trim();
+    const hasFilters =
+      Boolean(title) ||
+      Boolean(searchMetadata.author) ||
+      Boolean(searchMetadata.status?.length) ||
+      Boolean(searchMetadata.year?.length) ||
+      Boolean(searchMetadata.rating?.length) ||
+      Object.keys(searchMetadata.genres ?? {}).length > 0;
+    const document = hasFilters
+      ? await fetchSearchPage({
+          page,
+          title: title || undefined,
+          nameMethod: searchMetadata.nameMethod?.[0],
+          author: searchMetadata.author,
+          authorMethod: searchMetadata.authorMethod?.[0],
+          status: searchMetadata.status?.[0],
+          genresInclude: pickTriState(searchMetadata.genres, "included"),
+          genresExclude: pickTriState(searchMetadata.genres, "excluded"),
+          year: searchMetadata.year?.[0],
+          rating: searchMetadata.rating?.[0],
+        })
+      : await fetchCategoryPage(categoryPathForSort(sortingOption?.id), page);
+
     return {
       items: parseListings(document)
         .filter((item) => item.imageUrl.length > 0)
         .map(toSearchResultItem),
       metadata: hasNextPage(document) ? { page: page + 1 } : undefined,
     };
+  }
+
+  private async resolveUrlQuery(
+    query: string,
+  ): Promise<PagedResults<SearchResultItem> | undefined> {
+    const path = query
+      .trim()
+      .match(/^https?:\/\/(?:www\.)?novelcool\.com(\/novel\/[^?#]+\.html)\/?$/i)?.[1];
+    if (!path) return undefined;
+    const mangaId = encodePathId(path);
+    try {
+      const manga = parseMangaDetails(await fetchContentPage(mangaId), mangaId);
+      return {
+        items: [
+          {
+            mangaId,
+            title: manga.mangaInfo.primaryTitle,
+            imageUrl: manga.mangaInfo.thumbnailUrl,
+            contentRating: manga.mangaInfo.contentRating,
+          },
+        ],
+      };
+    } catch (error: unknown) {
+      if (error instanceof CloudflareError) throw error;
+      return undefined;
+    }
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
@@ -217,7 +288,26 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    return parseChapterDetails(await fetchChapterPage(chapter.chapterId), chapter);
+    const initial = await fetchChapterPage(chapter.chapterId);
+    const direct = parseChapterDetails(initial.$, initial.url, chapter);
+    if (direct) return direct;
+
+    const pageUrls = parseReaderPageUrls(initial.$, initial.url);
+    if (pageUrls.length === 0) {
+      throw new Error(`No readable content found for ${chapter.chapterId}.`);
+    }
+    const pages = (
+      await Promise.all(pageUrls.map((url) => fetchReaderPage(url, initial.url)))
+    ).flatMap((page) => parseReaderImages(page.$, page.url));
+    const uniquePages = [...new Set(pages)];
+    if (uniquePages.length === 0) {
+      throw new Error(`No readable pages found for ${chapter.chapterId}.`);
+    }
+    return {
+      id: chapter.chapterId,
+      mangaId: chapter.sourceManga.mangaId,
+      pages: uniquePages,
+    };
   }
 }
 
