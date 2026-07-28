@@ -4,10 +4,10 @@
 import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/types";
 
 export default {
-  name: "NovelCool",
-  description: "Extension that pulls content from novelcool.com.",
-  version: "1.0.0-alpha.6",
-  icon: "icons.png",
+  name: "Chikari",
+  description: "Extension that pulls content from chikari.moe.",
+  version: "0.0.1-alpha.1",
+  icon: "icon.png",
   language: "en",
   contentRating: ContentRating.ADULT,
   capabilities: [
@@ -15,11 +15,9 @@ export default {
     SourceIntents.CLOUDFLARE_BYPASS_PROVIDING,
     SourceIntents.DISCOVER_SECTION_PROVIDING,
     SourceIntents.SEARCH_RESULT_PROVIDING,
+    SourceIntents.SETTINGS_FORM_PROVIDING,
   ],
-  badges: [
-    { label: "Novel", textColor: "#ffffff", backgroundColor: "#ff7b0a" },
-    { label: "Manga", textColor: "#ffffff", backgroundColor: "#1fa7d8" },
-  ],
+  badges: [],
   developers: [
     {
       name: "Popmango",

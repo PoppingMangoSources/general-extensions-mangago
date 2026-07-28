@@ -8,6 +8,7 @@ The repository's own sources are currently available from `0.9/test` while they 
 
 | Source                                        | Website               |
 | --------------------------------------------- | --------------------- |
+| [Chikari](https://chikari.moe)                | `chikari.moe`         |
 | [KaliScan](https://kaliscan.io)               | `kaliscan.io`         |
 | [KingOfShojo](https://kingofshojo.com)        | `kingofshojo.com`     |
 | [LikeManga](https://likemanga.ink)            | `likemanga.ink`       |
