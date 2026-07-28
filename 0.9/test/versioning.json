@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-28T13:21:09.355Z",
+  "buildTime": "2026-07-28T13:23:51.955Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -15,7 +15,7 @@
       "version": "0.0.1-alpha.2",
       "icon": "icon.png",
       "language": "en",
-      "contentRating": "ADULT",
+      "contentRating": "SAFE",
       "capabilities": [
         1,
         16,
