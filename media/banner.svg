@@ -11,8 +11,8 @@
       <stop offset="1" stop-color="#9bc153"/>
     </linearGradient>
     <linearGradient id="title" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#f9c9d8"/>
-      <stop offset="0.45" stop-color="#ffb144"/>
+      <stop offset="0" stop-color="#ffb144"/>
+      <stop offset="0.45" stop-color="#ffab3c"/>
       <stop offset="1" stop-color="#9bc153"/>
     </linearGradient>
     <radialGradient id="glowPink" cx="0.5" cy="0.5" r="0.5">
@@ -46,8 +46,7 @@
   </g>
 
   <g font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
-    <text x="270" y="150" font-size="62" font-weight="800" fill="url(#title)">PoppingMango</text>
-    <text x="750" y="150" font-size="62" font-weight="800" fill="#ffffff">Sources</text>
+    <text x="270" y="150" font-size="62" font-weight="800"><tspan fill="url(#title)">PoppingMango</tspan><tspan dx="16" fill="#ffffff">Sources</tspan></text>
     <text x="270" y="205" font-size="25" font-weight="600" letter-spacing="4" fill="#f2d9e2">NOVELS · MANGA · MANHWA · MANHUA</text>
     <text x="270" y="245" font-size="21" font-weight="500" letter-spacing="2" fill="#b9a7b2">A HAND-BUILT SOURCE LIST FOR PAPERBACK 0.9</text>
   </g>
