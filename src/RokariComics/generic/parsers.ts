@@ -54,10 +54,14 @@ export const getFilterTagsBySection = (
     });
 };
 
+// Scraped markup double-encodes entities on some titles, so decode display
+// text once more at the parser boundary.
+const cleanText = (value: string): string => Application.decodeHTMLEntities(value).trim();
+
 export class MangaStreamParser {
   parseMangaDetails($: CheerioAPI, mangaId: string, source: MangaStreamParserContext): SourceManga {
     const titles: string[] = [];
-    titles.push($("h1.entry-title").text().trim());
+    titles.push(cleanText($("h1.entry-title").text()));
 
     const altTitles = $(
       `span:contains(${source.mangaSelectorAlternativeTitles}), b:contains(${source.mangaSelectorAlternativeTitles})+span, .imptdt:contains(${source.mangaSelectorAlternativeTitles}) i, h1.entry-title+span`,
@@ -71,31 +75,35 @@ export class MangaStreamParser {
       if (title == "") {
         continue;
       }
-      titles.push(title.trim());
+      titles.push(cleanText(title));
     }
 
-    const author = $(
-      `span:contains(${source.mangaSelectorAuthor}), .fmed b:contains(${source.mangaSelectorAuthor})+span, .imptdt:contains(${source.mangaSelectorAuthor}) i, tr td:contains(${source.mangaSelectorAuthor}) + td`,
-    )
-      .contents()
-      .remove()
-      .last()
-      .text()
-      .trim(); // Language dependant
-    const artist = $(
-      `span:contains(${source.mangaSelectorArtist}), .fmed b:contains(${source.mangaSelectorArtist})+span, .imptdt:contains(${source.mangaSelectorArtist}) i, tr td:contains(${source.mangaSelectorArtist}) + td`,
-    )
-      .contents()
-      .remove()
-      .last()
-      .text()
-      .trim(); // Language dependant
+    // Language dependant
+    const author = cleanText(
+      $(
+        `span:contains(${source.mangaSelectorAuthor}), .fmed b:contains(${source.mangaSelectorAuthor})+span, .imptdt:contains(${source.mangaSelectorAuthor}) i, tr td:contains(${source.mangaSelectorAuthor}) + td`,
+      )
+        .contents()
+        .remove()
+        .last()
+        .text(),
+    );
+    // Language dependant
+    const artist = cleanText(
+      $(
+        `span:contains(${source.mangaSelectorArtist}), .fmed b:contains(${source.mangaSelectorArtist})+span, .imptdt:contains(${source.mangaSelectorArtist}) i, tr td:contains(${source.mangaSelectorArtist}) + td`,
+      )
+        .contents()
+        .remove()
+        .last()
+        .text(),
+    );
     const image = this.getImageSrc($("img", 'div[itemprop="image"]'));
-    const description = $('div[itemprop="description"]  p').text().trim();
+    const description = cleanText($('div[itemprop="description"]  p').text());
 
     const arrayTags: Tag[] = [];
     for (const tag of $("a", source.mangaTagSelectorBox).toArray()) {
-      const title = $(tag).text().trim();
+      const title = cleanText($(tag).text());
       const id = this.idCleaner($(tag).attr("href") ?? "");
       if (!id || !title) {
         continue;
@@ -158,7 +166,7 @@ export class MangaStreamParser {
     const language = source.language;
 
     for (const chapter of $("li", "div#chapterlist").toArray()) {
-      const title = $("span.chapternum", chapter).text().trim().replace(/\s+/g, " ");
+      const title = cleanText($("span.chapternum", chapter).text()).replace(/\s+/g, " ");
       const date = convertDate($("span.chapterdate", chapter).text().trim(), source);
       const id = (chapter.attribs["data-num"] ?? "").replaceAll(" ", "-");
       const chapterNumberRegex = id.match(/(\d+\.?\d?)+/);
@@ -277,7 +285,7 @@ export class MangaStreamParser {
       }
 
       for (const tag of $("li", sectionDropdown).toArray()) {
-        const title = $("label", tag).text().trim();
+        const title = cleanText($("label", tag).text());
         const value = $("input", tag).attr("value") ?? "";
         const id = `${section.id}_${value}`;
 
@@ -306,7 +314,7 @@ export class MangaStreamParser {
 
       const title: string = $("a", obj).attr("title") ?? "";
       const image = this.getImageSrc($("img", obj)) ?? "";
-      const subtitle = $("div.epxs", obj).text().trim();
+      const subtitle = cleanText($("div.epxs", obj).text());
 
       results.push({
         mangaId: slug,

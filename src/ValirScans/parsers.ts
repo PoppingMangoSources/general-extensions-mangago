@@ -112,6 +112,11 @@ const formatCount = (count: number): string => {
   return count.toString();
 };
 
+// Series text arrives with HTML entities still in place, so decode it at the
+// parser boundary before it reaches the app.
+const cleanText = (value?: string | null): string =>
+  Application.decodeHTMLEntities(value ?? "").trim();
+
 const toTitleCase = (value: string): string =>
   value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
 
@@ -157,7 +162,9 @@ export const parseFilterTaxonomy = (html: string): FilterTaxonomy => {
         .filter((list) => Array.isArray(list) && !!list[0]?.name && !!list[0]?.slug)
         .sort((a, b) => b.length - a.length)[0] ?? []
     ).flatMap((entry) =>
-      entry.name && entry.slug ? [{ id: sanitizeId(entry.slug), title: entry.name }] : [],
+      entry.name && entry.slug
+        ? [{ id: sanitizeId(entry.slug), title: cleanText(entry.name) }]
+        : [],
     );
   return { genres: pick("genres"), tags: pick("tags") };
 };
@@ -186,21 +193,21 @@ export const parseMangaDetails = (page: ValirSeriesPage, mangaId: string): Sourc
   const series = page.series;
   const secondaryTitles = [
     ...new Set(
-      [series.altTitle, series.originalTitle, ...(series.aliases ?? [])].filter(
-        (title): title is string => !!title && title !== series.title,
-      ),
+      [series.altTitle, series.originalTitle, ...(series.aliases ?? [])]
+        .map((title) => (title ? cleanText(title) : title))
+        .filter((title): title is string => !!title && title !== cleanText(series.title)),
     ),
   ];
 
   const genres: Tag[] = (series.genres ?? []).flatMap((entry) => {
     const genre = entry.genre ?? entry;
-    const title = genre.name ?? (genre.slug ? toTitleCase(genre.slug) : undefined);
+    const title = genre.name ? cleanText(genre.name) : genre.slug ? toTitleCase(genre.slug) : "";
     if (!title) return [];
     return [{ id: sanitizeId(genre.slug ?? title), title }];
   });
   const tags: Tag[] = (series.tags ?? [])
     .filter((tag): tag is { name: string; slug?: string } => !!tag.name)
-    .map((tag) => ({ id: sanitizeId(tag.slug ?? tag.name), title: tag.name }));
+    .map((tag) => ({ id: sanitizeId(tag.slug ?? tag.name), title: cleanText(tag.name) }));
 
   const tagGroups: TagSection[] = [];
   if (genres.length > 0) tagGroups.push({ id: "genres", title: "Genres", tags: genres });
@@ -209,16 +216,16 @@ export const parseMangaDetails = (page: ValirSeriesPage, mangaId: string): Sourc
   return {
     mangaId,
     mangaInfo: {
-      primaryTitle: series.title,
+      primaryTitle: cleanText(series.title),
       secondaryTitles,
       thumbnailUrl: toAbsoluteUrl(series.coverImage),
       bannerUrl: series.bannerImage ? toAbsoluteUrl(series.bannerImage) : undefined,
-      synopsis: series.description ?? "",
+      synopsis: cleanText(series.description),
       contentRating: toContentRating(series),
       contentType: isNovel(series) ? "novel" : "comic",
       status: series.status ? toTitleCase(series.status) : undefined,
-      author: series.author ?? undefined,
-      artist: series.artist ?? undefined,
+      author: cleanText(series.author) || undefined,
+      artist: cleanText(series.artist) || undefined,
       rating: series.rating ? Math.min(1, Math.max(0, series.rating / 10)) : undefined,
       tagGroups: tagGroups.length > 0 ? tagGroups : undefined,
       shareUrl: `${getBaseUrl()}/series/${mangaId}`,
@@ -227,7 +234,7 @@ export const parseMangaDetails = (page: ValirSeriesPage, mangaId: string): Sourc
 };
 
 const chapterTitle = (chapter: ValirChapterItem): string => {
-  const title = (chapter.title?.trim() || "")
+  const title = cleanText(chapter.title)
     .replace(/^chapter\s+\d+(?:\.\d+)?(?:\s*[-:]\s*)?/i, "")
     .trim();
   return chapterIsLocked(chapter) ? (title ? `${title} 🔒` : "🔒") : title;
@@ -335,9 +342,9 @@ export const toFeaturedItems = (list: ValirSeries[]): DiscoverSectionItem[] =>
       type: "featuredCarouselItem",
       mangaId: toMangaId(series),
       imageUrl: toAbsoluteUrl(series.coverImage),
-      title: series.title,
+      title: cleanText(series.title),
       supertitle: series.type ? toTitleCase(series.type.replaceAll("_", " ")) : undefined,
-      summary: series.description ?? undefined,
+      summary: cleanText(series.description) || undefined,
       infoItems: (infoItems.length > 0
         ? infoItems
         : undefined) as FeaturedCarouselItem["infoItems"],
@@ -354,7 +361,7 @@ export const toCarouselItems = (
     type,
     mangaId: toMangaId(series),
     imageUrl: toAbsoluteUrl(series.coverImage),
-    title: series.title,
+    title: cleanText(series.title),
     subtitle: statSubtitle(series, ranked ? index + 1 : undefined),
     contentRating: toContentRating(series),
   }));
@@ -377,7 +384,7 @@ export const toChapterUpdateItems = (
           mangaId: toMangaId(series),
           chapterId: String(chapter.number),
           imageUrl: toAbsoluteUrl(series.coverImage),
-          title: series.title,
+          title: cleanText(series.title),
           // Update cards show the chapter number, not its title text (some
           // chapters carry a name after the number that would read oddly here).
           subtitle: `Chapter ${chapter.number}`,
@@ -396,7 +403,7 @@ export const toSearchResultItem = (series: ValirSeries): SearchResultItem => {
     .join(" · ");
   return {
     mangaId: toMangaId(series),
-    title: series.title,
+    title: cleanText(series.title),
     imageUrl: toAbsoluteUrl(series.coverImage),
     subtitle: subtitle.length > 0 ? subtitle : undefined,
     contentRating: toContentRating(series),

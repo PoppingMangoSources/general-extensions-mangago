@@ -57,7 +57,7 @@ class RokariComicsExtension extends MangaStreamGeneric {
       type: DiscoverSectionType.featured,
       selectorFunc: ($: CheerioAPI) => $("div.slider-wrapper div.swiper-slide"),
       titleSelectorFunc: ($: CheerioAPI, element: BasicAcceptedElems<AnyNode>) =>
-        $("span.name", element).first().text().trim(),
+        cleanText($("span.name", element).first().text()),
       subtitleSelectorFunc: () => "",
       itemType: "featuredCarouselItem",
       enabled: true,
@@ -69,7 +69,7 @@ class RokariComicsExtension extends MangaStreamGeneric {
       type: DiscoverSectionType.prominentCarousel,
       selectorFunc: ($: CheerioAPI) => $("div.popularslider div.bsx"),
       titleSelectorFunc: ($: CheerioAPI, element: BasicAcceptedElems<AnyNode>) =>
-        $("a", element).attr("title") ?? $("div.tt", element).first().text().trim(),
+        cleanText($("a", element).attr("title") ?? $("div.tt", element).first().text()),
       subtitleSelectorFunc: ($: CheerioAPI, element: BasicAcceptedElems<AnyNode>) =>
         $("div.epxs", element).first().text().trim(),
       itemType: "prominentCarouselItem",
@@ -82,7 +82,7 @@ class RokariComicsExtension extends MangaStreamGeneric {
       type: DiscoverSectionType.chapterUpdates,
       selectorFunc: ($: CheerioAPI) => $(".bixbox:has(h2:contains(Latest)) .bs .bsx"),
       titleSelectorFunc: ($: CheerioAPI, element: BasicAcceptedElems<AnyNode>) =>
-        $("a", element).attr("title") ?? $("div.tt", element).first().text().trim(),
+        cleanText($("a", element).attr("title") ?? $("div.tt", element).first().text()),
       subtitleSelectorFunc: ($: CheerioAPI, element: BasicAcceptedElems<AnyNode>) =>
         $("div.epxs", element).first().text().trim(),
       itemType: "chapterUpdatesCarouselItem",
@@ -95,7 +95,7 @@ class RokariComicsExtension extends MangaStreamGeneric {
       type: DiscoverSectionType.simpleCarousel,
       selectorFunc: ($: CheerioAPI) => $("div.series-gen div.listupd div.bsx"),
       titleSelectorFunc: ($: CheerioAPI, element: BasicAcceptedElems<AnyNode>) =>
-        $("a", element).attr("title") ?? $("div.tt", element).first().text().trim(),
+        cleanText($("a", element).attr("title") ?? $("div.tt", element).first().text()),
       subtitleSelectorFunc: ($: CheerioAPI, element: BasicAcceptedElems<AnyNode>) =>
         $("div.epxs", element).first().text().trim(),
       itemType: "simpleCarouselItem",
@@ -166,7 +166,7 @@ class RokariComicsExtension extends MangaStreamGeneric {
     for (const slide of $("div.slider-wrapper div.swiper-slide").toArray()) {
       const anchor = $("a", slide).first();
       const href = anchor.attr("href") ?? "";
-      const title = $("span.name", slide).first().text().trim();
+      const title = cleanText($("span.name", slide).first().text());
       if (!href || !title) continue;
 
       const mangaId = await this.resolveMangaId(href, anchor.attr("rel"));
@@ -201,8 +201,9 @@ class RokariComicsExtension extends MangaStreamGeneric {
     for (const element of $(".bixbox:has(h2:contains(Latest)) .bs .bsx").toArray()) {
       const seriesAnchor = $("a[href*='/manga/']", element).first();
       const href = seriesAnchor.attr("href") ?? "";
-      const title =
-        seriesAnchor.attr("title") ?? $("div.tt a, div.tt", element).first().text().trim();
+      const title = cleanText(
+        seriesAnchor.attr("title") ?? $("div.tt a, div.tt", element).first().text(),
+      );
       if (!href || !title) continue;
 
       const mangaId = await this.resolveMangaId(href, seriesAnchor.attr("rel"));
@@ -247,14 +248,14 @@ class RokariComicsExtension extends MangaStreamGeneric {
     for (const element of $("div.series-gen div.listupd div.bsx").toArray()) {
       const anchor = $("a", element).first();
       const href = anchor.attr("href") ?? "";
-      const title = anchor.attr("title") ?? $("div.tt", element).first().text().trim();
+      const title = cleanText(anchor.attr("title") ?? $("div.tt", element).first().text());
       if (!href || !title) continue;
 
       const mangaId = await this.resolveMangaId(href, anchor.attr("rel"));
       if (!mangaId) continue;
 
       const imageUrl = this.parser.getImageSrc($("img", element)) ?? "";
-      const subtitle = $("div.epxs", element).first().text().replace(/\s+/g, " ").trim();
+      const subtitle = cleanText($("div.epxs", element).first().text()).replace(/\s+/g, " ");
 
       items.push({
         type: "simpleCarouselItem",
@@ -272,8 +273,9 @@ class RokariComicsExtension extends MangaStreamGeneric {
     for (const li of $(`div.serieslist.pop.wpop-${range} li`).toArray()) {
       const anchor = $("a.series", li).first();
       const href = anchor.attr("href") ?? "";
-      const title =
-        $("div.leftseries h2 a", li).first().text().trim() || anchor.attr("title") || "";
+      const title = cleanText(
+        $("div.leftseries h2 a", li).first().text() || anchor.attr("title") || "",
+      );
       if (!href || !title) continue;
 
       const imageUrl = this.parser.getImageSrc($("img", li)) ?? "";
@@ -381,5 +383,9 @@ class RokariComicsExtension extends MangaStreamGeneric {
     return true;
   }
 }
+
+// Scraped markup double-encodes entities on some titles, so decode display
+// text once more at the parser boundary.
+const cleanText = (value: string): string => Application.decodeHTMLEntities(value).trim();
 
 export const RokariComics = new RokariComicsExtension();
