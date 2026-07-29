@@ -6,7 +6,6 @@ import {
   type Chapter,
   type ChapterUpdatesCarouselItem,
   type FeaturedCarouselItem,
-  type ProminentCarouselItem,
   type SearchResultItem,
   type SimpleCarouselItem,
   type SourceManga,
@@ -359,12 +358,14 @@ export const parseViewerImages = ($: cheerio.CheerioAPI): string[] =>
     .map((element) => imageUrlFrom($(element)))
     .filter((url) => url.length > 0);
 
-const formatViews = (views?: number): string | undefined => {
-  if (views == null) return undefined;
-  if (views >= 1_000_000) return `${(views / 1_000_000).toFixed(1)}M views`;
-  if (views >= 1_000) return `${(views / 1_000).toFixed(1)}K views`;
-  return `${views} views`;
+const formatCount = (count: number): string => {
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K`;
+  return `${count}`;
 };
+
+const formatViews = (views?: number): string | undefined =>
+  views != null ? `${formatCount(views)} views` : undefined;
 
 const formatRating = (rating?: number): string | undefined =>
   rating != null ? `★ ${rating.toFixed(2)}` : undefined;
@@ -413,23 +414,29 @@ export const toSimpleItem = (item: MangaListItem): SimpleCarouselItem => ({
   contentRating: contentRatingForGenres(item.genres),
 });
 
-export const toProminentItem = (item: MangaListItem): ProminentCarouselItem => ({
-  type: "prominentCarouselItem",
-  mangaId: item.mangaId,
-  imageUrl: item.imageUrl,
-  title: item.title,
-  subtitle:
-    [
-      item.rank != null ? `#${item.rank}` : undefined,
-      formatRating(item.rating),
-      item.author,
-      formatViews(item.views),
-      item.status,
-    ]
-      .filter((value): value is string => Boolean(value))
-      .join(" • ") || undefined,
-  contentRating: contentRatingForGenres(item.genres),
-});
+export const toTopItem = (item: MangaListItem): FeaturedCarouselItem => {
+  const infoItems: { symbol: string; text: string }[] = [];
+  if (item.rating != null) infoItems.push({ symbol: "star.fill", text: item.rating.toFixed(2) });
+  if (item.views != null) infoItems.push({ symbol: "eye.fill", text: formatCount(item.views) });
+  return {
+    type: "featuredCarouselItem",
+    mangaId: item.mangaId,
+    imageUrl: item.imageUrl,
+    title: item.title,
+    supertitle: item.author,
+    summary:
+      [item.rank != null ? `Rank ${item.rank}` : undefined, item.status]
+        .filter((value): value is string => Boolean(value))
+        .join(" • ") || undefined,
+    infoItems:
+      infoItems.length === 0
+        ? undefined
+        : infoItems.length === 1
+          ? [infoItems[0]]
+          : [infoItems[0], infoItems[1]],
+    contentRating: contentRatingForGenres(item.genres),
+  };
+};
 
 export const toChapterUpdateItem = (
   item: MangaListItem,

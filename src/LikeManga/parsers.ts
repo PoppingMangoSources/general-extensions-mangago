@@ -443,15 +443,15 @@ export const hasNextPage = ($: cheerio.CheerioAPI): boolean =>
 
 export const toFeaturedItem = (item: MangaListItem): FeaturedCarouselItem => {
   const infoItems: NonNullable<FeaturedCarouselItem["infoItems"]>[number][] = [];
-  const chapters = item.chapters
-    .slice(0, 2)
-    .map((chapter) => {
-      const number = chapterNumber(chapter.title);
-      return number == null ? formatChapterLabel(chapter.title) : `CH. ${number}`;
-    })
-    .join(" • ");
-  if (chapters) infoItems.push({ symbol: "book.closed.fill", text: chapters });
-  infoItems.push({ symbol: "heart.fill", text: item.follows || "0" });
+  const latestChapter = item.chapters[0];
+  if (latestChapter) {
+    const number = chapterNumber(latestChapter.title);
+    infoItems.push({
+      symbol: "book.closed.fill",
+      text: number == null ? formatChapterLabel(latestChapter.title) : `CH. ${number}`,
+    });
+  }
+  infoItems.push({ symbol: "heart.fill", text: `${item.follows || "0"} Follows` });
 
   return {
     type: "featuredCarouselItem",

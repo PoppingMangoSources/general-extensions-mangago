@@ -167,7 +167,7 @@ const parseCard = ($: CheerioAPI, base: string, element: AnyNode): MangaCard | u
 
   const rating = unit.find(".numscore").first().text().trim();
   const chapter = unit.find(".epxs").first().text().trim();
-  const subtitle = rating ? `Rating ${rating}` : chapter || undefined;
+  const subtitle = rating ? `★ ${rating}` : chapter || undefined;
 
   return {
     mangaId,
@@ -244,7 +244,7 @@ export const parsePopularSeries = (
       mangaId,
       title,
       imageUrl: imgAttr(base, li.find("img").first()),
-      subtitle: rating ? `Rating ${rating}` : undefined,
+      subtitle: rating ? `★ ${rating}` : undefined,
       rating: rating || undefined,
       isAdult,
     });

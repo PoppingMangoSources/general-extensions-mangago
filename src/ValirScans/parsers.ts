@@ -120,7 +120,7 @@ const statSubtitle = (series: ValirSeries, rank?: number): string | undefined =>
   // both trail with view count. Keeping it to two stats stops the subtitle from
   // overflowing the card.
   const lead =
-    rank !== undefined ? `#${rank}` : series.rating ? `Rating ${series.rating.toFixed(1)}` : "";
+    rank !== undefined ? `#${rank}` : series.rating ? `★ ${series.rating.toFixed(1)}` : "";
   const parts = [lead, series.viewCount ? `${formatCount(series.viewCount)} views` : ""].filter(
     Boolean,
   );
@@ -389,7 +389,7 @@ export const toChapterUpdateItems = (
 
 export const toSearchResultItem = (series: ValirSeries): SearchResultItem => {
   const subtitle = [
-    series.rating ? `Rating ${series.rating.toFixed(1)}` : "",
+    series.rating ? `★ ${series.rating.toFixed(1)}` : "",
     series.type ? toTitleCase(series.type.replaceAll("_", " ")) : "",
   ]
     .filter(Boolean)

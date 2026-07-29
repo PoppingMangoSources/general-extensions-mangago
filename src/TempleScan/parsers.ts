@@ -253,6 +253,11 @@ const chapterTitle = (chapter: SeasonChapter): string => {
   return chapterIsPaid(chapter) ? (title ? `${title} 🔒` : "🔒") : title;
 };
 
+const updateCardSubtitle = (chapter: SeasonChapter): string => {
+  const number = chapterNumber(chapter);
+  return [number ? `Chapter ${number}` : "", chapterTitle(chapter)].filter(Boolean).join(" • ");
+};
+
 export const parseChapters = (
   data: SeriesData,
   sourceManga: SourceManga,
@@ -327,7 +332,7 @@ export const toUpdateItems = (updates: HomeSeries[]): DiscoverSectionItem[] =>
         chapterId: chapter.chapter_slug,
         title: series.title,
         imageUrl: series.thumbnail ?? "",
-        subtitle: chapterTitle(chapter),
+        subtitle: updateCardSubtitle(chapter),
         publishDate: chapter.created_at ? new Date(chapter.created_at) : undefined,
         contentRating: ContentRating.ADULT,
       },

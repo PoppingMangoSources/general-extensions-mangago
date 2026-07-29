@@ -64,7 +64,7 @@ import {
   parseViewerImage,
   parseViewerImages,
   toChapterUpdateItem,
-  toProminentItem,
+  toTopItem,
   toSearchResultItem,
   toSimpleItem,
 } from "./parsers";
@@ -157,9 +157,7 @@ class MangaTownExtension implements ExtensionImpl<typeof MangaTownConfig> {
           (item) => [toSimpleItem(item)],
         );
       case SECTIONS.TOP_SHOUNEN:
-        return this.getListingSection(hotUrl(page, "shounen"), page, (item) => [
-          toProminentItem(item),
-        ]);
+        return this.getListingSection(hotUrl(page, "shounen"), page, (item) => [toTopItem(item)]);
       case SECTIONS.SEINEN:
         return this.getListingSection(
           directoryUrl(page, { demographic: "seinen", sortToken: SORT_TOKENS.latest }),
@@ -167,9 +165,7 @@ class MangaTownExtension implements ExtensionImpl<typeof MangaTownConfig> {
           (item) => [toSimpleItem(item)],
         );
       case SECTIONS.TOP_SEINEN:
-        return this.getListingSection(hotUrl(page, "seinen"), page, (item) => [
-          toProminentItem(item),
-        ]);
+        return this.getListingSection(hotUrl(page, "seinen"), page, (item) => [toTopItem(item)]);
       case SECTIONS.SHOUJO:
         return this.getListingSection(
           directoryUrl(page, { demographic: "shoujo", sortToken: SORT_TOKENS.latest }),
@@ -177,9 +173,7 @@ class MangaTownExtension implements ExtensionImpl<typeof MangaTownConfig> {
           (item) => [toSimpleItem(item)],
         );
       case SECTIONS.TOP_SHOUJO:
-        return this.getListingSection(hotUrl(page, "shoujo"), page, (item) => [
-          toProminentItem(item),
-        ]);
+        return this.getListingSection(hotUrl(page, "shoujo"), page, (item) => [toTopItem(item)]);
       case SECTIONS.YAOI:
         return this.getListingSection(directoryUrl(page, { demographic: "yaoi" }), page, (item) => [
           toSimpleItem(item),
@@ -197,9 +191,7 @@ class MangaTownExtension implements ExtensionImpl<typeof MangaTownConfig> {
           (item) => [toSimpleItem(item)],
         );
       case SECTIONS.TOP_YAOI:
-        return this.getListingSection(hotUrl(page, "yaoi"), page, (item) => [
-          toProminentItem(item),
-        ]);
+        return this.getListingSection(hotUrl(page, "yaoi"), page, (item) => [toTopItem(item)]);
       case SECTIONS.GENRES:
         return this.getGenreSection();
       default:
@@ -228,7 +220,9 @@ class MangaTownExtension implements ExtensionImpl<typeof MangaTownConfig> {
           return buildFeaturedItem(
             {
               ...card,
-              rating: card.rating ?? manga.mangaInfo.rating,
+              rating:
+                card.rating ??
+                (manga.mangaInfo.rating != null ? manga.mangaInfo.rating * 5 : undefined),
               genres:
                 card.genres.length > 0
                   ? card.genres

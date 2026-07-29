@@ -72,7 +72,7 @@ export const SECTION_DEFINITIONS: Record<SectionId, DiscoverSection> = {
   [SECTIONS.TOP_SHOUNEN]: {
     id: SECTIONS.TOP_SHOUNEN,
     title: "Top Shounen",
-    type: DiscoverSectionType.prominentCarousel,
+    type: DiscoverSectionType.featured,
   },
   [SECTIONS.SEINEN]: {
     id: SECTIONS.SEINEN,
@@ -82,7 +82,7 @@ export const SECTION_DEFINITIONS: Record<SectionId, DiscoverSection> = {
   [SECTIONS.TOP_SEINEN]: {
     id: SECTIONS.TOP_SEINEN,
     title: "Top Seinen",
-    type: DiscoverSectionType.prominentCarousel,
+    type: DiscoverSectionType.featured,
   },
   [SECTIONS.SHOUJO]: {
     id: SECTIONS.SHOUJO,
@@ -92,7 +92,7 @@ export const SECTION_DEFINITIONS: Record<SectionId, DiscoverSection> = {
   [SECTIONS.TOP_SHOUJO]: {
     id: SECTIONS.TOP_SHOUJO,
     title: "Top Shoujo",
-    type: DiscoverSectionType.prominentCarousel,
+    type: DiscoverSectionType.featured,
   },
   [SECTIONS.YAOI]: {
     id: SECTIONS.YAOI,
@@ -112,7 +112,7 @@ export const SECTION_DEFINITIONS: Record<SectionId, DiscoverSection> = {
   [SECTIONS.TOP_YAOI]: {
     id: SECTIONS.TOP_YAOI,
     title: "Top Yaoi",
-    type: DiscoverSectionType.prominentCarousel,
+    type: DiscoverSectionType.featured,
   },
   [SECTIONS.GENRES]: {
     id: SECTIONS.GENRES,

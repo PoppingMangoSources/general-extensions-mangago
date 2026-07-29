@@ -277,19 +277,26 @@ export const parseTotalResults = ($: cheerio.CheerioAPI): number | undefined => 
 
 export const hasLoadMore = ($: cheerio.CheerioAPI): boolean => $("#navigation-ajax").length > 0;
 
-export const toFeaturedItem = (item: MangaListItem): FeaturedCarouselItem => ({
-  type: "featuredCarouselItem",
-  mangaId: item.mangaId,
-  imageUrl: item.imageUrl,
-  title: item.title,
-  supertitle: item.alternativeTitle,
-  summary:
-    [item.genres.slice(0, 3).join(", "), item.status]
-      .filter((value): value is string => Boolean(value))
-      .join(" • ") || undefined,
-  infoItems: item.chapter ? [{ symbol: "book.fill", text: item.chapter.title }] : undefined,
-  contentRating: item.contentRating,
-});
+export const toFeaturedItem = (item: MangaListItem): FeaturedCarouselItem => {
+  const infoItems: { symbol: string; text: string }[] = [];
+  if (item.chapter) infoItems.push({ symbol: "book.fill", text: item.chapter.title });
+  if (item.status) infoItems.push({ symbol: "book.closed", text: item.status });
+  return {
+    type: "featuredCarouselItem",
+    mangaId: item.mangaId,
+    imageUrl: item.imageUrl,
+    title: item.title,
+    supertitle: item.alternativeTitle,
+    summary: item.genres.slice(0, 3).join(", ") || undefined,
+    infoItems:
+      infoItems.length === 0
+        ? undefined
+        : infoItems.length === 1
+          ? [infoItems[0]]
+          : [infoItems[0], infoItems[1]],
+    contentRating: item.contentRating,
+  };
+};
 
 export const toSimpleItem = (item: MangaListItem): SimpleCarouselItem => ({
   type: "simpleCarouselItem",
