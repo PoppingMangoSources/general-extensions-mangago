@@ -11,7 +11,7 @@ import {
 } from "@paperback/types";
 
 import { DOMAIN } from "../models";
-import { replaceSessionCookies } from "../network";
+import { storeSessionCookies } from "../network";
 
 export class RanobesSettingsForm extends Form {
   constructor(
@@ -56,7 +56,7 @@ export class RanobesSettingsForm extends Form {
   }
 
   async handleWebViewComplete(cookies: Cookie[]): Promise<void> {
-    replaceSessionCookies(cookies);
+    storeSessionCookies(cookies);
   }
 
   async handleWebViewCancel(): Promise<void> {}

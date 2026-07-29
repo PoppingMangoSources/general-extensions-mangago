@@ -1,9 +1,16 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import type { ContentRating, DiscoverSection, SearchResultItem } from "@paperback/types";
+import type {
+  ContentRating,
+  DiscoverSection,
+  JSONObject,
+  SearchResultItem,
+} from "@paperback/types";
 import type { BasicAcceptedElems, Cheerio, CheerioAPI } from "cheerio";
 import type { AnyNode } from "domhandler";
+
+export const SEARCH_TAGS_KEY = "rokaricomics_search_tags";
 
 export interface Months {
   january: string;
@@ -38,17 +45,17 @@ export interface MangaStreamParserContext {
   slugToPostId(slug: string, path: string): Promise<string>;
 }
 
-export type MangaStreamSearchMetadata = {
+export interface MangaStreamSearchMetadata extends JSONObject {
   page?: number;
-};
+}
 
-export type MangaStreamFilterMetadata = {
+export interface MangaStreamFilterMetadata extends JSONObject {
   genres?: Record<string, "included" | "excluded">;
   status?: Record<string, "included" | "excluded">;
   type?: Record<string, "included" | "excluded">;
   order?: Record<string, "included" | "excluded">;
   rokariRange?: string;
-};
+}
 
 export interface MangaStreamSearchResultItem extends SearchResultItem {
   path: string;

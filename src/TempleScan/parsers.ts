@@ -247,10 +247,10 @@ const chapterNumber = (chapter: SeasonChapter): number => {
 const chapterIsPaid = (chapter: SeasonChapter): boolean => (chapter.price ?? 0) > 0;
 
 const chapterTitle = (chapter: SeasonChapter): string => {
-  const name = chapter.chapter_name?.trim() || `Chapter ${chapterNumber(chapter)}`;
-  const title = chapter.chapter_title?.trim();
-  const full = title ? `${name}: ${title}` : name;
-  return chapterIsPaid(chapter) ? `🔒 ${full}` : full;
+  const title = (chapter.chapter_title?.trim() || chapter.chapter_name?.trim() || "")
+    .replace(/^chapter\s+\d+(?:\.\d+)?(?:\s*[-:]\s*)?/i, "")
+    .trim();
+  return chapterIsPaid(chapter) ? (title ? `${title} - Locked` : "Locked") : title;
 };
 
 export const parseChapters = (

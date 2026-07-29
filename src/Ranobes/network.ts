@@ -91,28 +91,37 @@ const completeMobileSafariUserAgent = (userAgent: string): string => {
   return /\bSafari\//.test(withVersion) ? withVersion : `${withVersion} Safari/604.1`;
 };
 
-export const getRanobesUserAgent = async (): Promise<string> =>
-  completeMobileSafariUserAgent(await Application.getDefaultUserAgent());
+let userAgentPromise: Promise<string> | undefined;
 
-export const replaceSessionCookies = (cookies: Cookie[]): void => {
-  cookieStorage.cookies = [];
-  cookieStorage.setCookie({
-    name: "browser_check",
-    value: "1",
-    domain: "ranobes.net",
-    path: "/",
-  });
+export const getRanobesUserAgent = (): Promise<string> =>
+  (userAgentPromise ??= Application.getDefaultUserAgent().then(completeMobileSafariUserAgent));
+
+export const storeSessionCookies = (cookies: Cookie[]): void => {
+  const cookieId = (cookie: Cookie): string =>
+    `${cookie.name}:${cookie.domain.replace(/^(?:www)?\.?/i, "").toLowerCase()}:${
+      cookie.path?.startsWith("/") ? cookie.path : `/${cookie.path ?? ""}`
+    }`;
+  const replaced = new Set(cookies.map(cookieId));
+  cookieStorage.cookies = cookieStorage.cookies.filter((cookie) => !replaced.has(cookieId(cookie)));
   for (const cookie of cookies) {
-    if (cookie.expires && cookie.expires.getTime() <= Date.now()) continue;
-    cookieStorage.setCookie(cookie);
+    if (!cookie.expires || cookie.expires.getTime() > Date.now()) {
+      cookieStorage.setCookie(cookie);
+    }
   }
 };
 
+const responseHeader = (response: Response, name: string): string => {
+  const key = Object.keys(response.headers ?? {}).find(
+    (header) => header.toLowerCase() === name.toLowerCase(),
+  );
+  return key ? (response.headers?.[key] ?? "") : "";
+};
+
 const isChallengeResponse = (response: Response, body: string): boolean => {
+  if (responseHeader(response, "cf-mitigated") === "challenge") return true;
+  if (response.status !== 403) return false;
   if (body.includes("window.__DATA__")) return false;
-  if (response.headers?.["cf-mitigated"] === "challenge") return true;
-  if (response.status === 403) return true;
-  return /(?:vb_challenge|cf-turnstile|<title>Just a moment|ddos-guard|checking your browser|enable javascript and cookies|__ddg\d+_)/i.test(
+  return /(?:<title>\s*(?:Just a moment|Bot Verification)\b|vb-custom-captcha-shell|checking your browser)/i.test(
     body,
   );
 };
@@ -127,7 +136,7 @@ export class RanobesInterceptor extends PaperbackInterceptor {
         // header set (not just UA + referer) to look like the challenge-solving
         // webview that earned the clearance cookie.
         accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        "accept-language": "en-US,en;q=0.9,ru;q=0.8",
+        "accept-language": "en-US,en;q=0.9",
         ...request.headers,
         referer: `${origin}/`,
         "user-agent": await getRanobesUserAgent(),
@@ -136,16 +145,19 @@ export class RanobesInterceptor extends PaperbackInterceptor {
   }
 
   override async interceptResponse(
-    request: Request,
+    _request: Request,
     response: Response,
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
-    const contentType = response.headers?.["content-type"] ?? "";
-    const body = contentType.includes("text/html") ? Application.arrayBufferToUTF8String(data) : "";
+    const contentType = responseHeader(response, "content-type");
+    const body =
+      response.status === 403 || contentType.includes("text/html")
+        ? Application.arrayBufferToUTF8String(data)
+        : "";
     if (isChallengeResponse(response, body)) {
       throw new CloudflareError({
-        url: request.url,
-        method: request.method ?? "GET",
+        url: `${DOMAIN}/`,
+        method: "GET",
         headers: {
           referer: `${DOMAIN}/`,
           "user-agent": await getRanobesUserAgent(),

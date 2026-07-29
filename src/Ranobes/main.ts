@@ -39,8 +39,8 @@ import {
   fetchHtml,
   fetchListingPage,
   getRanobesUserAgent,
-  replaceSessionCookies,
   RanobesInterceptor,
+  storeSessionCookies,
 } from "./network";
 import {
   extractNovelId,
@@ -51,6 +51,7 @@ import {
   parseFilterTaxonomy,
   parseListings,
   parseMangaDetails,
+  parseHomepageRated,
   toChapterUpdateItem,
   toCompletedItem,
   toFeaturedItem,
@@ -59,16 +60,13 @@ import {
 } from "./parsers";
 import type RanobesConfig from "./pbconfig";
 
-// Safety ceiling for the chapter-list crawl; matches the mature Aidoku source.
+// Safety ceiling for exceptionally long chapter lists.
 const MAX_CHAPTER_PAGES = 50;
 
 export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
-  // ranobes.net sits behind DDoS-Guard, which starts challenging when pages
-  // arrive too fast — long chapter lists are dozens of sequential fetches. The
-  // mature Aidoku source settled on 2 req/s for exactly this reason.
   mainRateLimiter = new BasicRateLimiter("ranobes-rate-limiter", {
-    numberOfRequests: 2,
-    bufferInterval: 1,
+    numberOfRequests: 1,
+    bufferInterval: 2.5,
     ignoreImages: true,
   });
 
@@ -85,15 +83,9 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   };
 
   async initialise(): Promise<void> {
-    cookieStorage.setCookie({
-      name: "browser_check",
-      value: "1",
-      domain: "ranobes.net",
-      path: "/",
-    });
-    cookieStorage.registerInterceptor();
-    this.mainRateLimiter.registerInterceptor();
     this.requestManager.registerInterceptor();
+    this.mainRateLimiter.registerInterceptor();
+    cookieStorage.registerInterceptor();
   }
 
   async getSettingsForm(): Promise<Form> {
@@ -107,7 +99,7 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   ): Promise<void> {
     this.taxonomyPromise = undefined;
     this.chapterPagesCache = undefined;
-    replaceSessionCookies(cookies);
+    storeSessionCookies(cookies);
   }
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
@@ -127,21 +119,38 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
           ),
         };
       case SECTIONS.LATEST: {
-        const $ = cheerio.load(await fetchListingPage("/updates/", page));
+        const fromHomepage = metadata === undefined;
+        const $ = cheerio.load(
+          fromHomepage ? await fetchHtml(`${DOMAIN}/`) : await fetchListingPage("/updates/", page),
+        );
+        const collectedIds = new Set(metadata?.collectedIds ?? []);
+        const listings = parseListings($, "updates").filter((listing) => {
+          if (!listing.chapterId || collectedIds.has(listing.chapterId)) return false;
+          collectedIds.add(listing.chapterId);
+          return true;
+        });
         return {
-          items: parseListings($, "updates").flatMap((listing) => {
+          items: listings.flatMap((listing) => {
             const item = toChapterUpdateItem(listing);
             return item ? [item] : [];
           }),
-          metadata: isLastListingPage($) ? undefined : { page: page + 1 },
+          metadata:
+            fromHomepage || !isLastListingPage($)
+              ? {
+                  page: fromHomepage ? 1 : page + 1,
+                  collectedIds: [...collectedIds],
+                }
+              : undefined,
         };
       }
       case SECTIONS.MOST_VIEWED:
         return this.getRankingItems("/ranking/", page, false);
       case SECTIONS.MOST_RATED:
-        return this.getRankingItems("/ranking/rated/", page, true);
-      case SECTIONS.ALL_TIME:
-        return this.getRankingItems("/ranking/all_time/", page, false);
+        return {
+          items: parseHomepageRated(cheerio.load(await fetchHtml(`${DOMAIN}/`))).map(
+            (listing, index) => toRankingItem(listing, index + 1, true),
+          ),
+        };
       case SECTIONS.COMPLETED: {
         const $ = cheerio.load(await fetchListingPage("/tags/status-trs/Completed/", page));
         return {
@@ -194,14 +203,8 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     const firstPage = parseChapterPage(cheerio.load(await fetchChapterListPage(novelId)));
     const pageCount = Math.min(MAX_CHAPTER_PAGES, Math.max(1, firstPage.pages_count ?? 1));
     const pages = [firstPage];
-    for (let start = 2; start <= pageCount; start += 4) {
-      const requests: Promise<ReturnType<typeof parseChapterPage>>[] = [];
-      for (let page = start; page < Math.min(start + 4, pageCount + 1); page++) {
-        requests.push(
-          fetchChapterListPage(novelId, page).then((html) => parseChapterPage(cheerio.load(html))),
-        );
-      }
-      pages.push(...(await Promise.all(requests)));
+    for (let page = 2; page <= pageCount; page++) {
+      pages.push(parseChapterPage(cheerio.load(await fetchChapterListPage(novelId, page))));
     }
     this.chapterPagesCache = { novelId, pages, fetchedAt: Date.now() };
     return parseChapters(pages, sourceManga);

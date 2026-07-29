@@ -50,15 +50,16 @@ export const TOP_SERIES_OPTIONS = [
 ] as const;
 
 export type TopSeriesSort = (typeof TOP_SERIES_OPTIONS)[number]["id"];
+export type TriState = Record<string, "included" | "excluded">;
 
 export interface PageMetadata extends JSONObject {
   page: number;
 }
 
 export interface SearchMetadata extends JSONObject {
-  genres?: string[];
+  genres?: TriState;
   minChapters?: string[];
-  status?: string[];
+  status?: TriState;
   keyword?: string;
   topSeriesSort?: TopSeriesSort;
 }

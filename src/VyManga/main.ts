@@ -215,7 +215,7 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
     if (meta.status?.[0]) builder.setQueryItem("completed", meta.status[0]);
     if (meta.searchDescription) builder.setQueryItem("check_search_desc", "1");
 
-    const sort = sortOverride || meta.sort?.[0];
+    const sort = sortOverride;
     if (sort) {
       builder.setQueryItem("sort", sort);
       builder.setQueryItem("sort_type", meta.order?.[0] ?? "desc");

@@ -30,6 +30,7 @@ export const PERIOD_OPTIONS = [
 
 export type PopularPeriod = (typeof PERIOD_OPTIONS)[number]["id"];
 export type ContentType = "manhwa" | "novel";
+export type TriState = Record<string, "included" | "excluded">;
 
 export const STATUS_OPTIONS: Tag[] = [
   { id: "in-process", title: "In Process" },
@@ -38,7 +39,7 @@ export const STATUS_OPTIONS: Tag[] = [
 ];
 
 export const CONTENT_TYPE_OPTIONS: Tag[] = [
-  { id: "manhwa-manga", title: "Comics" },
+  { id: "manhwa-manga", title: "Manhwa / Manga" },
   { id: "novels", title: "Novels" },
 ];
 
@@ -55,9 +56,9 @@ export interface PageMetadata extends JSONObject {
 }
 
 export interface SearchMetadata extends JSONObject {
-  status?: string[];
-  contentType?: string[];
-  genres?: string[];
+  status?: TriState;
+  contentType?: TriState;
+  genres?: TriState;
   popularPeriod?: PopularPeriod;
 }
 

@@ -53,7 +53,6 @@ export type SearchMetadata = {
   searchType?: string[];
   searchDescription?: boolean;
   status?: string[];
-  sort?: string[];
   order?: string[];
   genres?: Record<string, "included" | "excluded">;
 };

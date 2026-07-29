@@ -10,7 +10,7 @@ import {
   type TagSection,
 } from "@paperback/types";
 import type { Cheerio, CheerioAPI } from "cheerio";
-import type { Element } from "domhandler";
+import type { AnyNode } from "domhandler";
 
 import { getUsePostIds } from "./forms";
 import {
@@ -263,10 +263,10 @@ export class MangaStreamParser {
 
   parseTags($: CheerioAPI): TagSection[] {
     const tagSections: TagSection[] = [
-      { id: "0", title: "genres", tags: [] },
-      { id: "1", title: "status", tags: [] },
-      { id: "2", title: "type", tags: [] },
-      { id: "3", title: "order", tags: [] },
+      { id: "genres", title: "Genres", tags: [] },
+      { id: "status", title: "Status", tags: [] },
+      { id: "type", title: "Type", tags: [] },
+      { id: "order", title: "Order", tags: [] },
     ];
 
     const sectionDropDowns = $("ul.dropdown-menu.c4.genrez, ul.dropdown-menu.c1").toArray();
@@ -279,9 +279,10 @@ export class MangaStreamParser {
 
       for (const tag of $("li", sectionDropdown).toArray()) {
         const title = $("label", tag).text().trim();
-        const id = `${section.title}_${$("input", tag).attr("value")}`;
+        const value = $("input", tag).attr("value") ?? "";
+        const id = `${section.id}_${value}`;
 
-        if (!id || !title) {
+        if (!value || !title) {
           continue;
         }
 
@@ -429,7 +430,7 @@ export class MangaStreamParser {
     return isLast;
   };
 
-  getImageSrc(imageObj: Cheerio<Element> | undefined): string {
+  getImageSrc(imageObj: Cheerio<AnyNode> | undefined): string {
     let image: string | undefined;
     if (typeof imageObj?.attr("data-src") != "undefined") {
       image = imageObj?.attr("data-src");

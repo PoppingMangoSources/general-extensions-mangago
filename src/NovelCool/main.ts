@@ -120,7 +120,6 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
       { id: SECTIONS.LATEST, title: "Latest", type: DiscoverSectionType.chapterUpdates },
       { id: SECTIONS.POPULAR, title: "Popular", type: DiscoverSectionType.simpleCarousel },
       { id: SECTIONS.COMPLETED, title: "Completed", type: DiscoverSectionType.simpleCarousel },
-      { id: SECTIONS.GENRES, title: "Genres", type: DiscoverSectionType.genres },
     ];
   }
 
@@ -137,8 +136,6 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
         return this.getApiSection("hot", metadata, toSimpleItem);
       case SECTIONS.COMPLETED:
         return this.getHtmlSection(CATEGORY_PATHS.COMPLETED, metadata);
-      case SECTIONS.GENRES:
-        return this.getGenresSection();
       default:
         return { items: [] };
     }
@@ -156,21 +153,6 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     return this.getApiSection("latest", metadata, (item) => toLatestItem(item, this.dateAnchor()));
-  }
-
-  private async getGenresSection(): Promise<PagedResults<DiscoverSectionItem>> {
-    return {
-      items: (await this.getSearchOptions()).genres.map(
-        (tag): DiscoverSectionItem => ({
-          type: "genresCarouselItem",
-          name: tag.title,
-          searchQuery: {
-            title: "",
-            metadata: { genres: { [tag.id]: "included" } } satisfies SearchMetadata,
-          },
-        }),
-      ),
-    };
   }
 
   private async getApiSection(

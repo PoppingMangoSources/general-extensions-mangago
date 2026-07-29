@@ -34,7 +34,6 @@ export const SECTIONS = {
   LATEST: "latest",
   POPULAR: "popular",
   COMPLETED: "completed",
-  GENRES: "genres",
 } as const;
 
 export const CATEGORY_PATHS = {

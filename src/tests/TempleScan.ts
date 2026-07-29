@@ -46,7 +46,7 @@ export async function runTests(logger: TestLogger) {
       "chapter-1",
       "chapter-2#paid",
     ]);
-    expect(chapters[1]?.title).to.equal("🔒 Chapter 2");
+    expect(chapters[1]?.title).to.equal("Locked");
 
     let error: unknown;
     try {

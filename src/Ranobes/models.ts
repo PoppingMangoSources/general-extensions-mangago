@@ -11,7 +11,6 @@ export const SECTIONS = {
   LATEST: "latest",
   MOST_VIEWED: "most-viewed",
   MOST_RATED: "most-rated",
-  ALL_TIME: "all-time",
   COMPLETED: "completed",
 } as const;
 
@@ -26,11 +25,6 @@ export const DISCOVER_SECTIONS: DiscoverSection[] = [
   {
     id: SECTIONS.MOST_RATED,
     title: "Most Rated Novels",
-    type: DiscoverSectionType.prominentCarousel,
-  },
-  {
-    id: SECTIONS.ALL_TIME,
-    title: "All Time Popular",
     type: DiscoverSectionType.prominentCarousel,
   },
   { id: SECTIONS.COMPLETED, title: "Completed", type: DiscoverSectionType.prominentCarousel },
@@ -116,7 +110,10 @@ export const GENRES = [
   "Yuri",
 ];
 
-export type PageMetadata = { page: number };
+export interface PageMetadata extends JSONObject {
+  page: number;
+  collectedIds?: string[];
+}
 export type TriState = Record<string, "included" | "excluded">;
 
 export interface SearchMetadata extends JSONObject {

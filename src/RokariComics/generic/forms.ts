@@ -7,13 +7,14 @@ import {
   Form,
   LabelRow,
   Section,
+  SelectRow,
   ToggleRow,
   TriStateSelectRow,
   type SearchQuery,
   type TagSection,
 } from "@paperback/types";
 
-import { type MangaStreamFilterMetadata } from "./models";
+import { SEARCH_TAGS_KEY, type MangaStreamFilterMetadata } from "./models";
 
 const toBoolean = (value: unknown): boolean => {
   return (value ?? false) === "true";
@@ -28,7 +29,7 @@ export const setUsePostIds = (value: boolean): void => {
 };
 
 export const clearTags = (): void => {
-  Application.setState(undefined, "tags");
+  Application.setState(undefined, SEARCH_TAGS_KEY);
 };
 
 export class MangaStreamAdvancedSearchForm extends AdvancedSearchForm {
@@ -40,6 +41,7 @@ export class MangaStreamAdvancedSearchForm extends AdvancedSearchForm {
   constructor(
     query: SearchQuery<MangaStreamFilterMetadata>,
     private readonly tags: TagSection[],
+    private readonly supportsGenreExclusion: boolean,
   ) {
     super();
     this.genres = { ...query.metadata?.genres };
@@ -52,23 +54,42 @@ export class MangaStreamAdvancedSearchForm extends AdvancedSearchForm {
     return this.tags.flatMap((section) => {
       const id = section.id as "genres" | "status" | "type" | "order";
       if (!["genres", "status", "type", "order"].includes(id)) return [];
+      if (id === "genres") {
+        return [
+          Section(id, [
+            TriStateSelectRow(id, {
+              title: section.title,
+              layout: "flow",
+              value: this.genres,
+              items: section.tags,
+              allowExclusion: this.supportsGenreExclusion,
+              allowEmptySelection: true,
+              onValueChange: Application.Selector(
+                this as MangaStreamAdvancedSearchForm,
+                "handleGenresChange",
+              ),
+            }),
+          ]),
+        ];
+      }
+
       const handler =
-        id === "genres"
-          ? "handleGenresChange"
-          : id === "status"
-            ? "handleStatusChange"
-            : id === "type"
-              ? "handleTypeChange"
-              : "handleOrderChange";
+        id === "status"
+          ? "handleStatusChange"
+          : id === "type"
+            ? "handleTypeChange"
+            : "handleOrderChange";
       return [
         Section(id, [
-          TriStateSelectRow(id, {
+          SelectRow(id, {
             title: section.title,
             layout: "flow",
-            value: this[id],
+            value: Object.entries(this[id])
+              .filter(([, state]) => state === "included")
+              .map(([value]) => value),
             items: section.tags,
-            allowExclusion: false,
-            allowEmptySelection: true,
+            minItemCount: 0,
+            maxItemCount: 1,
             onValueChange: Application.Selector(this as MangaStreamAdvancedSearchForm, handler),
           }),
         ]),
@@ -80,16 +101,16 @@ export class MangaStreamAdvancedSearchForm extends AdvancedSearchForm {
     this.genres = value;
   }
 
-  async handleStatusChange(value: Record<string, "included" | "excluded">): Promise<void> {
-    this.status = value;
+  async handleStatusChange(value: string[]): Promise<void> {
+    this.status = Object.fromEntries(value.map((id) => [id, "included"] as const));
   }
 
-  async handleTypeChange(value: Record<string, "included" | "excluded">): Promise<void> {
-    this.type = value;
+  async handleTypeChange(value: string[]): Promise<void> {
+    this.type = Object.fromEntries(value.map((id) => [id, "included"] as const));
   }
 
-  async handleOrderChange(value: Record<string, "included" | "excluded">): Promise<void> {
-    this.order = value;
+  async handleOrderChange(value: string[]): Promise<void> {
+    this.order = Object.fromEntries(value.map((id) => [id, "included"] as const));
   }
 
   override getSearchQueryMetadata(): MangaStreamFilterMetadata {

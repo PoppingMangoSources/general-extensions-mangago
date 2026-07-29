@@ -26,6 +26,7 @@ import {
 import { StoneScapeAdvancedSearchForm } from "./forms/search";
 import { getShowLockedChapters, StoneScapeSettingsForm } from "./forms/settings";
 import {
+  CONTENT_TYPE_OPTIONS,
   PAGE_SIZE,
   PERIOD_OPTIONS,
   SECTIONS,
@@ -33,6 +34,8 @@ import {
   type ContentType,
   type PageMetadata,
   type SearchMetadata,
+  type Series,
+  type TriState,
 } from "./models";
 import {
   fetchBanner,
@@ -87,6 +90,42 @@ const statusFromFilter = (value?: string): string | undefined => {
     default:
       return undefined;
   }
+};
+
+const pickState = (value: TriState | undefined, state: "included" | "excluded"): string[] =>
+  Object.entries(value ?? {})
+    .filter(([, current]) => current === state)
+    .map(([id]) => id);
+
+const normalizedGenre = (value: string): string =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, "-");
+
+const seriesMatchesFilters = (series: Series, metadata: SearchMetadata): boolean => {
+  const typeId = contentTypeFilterId(series.contentType === "novel" ? "novel" : "manhwa");
+  const includedTypes = pickState(metadata.contentType, "included");
+  const excludedTypes = pickState(metadata.contentType, "excluded");
+  if (includedTypes.length > 0 && !includedTypes.includes(typeId)) return false;
+  if (excludedTypes.includes(typeId)) return false;
+
+  const status = (series.publicationStatus ?? "").toLowerCase();
+  const statusId = status.includes("complete")
+    ? "completed"
+    : status.includes("hiatus")
+      ? "hiatus"
+      : "in-process";
+  const includedStatuses = pickState(metadata.status, "included");
+  const excludedStatuses = pickState(metadata.status, "excluded");
+  if (includedStatuses.length > 0 && !includedStatuses.includes(statusId)) return false;
+  if (excludedStatuses.includes(statusId)) return false;
+
+  const genres = new Set((series.genres ?? []).map(normalizedGenre));
+  const includedGenres = pickState(metadata.genres, "included");
+  const excludedGenres = pickState(metadata.genres, "excluded");
+  if (includedGenres.some((genre) => !genres.has(normalizedGenre(genre)))) return false;
+  return !excludedGenres.some((genre) => genres.has(normalizedGenre(genre)));
 };
 
 class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
@@ -197,7 +236,7 @@ class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
           searchQuery: {
             title: "",
             metadata: {
-              contentType: [contentTypeFilterId(contentType)],
+              contentType: { [contentTypeFilterId(contentType)]: "included" },
               popularPeriod: period.id,
             } satisfies SearchMetadata,
           },
@@ -245,7 +284,7 @@ class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
           name: genre.title,
           searchQuery: {
             title: "",
-            metadata: { genres: [genre.id] } satisfies SearchMetadata,
+            metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
           },
           contentRating: contentRatingForGenres([genre.title]),
         }),
@@ -270,7 +309,12 @@ class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
     if (pasted) return pasted;
 
     const searchMetadata = query.metadata ?? {};
-    const selectedContentType = contentTypeFromFilter(searchMetadata.contentType?.[0]);
+    const includedContentTypes = pickState(searchMetadata.contentType, "included");
+    const excludedContentTypes = pickState(searchMetadata.contentType, "excluded");
+    const selectedContentType =
+      includedContentTypes.length === 1 && excludedContentTypes.length === 0
+        ? contentTypeFromFilter(includedContentTypes[0])
+        : undefined;
 
     if (searchMetadata.popularPeriod && selectedContentType) {
       const popular = await fetchPopular(
@@ -282,18 +326,50 @@ class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
     }
 
     const page = metadata?.page ?? 1;
-    const response = await fetchSeries({
-      page,
-      limit: PAGE_SIZE,
-      contentType: selectedContentType,
-      genres: searchMetadata.genres,
-      status: statusFromFilter(searchMetadata.status?.[0]),
-      search: (query.title ?? "").trim() || undefined,
-      sort: sortingOption?.id,
-    });
+    const allContentTypes = CONTENT_TYPE_OPTIONS.map((option) => option.id);
+    const selectedTypeIds =
+      includedContentTypes.length > 0
+        ? includedContentTypes
+        : excludedContentTypes.length > 0
+          ? allContentTypes.filter((id) => !excludedContentTypes.includes(id))
+          : [];
+    if (selectedTypeIds.length === 0 && excludedContentTypes.length > 0) return { items: [] };
+
+    const includedStatuses = pickState(searchMetadata.status, "included");
+    const excludedStatuses = pickState(searchMetadata.status, "excluded");
+    const serverStatus =
+      includedStatuses.length === 1 && excludedStatuses.length === 0
+        ? statusFromFilter(includedStatuses[0])
+        : undefined;
+    const includedGenres = pickState(searchMetadata.genres, "included");
+    const requestTypes =
+      selectedTypeIds.length === 1 ? [contentTypeFromFilter(selectedTypeIds[0])] : [undefined];
+    const responses = await Promise.all(
+      requestTypes.map((contentType) =>
+        fetchSeries({
+          page,
+          limit: PAGE_SIZE,
+          contentType,
+          genres: includedGenres,
+          status: serverStatus,
+          search: (query.title ?? "").trim() || undefined,
+          sort: sortingOption?.id,
+        }),
+      ),
+    );
+    const seen = new Set<string>();
+    const series = responses
+      .flatMap((response) => response.data)
+      .filter((item) => {
+        if (seen.has(item.seriesId) || !seriesMatchesFilters(item, searchMetadata)) return false;
+        seen.add(item.seriesId);
+        return true;
+      });
     return {
-      items: parseMangaList(response.data).map(toSearchResultItem),
-      metadata: page < response.pagination.totalPages ? { page: page + 1 } : undefined,
+      items: parseMangaList(series).map(toSearchResultItem),
+      metadata: responses.some((response) => page < response.pagination.totalPages)
+        ? { page: page + 1 }
+        : undefined,
     };
   }
 

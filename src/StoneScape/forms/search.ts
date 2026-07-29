@@ -4,7 +4,7 @@
 import {
   AdvancedSearchForm,
   Section,
-  SelectRow,
+  TriStateSelectRow,
   type SearchQuery,
   type Tag,
 } from "@paperback/types";
@@ -14,12 +14,13 @@ import {
   STATUS_OPTIONS,
   type PopularPeriod,
   type SearchMetadata,
+  type TriState,
 } from "../models";
 
 export class StoneScapeAdvancedSearchForm extends AdvancedSearchForm {
-  private status: string[];
-  private contentType: string[];
-  private genres: string[];
+  private status: TriState;
+  private contentType: TriState;
+  private genres: TriState;
   private popularPeriod?: PopularPeriod;
 
   private readonly genreOptions: Tag[];
@@ -27,9 +28,9 @@ export class StoneScapeAdvancedSearchForm extends AdvancedSearchForm {
   constructor(searchQuery: SearchQuery<SearchMetadata>, genreOptions: Tag[]) {
     super();
     const metadata = searchQuery.metadata ?? {};
-    this.status = metadata.status ?? [];
-    this.contentType = metadata.contentType ?? [];
-    this.genres = metadata.genres ?? [];
+    this.status = { ...metadata.status };
+    this.contentType = { ...metadata.contentType };
+    this.genres = { ...metadata.genres };
     this.popularPeriod = metadata.popularPeriod;
     this.genreOptions = genreOptions;
   }
@@ -37,13 +38,13 @@ export class StoneScapeAdvancedSearchForm extends AdvancedSearchForm {
   override getSections() {
     return [
       Section("type", [
-        SelectRow("type", {
+        TriStateSelectRow("type", {
           title: "Content Type",
           layout: "flow",
           value: this.contentType,
           items: CONTENT_TYPE_OPTIONS,
-          minItemCount: 0,
-          maxItemCount: 1,
+          allowExclusion: true,
+          allowEmptySelection: true,
           onValueChange: Application.Selector(
             this as StoneScapeAdvancedSearchForm,
             "handleContentTypeChange",
@@ -51,13 +52,13 @@ export class StoneScapeAdvancedSearchForm extends AdvancedSearchForm {
         }),
       ]),
       Section("status", [
-        SelectRow("status", {
+        TriStateSelectRow("status", {
           title: "Status",
           layout: "flow",
           value: this.status,
           items: STATUS_OPTIONS,
-          minItemCount: 0,
-          maxItemCount: 1,
+          allowExclusion: true,
+          allowEmptySelection: true,
           onValueChange: Application.Selector(
             this as StoneScapeAdvancedSearchForm,
             "handleStatusChange",
@@ -65,13 +66,13 @@ export class StoneScapeAdvancedSearchForm extends AdvancedSearchForm {
         }),
       ]),
       Section("genres", [
-        SelectRow("genres", {
+        TriStateSelectRow("genres", {
           title: "Genres",
           layout: "flow",
           value: this.genres,
           items: this.genreOptions,
-          minItemCount: 0,
-          maxItemCount: this.genreOptions.length,
+          allowExclusion: true,
+          allowEmptySelection: true,
           onValueChange: Application.Selector(
             this as StoneScapeAdvancedSearchForm,
             "handleGenresChange",
@@ -81,26 +82,26 @@ export class StoneScapeAdvancedSearchForm extends AdvancedSearchForm {
     ];
   }
 
-  async handleContentTypeChange(value: string[]): Promise<void> {
+  async handleContentTypeChange(value: TriState): Promise<void> {
     this.contentType = value;
     this.popularPeriod = undefined;
   }
 
-  async handleStatusChange(value: string[]): Promise<void> {
+  async handleStatusChange(value: TriState): Promise<void> {
     this.status = value;
     this.popularPeriod = undefined;
   }
 
-  async handleGenresChange(value: string[]): Promise<void> {
+  async handleGenresChange(value: TriState): Promise<void> {
     this.genres = value;
     this.popularPeriod = undefined;
   }
 
   override getSearchQueryMetadata(): SearchMetadata {
     return {
-      ...(this.status.length > 0 && { status: this.status }),
-      ...(this.contentType.length > 0 && { contentType: this.contentType }),
-      ...(this.genres.length > 0 && { genres: this.genres }),
+      ...(Object.keys(this.status).length > 0 && { status: this.status }),
+      ...(Object.keys(this.contentType).length > 0 && { contentType: this.contentType }),
+      ...(Object.keys(this.genres).length > 0 && { genres: this.genres }),
       ...(this.popularPeriod && { popularPeriod: this.popularPeriod }),
     };
   }

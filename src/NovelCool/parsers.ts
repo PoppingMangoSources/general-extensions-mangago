@@ -46,6 +46,7 @@ const cleanText = (value?: string | null): string =>
 
 const cleanDescription = (value?: string | null): string =>
   Application.decodeHTMLEntities(value ?? "")
+    .replace(/^\s*summary\s*:?\s*/i, "")
     .replace(/\r/g, "")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
@@ -140,14 +141,15 @@ const mappedStatus = (value?: string | null): string | undefined => {
 
 const parseBookType = (item: cheerio.Cheerio<AnyNode>): string | undefined => {
   const className = item.find("[class*='book-type-']").first().attr("class") ?? "";
-  const classType = className.match(/\bbook-type-([a-z-]+)/i)?.[1];
-  if (classType) {
-    return classType
-      .split("-")
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(" ");
-  }
-  return cleanText(item.find(".book-type, .book-list-type").first().text()) || undefined;
+  const type = (
+    className.match(/\bbook-type-([a-z-]+)/i)?.[1]?.replace(/-/g, " ") ??
+    cleanText(item.find(".book-type, .book-list-type").first().text())
+  ).toLowerCase();
+  if (!TYPE_TITLES.has(type)) return undefined;
+  return type
+    .split(" ")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 };
 
 const chapterIdFromUrl = (value: string): string =>
@@ -199,7 +201,7 @@ export const parseListings = ($: cheerio.CheerioAPI): ListingItem[] => {
     seen.add(mangaId);
 
     const genres = item
-      .find(".book-data-info a, .book-cate a, .book-info a")
+      .find(".book-cate a, .book-data-info a[href*='/category/'], .book-info a[href*='/category/']")
       .toArray()
       .map((genre) => cleanText($(genre).text()))
       .filter(
@@ -482,17 +484,14 @@ const chapterLabel = (title: string): string => {
 export const toFeaturedItem = (item: ListingItem): FeaturedCarouselItem => {
   const infoItems: NonNullable<FeaturedCarouselItem["infoItems"]>[number][] = [];
   if (item.rating != null) infoItems.push({ symbol: "star.fill", text: item.rating.toFixed(1) });
-  if (item.type) infoItems.push({ symbol: "books.vertical.fill", text: item.type });
   return {
     type: "featuredCarouselItem",
     mangaId: item.mangaId,
     imageUrl: item.imageUrl,
     title: item.title,
-    supertitle: item.type ?? item.genres[0] ?? "Popular",
+    supertitle: item.type ?? item.genres[0],
     summary: item.description,
-    infoItems: infoItems.length
-      ? (infoItems.slice(0, 2) as FeaturedCarouselItem["infoItems"])
-      : undefined,
+    infoItems: infoItems.length ? (infoItems as FeaturedCarouselItem["infoItems"]) : undefined,
     contentRating: contentRatingForGenres(item.genres),
   };
 };

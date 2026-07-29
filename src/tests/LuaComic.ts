@@ -39,7 +39,7 @@ export async function runTests(logger: TestLogger) {
       "chapter-1",
       "chapter-2#paid",
     ]);
-    expect(chapters[1]?.title).to.equal("🔒 After Hours");
+    expect(chapters[1]?.title).to.equal("After Hours - Locked");
 
     let error: unknown;
     try {

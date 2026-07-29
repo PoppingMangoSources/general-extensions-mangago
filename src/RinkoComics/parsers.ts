@@ -400,29 +400,31 @@ export const parseChapterElements = (
 
     const locked = isLocked(el);
 
-    let name = Application.decodeHTMLEntities(
+    const name = Application.decodeHTMLEntities(
       el.find(".chapter-number").first().text().trim() ||
         el.find(".ch-name").first().text().trim() ||
         el.find(".chapter-side-title").first().text().trim() ||
         (el.attr("data-title") || "").trim() ||
         el.find("label").first().text().trim(),
     );
+    const chapNum = parseChapterNumber(name);
+    let title = name.replace(/^chapter\s+\d+(?:\.\d+)?(?:\s*[-:]\s*)?/i, "").trim();
     const dateText = el.find(".chapter-date").first().text().trim();
 
     // Locked chapters (e.g. on novel pages) may expose no URL at all; a
     // synthetic id keeps them listed while staying unreadable.
     let chapterId = rawUrl ? parsePath(rawUrl) : `locked-${postId}`;
     if (locked) {
-      name = `🔒 ${name}`;
+      title = title ? `${title} - Locked` : "Locked";
       chapterId += LOCK_SUFFIX;
     }
 
     chapters.push({
       chapterId,
       sourceManga,
-      title: name,
+      title,
       volume: 0,
-      chapNum: parseChapterNumber(name),
+      chapNum,
       publishDate: dateText ? parseDate(dateText) : undefined,
       langCode: "en",
     });

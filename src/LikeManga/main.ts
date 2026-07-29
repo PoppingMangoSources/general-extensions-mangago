@@ -30,6 +30,7 @@ import {
   TOP_SERIES_OPTIONS,
   type PageMetadata,
   type SearchMetadata,
+  type TriState,
 } from "./models";
 import {
   fetchChapterListPage,
@@ -57,6 +58,25 @@ import {
   toSearchResultItem,
 } from "./parsers";
 import type LikeMangaConfig from "./pbconfig";
+
+const pickState = (value: TriState | undefined, state: "included" | "excluded"): string[] =>
+  Object.entries(value ?? {})
+    .filter(([, current]) => current === state)
+    .map(([id]) => id);
+
+const normalizedFilterValue = (value: string): string =>
+  value
+    .replace(/%20/gi, " ")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, "-");
+
+const statusFilterId = (status?: string): string => {
+  const normalized = (status ?? "").toLowerCase();
+  if (normalized.includes("complete")) return "Complete";
+  if (normalized.includes("pause") || normalized.includes("hiatus")) return "Pause";
+  return "In%20process";
+};
 
 class LikeMangaExtension implements ExtensionImpl<typeof LikeMangaConfig> {
   private rateLimiter = new BasicRateLimiter("rateLimiter", {
@@ -201,7 +221,7 @@ class LikeMangaExtension implements ExtensionImpl<typeof LikeMangaConfig> {
           name: genre.title,
           searchQuery: {
             title: "",
-            metadata: { genres: [genre.id] } satisfies SearchMetadata,
+            metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
           },
           contentRating: contentRatingForGenres([genre.title]),
         }),
@@ -228,18 +248,40 @@ class LikeMangaExtension implements ExtensionImpl<typeof LikeMangaConfig> {
     const page = metadata?.page ?? 1;
     const searchMetadata = query.metadata ?? {};
     const sortBy = searchMetadata.topSeriesSort ?? sortingOption?.id ?? SORT_OPTIONS[0].id;
+    const includedGenres = pickState(searchMetadata.genres, "included");
+    const excludedGenres = pickState(searchMetadata.genres, "excluded");
+    const includedStatuses = pickState(searchMetadata.status, "included");
+    const excludedStatuses = pickState(searchMetadata.status, "excluded");
     const document = await fetchSearchPage({
       page,
       keyword: searchMetadata.keyword?.trim() || (query.title ?? "").trim() || undefined,
       sortBy,
-      status: searchMetadata.status?.[0],
-      genres: searchMetadata.genres,
+      status:
+        includedStatuses.length === 1 && excludedStatuses.length === 0
+          ? includedStatuses[0]
+          : undefined,
+      genres: includedGenres,
       minChapters: searchMetadata.minChapters?.[0],
     });
     const ranked = searchMetadata.topSeriesSort != null;
+    const items = parseMangaList(document).filter((item) => {
+      const genres = new Set(item.genres.map(normalizedFilterValue));
+      if (
+        genres.size > 0 &&
+        includedGenres.some((genre) => !genres.has(normalizedFilterValue(genre)))
+      ) {
+        return false;
+      }
+      if (excludedGenres.some((genre) => genres.has(normalizedFilterValue(genre)))) return false;
+      const status = statusFilterId(item.status);
+      if (item.status && includedStatuses.length > 0 && !includedStatuses.includes(status)) {
+        return false;
+      }
+      return !item.status || !excludedStatuses.includes(status);
+    });
 
     return {
-      items: parseMangaList(document).map((item, index) =>
+      items: items.map((item, index) =>
         toSearchResultItem(item, ranked ? (page - 1) * PAGE_SIZE + index + 1 : undefined),
       ),
       metadata: hasNextPage(document) ? { page: page + 1 } : undefined,

@@ -151,8 +151,10 @@ export interface SeriesQueryOptions {
 }
 
 const buildSeriesUrl = (options: SeriesQueryOptions): string => {
+  const sort =
+    options.sort === "trending" && options.period ? `trending-${options.period}` : options.sort;
   const url = apiUrl("series")
-    .setQueryItem("sort", options.sort)
+    .setQueryItem("sort", sort)
     .setQueryItem("adult", String(options.adult))
     .setQueryItem("content_rating", options.contentRatings.join(","))
     .setQueryItem("limit", String(options.limit ?? PAGE_SIZE))

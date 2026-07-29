@@ -292,6 +292,30 @@ export const parseListings = ($: cheerio.CheerioAPI, type: ListingType): Ranobes
   return listings;
 };
 
+export const parseHomepageRated = ($: cheerio.CheerioAPI): RanobesListing[] =>
+  $("#news_top .story_line.story_line-img")
+    .toArray()
+    .flatMap((element) => {
+      const card = $(element);
+      const link = card.find("a").first();
+      const mangaId = absoluteUrl(link.attr("href") ?? "");
+      const title = cleanText(card.find(".title").first().text());
+      const imageUrl = parseImageUrl(card.find("i.image.cover").first());
+      if (!mangaId || !title || !imageUrl) return [];
+
+      const ratingText = cleanText(card.find(".meta").text());
+      const rating = Number(ratingText.match(/rating:\s*([\d.]+)/i)?.[1]);
+      return [
+        {
+          mangaId,
+          title,
+          imageUrl,
+          rating: Number.isFinite(rating) ? rating : undefined,
+          ratingCount: parseCount(card.find("[id^='vote-num-id-']").first().text()),
+        },
+      ];
+    });
+
 export const isLastListingPage = ($: cheerio.CheerioAPI): boolean =>
   $(".navigation .page_next a").length === 0;
 

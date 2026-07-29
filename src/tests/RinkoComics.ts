@@ -24,7 +24,7 @@ export async function runTests(logger: TestLogger) {
     const chapter = {
       chapterId: "locked-1#lock",
       sourceManga,
-      title: "🔒 Chapter 1",
+      title: "Locked",
       chapNum: 1,
       langCode: "en",
     } as Chapter;

@@ -15,7 +15,6 @@ import {
 import {
   ORDER_OPTIONS,
   SEARCH_TYPE_OPTIONS,
-  SORT_OPTIONS,
   STATUS_OPTIONS,
   type OptionItem,
   type SearchMetadata,
@@ -29,11 +28,9 @@ export class VyMangaSearchForm extends AdvancedSearchForm {
   private searchType: string[];
   private searchDescription: boolean;
   private status: string[];
-  private sort: string[];
   private order: string[];
   private genres: Record<string, "included" | "excluded">;
 
-  private readonly sortOptions = toTags(SORT_OPTIONS);
   private readonly genreOptions: Tag[];
 
   constructor(searchQuery: SearchQuery<SearchMetadata>, genres: OptionItem[]) {
@@ -45,7 +42,6 @@ export class VyMangaSearchForm extends AdvancedSearchForm {
     this.searchType = meta.searchType ?? [];
     this.searchDescription = meta.searchDescription ?? false;
     this.status = meta.status ?? [];
-    this.sort = meta.sort ?? [];
     this.order = meta.order ?? [];
     this.genres = { ...meta.genres };
   }
@@ -89,16 +85,7 @@ export class VyMangaSearchForm extends AdvancedSearchForm {
           onValueChange: Application.Selector(this as VyMangaSearchForm, "handleStatusChange"),
         }),
       ]),
-      Section("sort", [
-        SelectRow("sort", {
-          title: "Sort by",
-          layout: "flow",
-          value: this.sort,
-          items: this.sortOptions,
-          minItemCount: 0,
-          maxItemCount: 1,
-          onValueChange: Application.Selector(this as VyMangaSearchForm, "handleSortChange"),
-        }),
+      Section("order", [
         SelectRow("order", {
           title: "Order",
           layout: "flow",
@@ -146,10 +133,6 @@ export class VyMangaSearchForm extends AdvancedSearchForm {
     this.status = value;
   }
 
-  async handleSortChange(value: string[]): Promise<void> {
-    this.sort = value;
-  }
-
   async handleOrderChange(value: string[]): Promise<void> {
     this.order = value;
   }
@@ -164,7 +147,6 @@ export class VyMangaSearchForm extends AdvancedSearchForm {
     if (this.searchType.length > 0) result.searchType = this.searchType;
     if (this.searchDescription) result.searchDescription = true;
     if (this.status.length > 0) result.status = this.status;
-    if (this.sort.length > 0) result.sort = this.sort;
     if (this.order.length > 0) result.order = this.order;
     if (Object.keys(this.genres).length > 0) result.genres = this.genres;
     return result;

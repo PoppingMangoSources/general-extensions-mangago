@@ -33,6 +33,7 @@ import {
   type MangaStreamSearchMetadata,
   type MangaStreamSlug,
   type Months,
+  SEARCH_TAGS_KEY,
   type StatusTypes,
 } from "./models";
 import { MangaStreamInterceptor } from "./network";
@@ -132,7 +133,7 @@ export abstract class MangaStreamGeneric implements ExtensionImpl<typeof basePbC
   }
 
   async getSearchTags(): Promise<TagSection[]> {
-    let tags: TagSection[] = Application.getState("tags") as TagSection[];
+    let tags = Application.getState(SEARCH_TAGS_KEY) as TagSection[] | undefined;
     if (tags) {
       return tags;
     }
@@ -144,12 +145,16 @@ export abstract class MangaStreamGeneric implements ExtensionImpl<typeof basePbC
     const [, buffer] = await Application.scheduleRequest(request);
     const $ = cheerio.load(Application.arrayBufferToUTF8String(buffer));
     tags = this.parser.parseTags($);
-    Application.setState(tags, "tags");
+    Application.setState(tags, SEARCH_TAGS_KEY);
     return tags;
   }
 
   async getAdvancedSearchForm(query: SearchQuery<MangaStreamFilterMetadata>) {
-    return new MangaStreamAdvancedSearchForm(query, await this.getSearchTags());
+    return new MangaStreamAdvancedSearchForm(
+      query,
+      await this.getSearchTags(),
+      this.supportsTagExclusion(),
+    );
   }
 
   async getSearchResults(

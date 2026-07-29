@@ -112,7 +112,7 @@ class RokariComicsExtension extends MangaStreamGeneric {
       enabled: true,
     };
 
-    this.discoverSections = [hero, popularToday, latest, recommendation, popularRanking];
+    this.discoverSections = [hero, latest, popularToday, recommendation, popularRanking];
   }
 
   override async getDiscoverSectionItems(
@@ -318,14 +318,28 @@ class RokariComicsExtension extends MangaStreamGeneric {
     const page = metadata?.page ?? 1;
 
     const includedTags: string[] = [];
+    const excludedTags: string[] = [];
     for (const tags of Object.values(query.metadata ?? {})) {
-      if (!tags || typeof tags !== "object") continue;
-      includedTags.push(...Object.keys(tags));
+      if (!tags || typeof tags !== "object" || Array.isArray(tags)) continue;
+      for (const [id, state] of Object.entries(tags)) {
+        if (state === "included") includedTags.push(id);
+        if (state === "excluded") excludedTags.push(id);
+      }
     }
 
-    const urlBuilder = new URL(this.domain)
-      .setQueryItem("s", (query.title ?? "").replace(/[’–][a-z]*/g, ""))
-      .setQueryItem("page", page.toString());
+    const title = (query.title ?? "").replace(/[’–][a-z]*/g, "").trim();
+    const hasFilters = includedTags.length > 0 || excludedTags.length > 0;
+    let urlBuilder = new URL(this.domain);
+    if (title && !hasFilters) {
+      if (page > 1) {
+        urlBuilder.addPathComponent("page").addPathComponent(page.toString());
+      }
+      urlBuilder.setQueryItem("s", title);
+    } else {
+      urlBuilder.addPathComponent("manga");
+      if (page > 1) urlBuilder.setQueryItem("page", page.toString());
+      if (title) urlBuilder.setQueryItem("s", title);
+    }
 
     const status = getIncludedTagBySection("status", includedTags);
     const type = getIncludedTagBySection("type", includedTags);
@@ -334,7 +348,10 @@ class RokariComicsExtension extends MangaStreamGeneric {
     if (type) urlBuilder.setQueryItem("type", type);
     if (order) urlBuilder.setQueryItem("order", order);
 
-    const genres = getFilterTagsBySection("genres", includedTags, true);
+    const genres = [
+      ...getFilterTagsBySection("genres", includedTags, true),
+      ...getFilterTagsBySection("genres", excludedTags, false, true),
+    ];
     if (genres.length > 0) urlBuilder.setQueryItem("genre[]", genres);
 
     const [, buffer] = await Application.scheduleRequest({
@@ -360,6 +377,10 @@ class RokariComicsExtension extends MangaStreamGeneric {
 
     const hasNextPage = $("div.hpage .r, div.pagination .next, a.next.page-numbers").length > 0;
     return { items: manga, metadata: hasNextPage ? { page: page + 1 } : undefined };
+  }
+
+  override supportsTagExclusion(): boolean {
+    return true;
   }
 }
 
