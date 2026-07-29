@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="330" height="56" viewBox="0 0 330 56" role="img" aria-label="Paperback 0.9 or newer">
+  <defs>
+    <linearGradient id="mango" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffb144"/>
+      <stop offset="1" stop-color="#f09a36"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="330" height="56" rx="14" fill="url(#mango)"/>
+  <text x="165" y="37" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="800" letter-spacing="3" fill="#22140a">PAPERBACK 0.9+</text>
+</svg>

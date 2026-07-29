@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="440" height="72" viewBox="0 0 440 72" role="img" aria-label="Join the support Discord">
+  <rect x="1.5" y="1.5" width="437" height="69" rx="18" fill="#221019" stroke="#f9c9d8" stroke-opacity="0.45" stroke-width="3"/>
+  <g transform="translate(40,36)">
+    <path d="M-14,-12 h28 a8 8 0 0 1 8 8 v10 a8 8 0 0 1 -8 8 h-12 l-9 8 v-8 h-7 a8 8 0 0 1 -8 -8 v-10 a8 8 0 0 1 8 -8 Z" fill="#f9c9d8"/>
+    <circle cx="-7" cy="1" r="2.6" fill="#221019"/>
+    <circle cx="0" cy="1" r="2.6" fill="#221019"/>
+    <circle cx="7" cy="1" r="2.6" fill="#221019"/>
+  </g>
+  <text x="242" y="45" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="26" font-weight="700" fill="#f2d9e2">Join the Support Discord</text>
+</svg>

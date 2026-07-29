@@ -1,6 +1,31 @@
-# PoppingMango Sources
+<p align="center">
+  <img src="media/banner.svg" alt="PoppingMango Sources — Novels, Manga, Manhwa &amp; Manhua for Paperback 0.9" width="100%"/>
+</p>
 
-Unofficial Paperback extensions built and maintained in this repository. This source list is independent of Inkdex and focuses on the repository's own sources instead of repeating the stock Inkdex catalog.
+<p align="center">
+  <img src="media/badge-platform.svg" alt="iOS / iPadOS" height="28"/>
+  <img src="media/badge-paperback.svg" alt="Paperback 0.9+" height="28"/>
+  <img src="media/badge-sources.svg" alt="22 sources" height="28"/>
+</p>
+
+<p align="center">
+  <a href="https://poppingmangosources.github.io/general-extensions-mangago/0.9/test/">
+    <img src="media/add-button.svg" alt="Add PoppingMango to Paperback" height="52"/>
+  </a>
+</p>
+
+<p align="center">
+  On iPhone or iPad, tap the button and add the repository from the page that opens.<br/>
+  To add it by hand, open Paperback, go to <b>Settings → Extensions → Add Repository</b>, and paste:
+</p>
+
+<p align="center">
+  <code>https://poppingmangosources.github.io/general-extensions-mangago/0.9/test/</code>
+</p>
+
+---
+
+PoppingMango is an independent, hand-built source list for [Paperback](https://paperback.moe) 0.9 covering novels, manga, manhwa, and manhua. Every extension here is written and maintained in this repository — it is not a mirror of any other catalog. After adding the repository, refresh it in Paperback whenever you want to pick up source updates.
 
 ## Sources
 
@@ -31,17 +56,14 @@ The repository's own sources are currently available from `0.9/test` while they 
 | [ValirScans](https://valirscans.org)          | `valirscans.org`      |
 | [VyManga](https://vymanga.com)                | `vymanga.com`         |
 
-## Installation
-
-- [Add the Popmango repository to Paperback][test-installation]
-
-After installing the repository, refresh it in Paperback to receive source updates.
-
 ## Support
 
-Report source problems through Inkdex's discord in the OTHER-REPOS channel: [issues] where my support chat is. Include the affected source, the page or title that failed, and screenshots or request details when possible.
+<p align="center">
+  <a href="https://discord.com/invite/inkdex">
+    <img src="media/discord-button.svg" alt="Join the support Discord" height="36"/>
+  </a>
+</p>
+
+Source problems are handled in the **OTHER-REPOS** channel of the linked Discord, where the PoppingMango support chat lives. Include the affected source, the page or title that failed, and screenshots or request details when possible — it makes fixes much faster.
 
 These extensions are not affiliated with Paperback or any supported website. All site names and logos belong to their respective owners.
-
-[test-installation]: https://poppingmangosources.github.io/general-extensions-mangago/0.9/test/
-[issues]: https://discord.com/invite/inkdex
