@@ -11,12 +11,20 @@ import {
   type Tag,
 } from "@paperback/types";
 
-import type { ChikariPreferences, SeriesStatus, SeriesType } from "../shared/models";
+import type {
+  ChikariPreferences,
+  Period,
+  SeriesStatus,
+  SeriesType,
+  SortId,
+} from "../shared/models";
 import { STATUS_OPTIONS, TYPE_OPTIONS, type SearchMetadata, type TriState } from "./models";
 
 export class ChikariAdvancedSearchForm extends AdvancedSearchForm {
   private genres: TriState;
   private minChapters: string;
+  private readonly period?: Period;
+  private readonly sort?: SortId;
   private statuses: SeriesStatus[];
   private tags: TriState;
   private types: SeriesType[];
@@ -40,6 +48,8 @@ export class ChikariAdvancedSearchForm extends AdvancedSearchForm {
     };
     this.genres = metadata.genres;
     this.minChapters = metadata.minChapters;
+    this.period = metadata.period;
+    this.sort = metadata.sort;
     this.statuses = metadata.statuses;
     this.tags = metadata.tags;
     this.types = metadata.types;
@@ -149,6 +159,8 @@ export class ChikariAdvancedSearchForm extends AdvancedSearchForm {
 
   override getSearchQueryMetadata(): SearchMetadata {
     const metadata: SearchMetadata = {};
+    if (this.period) metadata.period = this.period;
+    if (this.sort) metadata.sort = this.sort;
     if (this.types.length > 0) metadata.types = this.types;
     if (this.statuses.length > 0) metadata.statuses = this.statuses;
     if (this.year) metadata.year = this.year;
