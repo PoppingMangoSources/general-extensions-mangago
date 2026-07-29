@@ -1,0 +1,1 @@
+{"name":"MVLEMPYR","description":"Extension that pulls content from mvlempyr.io.","version":"1.0.0-alpha.1","icon":"icon.png","language":"en","contentRating":"MATURE","capabilities":[1,16,4,64,32],"badges":[{"label":"Novel","textColor":"#ffffff","backgroundColor":"#3baf4b"}],"developers":[{"name":"Popmango","github":"https://github.com/PoppingMangoSources"}],"id":"MVLEMPYR"}
