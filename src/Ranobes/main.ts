@@ -60,13 +60,10 @@ import {
 } from "./parsers";
 import type RanobesConfig from "./pbconfig";
 
-// Safety ceiling for exceptionally long chapter lists.
-const MAX_CHAPTER_PAGES = 50;
-
 export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   mainRateLimiter = new BasicRateLimiter("ranobes-rate-limiter", {
     numberOfRequests: 1,
-    bufferInterval: 2,
+    bufferInterval: 1,
     ignoreImages: true,
   });
 
@@ -201,10 +198,25 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     }
 
     const firstPage = parseChapterPage(cheerio.load(await fetchChapterListPage(novelId)));
-    const pageCount = Math.min(MAX_CHAPTER_PAGES, Math.max(1, firstPage.pages_count ?? 1));
+    const pageCount = Math.max(
+      1,
+      firstPage.pages_count ??
+        (firstPage.count_all && firstPage.limit
+          ? Math.ceil(firstPage.count_all / firstPage.limit)
+          : 1),
+    );
     const pages = [firstPage];
-    for (let page = 2; page <= pageCount; page++) {
-      pages.push(parseChapterPage(cheerio.load(await fetchChapterListPage(novelId, page))));
+    for (let page = 2; page <= pageCount; page += 4) {
+      const pageNumbers = Array.from(
+        { length: Math.min(4, pageCount - page + 1) },
+        (_, index) => page + index,
+      );
+      const chapterPages = await Promise.all(
+        pageNumbers.map(async (pageNumber) =>
+          parseChapterPage(cheerio.load(await fetchChapterListPage(novelId, pageNumber))),
+        ),
+      );
+      pages.push(...chapterPages);
     }
     this.chapterPagesCache = { novelId, pages, fetchedAt: Date.now() };
     return parseChapters(pages, sourceManga);
