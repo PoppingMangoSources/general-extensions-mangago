@@ -360,6 +360,7 @@ export const parseChapters = ($: cheerio.CheerioAPI, sourceManga: SourceManga): 
       sourceManga,
       title,
       chapNum: number ? Number.parseFloat(number[1]) : 0,
+      volume: 0,
       publishDate: parseDate(item.find(CHAPTER_DATE_SELECTOR).first().text()),
       langCode: "en",
     });

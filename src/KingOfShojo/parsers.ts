@@ -422,6 +422,7 @@ export const parseChapters = ($: CheerioAPI, sourceManga: SourceManga): Chapter[
       sourceManga,
       title,
       chapNum,
+      volume: 0,
       publishDate: dateText ? parseDate(dateText) : undefined,
       langCode: "en",
     });

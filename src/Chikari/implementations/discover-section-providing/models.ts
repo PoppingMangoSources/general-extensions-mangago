@@ -71,10 +71,7 @@ export const PERIOD_FILTERS: Array<{ id: Period; title: string }> = [
   { id: "month", title: "Month" },
 ];
 
-export const BOOKMARK_PERIOD_FILTERS: Array<{ id: Period; title: string }> = [
-  ...PERIOD_FILTERS,
-  { id: "all", title: "All Time" },
-];
+export const BOOKMARK_PERIOD_FILTERS: Array<{ id: Period; title: string }> = PERIOD_FILTERS;
 
 export const TYPE_FILTERS: Array<{ id: SeriesType; title: string }> = [
   { id: "manga", title: "Manga" },

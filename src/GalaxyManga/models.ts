@@ -80,11 +80,10 @@ export const TRENDING_RANGES: Tag[] = [
   { id: "wpop-alltime", title: "All" },
 ];
 
-export const RECOMMENDED_GENRES: Tag[] = [
-  { id: "comedy", title: "Comedy" },
-  { id: "romance", title: "Romance" },
-  { id: "tragedy", title: "Tragedy" },
-];
+// Chip labels for the recommendation row; the filter value each one sends is
+// resolved against the directory's own genre list, which keys some genres by
+// term id rather than by slug.
+export const RECOMMENDED_GENRE_NAMES = ["Comedy", "Romance", "Tragedy"] as const;
 
 export const STATUS_OPTIONS: Tag[] = [
   { id: "", title: "All" },

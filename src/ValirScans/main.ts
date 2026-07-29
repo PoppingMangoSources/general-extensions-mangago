@@ -86,6 +86,7 @@ export class ValirScansExtension implements ExtensionImpl<typeof ValirScansConfi
   ): Promise<void> {
     this.homePromise = undefined;
     this.taxonomyPromise = undefined;
+    this.mainInterceptor.resetChallengeState();
     for (const cookie of cookies) {
       if (
         cookie.name.startsWith("cf") ||

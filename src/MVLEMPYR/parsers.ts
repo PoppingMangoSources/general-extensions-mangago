@@ -222,6 +222,7 @@ export const buildChapters = (
       sourceManga,
       langCode: "en",
       chapNum: number,
+      volume: 0,
       title: cleanText(post.acf?.ch_name) || undefined,
       publishDate: date != null && !Number.isNaN(date.getTime()) ? date : undefined,
     });

@@ -32,7 +32,7 @@ import {
 import {
   MANGA_DIR,
   NEXT_PAGE_SELECTOR,
-  RECOMMENDED_GENRES,
+  RECOMMENDED_GENRE_NAMES,
   SECTION_DEFINITIONS,
   SECTIONS,
   SORT_OPTIONS,
@@ -154,17 +154,7 @@ class GalaxyMangaExtension implements ExtensionImpl<typeof GalaxyMangaConfig> {
           }),
         };
       case SECTIONS.RECOMMENDATION:
-        return {
-          items: RECOMMENDED_GENRES.map((genre) => ({
-            type: "genresCarouselItem",
-            name: genre.title,
-            searchQuery: {
-              title: "",
-              metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
-            },
-            contentRating: contentRatingForGenres([genre.title]),
-          })),
-        };
+        return this.getRecommendationSection();
       case SECTIONS.FRESH:
         return this.getDirectorySection({ order: "latest" }, page, toSimpleItem);
       case SECTIONS.GENRES:
@@ -183,6 +173,27 @@ class GalaxyMangaExtension implements ExtensionImpl<typeof GalaxyMangaConfig> {
     return {
       items: parseCards($).map(mapper),
       metadata: $(NEXT_PAGE_SELECTOR).length > 0 ? { page: page + 1 } : undefined,
+    };
+  }
+
+  private async getRecommendationSection(): Promise<PagedResults<DiscoverSectionItem>> {
+    const genres = await this.getGenres();
+    return {
+      items: RECOMMENDED_GENRE_NAMES.flatMap((name): DiscoverSectionItem[] => {
+        const genre = genres.find((option) => option.title.toLowerCase() === name.toLowerCase());
+        if (!genre) return [];
+        return [
+          {
+            type: "genresCarouselItem",
+            name: genre.title,
+            searchQuery: {
+              title: "",
+              metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
+            },
+            contentRating: contentRatingForGenres([genre.title]),
+          },
+        ];
+      }),
     };
   }
 

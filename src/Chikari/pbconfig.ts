@@ -6,7 +6,7 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "Chikari",
   description: "Extension that pulls content from chikari.moe.",
-  version: "0.0.1-alpha.4",
+  version: "0.0.1-alpha.5",
   icon: "icon.png",
   language: "en",
   contentRating: ContentRating.EVERYONE,

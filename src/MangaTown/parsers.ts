@@ -319,7 +319,7 @@ export const parseChapters = ($: cheerio.CheerioAPI, sourceManga: SourceManga): 
       langCode: "en",
       chapNum: chapNum ?? 0,
       title: extra || (chapNum == null ? cleanText(linkText.replace(mangaTitle, "")) : undefined),
-      volume: volumeMatch ? Number.parseInt(volumeMatch[1], 10) : undefined,
+      volume: volumeMatch ? Number.parseInt(volumeMatch[1], 10) : 0,
       publishDate: parseSiteDate(item.find("span.time").first().text()),
       // The site lists newest chapters first.
       sortingIndex: entries.length - index,

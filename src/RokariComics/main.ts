@@ -175,13 +175,6 @@ class RokariComicsExtension extends MangaStreamGeneric {
       const imageUrl = this.parser.getImageSrc($("img", slide)) ?? "";
       if (!imageUrl) continue;
 
-      const summary = $("div.desc, div.summary, div.excerpt, p", slide)
-        .first()
-        .text()
-        .replace(/\s+/g, " ")
-        .trim()
-        .slice(0, 280);
-
       const chapterLabel = (
         $("span.chapter, div.chapter, span.fivchap, span.epxs, div.epxs", slide).first().text() ||
         ($(slide)
@@ -197,7 +190,6 @@ class RokariComicsExtension extends MangaStreamGeneric {
         mangaId,
         imageUrl,
         title,
-        summary: summary || undefined,
         infoItems: chapterLabel ? [{ symbol: "book.fill", text: chapterLabel }] : undefined,
       });
     }

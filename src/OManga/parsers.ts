@@ -388,7 +388,7 @@ const toChapter = (
 ): Chapter => {
   const teamName = entry.team?.name ?? entry.translator ?? undefined;
   const version =
-    teamName && isOfficialTeam(teamName, entry.team?.slug) ? `Official - ${teamName}` : teamName;
+    teamName && isOfficialTeam(teamName, entry.team?.slug) ? `★ ${teamName}` : teamName;
   const teamSuffix =
     allVersions && entry.team?.slug ? `?team=${encodeURIComponent(entry.team.slug)}` : "";
 

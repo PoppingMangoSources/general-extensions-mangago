@@ -12,7 +12,18 @@ import {
 import { getBaseUrl } from "./forms/settings";
 import { type SearchMetadata, type TriState } from "./models";
 
+// Discover loads several sections at once, so a challenge would otherwise
+// raise one bypass prompt per in-flight request. Only the first challenge in
+// this window surfaces a prompt; the rest fail with a plain error.
+const CHALLENGE_PROMPT_INTERVAL = 60_000;
+
 export class ValirScansInterceptor extends PaperbackInterceptor {
+  private lastChallengeAt = 0;
+
+  resetChallengeState(): void {
+    this.lastChallengeAt = 0;
+  }
+
   override async interceptRequest(request: Request): Promise<Request> {
     return {
       ...request,
@@ -30,6 +41,11 @@ export class ValirScansInterceptor extends PaperbackInterceptor {
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
     if (response.headers?.["cf-mitigated"] === "challenge") {
+      const now = Date.now();
+      if (now - this.lastChallengeAt < CHALLENGE_PROMPT_INTERVAL) {
+        throw new Error("Cloudflare challenge pending. Solve the open prompt, then reload.");
+      }
+      this.lastChallengeAt = now;
       throw new CloudflareError({
         url: request.url,
         method: request.method ?? "GET",
