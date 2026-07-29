@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="media/banner.svg" alt="PoppingMango Sources — Novels, Manga, Manhwa &amp; Manhua for Paperback 0.9" width="100%"/>
+  <img src="media/banner.svg" alt="PoppingMango Sources — Novels, Manga, Manhwa & Manhua for Paperback 0.9" width="100%"/>
 </p>
 
 <p align="center">
   <img src="media/badge-platform.svg" alt="iOS / iPadOS" height="28"/>
   <img src="media/badge-paperback.svg" alt="Paperback 0.9+" height="28"/>
-  <img src="media/badge-sources.svg" alt="18 sources" height="28"/>
+  <img src="media/badge-sources.svg" alt="22 sources" height="28"/>
 </p>
 
 <p align="center">
@@ -29,28 +29,28 @@ PoppingMango is an independent, hand-built source list for [Paperback](https://p
 
 ## Sources
 
-The repository's own sources are currently available from `0.9/test` while they are prepared for stable release.
+**22 sources** — 18 manga, manhwa & manhua, and 4 novels. All of them are available from `0.9/test` while they are prepared for stable release.
 
-| Source                                        | Website               |
-| --------------------------------------------- | --------------------- |
-| [Chikari](https://chikari.moe)                | `chikari.moe`         |
-| [KaliScan](https://kaliscan.io)               | `kaliscan.io`         |
-| [KingOfShojo](https://kingofshojo.com)        | `kingofshojo.com`     |
-| [LikeManga](https://likemanga.ink)            | `likemanga.ink`       |
-| [Lua Comic](https://luacomic.org)             | `luacomic.org`        |
-| [MyReadingManga](https://myreadingmanga.info) | `myreadingmanga.info` |
-| [NovelArchive](https://novelarchive.cc)       | `novelarchive.cc`     |
-| [NovelCool](https://www.novelcool.com)        | `novelcool.com`       |
-| [oManga](https://omanga.to)                   | `omanga.to`           |
-| [OniSaga](https://onisaga.com)                | `onisaga.com`         |
-| [Ranobes](https://ranobes.net)                | `ranobes.net`         |
-| [RinkoComics](https://rinkocomics.com)        | `rinkocomics.com`     |
-| [RokariComics](https://rokaricomics.com)      | `rokaricomics.com`    |
-| [Scans.GG](https://scans.gg)                  | `scans.gg`            |
-| [StoneScape](https://stonescape.xyz)          | `stonescape.xyz`      |
-| [Temple Scan](https://templetoons.com)        | `templetoons.com`     |
-| [ValirScans](https://valirscans.org)          | `valirscans.org`      |
-| [VyManga](https://vymanga.com)                | `vymanga.com`         |
+### Manga, Manhwa & Manhua
+
+| Source                                            | Site                  | Source                                       | Site               |
+| :------------------------------------------------ | :-------------------- | :------------------------------------------- | :----------------- |
+| **[BunManga](https://bunmanga.com)**              | `bunmanga.com`        | **[oManga](https://omanga.to)**              | `omanga.to`        |
+| **[Chikari](https://chikari.moe)**                | `chikari.moe`         | **[OniSaga](https://onisaga.com)**           | `onisaga.com`      |
+| **[Galaxy Manga](https://galaxymanga.io)**        | `galaxymanga.io`      | **[RinkoComics](https://rinkocomics.com)**   | `rinkocomics.com`  |
+| **[KaliScan](https://kaliscan.io)**               | `kaliscan.io`         | **[RokariComics](https://rokaricomics.com)** | `rokaricomics.com` |
+| **[KingOfShojo](https://kingofshojo.com)**        | `kingofshojo.com`     | **[Scans.GG](https://scans.gg)**             | `scans.gg`         |
+| **[LikeManga](https://likemanga.ink)**            | `likemanga.ink`       | **[StoneScape](https://stonescape.xyz)**     | `stonescape.xyz`   |
+| **[Lua Comic](https://luacomic.org)**             | `luacomic.org`        | **[Temple Scan](https://templetoons.com)**   | `templetoons.com`  |
+| **[MangaTown](https://www.mangatown.com)**        | `mangatown.com`       | **[ValirScans](https://valirscans.org)**     | `valirscans.org`   |
+| **[MyReadingManga](https://myreadingmanga.info)** | `myreadingmanga.info` | **[VyManga](https://vymanga.com)**           | `vymanga.com`      |
+
+### Novels
+
+| Source                                      | Site              | Source                                     | Site            |
+| :------------------------------------------ | :---------------- | :----------------------------------------- | :-------------- |
+| **[MVLEMPYR](https://www.mvlempyr.io)**     | `mvlempyr.io`     | **[NovelCool](https://www.novelcool.com)** | `novelcool.com` |
+| **[NovelArchive](https://novelarchive.cc)** | `novelarchive.cc` | **[Ranobes](https://ranobes.net)**         | `ranobes.net`   |
 
 ## Support
 
