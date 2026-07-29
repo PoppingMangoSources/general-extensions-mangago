@@ -10,6 +10,7 @@ The repository's own sources are currently available from `0.9/test` while they 
 | --------------------------------------------- | --------------------- |
 | [BunManga](https://bunmanga.com)              | `bunmanga.com`        |
 | [Chikari](https://chikari.moe)                | `chikari.moe`         |
+| [Galaxy Manga](https://galaxymanga.io)        | `galaxymanga.io`      |
 | [KaliScan](https://kaliscan.io)               | `kaliscan.io`         |
 | [KingOfShojo](https://kingofshojo.com)        | `kingofshojo.com`     |
 | [LikeManga](https://likemanga.ink)            | `likemanga.ink`       |
