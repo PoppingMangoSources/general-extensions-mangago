@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-29T06:20:08.062Z",
+  "buildTime": "2026-07-29T06:38:26.854Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -12,7 +12,7 @@
     {
       "name": "Chikari",
       "description": "Extension that pulls content from chikari.moe.",
-      "version": "0.0.1-alpha.3",
+      "version": "0.0.1-alpha.4",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "SAFE",
