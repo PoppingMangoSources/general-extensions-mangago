@@ -56,6 +56,7 @@ import {
 } from "./network";
 import {
   buildFeaturedItem,
+  buildSequentialImageUrls,
   contentRatingForGenres,
   parseChapterPageUrls,
   parseChapters,
@@ -404,7 +405,7 @@ class MangaTownExtension implements ExtensionImpl<typeof MangaTownConfig> {
     // Paged chapters expose one image per page, so every remaining page is
     // fetched to collect its image; long-strip chapters list them all at once.
     const pages =
-      pageUrls.length > 0 ? await this.fetchPageImages($, pageUrls) : parseViewerImages($);
+      pageUrls.length > 0 ? await this.readPagedChapter($, pageUrls) : parseViewerImages($);
 
     const validPages = pages.filter((url) => url.length > 0);
     if (validPages.length === 0) {
@@ -418,9 +419,27 @@ class MangaTownExtension implements ExtensionImpl<typeof MangaTownConfig> {
     return { id: chapter.chapterId, mangaId, pages: validPages };
   }
 
-  // Each page holds a single image, so a long chapter needs one request per
-  // page; a small worker pool keeps the order while capping how many of those
-  // requests are in flight at once.
+  // A chapter's images are numbered sequentially in one directory, so the list
+  // can be derived from page one instead of fetching every page. The last page
+  // is still read to confirm the derived list lines up before it is trusted.
+  private async readPagedChapter(firstPage: CheerioAPI, pageUrls: string[]): Promise<string[]> {
+    const firstImage = parseViewerImage(firstPage);
+    if (pageUrls.length === 1) return [firstImage];
+
+    const derived = firstImage
+      ? buildSequentialImageUrls(firstImage, 1, pageUrls.length)
+      : undefined;
+    if (derived) {
+      const lastImage = await this.fetchPageImage(pageUrls[pageUrls.length - 1]);
+      if (lastImage && lastImage === derived[derived.length - 1]) return derived;
+    }
+
+    return this.fetchPageImages(firstPage, pageUrls);
+  }
+
+  // Fallback for chapters whose images are not sequentially numbered: each page
+  // holds a single image, so a small worker pool keeps the order while capping
+  // how many of those requests are in flight at once.
   private async fetchPageImages(firstPage: CheerioAPI, pageUrls: string[]): Promise<string[]> {
     const images: string[] = Array.from({ length: pageUrls.length }, () => "");
     images[0] = parseViewerImage(firstPage);

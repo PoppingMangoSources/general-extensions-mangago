@@ -6,7 +6,7 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "MangaTown",
   description: "Extension that pulls content from mangatown.com.",
-  version: "1.0.0-alpha.5",
+  version: "1.0.0-alpha.6",
   icon: "icon.png",
   language: "en",
   contentRating: ContentRating.MATURE,

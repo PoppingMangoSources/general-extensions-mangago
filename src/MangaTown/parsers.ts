@@ -352,6 +352,27 @@ export const parseChapterPageUrls = ($: cheerio.CheerioAPI): string[] => {
   return urls;
 };
 
+// Every image of a chapter sits in one directory under a zero-padded page
+// index, so the whole chapter can be derived from a single page's image URL.
+const SEQUENTIAL_IMAGE_REGEX = /^(.*\/)([^/\d]*)(\d+)(\.[A-Za-z0-9]+)$/;
+
+export const buildSequentialImageUrls = (
+  imageUrl: string,
+  imagePage: number,
+  totalPages: number,
+): string[] | undefined => {
+  const match = imageUrl.match(SEQUENTIAL_IMAGE_REGEX);
+  if (!match) return undefined;
+  const [, directory, prefix, digits, extension] = match;
+  const first = Number.parseInt(digits, 10) - (imagePage - 1);
+  if (!Number.isFinite(first) || first < 0) return undefined;
+  return Array.from(
+    { length: totalPages },
+    (_, index) =>
+      `${directory}${prefix}${String(first + index).padStart(digits.length, "0")}${extension}`,
+  );
+};
+
 export const parseViewerImage = ($: cheerio.CheerioAPI): string => {
   const image = $("div#viewer img, img#image, source#image").first();
   return imageUrlFrom(image);
