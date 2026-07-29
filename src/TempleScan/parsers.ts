@@ -250,7 +250,7 @@ const chapterTitle = (chapter: SeasonChapter): string => {
   const title = (chapter.chapter_title?.trim() || chapter.chapter_name?.trim() || "")
     .replace(/^chapter\s+\d+(?:\.\d+)?(?:\s*[-:]\s*)?/i, "")
     .trim();
-  return chapterIsPaid(chapter) ? (title ? `${title} - Locked` : "Locked") : title;
+  return chapterIsPaid(chapter) ? (title ? `${title} 🔒` : "🔒") : title;
 };
 
 export const parseChapters = (

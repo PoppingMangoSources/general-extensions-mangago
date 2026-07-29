@@ -11,6 +11,7 @@ import {
   type PagedResults,
   type SearchQuery,
   type SearchResultItem,
+  type SortingOption,
   type SourceManga,
 } from "@paperback/types";
 import * as cheerio from "cheerio";
@@ -25,7 +26,7 @@ import {
   type MangaStreamSearchMetadata,
 } from "./generic/models";
 import { getFilterTagsBySection, getIncludedTagBySection } from "./generic/parsers";
-import { DOMAIN, RANKING_RANGES, SECTIONS } from "./models";
+import { DOMAIN, RANKING_RANGES, SECTIONS, SORT_OPTIONS } from "./models";
 import { parseRelativeDate } from "./parsers";
 import pbconfig from "./pbconfig";
 import { getBaseUrlOverride, RokariComicsSettings } from "./settings";
@@ -301,6 +302,7 @@ class RokariComicsExtension extends MangaStreamGeneric {
   override async getSearchResults(
     query: SearchQuery<MangaStreamFilterMetadata>,
     metadata: MangaStreamSearchMetadata | undefined,
+    sortingOption?: SortingOption,
   ): Promise<PagedResults<SearchResultItem>> {
     const rawMetadata = query.metadata;
     if (rawMetadata) {
@@ -328,7 +330,8 @@ class RokariComicsExtension extends MangaStreamGeneric {
     }
 
     const title = (query.title ?? "").replace(/[’–][a-z]*/g, "").trim();
-    const hasFilters = includedTags.length > 0 || excludedTags.length > 0;
+    const order = sortingOption?.id === "default" ? undefined : sortingOption?.id;
+    const hasFilters = includedTags.length > 0 || excludedTags.length > 0 || order != null;
     let urlBuilder = new URL(this.domain);
     if (title && !hasFilters) {
       if (page > 1) {
@@ -343,7 +346,6 @@ class RokariComicsExtension extends MangaStreamGeneric {
 
     const status = getIncludedTagBySection("status", includedTags);
     const type = getIncludedTagBySection("type", includedTags);
-    const order = getIncludedTagBySection("order", includedTags);
     if (status) urlBuilder.setQueryItem("status", status);
     if (type) urlBuilder.setQueryItem("type", type);
     if (order) urlBuilder.setQueryItem("order", order);
@@ -377,6 +379,10 @@ class RokariComicsExtension extends MangaStreamGeneric {
 
     const hasNextPage = $("div.hpage .r, div.pagination .next, a.next.page-numbers").length > 0;
     return { items: manga, metadata: hasNextPage ? { page: page + 1 } : undefined };
+  }
+
+  override async getSortingOptions(): Promise<SortingOption[]> {
+    return SORT_OPTIONS;
   }
 
   override supportsTagExclusion(): boolean {

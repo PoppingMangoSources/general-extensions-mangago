@@ -36,7 +36,7 @@ export async function runTests(logger: TestLogger) {
     );
 
     expect(chapters.map((chapter) => chapter.chapterId)).to.deep.equal(["1", "locked:2"]);
-    expect(chapters[1]?.title).to.equal("After Hours - Locked");
+    expect(chapters[1]?.title).to.equal("After Hours 🔒");
 
     let error: unknown;
     try {

@@ -217,11 +217,23 @@ class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
   private async getFeaturedSection(
     contentType: ContentType,
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    const banner = await fetchBanner(contentType);
+    const [banner, seriesResponse] = await Promise.all([
+      fetchBanner(contentType),
+      fetchSeries({ page: 1, limit: 100, contentType }),
+    ]);
     if (contentType === "novel" && banner.showNovelSection === false) return { items: [] };
 
+    const seriesById = new Map(seriesResponse.data.map((series) => [series.seriesId, series]));
+    const featuredSeries = banner.featuredSeries.map((series) => {
+      const listing = seriesById.get(series.seriesId);
+      return {
+        ...listing,
+        ...series,
+        contentType: listing?.contentType ?? contentType,
+      };
+    });
     return {
-      items: parseMangaList(banner.featuredSeries)
+      items: parseMangaList(featuredSeries)
         .filter((item) => item.imageUrl.length > 0)
         .map(toFeaturedItem),
     };

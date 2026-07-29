@@ -266,11 +266,10 @@ export class MangaStreamParser {
       { id: "genres", title: "Genres", tags: [] },
       { id: "status", title: "Status", tags: [] },
       { id: "type", title: "Type", tags: [] },
-      { id: "order", title: "Order", tags: [] },
     ];
 
     const sectionDropDowns = $("ul.dropdown-menu.c4.genrez, ul.dropdown-menu.c1").toArray();
-    for (let i = 0; i < 4; ++i) {
+    for (let i = 0; i < tagSections.length; ++i) {
       const sectionDropdown = sectionDropDowns[i];
       const section = tagSections[i];
       if (!sectionDropdown || !section) {

@@ -18,6 +18,7 @@ import {
   type ChapterPagesResponse,
   type ContentType,
   type MangaListItem,
+  type MediaType,
   type NovelChapterResponse,
   type Series,
   type SeriesChapterDetails,
@@ -89,6 +90,18 @@ const formatChapterNumber = (value: string): string => {
   return Number.isFinite(number) ? number.toString() : value;
 };
 
+const formatMediaType = (series: Series): MediaType => {
+  if (series.contentType === "novel") return "Novel";
+  switch ((series.countryOfOrigin ?? "").toUpperCase()) {
+    case "JP":
+      return "Manga";
+    case "CN":
+      return "Manhua";
+    default:
+      return "Manhwa";
+  }
+};
+
 export const contentRatingForGenres = (genreNames: string[]): ContentRating => {
   const genres = genreNames.map((name) => name.trim().toLowerCase());
   if (
@@ -118,7 +131,6 @@ const formatViews = (views?: number): string | undefined => {
 
 export const parseMangaList = (series: Series[]): MangaListItem[] =>
   series.map((item) => {
-    const contentType = item.contentType === "novel" ? "novel" : "manhwa";
     const views =
       item.totalViews == null ? undefined : Number.parseInt(String(item.totalViews), 10);
     return {
@@ -135,7 +147,7 @@ export const parseMangaList = (series: Series[]): MangaListItem[] =>
           : item.averageRating,
       views: views != null && Number.isFinite(views) ? views : undefined,
       contentRating: contentRatingForGenres(item.genres ?? []),
-      contentType,
+      mediaType: formatMediaType(item),
     };
   });
 
@@ -152,7 +164,7 @@ export const toFeaturedItem = (item: MangaListItem): DiscoverSectionItem => {
     mangaId: item.mangaId,
     title: item.title,
     imageUrl: item.bannerImageUrl,
-    supertitle: item.status ?? (item.contentType === "novel" ? "Novel" : "Comic"),
+    supertitle: item.mediaType,
     summary: item.summary,
     infoItems:
       ratingInfo && viewsInfo
@@ -168,6 +180,7 @@ export const toFeaturedItem = (item: MangaListItem): DiscoverSectionItem => {
 
 export const toSearchResultItem = (item: MangaListItem): SearchResultItem => {
   const subtitle = [
+    item.mediaType,
     item.status,
     item.rating == null ? undefined : `Rating ${item.rating.toFixed(1)}`,
     formatViews(item.views),
@@ -205,7 +218,7 @@ export const toChapterUpdateItem = (
         : chapter.chapterId.replace(SAFE_ID_REGEX, "-"),
     title: decodeText(series.title),
     imageUrl: staticImageUrl(series.coverUrl, series.bannerUrl) || FALLBACK_IMAGE_URL,
-    subtitle: `Ch. ${formatChapterNumber(chapter.chapterNumber)}`,
+    subtitle: `${formatMediaType(series)} • Ch. ${formatChapterNumber(chapter.chapterNumber)}`,
     publishDate,
     contentRating: contentRatingForGenres(series.genres ?? []),
   };
@@ -291,7 +304,7 @@ export const parseChapterList = (
         sourceManga,
         langCode: "en",
         chapNum: Number.isFinite(number) ? number : index + 1,
-        title: locked ? (rawTitle ? `Paid: ${rawTitle}` : "Paid") : rawTitle || undefined,
+        title: locked ? (rawTitle ? `${rawTitle} 🔒` : "🔒") : rawTitle || undefined,
         version: contentType === "novel" ? "Novel" : undefined,
         volume: 0,
         sortingIndex: index,

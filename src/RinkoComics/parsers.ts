@@ -415,7 +415,7 @@ export const parseChapterElements = (
     // synthetic id keeps them listed while staying unreadable.
     let chapterId = rawUrl ? parsePath(rawUrl) : `locked-${postId}`;
     if (locked) {
-      title = title ? `${title} - Locked` : "Locked";
+      title = title ? `${title} 🔒` : "🔒";
       chapterId += LOCK_SUFFIX;
     }
 

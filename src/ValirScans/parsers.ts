@@ -230,7 +230,7 @@ const chapterTitle = (chapter: ValirChapterItem): string => {
   const title = (chapter.title?.trim() || "")
     .replace(/^chapter\s+\d+(?:\.\d+)?(?:\s*[-:]\s*)?/i, "")
     .trim();
-  return chapterIsLocked(chapter) ? (title ? `${title} - Locked` : "Locked") : title;
+  return chapterIsLocked(chapter) ? (title ? `${title} 🔒` : "🔒") : title;
 };
 
 const chapterIsLocked = (chapter: ValirChapterItem): boolean => chapter.isLocked === true;

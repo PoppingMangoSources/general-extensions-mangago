@@ -5,7 +5,6 @@ import {
   BasicRateLimiter,
   CookieStorageInterceptor,
   DiscoverSectionType,
-  URL,
   type Chapter,
   type ChapterDetails,
   type ContentRating,
@@ -19,6 +18,7 @@ import {
   type Request,
   type SearchQuery,
   type SearchResultItem,
+  type SortingOption,
   type SourceManga,
   type TagSection,
 } from "@paperback/types";
@@ -37,7 +37,7 @@ import {
   type StatusTypes,
 } from "./models";
 import { MangaStreamInterceptor } from "./network";
-import { getFilterTagsBySection, getIncludedTagBySection, MangaStreamParser } from "./parsers";
+import { MangaStreamParser } from "./parsers";
 
 export abstract class MangaStreamGeneric implements ExtensionImpl<typeof basePbConfig> {
   abstract domain: string;
@@ -157,63 +157,13 @@ export abstract class MangaStreamGeneric implements ExtensionImpl<typeof basePbC
     );
   }
 
-  async getSearchResults(
+  abstract getSearchResults(
     query: SearchQuery<MangaStreamFilterMetadata>,
     metadata: MangaStreamSearchMetadata | undefined,
-  ): Promise<PagedResults<SearchResultItem>> {
-    const page: number = metadata?.page ?? 1;
+    sortingOption?: SortingOption,
+  ): Promise<PagedResults<SearchResultItem>>;
 
-    let urlBuilder: URL = new URL(this.domain)
-      .addPathComponent(this.directoryPath)
-      .setQueryItem("page", page.toString());
-
-    if (query?.title) {
-      urlBuilder = urlBuilder.setQueryItem(
-        "s",
-        encodeURIComponent(query?.title.replace(/[’–][a-z]*/g, "") ?? ""),
-      );
-    } else {
-      const includedTags: string[] = [];
-      for (const tags of Object.values(query.metadata ?? {})) {
-        if (!tags || typeof tags !== "object") continue;
-        includedTags.push(...Object.keys(tags));
-      }
-      urlBuilder = urlBuilder
-        .setQueryItem("genre", getFilterTagsBySection("genres", includedTags, true))
-        .setQueryItem("status", getIncludedTagBySection("status", includedTags))
-        .setQueryItem("type", getIncludedTagBySection("type", includedTags))
-        .setQueryItem("order", getIncludedTagBySection("order", includedTags));
-    }
-
-    const request = {
-      url: urlBuilder.toString(),
-      method: "GET",
-    };
-    const [, buffer] = await Application.scheduleRequest(request);
-    const $ = cheerio.load(Application.arrayBufferToUTF8String(buffer));
-    const results = this.parser.parseSearchResults($);
-
-    const manga: SearchResultItem[] = [];
-    for (const result of results) {
-      let mangaId: string = result.mangaId;
-      if (getUsePostIds()) {
-        mangaId = await this.slugToPostId(result.mangaId, result.path);
-      }
-
-      manga.push({
-        mangaId,
-        title: result.title,
-        subtitle: result.subtitle,
-        imageUrl: result.imageUrl,
-      });
-    }
-
-    metadata = !this.parser.isLastPage($, "view_more") ? { page: page + 1 } : undefined;
-    return {
-      items: manga,
-      metadata,
-    };
-  }
+  abstract getSortingOptions(): Promise<SortingOption[]>;
 
   supportsTagExclusion(): boolean {
     return false;

@@ -53,7 +53,6 @@ export interface MangaStreamFilterMetadata extends JSONObject {
   genres?: Record<string, "included" | "excluded">;
   status?: Record<string, "included" | "excluded">;
   type?: Record<string, "included" | "excluded">;
-  order?: Record<string, "included" | "excluded">;
   rokariRange?: string;
 }
 

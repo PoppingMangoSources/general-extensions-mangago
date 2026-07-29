@@ -36,7 +36,6 @@ export class MangaStreamAdvancedSearchForm extends AdvancedSearchForm {
   private genres: Record<string, "included" | "excluded">;
   private status: Record<string, "included" | "excluded">;
   private type: Record<string, "included" | "excluded">;
-  private order: Record<string, "included" | "excluded">;
 
   constructor(
     query: SearchQuery<MangaStreamFilterMetadata>,
@@ -47,13 +46,12 @@ export class MangaStreamAdvancedSearchForm extends AdvancedSearchForm {
     this.genres = { ...query.metadata?.genres };
     this.status = { ...query.metadata?.status };
     this.type = { ...query.metadata?.type };
-    this.order = { ...query.metadata?.order };
   }
 
   override getSections() {
     return this.tags.flatMap((section) => {
-      const id = section.id as "genres" | "status" | "type" | "order";
-      if (!["genres", "status", "type", "order"].includes(id)) return [];
+      const id = section.id as "genres" | "status" | "type";
+      if (!["genres", "status", "type"].includes(id)) return [];
       if (id === "genres") {
         return [
           Section(id, [
@@ -73,12 +71,7 @@ export class MangaStreamAdvancedSearchForm extends AdvancedSearchForm {
         ];
       }
 
-      const handler =
-        id === "status"
-          ? "handleStatusChange"
-          : id === "type"
-            ? "handleTypeChange"
-            : "handleOrderChange";
+      const handler = id === "status" ? "handleStatusChange" : "handleTypeChange";
       return [
         Section(id, [
           SelectRow(id, {
@@ -109,16 +102,11 @@ export class MangaStreamAdvancedSearchForm extends AdvancedSearchForm {
     this.type = Object.fromEntries(value.map((id) => [id, "included"] as const));
   }
 
-  async handleOrderChange(value: string[]): Promise<void> {
-    this.order = Object.fromEntries(value.map((id) => [id, "included"] as const));
-  }
-
   override getSearchQueryMetadata(): MangaStreamFilterMetadata {
     return {
       genres: this.genres,
       status: this.status,
       type: this.type,
-      order: this.order,
     };
   }
 }

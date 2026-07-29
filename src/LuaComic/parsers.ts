@@ -437,7 +437,7 @@ export const parseChapterList = (
     return {
       chapterId: `${encodeSlugId(chapter.chapter_slug)}${paid ? PAID_CHAPTER_SUFFIX : ""}`,
       sourceManga,
-      title: paid ? (title ? `${title} - Locked` : "Locked") : title,
+      title: paid ? (title ? `${title} 🔒` : "🔒") : title,
       chapNum: chapterNumberOf(chapter),
       volume: 0,
       langCode: "en",

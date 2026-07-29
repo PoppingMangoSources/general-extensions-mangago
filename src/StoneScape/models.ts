@@ -30,6 +30,7 @@ export const PERIOD_OPTIONS = [
 
 export type PopularPeriod = (typeof PERIOD_OPTIONS)[number]["id"];
 export type ContentType = "manhwa" | "novel";
+export type MediaType = "Manga" | "Manhwa" | "Manhua" | "Novel";
 export type TriState = Record<string, "included" | "excluded">;
 
 export const STATUS_OPTIONS: Tag[] = [
@@ -178,7 +179,7 @@ export interface MangaListItem {
   rating?: number;
   views?: number;
   contentRating: ContentRating;
-  contentType: ContentType;
+  mediaType: MediaType;
 }
 
 export interface SeriesQuery {

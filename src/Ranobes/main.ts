@@ -66,7 +66,7 @@ const MAX_CHAPTER_PAGES = 50;
 export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   mainRateLimiter = new BasicRateLimiter("ranobes-rate-limiter", {
     numberOfRequests: 1,
-    bufferInterval: 2.5,
+    bufferInterval: 2,
     ignoreImages: true,
   });
 
