@@ -328,22 +328,27 @@ export const parseChapters = ($: cheerio.CheerioAPI, sourceManga: SourceManga): 
   return chapters;
 };
 
+// The reader carries two page_select blocks; only the one following the
+// chapter dropdown lists pages, the other repeats the chapter list.
+const PAGE_OPTION_SELECTOR = "select#top_chapter_list ~ div.page_select option";
+const FALLBACK_PAGE_OPTION_SELECTOR = "div.manga_read_footer div.page_select option";
+
 export const parseChapterPageUrls = ($: cheerio.CheerioAPI): string[] => {
+  const scoped = $(PAGE_OPTION_SELECTOR);
+  const options = scoped.length > 0 ? scoped : $(FALLBACK_PAGE_OPTION_SELECTOR);
+
   const urls: string[] = [];
   const seen = new Set<string>();
-  $("div.page_select")
-    .first()
-    .find("option")
-    .each((_, element) => {
-      const option = $(element);
-      if (option.text().toLowerCase().includes("featured")) return;
-      const value = option.attr("value") ?? "";
-      if (!value) return;
-      const url = toAbsoluteUrl(value);
-      if (seen.has(url)) return;
-      seen.add(url);
-      urls.push(url);
-    });
+  options.each((_, element) => {
+    const option = $(element);
+    const value = option.attr("value") ?? "";
+    // The final option advertises a promo page rather than a chapter page.
+    if (!value || /featured/i.test(value) || /featured/i.test(option.text())) return;
+    const url = toAbsoluteUrl(value);
+    if (seen.has(url)) return;
+    seen.add(url);
+    urls.push(url);
+  });
   return urls;
 };
 
@@ -375,11 +380,7 @@ const chapterLabel = (chapter?: ListingChapter): string | undefined => {
   return chapter.chapNum != null ? `Ch. ${chapter.chapNum}` : chapter.label || undefined;
 };
 
-export const buildFeaturedItem = (
-  item: MangaListItem,
-  author?: string,
-  summary?: string,
-): FeaturedCarouselItem => {
+export const buildFeaturedItem = (item: MangaListItem, author?: string): FeaturedCarouselItem => {
   const infoItems: { symbol: string; text: string }[] = [];
   if (item.rating != null) infoItems.push({ symbol: "star.fill", text: item.rating.toFixed(2) });
   if (item.genres.length > 0) {
@@ -391,7 +392,6 @@ export const buildFeaturedItem = (
     imageUrl: item.imageUrl,
     title: item.title,
     supertitle: author ?? item.author,
-    summary,
     infoItems:
       infoItems.length === 0
         ? undefined

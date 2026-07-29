@@ -20,6 +20,7 @@ import {
   type SortingOption,
   type SourceManga,
 } from "@paperback/types";
+import type { CheerioAPI } from "cheerio";
 
 import {
   getSectionOrder,
@@ -30,6 +31,7 @@ import {
 import {
   DEMOGRAPHICS,
   FEATURED_LIMIT,
+  READER_CONCURRENCY,
   GENRES,
   HOT_PERIODS,
   SECTION_DEFINITIONS,
@@ -209,7 +211,7 @@ class MangaTownExtension implements ExtensionImpl<typeof MangaTownConfig> {
     }
   }
 
-  // The featured listing carries no author or synopsis, so each card is
+  // The featured listing carries no author, so each card is
   // completed from its details page, capped at FEATURED_LIMIT titles.
   private async buildFeaturedItems(): Promise<DiscoverSectionItem[]> {
     const cards = parseMangaList(await fetchFeaturedPage()).slice(0, FEATURED_LIMIT);
@@ -229,7 +231,6 @@ class MangaTownExtension implements ExtensionImpl<typeof MangaTownConfig> {
                   : (manga.mangaInfo.tagGroups?.[0]?.tags.map((tag) => tag.title) ?? []),
             },
             manga.mangaInfo.author,
-            manga.mangaInfo.synopsis || undefined,
           );
         } catch (error) {
           if (error instanceof CloudflareError) throw error;
@@ -398,21 +399,33 @@ class MangaTownExtension implements ExtensionImpl<typeof MangaTownConfig> {
     // Paged chapters expose one image per page, so every remaining page is
     // fetched to collect its image; long-strip chapters list them all at once.
     const pages =
-      pageUrls.length > 0
-        ? await Promise.all(
-            pageUrls.map((pageUrl, index) =>
-              index === 0
-                ? Promise.resolve(parseViewerImage($))
-                : fetchChapterPage(pageUrl).then(parseViewerImage),
-            ),
-          )
-        : parseViewerImages($);
+      pageUrls.length > 0 ? await this.fetchPageImages($, pageUrls) : parseViewerImages($);
 
     const validPages = pages.filter((url) => url.length > 0);
     if (validPages.length === 0) {
       throw new Error(`No pages found for chapter ${chapter.chapterId} of ${mangaId}.`);
     }
     return { id: chapter.chapterId, mangaId, pages: validPages };
+  }
+
+  // Each page holds a single image, so a long chapter needs one request per
+  // page; a small worker pool keeps the order while capping how many of those
+  // requests are in flight at once.
+  private async fetchPageImages(firstPage: CheerioAPI, pageUrls: string[]): Promise<string[]> {
+    const images: string[] = Array.from({ length: pageUrls.length }, () => "");
+    images[0] = parseViewerImage(firstPage);
+
+    let cursor = 1;
+    const worker = async (): Promise<void> => {
+      while (cursor < pageUrls.length) {
+        const index = cursor++;
+        images[index] = parseViewerImage(await fetchChapterPage(pageUrls[index]));
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(READER_CONCURRENCY, pageUrls.length - 1) }, worker),
+    );
+    return images;
   }
 }
 
