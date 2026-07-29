@@ -174,6 +174,7 @@ export interface RanobesChapterPage {
   chapters?: RanobesChapterEntry[];
   pages_count?: number;
   count_all?: number;
+  cstart?: number;
   limit?: number;
 }
 

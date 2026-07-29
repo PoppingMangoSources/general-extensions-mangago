@@ -3,6 +3,7 @@
 
 import {
   BasicRateLimiter,
+  CloudflareError,
   type AdvancedSearchForm,
   type Chapter,
   type ChapterDetails,
@@ -197,7 +198,7 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
       return parseChapters(cached.pages, sourceManga);
     }
 
-    const firstPage = parseChapterPage(cheerio.load(await fetchChapterListPage(novelId)));
+    const firstPage = await this.getChapterPage(novelId);
     const pageCount = Math.max(
       1,
       firstPage.pages_count ??
@@ -212,14 +213,18 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
         (_, index) => page + index,
       );
       const chapterPages = await Promise.all(
-        pageNumbers.map(async (pageNumber) =>
-          parseChapterPage(cheerio.load(await fetchChapterListPage(novelId, pageNumber))),
-        ),
+        pageNumbers.map((pageNumber) => this.getChapterPage(novelId, pageNumber)),
       );
       pages.push(...chapterPages);
     }
+    const chapters = parseChapters(pages, sourceManga);
+    if (firstPage.count_all && chapters.length < firstPage.count_all) {
+      throw new Error(
+        `Ranobes: loaded ${chapters.length} of ${firstPage.count_all} chapters for ${sourceManga.mangaId}`,
+      );
+    }
     this.chapterPagesCache = { novelId, pages, fetchedAt: Date.now() };
-    return parseChapters(pages, sourceManga);
+    return chapters;
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
@@ -242,6 +247,29 @@ export class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
 
   private async getFilterTaxonomy(): Promise<FilterTaxonomy> {
     return parseFilterTaxonomy(cheerio.load(await fetchListingPage("/novels/")));
+  }
+
+  private async getChapterPage(
+    novelId: string,
+    page = 1,
+  ): Promise<ReturnType<typeof parseChapterPage>> {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const chapterPage = parseChapterPage(
+          cheerio.load(await fetchChapterListPage(novelId, page)),
+        );
+        if (chapterPage.cstart !== undefined && chapterPage.cstart !== page) {
+          throw new Error(`Ranobes returned chapter page ${chapterPage.cstart} instead of ${page}`);
+        }
+        return chapterPage;
+      } catch (error) {
+        if (error instanceof CloudflareError) throw error;
+        if (attempt === 3) {
+          throw new Error(`Ranobes: failed to load chapter page ${page}`, { cause: error });
+        }
+      }
+    }
+    throw new Error(`Ranobes: failed to load chapter page ${page}`);
   }
 }
 

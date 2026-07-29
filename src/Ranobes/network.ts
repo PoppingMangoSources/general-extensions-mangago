@@ -119,8 +119,7 @@ const responseHeader = (response: Response, name: string): string => {
 
 const isChallengeResponse = (response: Response, body: string): boolean => {
   if (responseHeader(response, "cf-mitigated") === "challenge") return true;
-  if (response.status !== 403) return false;
-  if (body.includes("window.__DATA__")) return false;
+  if (!body || body.includes("window.__DATA__")) return false;
   return /(?:<title>\s*(?:Just a moment|Bot Verification)\b|vb-custom-captcha-shell|checking your browser)/i.test(
     body,
   );
