@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-29T08:15:14.778Z",
+  "buildTime": "2026-07-29T09:11:54.749Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -9,6 +9,28 @@
     "description": "Paperback extensions for websites with unique, non-generic themes. Maintained by Inkdex."
   },
   "sources": [
+    {
+      "name": "BunManga",
+      "description": "Extension that pulls content from bunmanga.com.",
+      "version": "1.0.0-alpha.1",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "ADULT",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "BunManga"
+    },
     {
       "name": "Chikari",
       "description": "Extension that pulls content from chikari.moe.",
