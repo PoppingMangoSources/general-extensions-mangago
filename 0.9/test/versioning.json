@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-29T10:00:14.545Z",
+  "buildTime": "2026-07-29T10:31:27.797Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -53,6 +53,29 @@
         }
       ],
       "id": "Chikari"
+    },
+    {
+      "name": "Galaxy Manga",
+      "description": "Extension that pulls content from galaxymanga.io.",
+      "version": "1.0.0-alpha.1",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "MATURE",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "GalaxyManga"
     },
     {
       "name": "KaliScan",
