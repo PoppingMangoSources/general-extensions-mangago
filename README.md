@@ -14,6 +14,7 @@ The repository's own sources are currently available from `0.9/test` while they 
 | [KingOfShojo](https://kingofshojo.com)        | `kingofshojo.com`     |
 | [LikeManga](https://likemanga.ink)            | `likemanga.ink`       |
 | [Lua Comic](https://luacomic.org)             | `luacomic.org`        |
+| [MangaTown](https://www.mangatown.com)        | `mangatown.com`       |
 | [MyReadingManga](https://myreadingmanga.info) | `myreadingmanga.info` |
 | [NovelArchive](https://novelarchive.cc)       | `novelarchive.cc`     |
 | [NovelCool](https://www.novelcool.com)        | `novelcool.com`       |
