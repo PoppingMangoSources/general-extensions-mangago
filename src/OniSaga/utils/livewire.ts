@@ -83,16 +83,6 @@ export function extractLivewireState(
   return { token, snapshot };
 }
 
-// wire:snapshot values are HTML-entity-encoded JSON.
-function decodeEntities(value: string): string {
-  return value
-    .replace(/&quot;/g, '"')
-    .replace(/&#0?39;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&");
-}
-
 // Same extraction straight off the raw document text. The /browse page can be
 // well over 10 MB, which cheerio takes ages to parse on-device; two regexes
 // over the string find the CSRF token and the component snapshot instantly.
@@ -108,7 +98,8 @@ export function extractLivewireStateFromHtml(
   const snapshotRegex = /wire:snapshot="([^"]+)"/g;
   for (const match of html.matchAll(snapshotRegex)) {
     if (match[1].includes(componentName)) {
-      return { token, snapshot: decodeEntities(match[1]) };
+      // wire:snapshot values are HTML-entity-encoded JSON.
+      return { token, snapshot: Application.decodeHTMLEntities(match[1]) };
     }
   }
   return undefined;
