@@ -91,6 +91,7 @@ class MangaTownExtension implements ExtensionImpl<typeof MangaTownConfig> {
   private cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
   private interceptor = new MangaTownInterceptor("main");
   private featuredPromise?: Promise<DiscoverSectionItem[]>;
+  private readerCache = new Map<string, string[]>();
 
   async initialise(): Promise<void> {
     this.rateLimiter.registerInterceptor();
@@ -114,6 +115,7 @@ class MangaTownExtension implements ExtensionImpl<typeof MangaTownConfig> {
       }
     }
     this.featuredPromise = undefined;
+    this.readerCache.clear();
   }
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
@@ -393,6 +395,9 @@ class MangaTownExtension implements ExtensionImpl<typeof MangaTownConfig> {
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
     const mangaId = chapter.sourceManga.mangaId;
+    const cached = this.readerCache.get(chapter.chapterId);
+    if (cached) return { id: chapter.chapterId, mangaId, pages: cached };
+
     const $ = await fetchChapterPage(chapterUrl(mangaId, chapter.chapterId));
     const pageUrls = parseChapterPageUrls($);
 
@@ -404,6 +409,11 @@ class MangaTownExtension implements ExtensionImpl<typeof MangaTownConfig> {
     const validPages = pages.filter((url) => url.length > 0);
     if (validPages.length === 0) {
       throw new Error(`No pages found for chapter ${chapter.chapterId} of ${mangaId}.`);
+    }
+    // Rebuilding this costs one request per page, so keep a complete result for
+    // the session; a partial one is left out so reopening retries the gaps.
+    if (validPages.length === pages.length) {
+      this.readerCache.set(chapter.chapterId, validPages);
     }
     return { id: chapter.chapterId, mangaId, pages: validPages };
   }
@@ -419,13 +429,24 @@ class MangaTownExtension implements ExtensionImpl<typeof MangaTownConfig> {
     const worker = async (): Promise<void> => {
       while (cursor < pageUrls.length) {
         const index = cursor++;
-        images[index] = parseViewerImage(await fetchChapterPage(pageUrls[index]));
+        images[index] = await this.fetchPageImage(pageUrls[index]);
       }
     };
     await Promise.all(
       Array.from({ length: Math.min(READER_CONCURRENCY, pageUrls.length - 1) }, worker),
     );
     return images;
+  }
+
+  // One page failing shouldn't sink the whole chapter, so a miss leaves its slot
+  // empty and the chapter opens without it.
+  private async fetchPageImage(pageUrl: string): Promise<string> {
+    try {
+      return parseViewerImage(await fetchChapterPage(pageUrl));
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+      return "";
+    }
   }
 }
 
