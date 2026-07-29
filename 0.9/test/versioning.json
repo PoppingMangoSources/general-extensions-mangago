@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-07-29T15:04:16.202Z",
+  "buildTime": "2026-07-29T15:08:48.747Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -406,7 +406,7 @@
     {
       "name": "RokariComics",
       "description": "Extension that pulls content from rokaricomics.com.",
-      "version": "1.0.0-alpha.17",
+      "version": "1.0.0-alpha.18",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "SAFE",
@@ -498,7 +498,7 @@
     {
       "name": "ValirScans",
       "description": "Extension that pulls comics and novels from valirscans.org.",
-      "version": "1.0.0-alpha.16",
+      "version": "1.0.0-alpha.17",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
