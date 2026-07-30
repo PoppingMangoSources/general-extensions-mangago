@@ -46,6 +46,8 @@ export const toLinkCardProminentItem = (
 });
 
 const FLIGHT_CHUNK_REGEX = /self\.__next_f\.push\(\[1,"((?:[^"\\]|\\.)*)"\]\)/g;
+const COVER_URL_REGEX =
+  /https:\/\/opics\.online\/media\/covers\/[^"\\\s]+\.(?:jpe?g|png|webp|gif|avif)(?:\?[^"\\\s]*)?/i;
 
 export const decodeFlightPayload = (html: string): string => {
   const parts: string[] = [];
@@ -236,7 +238,7 @@ const parseLinkCards = (fragment: string): HomeLinkCard[] => {
       i + 1 < anchors.length ? (anchors[i + 1].index ?? fragment.length) : fragment.length;
     const segment = fragment.slice(start, end);
 
-    const cover = segment.match(/"src":"(https:\/\/[^"]+)"/)?.[1];
+    const cover = segment.match(/"src":"(https:\/\/[^\"]+)"/)?.[1];
     const alt = segment.match(/"alt":"((?:[^"\\]|\\.)*)"/)?.[1];
     if (!cover || !alt) continue;
 
@@ -330,14 +332,18 @@ export const parseSeriesProps = (html: string, slug: string): SeriesProps => {
   return { ...props, description: resolveFlightTextReference(payload, props.description) };
 };
 
-// The series props carry a null thumbnail and og:image now points at a social-card
-// generator, so prefer the real cover from the JSON-LD structured data; fall back to
-// the og:image meta only if that is missing.
-export const parseCoverUrl = (html: string): string =>
-  html.match(/"image":"(https:\/\/[^"]+\.(?:jpe?g|png|webp|gif|avif))"/i)?.[1] ??
-  html.match(/property="og:image"\s+content="([^"]+)"/)?.[1] ??
-  html.match(/"og:image","content":"([^"]+)"/)?.[1] ??
-  "";
+export const parseCoverUrl = (html: string): string => {
+  const payload = decodeFlightPayload(html);
+  for (const source of [payload, html]) {
+    const cover =
+      source.match(COVER_URL_REGEX)?.[0] ??
+      source.match(/"image":"(https:\/\/[^\"]+\.(?:jpe?g|png|webp|gif|avif))"/i)?.[1] ??
+      source.match(/property="og:image"\s+content="([^"]+)"/)?.[1] ??
+      source.match(/"og:image","content":"([^"]+)"/)?.[1];
+    if (cover) return cover;
+  }
+  return "";
+};
 
 const contentRatingForSeries = (props: SeriesProps): ContentRating => {
   const age = (props.ageRating ?? "").trim();

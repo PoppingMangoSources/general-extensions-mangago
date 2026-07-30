@@ -4,7 +4,7 @@ import { expect } from "chai";
 
 import { getDomain } from "../OManga/forms/settings.js";
 import { OManga, OMangaExtension } from "../OManga/main.js";
-import { parseHomeLinkSection, parseSeriesProps } from "../OManga/parsers.js";
+import { parseCoverUrl, parseHomeLinkSection, parseSeriesProps } from "../OManga/parsers.js";
 import sourceInfo from "../OManga/pbconfig.js";
 import { TestSuite, registerDefaultTests } from "./suite.js";
 
@@ -100,6 +100,21 @@ export async function runTests(logger: TestLogger) {
       mangaId: "second",
       subtitle: "#2",
     });
+  });
+
+  suite.test("series covers resolve from Flight image preloads", async () => {
+    const covers = [
+      "https://opics.online/media/covers/l-/l-YrkWNQ1etfOuO-KsOTU6BPbWOQMyfiKaMSm77dI9o.webp",
+      "https://opics.online/media/covers/P6/P6oZDxf0GKVNjem9c-pLD4JRZ_HpWpFzWR20gak1VtY.webp",
+      "https://opics.online/media/covers/XR/XRRfrpUQqNQ_IhHthY0K9HfF74fa6vjvZZ5DlpNNW4Y.webp",
+      "https://opics.online/media/covers/j0/j05W7uhnPJGTpdR-i81I2U4Rdc6daSKRcSHZHGoM8e0.webp",
+    ];
+
+    for (const cover of covers) {
+      const preload = `:HL["${cover}","image",{"fetchPriority":"high"}]`;
+      const html = `<script>self.__next_f.push([1,${JSON.stringify(preload)}])</script>`;
+      expect(parseCoverUrl(html)).to.equal(cover);
+    }
   });
 
   suite.test(
