@@ -51,47 +51,57 @@ const LOGO = svgUri(
 // so the page reads in the repository's colours rather than the stock ones.
 const STYLE = `
     <style>
-      /* Flat, and cool rather than warm. A pink-and-mango wash over a warm base
-         mixes to brown at low opacity, which is what covered the whole page;
-         the pastels belong on the elements, not behind them. */
+      /* The page carries the same gradient as the install button. It is pinned
+         so the run reads once down the page rather than restarting per screen,
+         and the end colour also sits on the root so overscroll matches. */
+      html { background-color: #ffc17e !important; }
       body {
-        background: #141019 !important;
-        color: #f3e9f4 !important;
+        background: linear-gradient(165deg, #ffdcea 0%, #ffbbd5 32%, #ffcda8 66%, #ffc17e 100%) fixed !important;
+        background-repeat: no-repeat !important;
+        color: #33162a !important;
+        min-height: 100vh;
       }
+      /* Deep enough to hold against the pastel behind it; the light gradient
+         used elsewhere would disappear into the page here. */
       h1 {
-        background: linear-gradient(100deg, #ffdcea 0%, #ffbbd5 34%, #ffcda8 70%, #ffc17e 100%);
+        background: linear-gradient(100deg, #c9376b 0%, #e0517f 42%, #e8853a 100%);
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent !important;
       }
       .addToPaperbackButton {
-        background: linear-gradient(100deg, #ffdcea 0%, #ffbbd5 34%, #ffcda8 68%, #ffc17e 100%) !important;
-        border-bottom-color: rgba(51, 22, 42, 0.3) !important;
+        background: #ffffff !important;
+        border-bottom-color: rgba(51, 22, 42, 0.12) !important;
+        box-shadow: 0 6px 18px rgba(120, 40, 70, 0.16) !important;
         color: #33162a !important;
         font-weight: 700;
       }
-      .bg-zinc-800 { background-color: #1e1728 !important; }
-      .bg-zinc-700 { background-color: #2a2038 !important; }
-      .hover\\:bg-zinc-600:hover { background-color: #352845 !important; }
-      .bg-gray-500 { background-color: #392b47 !important; }
-      .border-zinc-700 { border-color: #392b47 !important; }
-      .text-gray-100, .text-gray-200, .text-gray-300 { color: #f3e9f4 !important; }
-      .text-gray-400 { color: #c0a8cc !important; }
+      .bg-zinc-800 { background-color: #fffaf9 !important; }
+      .bg-zinc-700 { background-color: #ffeef4 !important; }
+      .hover\\:bg-zinc-600:hover { background-color: #ffe2ec !important; }
+      .bg-gray-500 { background-color: #e9d3de !important; }
+      .border-zinc-700 { border-color: #f4cddb !important; }
+      .text-gray-100, .text-gray-200, .text-gray-300 { color: #33162a !important; }
+      .text-gray-400 { color: #7a4a60 !important; }
+      .placeholder-gray-400::placeholder { color: #9a7285 !important; }
 
-      .bg-zinc-800.rounded-lg { border: 1px solid #392b47 !important; }
-      .bg-zinc-800.rounded-lg:hover { border-color: #f47fb2 !important; }
-      .shadow-lg { box-shadow: none !important; }
+      .bg-zinc-800.rounded-lg { border: 1px solid rgba(51, 22, 42, 0.1) !important; }
+      .bg-zinc-800.rounded-lg:hover { border-color: #d1477a !important; }
+      .shadow-lg { box-shadow: 0 8px 24px rgba(120, 40, 70, 0.14) !important; }
 
-      /* Content-rating pills read as a tinted panel with light text of the same
-         hue, rather than a block of saturated colour. */
-      .bg-red-500 { background-color: #431e31 !important; }
-      .text-red-100 { color: #ffb3cf !important; }
-      .text-red-500 { color: #c94a72 !important; }
-      .bg-yellow-500 { background-color: #453320 !important; }
-      .text-yellow-900 { color: #ffd79a !important; }
-      .bg-green-500 { background-color: #23342d !important; }
-      .text-green-100 { color: #a8e0c0 !important; }
-      .border-red-700 { border-color: rgba(51, 22, 42, 0.3) !important; }
+      /* Badge chips are filled from each extension's own colour and drawn at a
+         quarter opacity when unselected, so only the label is set here — dark,
+         which holds against both the pale unselected tint and the full fill. */
+      .font-medium.transition-all { color: #33162a !important; }
+
+      /* bg-red-500 backs both the ADULT pill and the error panel, and those
+         carry different label colours, so the pill is matched on the pair. */
+      .bg-red-500 { background-color: #c9376b !important; }
+      .text-red-500 { color: #c9376b !important; }
+      .bg-red-500.text-red-100 { background-color: #ffd9e4 !important; color: #a82d52 !important; }
+      .bg-yellow-500.text-yellow-900 { background-color: #ffe6c2 !important; color: #8a4b10 !important; }
+      .bg-green-500.text-green-100 { background-color: #d8efd0 !important; color: #2f5a35 !important; }
+      .border-red-700 { border-color: rgba(51, 22, 42, 0.12) !important; }
     </style>
   </head>`;
 
@@ -107,17 +117,18 @@ const REPLACEMENTS = [
     '<meta name="robots" content="noindex" />',
     `<meta name="robots" content="noindex" />\n    <meta name="description" content="${description}" />`,
   ],
-  // Header halo, kept to pink alone: the warm half of it was what turned the
-  // area behind the logo brown.
-  ["rgba(84, 120, 219, 0.4)", "rgba(255, 187, 213, 0.34)"],
-  ["rgba(246, 75, 75, 0.4)", "rgba(244, 127, 178, 0.26)"],
-  // Install button sits on white label text, so it stays a step deeper than
-  // the pastels used for fills.
-  ["bg-[#f64b4b]", "bg-[#e8629b]"],
-  ["hover:bg-[#f46565]", "hover:bg-[#f47fb2]"],
+  // Header halo: a white bloom lifts the mark off the gradient, where a
+  // coloured one would only muddy it.
+  ["rgba(84, 120, 219, 0.4)", "rgba(255, 255, 255, 0.6)"],
+  ["rgba(246, 75, 75, 0.4)", "rgba(255, 255, 255, 0.35)"],
+  // Install button carries white label text, so it has to sit well below the
+  // pastels the page itself is painted in.
+  ["bg-[#f64b4b]", "bg-[#c9376b]"],
+  ["hover:bg-[#f46565]", "hover:bg-[#e0517f]"],
   // The template's blue drives the focus ring, the selected-source ring and the
-  // per-source link, in markup and in script alike.
-  ["#5478db", "#f47fb2"],
+  // per-source version line, in markup and in script alike. It has to read on
+  // the near-white cards, so it matches the heading rather than the fills.
+  ["#5478db", "#c9376b"],
 ];
 
 const targets = process.argv.slice(2);
