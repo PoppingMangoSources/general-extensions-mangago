@@ -20,13 +20,20 @@
     ></script>
 
     <style>
-      /* The page carries the same gradient as the install button. It is pinned
-         so the run reads once down the page rather than restarting per screen,
-         and the end colour also sits on the root so overscroll matches. */
-      html { background-color: #ffc17e !important; }
-      body {
-        background: linear-gradient(165deg, #ffdcea 0%, #ffbbd5 32%, #ffcda8 66%, #ffc17e 100%) fixed !important;
+      /* The page carries the same run of colour as the install button, pinned so
+         it reads once from top to bottom rather than restarting each screen.
+         It belongs on the root, not on the body: the root's background is what
+         paints the canvas, so it covers the status bar and the overscroll area
+         and does not stop short when the content is shorter than the screen.
+         A flat colour here instead would show as a band of that colour above
+         and below the gradient. */
+      html {
+        background: linear-gradient(180deg, #ffe2f0 0%, #ffc4dc 32%, #ffd3b8 70%, #ffca92 100%) fixed !important;
         background-repeat: no-repeat !important;
+        min-height: 100%;
+      }
+      body {
+        background: transparent !important;
         color: #33162a !important;
         min-height: 100vh;
       }
