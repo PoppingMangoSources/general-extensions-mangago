@@ -51,6 +51,21 @@ const LOGO = svgUri(
 // so the page reads in the repository's colours rather than the stock ones.
 const STYLE = `
     <style>
+      /* One palette drives every rule below, so a colour is changed in a single
+         place rather than hunted through the sheet. */
+      :root {
+        --pm-ink: #33162a;
+        --pm-ink-soft: #7a4a60;
+        --pm-ink-faint: #9a7285;
+        --pm-rose: #c9376b;
+        --pm-rose-light: #e0517f;
+        --pm-mango: #e8853a;
+        --pm-surface: #fffaf9;
+        --pm-surface-tint: #fff4f8;
+        --pm-surface-warm: #ffeef4;
+        --pm-line: rgba(51, 22, 42, 0.1);
+      }
+
       /* The page carries the same run of colour as the install button, pinned so
          it reads once from top to bottom rather than restarting each screen.
          It belongs on the root, not on the body: the root's background is what
@@ -65,13 +80,16 @@ const STYLE = `
       }
       body {
         background: transparent !important;
-        color: #33162a !important;
+        color: var(--pm-ink) !important;
         min-height: 100vh;
       }
+      ::selection { background: rgba(224, 81, 127, 0.26); color: var(--pm-ink); }
+      a { color: var(--pm-rose); }
+
       /* Deep enough to hold against the pastel behind it; the light gradient
          used elsewhere would disappear into the page here. */
       h1 {
-        background: linear-gradient(100deg, #c9376b 0%, #e0517f 42%, #e8853a 100%);
+        background: linear-gradient(100deg, var(--pm-rose) 0%, var(--pm-rose-light) 42%, var(--pm-mango) 100%);
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent !important;
@@ -79,23 +97,30 @@ const STYLE = `
       /* A saturated echo of the page's own run, so the call to action reads as
          part of the palette rather than as a hole punched through it. */
       .addToPaperbackButton {
-        background: linear-gradient(100deg, #c9376b 0%, #e0517f 100%) !important;
+        background: linear-gradient(100deg, var(--pm-rose) 0%, var(--pm-rose-light) 100%) !important;
         border-bottom-color: rgba(51, 22, 42, 0.22) !important;
         box-shadow: 0 6px 18px rgba(150, 40, 85, 0.28) !important;
         color: #ffffff !important;
         font-weight: 700;
       }
-      .bg-zinc-800 { background-color: #fffaf9 !important; }
-      .bg-zinc-700 { background-color: #ffeef4 !important; }
+      .bg-zinc-700 { background-color: var(--pm-surface-warm) !important; }
       .hover\\:bg-zinc-600:hover { background-color: #ffe2ec !important; }
       .bg-gray-500 { background-color: #e9d3de !important; }
       .border-zinc-700 { border-color: #f4cddb !important; }
-      .text-gray-100, .text-gray-200, .text-gray-300 { color: #33162a !important; }
-      .text-gray-400 { color: #7a4a60 !important; }
-      .placeholder-gray-400::placeholder { color: #9a7285 !important; }
+      .text-gray-100, .text-gray-200, .text-gray-300 { color: var(--pm-ink) !important; }
+      .text-gray-400 { color: var(--pm-ink-soft) !important; }
+      .placeholder-gray-400::placeholder { color: var(--pm-ink-faint) !important; }
 
-      .bg-zinc-800.rounded-lg { border: 1px solid rgba(51, 22, 42, 0.1) !important; }
-      .bg-zinc-800.rounded-lg:hover { border-color: #d1477a !important; }
+      /* Surfaces carry a slight warm tint rather than flat white, so the cards
+         and the search field belong to the page instead of sitting on it. */
+      .bg-zinc-800 {
+        background: linear-gradient(165deg, var(--pm-surface) 0%, var(--pm-surface-tint) 100%) !important;
+      }
+      .bg-zinc-800.rounded-lg { border: 1px solid var(--pm-line) !important; }
+      .bg-zinc-800.rounded-lg:hover {
+        background: linear-gradient(165deg, #fffdfd 0%, #ffe9f1 100%) !important;
+        border-color: var(--pm-rose-light) !important;
+      }
       .shadow-lg { box-shadow: 0 8px 24px rgba(120, 40, 70, 0.14) !important; }
 
       /* Badge chips are filled from each extension's own colour and drawn at a
@@ -104,12 +129,14 @@ const STYLE = `
       .font-medium.transition-all { color: #33162a !important; }
 
       /* bg-red-500 backs both the ADULT pill and the error panel, and those
-         carry different label colours, so the pill is matched on the pair. */
-      .bg-red-500 { background-color: #c9376b !important; }
-      .text-red-500 { color: #c9376b !important; }
-      .bg-red-500.text-red-100 { background-color: #ffd9e4 !important; color: #a82d52 !important; }
-      .bg-yellow-500.text-yellow-900 { background-color: #ffe6c2 !important; color: #8a4b10 !important; }
-      .bg-green-500.text-green-100 { background-color: #d8efd0 !important; color: #2f5a35 !important; }
+         carry different label colours, so the pill is matched on the pair.
+         The pills are translucent so they tint the card they sit on instead of
+         covering it with a second opaque block. */
+      .bg-red-500 { background-color: var(--pm-rose) !important; }
+      .text-red-500 { color: var(--pm-rose) !important; }
+      .bg-red-500.text-red-100 { background-color: rgba(201, 55, 107, 0.16) !important; color: #a82d52 !important; }
+      .bg-yellow-500.text-yellow-900 { background-color: rgba(232, 133, 58, 0.2) !important; color: #8a4b10 !important; }
+      .bg-green-500.text-green-100 { background-color: rgba(79, 160, 106, 0.22) !important; color: #2f5a35 !important; }
       .border-red-700 { border-color: rgba(51, 22, 42, 0.12) !important; }
     </style>
   </head>`;
