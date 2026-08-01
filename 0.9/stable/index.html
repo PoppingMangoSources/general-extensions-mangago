@@ -22,23 +22,23 @@
     <style>
       body {
         background:
-          radial-gradient(circle at 12% -12%, rgba(244, 127, 178, 0.42) 0%, transparent 58%),
-          radial-gradient(circle at 86% 4%, rgba(234, 91, 147, 0.3) 0%, transparent 52%),
-          radial-gradient(circle at 74% 82%, rgba(255, 154, 94, 0.16) 0%, transparent 48%),
-          radial-gradient(circle at 22% 62%, rgba(249, 168, 200, 0.14) 0%, transparent 42%),
+          radial-gradient(circle at 12% -12%, rgba(255, 187, 213, 0.4) 0%, transparent 58%),
+          radial-gradient(circle at 86% 4%, rgba(255, 193, 126, 0.26) 0%, transparent 52%),
+          radial-gradient(circle at 74% 84%, rgba(207, 235, 180, 0.16) 0%, transparent 46%),
+          radial-gradient(circle at 20% 60%, rgba(255, 220, 234, 0.16) 0%, transparent 44%),
           #1b0a14 !important;
         color: #ffeaf2 !important;
       }
       h1 {
-        background: linear-gradient(100deg, #ffd7e6 0%, #f47fb2 42%, #ff9a5e 100%);
+        background: linear-gradient(100deg, #ffdcea 0%, #ffbbd5 34%, #ffcda8 70%, #ffc17e 100%);
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent !important;
       }
       .addToPaperbackButton {
-        background: linear-gradient(100deg, #ffb8d6 0%, #f47fb2 38%, #ea5b93 80%, #ff9a5e 100%) !important;
-        border-bottom-color: rgba(43, 16, 32, 0.35) !important;
-        color: #2b1020 !important;
+        background: linear-gradient(100deg, #ffdcea 0%, #ffbbd5 34%, #ffcda8 68%, #ffc17e 100%) !important;
+        border-bottom-color: rgba(51, 22, 42, 0.3) !important;
+        color: #33162a !important;
         font-weight: 700;
       }
       .bg-zinc-800 { background-color: #2b1020 !important; }
@@ -65,12 +65,12 @@
             background:
               radial-gradient(
                 circle at 30% 30%,
-                rgba(244, 127, 178, 0.55) 0%,
+                rgba(255, 187, 213, 0.5) 0%,
                 transparent 70%
               ),
               radial-gradient(
                 circle at 70% 70%,
-                rgba(255, 154, 94, 0.42) 0%,
+                rgba(255, 193, 126, 0.42) 0%,
                 transparent 70%
               );
             filter: blur(25px);
@@ -97,7 +97,7 @@
         ></p>
 
         <a
-          class="addToPaperbackButton inline-block leading-7 mt-4 mx-1 py-2 px-4 text-white bg-[#ea5b93] border-b border-red-700 rounded-full transition-colors duration-100 hover:bg-[#f47fb2] hover:cursor-pointer"
+          class="addToPaperbackButton inline-block leading-7 mt-4 mx-1 py-2 px-4 text-white bg-[#e8629b] border-b border-red-700 rounded-full transition-colors duration-100 hover:bg-[#f47fb2] hover:cursor-pointer"
           @click="addToPaperback()"
           x-show="repository"
         >
@@ -371,7 +371,7 @@
     >
       <button
         @click="installSelectedSources()"
-        class="py-3 px-6 bg-[#ea5b93] text-white rounded-full hover:bg-[#f47fb2] transition-colors duration-100 shadow-lg hover:cursor-pointer flex items-center space-x-2"
+        class="py-3 px-6 bg-[#e8629b] text-white rounded-full hover:bg-[#f47fb2] transition-colors duration-100 shadow-lg hover:cursor-pointer flex items-center space-x-2"
       >
         <span>Install</span>
         <span
