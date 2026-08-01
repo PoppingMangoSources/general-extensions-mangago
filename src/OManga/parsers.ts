@@ -238,7 +238,7 @@ const parseLinkCards = (fragment: string): HomeLinkCard[] => {
       i + 1 < anchors.length ? (anchors[i + 1].index ?? fragment.length) : fragment.length;
     const segment = fragment.slice(start, end);
 
-    const cover = segment.match(/"src":"(https:\/\/[^\"]+)"/)?.[1];
+    const cover = segment.match(/"src":"(https:\/\/[^"]+)"/)?.[1];
     const alt = segment.match(/"alt":"((?:[^"\\]|\\.)*)"/)?.[1];
     if (!cover || !alt) continue;
 
@@ -337,7 +337,7 @@ export const parseCoverUrl = (html: string): string => {
   for (const source of [payload, html]) {
     const cover =
       source.match(COVER_URL_REGEX)?.[0] ??
-      source.match(/"image":"(https:\/\/[^\"]+\.(?:jpe?g|png|webp|gif|avif))"/i)?.[1] ??
+      source.match(/"image":"(https:\/\/[^"]+\.(?:jpe?g|png|webp|gif|avif))"/i)?.[1] ??
       source.match(/property="og:image"\s+content="([^"]+)"/)?.[1] ??
       source.match(/"og:image","content":"([^"]+)"/)?.[1];
     if (cover) return cover;

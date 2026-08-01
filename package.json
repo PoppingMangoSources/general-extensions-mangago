@@ -1,7 +1,7 @@
 {
-  "name": "Popmango Sources (0.9)",
+  "name": "PoppingMango Sources",
   "private": true,
-  "description": "Paperback extensions for websites with unique, non-generic themes. Maintained by Inkdex.",
+  "description": "Novels, manga, manhwa & manhua for Paperback 0.9 — a hand-built source list.",
   "type": "module",
   "scripts": {
     "tsc": "tsc",
@@ -10,7 +10,7 @@
     "format": "oxfmt . '!bundles/**'",
     "format:check": "oxfmt --check . '!bundles/**'",
     "conformance": "npm run tsc && npm run lint:check && npm run format:check",
-    "bundle": "paperback-cli bundle",
+    "bundle": "paperback-cli bundle && node scripts/theme-homepage.mjs",
     "serve": "paperback-cli serve",
     "dev": "paperback-cli serve --watch",
     "logcat": "paperback-cli logcat",

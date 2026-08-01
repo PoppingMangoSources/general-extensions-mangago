@@ -1,178 +1,18 @@
 {
-  "buildTime": "2026-07-24T00:23:22.488Z",
+  "buildTime": "2026-08-01T14:26:58.652Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
   },
   "repository": {
-    "name": "Popmango Sources (0.9)",
-    "description": "Paperback extensions for websites with unique, non-generic themes. Maintained by Inkdex."
+    "name": "PoppingMango Sources",
+    "description": "Novels, manga, manhwa & manhua for Paperback 0.9 — a hand-built source list."
   },
   "sources": [
     {
-      "name": "HiveScans",
-      "description": "Extension that pulls content from hivetoons.org.",
-      "version": "1.0.0-alpha.14",
-      "icon": "icon.png",
-      "language": "en",
-      "contentRating": "MATURE",
-      "capabilities": [
-        1,
-        16,
-        4,
-        64,
-        32
-      ],
-      "badges": [],
-      "developers": [
-        {
-          "name": "PopMango",
-          "github": "https://github.com/PoppingMangoSources"
-        }
-      ],
-      "id": "HiveScans"
-    },
-    {
-      "name": "KingOfShojo",
-      "description": "Extension that pulls content from kingofshojo.com.",
-      "version": "1.0.0-alpha.14",
-      "icon": "icon.png",
-      "language": "en",
-      "contentRating": "MATURE",
-      "capabilities": [
-        1,
-        16,
-        4,
-        64,
-        32
-      ],
-      "badges": [],
-      "developers": [
-        {
-          "name": "PopMango",
-          "github": "https://github.com/PoppingMangoSources"
-        }
-      ],
-      "id": "KingOfShojo"
-    },
-    {
-      "name": "Lua Comic",
-      "description": "Extension that pulls comics from luacomic.org.",
-      "version": "1.0.0-alpha.1",
-      "icon": "icon.png",
-      "language": "en",
-      "contentRating": "MATURE",
-      "capabilities": [
-        1,
-        16,
-        4,
-        64,
-        32
-      ],
-      "badges": [],
-      "developers": [
-        {
-          "name": "PopMango",
-          "github": "https://github.com/PoppingMangoSources"
-        }
-      ],
-      "id": "LuaComic"
-    },
-    {
-      "name": "MyReadingManga",
-      "description": "Extension that pulls content from myreadingmanga.info.",
-      "version": "1.0.0-alpha.6",
-      "icon": "icon.png",
-      "language": "multi",
-      "contentRating": "ADULT",
-      "capabilities": [
-        1,
-        16,
-        4,
-        64,
-        32
-      ],
-      "badges": [],
-      "developers": [
-        {
-          "name": "PopMango",
-          "github": "https://github.com/PoppingMangoSources"
-        }
-      ],
-      "id": "MyReadingManga"
-    },
-    {
-      "name": "NovelArchive",
-      "description": "Extension that pulls light novels from novelarchive.cc.",
-      "version": "1.0.0-alpha.9",
-      "icon": "icon.png",
-      "language": "en",
-      "contentRating": "ADULT",
-      "capabilities": [
-        1,
-        4,
-        64,
-        32
-      ],
-      "badges": [],
-      "developers": [
-        {
-          "name": "PopMango",
-          "github": "https://github.com/PoppingMangoSources"
-        }
-      ],
-      "id": "NovelArchive"
-    },
-    {
-      "name": "oManga",
-      "description": "Extension that pulls content from omanga.to.",
-      "version": "1.0.0-alpha.14",
-      "icon": "icon.png",
-      "language": "en",
-      "contentRating": "ADULT",
-      "capabilities": [
-        1,
-        16,
-        4,
-        64,
-        32
-      ],
-      "badges": [],
-      "developers": [
-        {
-          "name": "PopMango",
-          "github": "https://github.com/PoppingMangoSources"
-        }
-      ],
-      "id": "OManga"
-    },
-    {
-      "name": "OniSaga",
-      "description": "Extension that pulls content from onisaga.com.",
-      "version": "1.0.0-alpha.23",
-      "icon": "icon.png",
-      "language": "multi",
-      "contentRating": "MATURE",
-      "capabilities": [
-        1,
-        16,
-        4,
-        64,
-        32
-      ],
-      "badges": [],
-      "developers": [
-        {
-          "name": "PopMango",
-          "github": "https://github.com/PoppingMangoSources"
-        }
-      ],
-      "id": "OniSaga"
-    },
-    {
-      "name": "Ranobes",
-      "description": "Extension that pulls light novels from ranobes.net.",
-      "version": "1.0.0-alpha.22",
+      "name": "BunManga",
+      "description": "Extension that pulls content from bunmanga.com.",
+      "version": "1.0.0-alpha.2",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
@@ -185,62 +25,62 @@
       "badges": [],
       "developers": [
         {
-          "name": "PopMango",
+          "name": "Popmango",
           "github": "https://github.com/PoppingMangoSources"
         }
       ],
-      "id": "Ranobes"
+      "id": "BunManga"
     },
     {
-      "name": "RinkoComics",
-      "description": "Extension that pulls content from rinkocomics.com.",
+      "name": "Chikari",
+      "description": "Extension that pulls content from chikari.moe.",
+      "version": "0.0.1-alpha.5",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "SAFE",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "Chikari"
+    },
+    {
+      "name": "Galaxy Manga",
+      "description": "Extension that pulls content from galaxymanga.io.",
+      "version": "1.0.0-alpha.2",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "MATURE",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "GalaxyManga"
+    },
+    {
+      "name": "KaliScan",
+      "description": "Extension that pulls content from kaliscan.io.",
       "version": "1.0.0-alpha.10",
-      "icon": "icon.png",
-      "language": "en",
-      "contentRating": "SAFE",
-      "capabilities": [
-        1,
-        16,
-        4,
-        64,
-        32
-      ],
-      "badges": [],
-      "developers": [
-        {
-          "name": "PopMango",
-          "github": "https://github.com/PoppingMangoSources"
-        }
-      ],
-      "id": "RinkoComics"
-    },
-    {
-      "name": "RokariComics",
-      "description": "Extension that pulls content from rokaricomics.com.",
-      "version": "1.0.0-alpha.12",
-      "icon": "icon.png",
-      "language": "en",
-      "contentRating": "SAFE",
-      "capabilities": [
-        1,
-        16,
-        4,
-        64,
-        32
-      ],
-      "badges": [],
-      "developers": [
-        {
-          "name": "PopMango",
-          "github": "https://github.com/PoppingMangoSources"
-        }
-      ],
-      "id": "RokariComics"
-    },
-    {
-      "name": "Scans.GG",
-      "description": "Extension that pulls content from scans.gg.",
-      "version": "1.0.0-alpha.22",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
@@ -254,15 +94,364 @@
       "badges": [],
       "developers": [
         {
-          "name": "PopMango",
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "KaliScan"
+    },
+    {
+      "name": "KingOfShojo",
+      "description": "Extension that pulls content from kingofshojo.com.",
+      "version": "1.0.0-alpha.19",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "MATURE",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "KingOfShojo"
+    },
+    {
+      "name": "LikeManga",
+      "description": "Extension that pulls content from likemanga.ink.",
+      "version": "1.0.0-alpha.6",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "ADULT",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "LikeManga"
+    },
+    {
+      "name": "Lua Comic",
+      "description": "Extension that pulls comics from luacomic.org.",
+      "version": "1.0.0-alpha.14",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "MATURE",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "LuaComic"
+    },
+    {
+      "name": "MVLEMPYR",
+      "description": "Extension that pulls content from mvlempyr.io.",
+      "version": "1.0.0-alpha.2",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "MATURE",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [
+        {
+          "label": "Novel",
+          "textColor": "#ffffff",
+          "backgroundColor": "#3baf4b"
+        }
+      ],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "MVLEMPYR"
+    },
+    {
+      "name": "MangaTown",
+      "description": "Extension that pulls content from mangatown.com.",
+      "version": "1.0.0-alpha.6",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "MATURE",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "MangaTown"
+    },
+    {
+      "name": "MyReadingManga",
+      "description": "Extension that pulls content from myreadingmanga.info.",
+      "version": "1.0.0-alpha.8",
+      "icon": "icon.png",
+      "language": "multi",
+      "contentRating": "ADULT",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "MyReadingManga"
+    },
+    {
+      "name": "NovelArchive",
+      "description": "Extension that pulls content from novelarchive.cc.",
+      "version": "1.0.0-alpha.51",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "ADULT",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [
+        {
+          "label": "Novel",
+          "textColor": "#ffffff",
+          "backgroundColor": "#3baf4b"
+        }
+      ],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "NovelArchive"
+    },
+    {
+      "name": "NovelCool",
+      "description": "Extension that pulls content from novelcool.com.",
+      "version": "1.0.0-alpha.8",
+      "icon": "icons.png",
+      "language": "en",
+      "contentRating": "ADULT",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64
+      ],
+      "badges": [
+        {
+          "label": "Novel",
+          "textColor": "#ffffff",
+          "backgroundColor": "#ff7b0a"
+        },
+        {
+          "label": "Manga",
+          "textColor": "#ffffff",
+          "backgroundColor": "#1fa7d8"
+        }
+      ],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "NovelCool"
+    },
+    {
+      "name": "oManga",
+      "description": "Extension that pulls content from omanga.to.",
+      "version": "1.0.0-alpha.19",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "ADULT",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "OManga"
+    },
+    {
+      "name": "OniSaga",
+      "description": "Extension that pulls content from onisaga.com.",
+      "version": "1.0.0-alpha.28",
+      "icon": "icon.png",
+      "language": "multi",
+      "contentRating": "MATURE",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "OniSaga"
+    },
+    {
+      "name": "Ranobes",
+      "description": "Extension that pulls light novels from ranobes.net.",
+      "version": "1.0.0-alpha.56",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "ADULT",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [
+        {
+          "label": "Novel",
+          "textColor": "#ffffff",
+          "backgroundColor": "#3baf4b"
+        }
+      ],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "Ranobes"
+    },
+    {
+      "name": "RinkoComics",
+      "description": "Extension that pulls content from rinkocomics.com.",
+      "version": "1.0.0-alpha.16",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "SAFE",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "RinkoComics"
+    },
+    {
+      "name": "RokariComics",
+      "description": "Extension that pulls content from rokaricomics.com.",
+      "version": "1.0.0-alpha.18",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "SAFE",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "RokariComics"
+    },
+    {
+      "name": "Scans.GG",
+      "description": "Extension that pulls content from scans.gg.",
+      "version": "1.0.0-alpha.25",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "ADULT",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
           "github": "https://github.com/PoppingMangoSources"
         }
       ],
       "id": "ScansGG"
     },
     {
-      "name": "Temple Scan",
-      "description": "Extension that pulls content from templetoons.com.",
+      "name": "StoneScape",
+      "description": "Extension that pulls content from stonescape.xyz.",
       "version": "1.0.0-alpha.8",
       "icon": "icon.png",
       "language": "en",
@@ -277,7 +466,30 @@
       "badges": [],
       "developers": [
         {
-          "name": "PopMango",
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "StoneScape"
+    },
+    {
+      "name": "Temple Scan",
+      "description": "Extension that pulls content from templetoons.com.",
+      "version": "1.0.0-alpha.20",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "ADULT",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
           "github": "https://github.com/PoppingMangoSources"
         }
       ],
@@ -286,7 +498,7 @@
     {
       "name": "ValirScans",
       "description": "Extension that pulls comics and novels from valirscans.org.",
-      "version": "1.0.0-alpha.7",
+      "version": "1.0.0-alpha.17",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
@@ -300,7 +512,7 @@
       "badges": [],
       "developers": [
         {
-          "name": "PopMango",
+          "name": "Popmango",
           "github": "https://github.com/PoppingMangoSources"
         }
       ],
@@ -309,7 +521,7 @@
     {
       "name": "VyManga",
       "description": "Extension that pulls content from vymanga.com.",
-      "version": "1.0.0-alpha.12",
+      "version": "1.0.0-alpha.15",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
@@ -323,7 +535,7 @@
       "badges": [],
       "developers": [
         {
-          "name": "PopMango",
+          "name": "Popmango",
           "github": "https://github.com/PoppingMangoSources"
         }
       ],
