@@ -20,47 +20,57 @@
     ></script>
 
     <style>
-      /* Flat, and cool rather than warm. A pink-and-mango wash over a warm base
-         mixes to brown at low opacity, which is what covered the whole page;
-         the pastels belong on the elements, not behind them. */
+      /* The page carries the same gradient as the install button. It is pinned
+         so the run reads once down the page rather than restarting per screen,
+         and the end colour also sits on the root so overscroll matches. */
+      html { background-color: #ffc17e !important; }
       body {
-        background: #141019 !important;
-        color: #f3e9f4 !important;
+        background: linear-gradient(165deg, #ffdcea 0%, #ffbbd5 32%, #ffcda8 66%, #ffc17e 100%) fixed !important;
+        background-repeat: no-repeat !important;
+        color: #33162a !important;
+        min-height: 100vh;
       }
+      /* Deep enough to hold against the pastel behind it; the light gradient
+         used elsewhere would disappear into the page here. */
       h1 {
-        background: linear-gradient(100deg, #ffdcea 0%, #ffbbd5 34%, #ffcda8 70%, #ffc17e 100%);
+        background: linear-gradient(100deg, #c9376b 0%, #e0517f 42%, #e8853a 100%);
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent !important;
       }
       .addToPaperbackButton {
-        background: linear-gradient(100deg, #ffdcea 0%, #ffbbd5 34%, #ffcda8 68%, #ffc17e 100%) !important;
-        border-bottom-color: rgba(51, 22, 42, 0.3) !important;
+        background: #ffffff !important;
+        border-bottom-color: rgba(51, 22, 42, 0.12) !important;
+        box-shadow: 0 6px 18px rgba(120, 40, 70, 0.16) !important;
         color: #33162a !important;
         font-weight: 700;
       }
-      .bg-zinc-800 { background-color: #1e1728 !important; }
-      .bg-zinc-700 { background-color: #2a2038 !important; }
-      .hover\:bg-zinc-600:hover { background-color: #352845 !important; }
-      .bg-gray-500 { background-color: #392b47 !important; }
-      .border-zinc-700 { border-color: #392b47 !important; }
-      .text-gray-100, .text-gray-200, .text-gray-300 { color: #f3e9f4 !important; }
-      .text-gray-400 { color: #c0a8cc !important; }
+      .bg-zinc-800 { background-color: #fffaf9 !important; }
+      .bg-zinc-700 { background-color: #ffeef4 !important; }
+      .hover\:bg-zinc-600:hover { background-color: #ffe2ec !important; }
+      .bg-gray-500 { background-color: #e9d3de !important; }
+      .border-zinc-700 { border-color: #f4cddb !important; }
+      .text-gray-100, .text-gray-200, .text-gray-300 { color: #33162a !important; }
+      .text-gray-400 { color: #7a4a60 !important; }
+      .placeholder-gray-400::placeholder { color: #9a7285 !important; }
 
-      .bg-zinc-800.rounded-lg { border: 1px solid #392b47 !important; }
-      .bg-zinc-800.rounded-lg:hover { border-color: #f47fb2 !important; }
-      .shadow-lg { box-shadow: none !important; }
+      .bg-zinc-800.rounded-lg { border: 1px solid rgba(51, 22, 42, 0.1) !important; }
+      .bg-zinc-800.rounded-lg:hover { border-color: #d1477a !important; }
+      .shadow-lg { box-shadow: 0 8px 24px rgba(120, 40, 70, 0.14) !important; }
 
-      /* Content-rating pills read as a tinted panel with light text of the same
-         hue, rather than a block of saturated colour. */
-      .bg-red-500 { background-color: #431e31 !important; }
-      .text-red-100 { color: #ffb3cf !important; }
-      .text-red-500 { color: #c94a72 !important; }
-      .bg-yellow-500 { background-color: #453320 !important; }
-      .text-yellow-900 { color: #ffd79a !important; }
-      .bg-green-500 { background-color: #23342d !important; }
-      .text-green-100 { color: #a8e0c0 !important; }
-      .border-red-700 { border-color: rgba(51, 22, 42, 0.3) !important; }
+      /* Badge chips are filled from each extension's own colour and drawn at a
+         quarter opacity when unselected, so only the label is set here — dark,
+         which holds against both the pale unselected tint and the full fill. */
+      .font-medium.transition-all { color: #33162a !important; }
+
+      /* bg-red-500 backs both the ADULT pill and the error panel, and those
+         carry different label colours, so the pill is matched on the pair. */
+      .bg-red-500 { background-color: #c9376b !important; }
+      .text-red-500 { color: #c9376b !important; }
+      .bg-red-500.text-red-100 { background-color: #ffd9e4 !important; color: #a82d52 !important; }
+      .bg-yellow-500.text-yellow-900 { background-color: #ffe6c2 !important; color: #8a4b10 !important; }
+      .bg-green-500.text-green-100 { background-color: #d8efd0 !important; color: #2f5a35 !important; }
+      .border-red-700 { border-color: rgba(51, 22, 42, 0.12) !important; }
     </style>
   </head>
 
@@ -77,12 +87,12 @@
             background:
               radial-gradient(
                 circle at 30% 30%,
-                rgba(255, 187, 213, 0.34) 0%,
+                rgba(255, 255, 255, 0.6) 0%,
                 transparent 70%
               ),
               radial-gradient(
                 circle at 70% 70%,
-                rgba(244, 127, 178, 0.26) 0%,
+                rgba(255, 255, 255, 0.35) 0%,
                 transparent 70%
               );
             filter: blur(25px);
@@ -109,7 +119,7 @@
         ></p>
 
         <a
-          class="addToPaperbackButton inline-block leading-7 mt-4 mx-1 py-2 px-4 text-white bg-[#e8629b] border-b border-red-700 rounded-full transition-colors duration-100 hover:bg-[#f47fb2] hover:cursor-pointer"
+          class="addToPaperbackButton inline-block leading-7 mt-4 mx-1 py-2 px-4 text-white bg-[#c9376b] border-b border-red-700 rounded-full transition-colors duration-100 hover:bg-[#e0517f] hover:cursor-pointer"
           @click="addToPaperback()"
           x-show="repository"
         >
@@ -146,7 +156,7 @@
               id="source-search"
               x-model="searchTerm"
               placeholder="Search sources..."
-              class="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#f47fb2]"
+              class="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#c9376b]"
             />
           </div>
 
@@ -199,7 +209,7 @@
               <div
                 @click="toggleSource(source.id)"
                 class="bg-zinc-800 rounded-lg shadow-lg overflow-hidden hover:cursor-pointer transition-all duration-200 relative"
-                :class="selectedSources.has(source.id) ? 'ring-2 ring-[#f47fb2]' : ''"
+                :class="selectedSources.has(source.id) ? 'ring-2 ring-[#c9376b]' : ''"
                 @keydown.enter="toggleSource(source.id)"
                 tabindex="0"
               >
@@ -258,7 +268,7 @@
                     <div class="text-gray-400 text-sm flex items-center mt-2">
                       <span
                         x-show="selectedSources.has(source.id)"
-                        class="text-[#f47fb2] text-xs"
+                        class="text-[#c9376b] text-xs"
                         >• Selected</span
                       >
                     </div>
@@ -319,7 +329,7 @@
                     </div>
                     <span
                       x-show="selectedSources.has(source.id)"
-                      class="text-[#f47fb2] text-xs block mt-2"
+                      class="text-[#c9376b] text-xs block mt-2"
                       >• Selected</span
                     >
                   </div>
@@ -383,7 +393,7 @@
     >
       <button
         @click="installSelectedSources()"
-        class="py-3 px-6 bg-[#e8629b] text-white rounded-full hover:bg-[#f47fb2] transition-colors duration-100 shadow-lg hover:cursor-pointer flex items-center space-x-2"
+        class="py-3 px-6 bg-[#c9376b] text-white rounded-full hover:bg-[#e0517f] transition-colors duration-100 shadow-lg hover:cursor-pointer flex items-center space-x-2"
       >
         <span>Install</span>
         <span
