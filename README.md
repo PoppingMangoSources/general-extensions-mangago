@@ -1,16 +1,16 @@
 <p align="center">
-  <img src="media/banner.svg" alt="PoppingMango Sources — Novels, Manga, Manhwa & Manhua for Paperback 0.9, maintained by Popmango" width="100%"/>
+  <img src="media/header.svg" alt="PoppingMango Sources — Novels, Manga, Manhwa & Manhua for Paperback 0.9, maintained by Popmango" width="100%"/>
 </p>
 
 <p align="center">
-  <img src="media/badge-platform.svg" alt="iOS / iPadOS" height="28"/>
-  <img src="media/badge-paperback.svg" alt="Paperback 0.9+" height="28"/>
-  <img src="media/badge-sources.svg" alt="22 sources" height="28"/>
+  <img src="media/badge-ios.svg" alt="iOS / iPadOS" height="28"/>
+  <img src="media/badge-version.svg" alt="Paperback 0.9+" height="28"/>
+  <img src="media/badge-count.svg" alt="22 sources" height="28"/>
 </p>
 
 <p align="center">
   <a href="https://poppingmangosources.github.io/general-extensions-mangago/0.9/test/">
-    <img src="media/add-button.svg" alt="Add PoppingMango to Paperback" height="52"/>
+    <img src="media/button-add.svg" alt="Add PoppingMango to Paperback" height="52"/>
   </a>
 </p>
 
@@ -67,7 +67,7 @@ PoppingMango is an independent source list for [Paperback](https://paperback.moe
 
 <p align="center">
   <a href="https://discord.com/invite/inkdex">
-    <img src="media/discord-button.svg" alt="Join the support Discord" height="36"/>
+    <img src="media/button-discord.svg" alt="Join the support Discord" height="36"/>
   </a>
 </p>
 
