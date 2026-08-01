@@ -6,7 +6,7 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "Ranobes",
   description: "Extension that pulls light novels from ranobes.net.",
-  version: "1.0.0-alpha.57",
+  version: "1.0.0-alpha.58",
   icon: "icon.png",
   language: "en",
   contentRating: ContentRating.ADULT,
@@ -17,6 +17,6 @@ export default {
     SourceIntents.SEARCH_RESULT_PROVIDING,
     SourceIntents.SETTINGS_FORM_PROVIDING,
   ],
-  badges: [{ label: "Novel", textColor: "#33162a", backgroundColor: "#ffc17e" }],
+  badges: [{ label: "Novel", textColor: "#ffffff", backgroundColor: "#4fa06a" }],
   developers: [{ name: "Popmango", github: "https://github.com/PoppingMangoSources" }],
 } satisfies ExtensionInfo;
