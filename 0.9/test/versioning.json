@@ -1,12 +1,12 @@
 {
-  "buildTime": "2026-08-01T14:31:51.141Z",
+  "buildTime": "2026-08-01T14:38:30.009Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
   },
   "repository": {
     "name": "PoppingMango Sources",
-    "description": "Novels, manga, manhwa & manhua for Paperback 0.9 — a hand-built source list."
+    "description": "Novels, manga, manhwa & manhua for Paperback 0.9 — maintained by Popmango."
   },
   "sources": [
     {
