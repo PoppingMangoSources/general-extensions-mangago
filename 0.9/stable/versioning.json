@@ -1,12 +1,12 @@
 {
-  "buildTime": "2026-07-29T14:25:19.735Z",
+  "buildTime": "2026-08-01T14:28:33.651Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
   },
   "repository": {
     "name": "General Extensions (0.9)",
-    "description": "Paperback extensions for websites with unique, non-generic themes. Maintained by Inkdex."
+    "description": "Novels, manga, manhwa & manhua for Paperback 0.9 — a hand-built source list."
   },
   "sources": [
     {
