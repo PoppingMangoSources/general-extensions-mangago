@@ -1,12 +1,12 @@
 {
-  "buildTime": "2026-07-30T14:08:49.596Z",
+  "buildTime": "2026-08-01T14:27:58.865Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
   },
   "repository": {
-    "name": "Popmango Sources (0.9)",
-    "description": "Paperback extensions for websites with unique, non-generic themes. Maintained by Inkdex."
+    "name": "PoppingMango Sources",
+    "description": "Novels, manga, manhwa & manhua for Paperback 0.9 — a hand-built source list."
   },
   "sources": [
     {
