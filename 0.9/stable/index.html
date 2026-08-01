@@ -43,14 +43,22 @@
          A flat colour here instead would show as a band of that colour above
          and below the gradient. */
       html {
-        background: linear-gradient(180deg, #ffe2f0 0%, #ffc4dc 32%, #ffd3b8 70%, #ffca92 100%) fixed !important;
+        /* The colour matters as much as the gradient: Safari paints the status
+           bar and the overscroll area from the root's background COLOUR, and a
+           gradient alone leaves it nothing to resolve, so those strips come out
+           white. Setting the first stop as the colour makes them continuous
+           with the top of the gradient. */
+        background-color: #ffe2f0 !important;
+        background-image: linear-gradient(180deg, #ffe2f0 0%, #ffc4dc 32%, #ffd3b8 70%, #ffca92 100%) !important;
         background-repeat: no-repeat !important;
         min-height: 100%;
+        overflow-y: scroll;
       }
       body {
         background: transparent !important;
         color: var(--pm-ink) !important;
         min-height: 100vh;
+        scrollbar-gutter: stable;
       }
       ::selection { background: rgba(224, 81, 127, 0.26); color: var(--pm-ink); }
       a { color: var(--pm-rose); }
