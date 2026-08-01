@@ -8,7 +8,7 @@ const { name, description } = JSON.parse(readFileSync("package.json", "utf8"));
 const svgUri = (body) => "data:image/svg+xml," + encodeURIComponent(body);
 
 const FAVICON = svgUri(
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">' +
+  '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">' +
     '<circle cx="32" cy="32" r="32" fill="#ffe3ee"/>' +
     '<ellipse cx="32" cy="35" rx="15" ry="19" fill="#ff9f52"/>' +
     '<path d="M33 14 q3 -6 9 -8" fill="none" stroke="#8fb648" stroke-width="4" stroke-linecap="round"/>' +
@@ -17,9 +17,12 @@ const FAVICON = svgUri(
 );
 
 // The template ships the Paperback tile as the header image, which reads as a
-// different product's mark above the repository's own name.
+// different product's mark above the repository's own name. Both marks carry an
+// explicit width and height: the header image is sized by max-height alone, and
+// Safari will not lay out an SVG that offers only a viewBox to size itself from,
+// so it collapses and nothing is drawn.
 const LOGO = svgUri(
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">' +
+  '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">' +
     "<defs>" +
     '<linearGradient id="g" x1="0" y1="0" x2="1" y2="1">' +
     '<stop offset="0" stop-color="#ffdcea"/><stop offset="0.42" stop-color="#ffbbd5"/>' +
