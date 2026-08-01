@@ -1,10 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" role="img" aria-label="PoppingMango Sources — Novels, Manga, Manhwa and Manhua for Paperback 0.9">
   <defs>
     <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#f277a8"/>
-      <stop offset="0.34" stop-color="#f0982e"/>
-      <stop offset="0.68" stop-color="#7cad3a"/>
-      <stop offset="1" stop-color="#2fb8cc"/>
+      <stop offset="0" stop-color="#f7b3cd"/>
+      <stop offset="0.28" stop-color="#ef6fa5"/>
+      <stop offset="0.58" stop-color="#e8629b"/>
+      <stop offset="0.82" stop-color="#f0982e"/>
+      <stop offset="1" stop-color="#8bb844"/>
     </linearGradient>
     <linearGradient id="scrim" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#1d0f16" stop-opacity="0.06"/>
@@ -24,8 +25,8 @@
     <rect x="0" y="0" width="1200" height="300" fill="url(#brand)"/>
     <rect x="0" y="0" width="1200" height="300" fill="url(#scrim)"/>
     <ellipse cx="600" cy="-40" rx="700" ry="150" fill="#ffffff" opacity="0.12"/>
-    <circle cx="1130" cy="250" r="230" fill="#2fb8cc" opacity="0.28"/>
-    <circle cx="90" cy="40" r="190" fill="#f9c9d8" opacity="0.26"/>
+    <circle cx="1120" cy="255" r="200" fill="#2fb8cc" opacity="0.22"/>
+    <circle cx="120" cy="30" r="260" fill="#f9c9d8" opacity="0.38"/>
   </g>
   <rect x="2" y="2" width="1196" height="296" rx="26" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="2"/>
 

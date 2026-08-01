@@ -2,9 +2,9 @@
   <defs>
     <linearGradient id="btn" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#f9c9d8"/>
-      <stop offset="0.34" stop-color="#ffb144"/>
-      <stop offset="0.68" stop-color="#9bc153"/>
-      <stop offset="1" stop-color="#6fe0ea"/>
+      <stop offset="0.42" stop-color="#f489b4"/>
+      <stop offset="0.76" stop-color="#ffb144"/>
+      <stop offset="1" stop-color="#9bc153"/>
     </linearGradient>
   </defs>
   <rect x="0" y="0" width="800" height="104" rx="52" fill="url(#btn)"/>
