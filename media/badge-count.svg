@@ -1,17 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="286" height="60" viewBox="0 0 286 60" role="img" aria-label="22 sources">
+<svg xmlns="http://www.w3.org/2000/svg" width="306" height="60" viewBox="0 0 306 60" role="img" aria-label="22 sources">
   <defs>
     <radialGradient id="sbubble" cx="0.34" cy="0.3" r="0.75">
-      <stop offset="0" stop-color="#ffd7e6"/>
-      <stop offset="1" stop-color="#f277a8"/>
+      <stop offset="0" stop-color="#eef8e2"/>
+      <stop offset="1" stop-color="#a8d48c"/>
     </radialGradient>
   </defs>
-  <rect x="1.5" y="1.5" width="283" height="57" rx="28.5" fill="#2b1020" stroke="#f9a8c8" stroke-opacity="0.85" stroke-width="3"/>
+  <rect x="1.5" y="1.5" width="303" height="57" rx="28.5" fill="#dcefc8" stroke="#a8d48c" stroke-width="3"/>
   <g>
     <circle cx="39" cy="29" r="13" fill="url(#sbubble)"/>
-    <circle cx="34" cy="24" r="3.5" fill="#ffffff" opacity="0.85"/>
-    <circle cx="55" cy="18" r="5" fill="#f9a8c8" opacity="0.9"/>
+    <circle cx="34" cy="24" r="3.5" fill="#ffffff"/>
+    <circle cx="55" cy="18" r="5" fill="#ffffff" opacity="0.9"/>
   </g>
-  <text x="132" y="38" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="700" letter-spacing="3" fill="#ffd7e6">SOURCES</text>
-  <circle cx="243" cy="30" r="21" fill="#f9a8c8"/>
-  <text x="243" y="39" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="800" fill="#2b1020">22</text>
+  <text x="154" y="38" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="700" letter-spacing="3" fill="#33162a">SOURCES</text>
+  <circle cx="261" cy="30" r="21" fill="#ffbbd5"/>
+  <text x="261" y="39" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="800" fill="#33162a">22</text>
 </svg>

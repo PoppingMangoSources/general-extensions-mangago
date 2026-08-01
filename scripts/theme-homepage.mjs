@@ -22,23 +22,23 @@ const STYLE = `
     <style>
       body {
         background:
-          radial-gradient(circle at 12% -12%, rgba(244, 127, 178, 0.42) 0%, transparent 58%),
-          radial-gradient(circle at 86% 4%, rgba(234, 91, 147, 0.3) 0%, transparent 52%),
-          radial-gradient(circle at 74% 82%, rgba(255, 154, 94, 0.16) 0%, transparent 48%),
-          radial-gradient(circle at 22% 62%, rgba(249, 168, 200, 0.14) 0%, transparent 42%),
+          radial-gradient(circle at 12% -12%, rgba(255, 187, 213, 0.4) 0%, transparent 58%),
+          radial-gradient(circle at 86% 4%, rgba(255, 193, 126, 0.26) 0%, transparent 52%),
+          radial-gradient(circle at 74% 84%, rgba(207, 235, 180, 0.16) 0%, transparent 46%),
+          radial-gradient(circle at 20% 60%, rgba(255, 220, 234, 0.16) 0%, transparent 44%),
           #1b0a14 !important;
         color: #ffeaf2 !important;
       }
       h1 {
-        background: linear-gradient(100deg, #ffd7e6 0%, #f47fb2 42%, #ff9a5e 100%);
+        background: linear-gradient(100deg, #ffdcea 0%, #ffbbd5 34%, #ffcda8 70%, #ffc17e 100%);
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent !important;
       }
       .addToPaperbackButton {
-        background: linear-gradient(100deg, #ffb8d6 0%, #f47fb2 38%, #ea5b93 80%, #ff9a5e 100%) !important;
-        border-bottom-color: rgba(43, 16, 32, 0.35) !important;
-        color: #2b1020 !important;
+        background: linear-gradient(100deg, #ffdcea 0%, #ffbbd5 34%, #ffcda8 68%, #ffc17e 100%) !important;
+        border-bottom-color: rgba(51, 22, 42, 0.3) !important;
+        color: #33162a !important;
         font-weight: 700;
       }
       .bg-zinc-800 { background-color: #2b1020 !important; }
@@ -63,11 +63,12 @@ const REPLACEMENTS = [
     '<meta name="robots" content="noindex" />',
     `<meta name="robots" content="noindex" />\n    <meta name="description" content="${description}" />`,
   ],
-  // Header halo: two pinks warming into mango, matching the banner gradient.
-  ["rgba(84, 120, 219, 0.4)", "rgba(244, 127, 178, 0.55)"],
-  ["rgba(246, 75, 75, 0.4)", "rgba(255, 154, 94, 0.42)"],
-  // Install button picks up the same pink as the header and the add button.
-  ["bg-[#f64b4b]", "bg-[#ea5b93]"],
+  // Header halo: blossom pink and mango, the two ends of the banner gradient.
+  ["rgba(84, 120, 219, 0.4)", "rgba(255, 187, 213, 0.5)"],
+  ["rgba(246, 75, 75, 0.4)", "rgba(255, 193, 126, 0.42)"],
+  // Install button sits on white label text, so it stays a step deeper than
+  // the pastels used for fills.
+  ["bg-[#f64b4b]", "bg-[#e8629b]"],
   ["hover:bg-[#f46565]", "hover:bg-[#f47fb2]"],
 ];
 
