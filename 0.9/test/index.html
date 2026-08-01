@@ -45,11 +45,13 @@
         background-clip: text;
         color: transparent !important;
       }
+      /* A saturated echo of the page's own run, so the call to action reads as
+         part of the palette rather than as a hole punched through it. */
       .addToPaperbackButton {
-        background: #ffffff !important;
-        border-bottom-color: rgba(51, 22, 42, 0.12) !important;
-        box-shadow: 0 6px 18px rgba(120, 40, 70, 0.16) !important;
-        color: #33162a !important;
+        background: linear-gradient(100deg, #c9376b 0%, #e0517f 100%) !important;
+        border-bottom-color: rgba(51, 22, 42, 0.22) !important;
+        box-shadow: 0 6px 18px rgba(150, 40, 85, 0.28) !important;
+        color: #ffffff !important;
         font-weight: 700;
       }
       .bg-zinc-800 { background-color: #fffaf9 !important; }
