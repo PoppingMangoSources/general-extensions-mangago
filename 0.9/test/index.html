@@ -20,17 +20,12 @@
     ></script>
 
     <style>
-      /* Sized in pixels rather than percentages: percentage-sized glows cover
-         a narrow phone viewport end to end and wash the whole page out. */
+      /* Flat, and cool rather than warm. A pink-and-mango wash over a warm base
+         mixes to brown at low opacity, which is what covered the whole page;
+         the pastels belong on the elements, not behind them. */
       body {
-        background:
-          radial-gradient(120% 420px at 50% -80px, rgba(255, 187, 213, 0.34) 0%, transparent 72%),
-          radial-gradient(90% 320px at 88% 40px, rgba(255, 193, 126, 0.2) 0%, transparent 72%),
-          radial-gradient(80% 300px at 6% 260px, rgba(207, 235, 180, 0.1) 0%, transparent 72%),
-          #150911 !important;
-        background-repeat: no-repeat !important;
-        background-attachment: scroll !important;
-        color: #ffeaf2 !important;
+        background: #141019 !important;
+        color: #f3e9f4 !important;
       }
       h1 {
         background: linear-gradient(100deg, #ffdcea 0%, #ffbbd5 34%, #ffcda8 70%, #ffc17e 100%);
@@ -44,29 +39,27 @@
         color: #33162a !important;
         font-weight: 700;
       }
-      .bg-zinc-800 { background-color: #26101d !important; }
-      .bg-zinc-700 { background-color: #351529 !important; }
-      .hover\:bg-zinc-600:hover { background-color: #451c37 !important; }
-      .bg-gray-500 { background-color: #6b2b4b !important; }
-      .border-zinc-700 { border-color: #55223d !important; }
-      .text-gray-100, .text-gray-200, .text-gray-300 { color: #ffeaf2 !important; }
-      .text-gray-400 { color: #f0a8c4 !important; }
+      .bg-zinc-800 { background-color: #1e1728 !important; }
+      .bg-zinc-700 { background-color: #2a2038 !important; }
+      .hover\:bg-zinc-600:hover { background-color: #352845 !important; }
+      .bg-gray-500 { background-color: #392b47 !important; }
+      .border-zinc-700 { border-color: #392b47 !important; }
+      .text-gray-100, .text-gray-200, .text-gray-300 { color: #f3e9f4 !important; }
+      .text-gray-400 { color: #c0a8cc !important; }
 
-      /* Source cards: lift them off the background instead of letting them sit
-         flat against it. */
-      .bg-zinc-800.rounded-lg { border: 1px solid rgba(255, 187, 213, 0.15) !important; }
-      .shadow-lg { box-shadow: 0 12px 32px rgba(16, 5, 12, 0.55) !important; }
-      .bg-zinc-800.rounded-lg:hover { border-color: rgba(255, 187, 213, 0.4) !important; }
+      .bg-zinc-800.rounded-lg { border: 1px solid #392b47 !important; }
+      .bg-zinc-800.rounded-lg:hover { border-color: #f47fb2 !important; }
+      .shadow-lg { box-shadow: none !important; }
 
-      /* Content-rating pills and the error panel ship in stock red, yellow and
-         green, the three loudest colours on the page. */
-      .bg-red-500 { background-color: #e8506f !important; }
-      .text-red-100 { color: #fff0f4 !important; }
-      .text-red-500 { color: #e8506f !important; }
-      .bg-yellow-500 { background-color: #f0a94c !important; }
-      .text-yellow-900 { color: #3b2408 !important; }
-      .bg-green-500 { background-color: #9bc153 !important; }
-      .text-green-100 { color: #1e2a10 !important; }
+      /* Content-rating pills read as a tinted panel with light text of the same
+         hue, rather than a block of saturated colour. */
+      .bg-red-500 { background-color: #431e31 !important; }
+      .text-red-100 { color: #ffb3cf !important; }
+      .text-red-500 { color: #c94a72 !important; }
+      .bg-yellow-500 { background-color: #453320 !important; }
+      .text-yellow-900 { color: #ffd79a !important; }
+      .bg-green-500 { background-color: #23342d !important; }
+      .text-green-100 { color: #a8e0c0 !important; }
       .border-red-700 { border-color: rgba(51, 22, 42, 0.3) !important; }
     </style>
   </head>
@@ -84,12 +77,12 @@
             background:
               radial-gradient(
                 circle at 30% 30%,
-                rgba(255, 187, 213, 0.5) 0%,
+                rgba(255, 187, 213, 0.34) 0%,
                 transparent 70%
               ),
               radial-gradient(
                 circle at 70% 70%,
-                rgba(255, 193, 126, 0.42) 0%,
+                rgba(244, 127, 178, 0.26) 0%,
                 transparent 70%
               );
             filter: blur(25px);
