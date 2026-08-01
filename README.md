@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="media/banner.svg" alt="PoppingMango Sources — Novels, Manga, Manhwa & Manhua for Paperback 0.9" width="100%"/>
+  <img src="media/banner.svg" alt="PoppingMango Sources — Novels, Manga, Manhwa & Manhua for Paperback 0.9, maintained by Popmango" width="100%"/>
 </p>
 
 <p align="center">
@@ -25,7 +25,7 @@
 
 ---
 
-PoppingMango is an independent, hand-built source list for [Paperback](https://paperback.moe) 0.9 covering novels, manga, manhwa, and manhua. Every extension here is written and maintained in this repository — it is not a mirror of any other catalog. After adding the repository, refresh it in Paperback whenever you want to pick up source updates.
+PoppingMango is an independent source list for [Paperback](https://paperback.moe) 0.9 covering novels, manga, manhwa, and manhua, maintained by Popmango. Every extension here is written and maintained in this repository — it is not a mirror of any other catalog. After adding the repository, refresh it in Paperback whenever you want to pick up source updates.
 
 ## Sources
 

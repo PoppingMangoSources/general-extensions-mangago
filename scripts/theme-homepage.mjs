@@ -15,7 +15,42 @@ const FAVICON =
       "</svg>",
   );
 
+// The template paints itself with a neutral zinc palette; restyle those classes
+// so the page reads in the repository's colours rather than the stock ones.
+const STYLE = `
+    <style>
+      body {
+        background:
+          radial-gradient(circle at 12% -10%, rgba(249, 201, 216, 0.22) 0%, transparent 55%),
+          radial-gradient(circle at 88% 8%, rgba(255, 177, 68, 0.14) 0%, transparent 55%),
+          #150a11 !important;
+        color: #f7e8ee !important;
+      }
+      h1 {
+        background: linear-gradient(100deg, #f9c9d8 0%, #ef6fa5 45%, #ffb144 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent !important;
+      }
+      .addToPaperbackButton {
+        background: linear-gradient(100deg, #f489b4 0%, #f9a03f 100%) !important;
+        border-bottom-color: rgba(0, 0, 0, 0.28) !important;
+        color: #2b1109 !important;
+        font-weight: 700;
+      }
+      .bg-zinc-800 { background-color: #241320 !important; }
+      .bg-zinc-700 { background-color: #2f1a28 !important; }
+      .hover\\:bg-zinc-600:hover { background-color: #3d2233 !important; }
+      .bg-gray-500 { background-color: #5c3348 !important; }
+      .border-zinc-700 { border-color: #52293c !important; }
+      .text-gray-100, .text-gray-200, .text-gray-300 { color: #f7e8ee !important; }
+      .text-gray-400 { color: #cf9db4 !important; }
+      .focus\\:ring-\\[\\#5478db\\]:focus { --tw-ring-color: #ef6fa5 !important; }
+    </style>
+  </head>`;
+
 const REPLACEMENTS = [
+  ["  </head>", STYLE],
   [
     '<link rel="icon" href="https://paperback.moe/pb-logo.svg" />',
     `<link rel="icon" href="${FAVICON}" />`,
