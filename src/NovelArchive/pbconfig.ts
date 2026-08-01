@@ -6,7 +6,7 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "NovelArchive",
   description: "Extension that pulls content from novelarchive.cc.",
-  version: "1.0.0-alpha.51",
+  version: "1.0.0-alpha.52",
   icon: "icon.png",
   language: "en",
   contentRating: ContentRating.ADULT,
@@ -17,7 +17,7 @@ export default {
     SourceIntents.SEARCH_RESULT_PROVIDING,
     SourceIntents.SETTINGS_FORM_PROVIDING,
   ],
-  badges: [{ label: "Novel", textColor: "#ffffff", backgroundColor: "#3baf4b" }],
+  badges: [{ label: "Novel", textColor: "#33162a", backgroundColor: "#ffc17e" }],
   developers: [
     {
       name: "Popmango",

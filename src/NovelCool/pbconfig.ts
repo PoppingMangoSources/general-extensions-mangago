@@ -6,7 +6,7 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "NovelCool",
   description: "Extension that pulls content from novelcool.com.",
-  version: "1.0.0-alpha.8",
+  version: "1.0.0-alpha.9",
   icon: "icons.png",
   language: "en",
   contentRating: ContentRating.ADULT,
@@ -17,8 +17,8 @@ export default {
     SourceIntents.SEARCH_RESULT_PROVIDING,
   ],
   badges: [
-    { label: "Novel", textColor: "#ffffff", backgroundColor: "#ff7b0a" },
-    { label: "Manga", textColor: "#ffffff", backgroundColor: "#1fa7d8" },
+    { label: "Novel", textColor: "#33162a", backgroundColor: "#ffc17e" },
+    { label: "Manga", textColor: "#33162a", backgroundColor: "#ffbbd5" },
   ],
   developers: [
     {
