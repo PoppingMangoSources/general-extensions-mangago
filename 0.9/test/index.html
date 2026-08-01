@@ -23,33 +23,30 @@
       /* One palette drives every rule below, so a colour is changed in a single
          place rather than hunted through the sheet. */
       :root {
-        --pm-ink: #33162a;
-        --pm-ink-soft: #7a4a60;
-        --pm-ink-faint: #9a7285;
-        --pm-rose: #c9376b;
-        --pm-rose-light: #e0517f;
-        --pm-mango: #e8853a;
-        --pm-surface: #fffaf9;
-        --pm-surface-tint: #fff4f8;
-        --pm-surface-warm: #ffeef4;
-        --pm-line: rgba(51, 22, 42, 0.1);
+        --pm-bg: #17101f;
+        --pm-surface: #241729;
+        --pm-surface-2: #2b1c33;
+        --pm-surface-hover: #33203c;
+        --pm-border: #3d2545;
+        --pm-ink: #fbeaf4;
+        --pm-ink-soft: #bda3c0;
+        --pm-ink-faint: #9b83a2;
+        --pm-rose: #ff5f9e;
+        --pm-rose-deep: #d63a78;
+        --pm-mango: #ffa45c;
+        /* The pastel run the readme art and the install button share. */
+        --pm-pastel: linear-gradient(100deg, #ffdcea 0%, #ffbbd5 34%, #ffcda8 70%, #ffc17e 100%);
+        --pm-on-pastel: #33162a;
       }
 
-      /* The page carries the same run of colour as the install button, pinned so
-         it reads once from top to bottom rather than restarting each screen.
-         It belongs on the root, not on the body: the root's background is what
-         paints the canvas, so it covers the status bar and the overscroll area
-         and does not stop short when the content is shorter than the screen.
-         A flat colour here instead would show as a band of that colour above
-         and below the gradient. */
       html {
         /* The colour matters as much as the gradient: Safari paints the status
            bar and the overscroll area from the root's background COLOUR, and a
            gradient alone leaves it nothing to resolve, so those strips come out
            white. Setting the first stop as the colour makes them continuous
-           with the top of the gradient. */
-        background-color: #ffe2f0 !important;
-        background-image: linear-gradient(180deg, #ffe2f0 0%, #ffc4dc 32%, #ffd3b8 70%, #ffca92 100%) !important;
+           with the top of the page. */
+        background-color: var(--pm-bg) !important;
+        background-image: linear-gradient(180deg, #1d1327 0%, #17101f 58%, #1b1124 100%) !important;
         background-repeat: no-repeat !important;
         min-height: 100%;
         overflow-y: scroll;
@@ -60,61 +57,69 @@
         min-height: 100vh;
         scrollbar-gutter: stable;
       }
-      ::selection { background: rgba(224, 81, 127, 0.26); color: var(--pm-ink); }
+      ::selection { background: rgba(255, 95, 158, 0.3); color: var(--pm-ink); }
       a { color: var(--pm-rose); }
 
-      /* Deep enough to hold against the pastel behind it; the light gradient
-         used elsewhere would disappear into the page here. */
+      /* Bright against the dark page, and the same run the artwork uses. */
       h1 {
-        background: linear-gradient(100deg, var(--pm-rose) 0%, var(--pm-rose-light) 42%, var(--pm-mango) 100%);
+        background: var(--pm-pastel);
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent !important;
       }
-      /* A saturated echo of the page's own run, so the call to action reads as
-         part of the palette rather than as a hole punched through it. */
-      .addToPaperbackButton {
-        background: linear-gradient(100deg, var(--pm-rose) 0%, var(--pm-rose-light) 100%) !important;
-        border-bottom-color: rgba(51, 22, 42, 0.22) !important;
-        box-shadow: 0 6px 18px rgba(150, 40, 85, 0.28) !important;
-        color: #ffffff !important;
+
+      /* Both install buttons carry the pastel gradient with dark text on it,
+         matching the add button in the readme. On a dark page that reads far
+         better than white-on-saturated, which cannot clear 3:1 at the warm end
+         of this run. */
+      .addToPaperbackButton,
+      .bg-\[\#c9376b\] {
+        background: var(--pm-pastel) !important;
+        border-bottom-color: rgba(23, 16, 31, 0.35) !important;
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4) !important;
+        color: var(--pm-on-pastel) !important;
         font-weight: 700;
       }
-      .bg-zinc-700 { background-color: var(--pm-surface-warm) !important; }
-      .hover\:bg-zinc-600:hover { background-color: #ffe2ec !important; }
-      .bg-gray-500 { background-color: #e9d3de !important; }
-      .border-zinc-700 { border-color: #f4cddb !important; }
+      .hover\:bg-\[\#f47fb2\]:hover {
+        background: linear-gradient(100deg, #ffe7f1 0%, #ffc9de 34%, #ffd9bb 70%, #ffcd96 100%) !important;
+      }
+      .bg-\[\#c9376b\] svg { color: var(--pm-on-pastel) !important; }
+
+      .bg-zinc-700 { background-color: var(--pm-surface-2) !important; }
+      .hover\:bg-zinc-600:hover { background-color: var(--pm-surface-hover) !important; }
+      .bg-gray-500 { background-color: var(--pm-border) !important; }
+      .border-zinc-700 { border-color: var(--pm-border) !important; }
       .text-gray-100, .text-gray-200, .text-gray-300 { color: var(--pm-ink) !important; }
       .text-gray-400 { color: var(--pm-ink-soft) !important; }
       .placeholder-gray-400::placeholder { color: var(--pm-ink-faint) !important; }
 
-      /* Surfaces carry a slight warm tint rather than flat white, so the cards
-         and the search field belong to the page instead of sitting on it. */
+      /* Source cards: a lifted surface with a rose edge on hover, rather than a
+         flat block. */
       .bg-zinc-800 {
-        background: linear-gradient(165deg, var(--pm-surface) 0%, var(--pm-surface-tint) 100%) !important;
+        background: linear-gradient(165deg, var(--pm-surface-2) 0%, var(--pm-surface) 100%) !important;
       }
-      .bg-zinc-800.rounded-lg { border: 1px solid var(--pm-line) !important; }
+      .bg-zinc-800.rounded-lg { border: 1px solid var(--pm-border) !important; }
       .bg-zinc-800.rounded-lg:hover {
-        background: linear-gradient(165deg, #fffdfd 0%, #ffe9f1 100%) !important;
-        border-color: var(--pm-rose-light) !important;
+        background: linear-gradient(165deg, var(--pm-surface-hover) 0%, var(--pm-surface-2) 100%) !important;
+        border-color: var(--pm-rose) !important;
       }
-      .shadow-lg { box-shadow: 0 8px 24px rgba(120, 40, 70, 0.14) !important; }
+      .shadow-lg { box-shadow: 0 10px 26px rgba(0, 0, 0, 0.38) !important; }
 
       /* Badge chips are filled from each extension's own colour and drawn at a
-         quarter opacity when unselected, so only the label is set here — dark,
-         which holds against both the pale unselected tint and the full fill. */
-      .font-medium.transition-all { color: #33162a !important; }
+         quarter opacity when unselected, so only the label is set here — light,
+         which holds against both the dim unselected tint and the full fill. */
+      .font-medium.transition-all { color: var(--pm-ink) !important; }
 
       /* bg-red-500 backs both the ADULT pill and the error panel, and those
          carry different label colours, so the pill is matched on the pair.
          The pills are translucent so they tint the card they sit on instead of
          covering it with a second opaque block. */
-      .bg-red-500 { background-color: var(--pm-rose) !important; }
-      .text-red-500 { color: var(--pm-rose) !important; }
-      .bg-red-500.text-red-100 { background-color: rgba(201, 55, 107, 0.16) !important; color: #a82d52 !important; }
-      .bg-yellow-500.text-yellow-900 { background-color: rgba(232, 133, 58, 0.2) !important; color: #8a4b10 !important; }
-      .bg-green-500.text-green-100 { background-color: rgba(79, 160, 106, 0.22) !important; color: #2f5a35 !important; }
-      .border-red-700 { border-color: rgba(51, 22, 42, 0.12) !important; }
+      .bg-red-500 { background-color: var(--pm-rose-deep) !important; }
+      .text-red-500 { color: var(--pm-rose-deep) !important; }
+      .bg-red-500.text-red-100 { background-color: rgba(255, 95, 158, 0.2) !important; color: #ffb3cf !important; }
+      .bg-yellow-500.text-yellow-900 { background-color: rgba(255, 164, 92, 0.2) !important; color: #ffd79a !important; }
+      .bg-green-500.text-green-100 { background-color: rgba(122, 200, 140, 0.2) !important; color: #a8e0c0 !important; }
+      .border-red-700 { border-color: rgba(23, 16, 31, 0.35) !important; }
     </style>
   </head>
 
