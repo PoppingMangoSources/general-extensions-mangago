@@ -124,7 +124,12 @@ export class MyReadingMangaExtension implements ExtensionImpl<typeof MyReadingMa
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    const $ = await fetchMangaPage(chapter.sourceManga.mangaId, parseInt(chapter.chapterId, 10));
+    // Chapters are the post's pagination parts, so the id is the part number.
+    const part = parseInt(chapter.chapterId, 10);
+    if (isNaN(part) || part < 1) {
+      throw new Error("Refresh the chapter list to reload chapters.");
+    }
+    const $ = await fetchMangaPage(chapter.sourceManga.mangaId, part);
     return parsePages($, chapter);
   }
 
@@ -165,10 +170,11 @@ export class MyReadingMangaExtension implements ExtensionImpl<typeof MyReadingMa
             contentRating: ContentRating.ADULT,
           },
     );
-    return {
-      items,
-      metadata: hasNextPage($) && items.length > 0 ? { page: page + 1 } : undefined,
-    };
+    // Paging follows the site's own next link. Stopping when this page's cards
+    // were all filtered out ended the list early, because a page can be
+    // entirely one hidden genre or one unwanted language and still be followed
+    // by pages that are not.
+    return { items, metadata: hasNextPage($) ? { page: page + 1 } : undefined };
   }
 
   private async getGenresSection(): Promise<PagedResults<DiscoverSectionItem>> {
@@ -209,10 +215,7 @@ export class MyReadingMangaExtension implements ExtensionImpl<typeof MyReadingMa
       imageUrl: card.imageUrl,
       contentRating: ContentRating.ADULT,
     }));
-    return {
-      items,
-      metadata: hasNextPage($) && items.length > 0 ? { page: page + 1 } : undefined,
-    };
+    return { items, metadata: hasNextPage($) ? { page: page + 1 } : undefined };
   }
 
   async getSortingOptions(_query: SearchQuery<SearchMetadata>): Promise<SortingOption[]> {
@@ -220,8 +223,15 @@ export class MyReadingMangaExtension implements ExtensionImpl<typeof MyReadingMa
   }
 
   private getTaxonomies(): Promise<FilterTaxonomies> {
-    this.taxonomiesPromise ??= fetchSearchPage(1, "", "rand").then(parseFilterTaxonomies);
-    return this.taxonomiesPromise;
+    // Drop a rejected scrape so the next open retries; caching the rejection
+    // left the filter rows empty for the rest of the session.
+    const request = (this.taxonomiesPromise ??= fetchSearchPage(1, "", "rand")
+      .then(parseFilterTaxonomies)
+      .catch((error: unknown) => {
+        if (this.taxonomiesPromise === request) this.taxonomiesPromise = undefined;
+        throw error;
+      }));
+    return request;
   }
 }
 
