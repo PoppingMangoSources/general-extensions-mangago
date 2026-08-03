@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import { type Tag } from "@paperback/types";
+import { type JSONObject, type Tag } from "@paperback/types";
 
 export const DEFAULT_DOMAIN = "https://vymanga.com";
 export const SEARCH_PATH = "search";
@@ -44,18 +44,18 @@ export const PAGE_SELECTOR = "div.carousel-item[data-page] img, img.lozad, img.d
 
 export const GENRE_LINK_SELECTOR = 'a[href*="/genre/"]';
 
-export type PageMetadata = {
+export interface PageMetadata extends JSONObject {
   page?: number;
-};
+}
 
-export type SearchMetadata = {
+export interface SearchMetadata extends JSONObject {
   author?: string;
   searchType?: string[];
   searchDescription?: boolean;
   status?: string[];
   order?: string[];
   genres?: Record<string, "included" | "excluded">;
-};
+}
 
 export type OptionItem = {
   id: string;

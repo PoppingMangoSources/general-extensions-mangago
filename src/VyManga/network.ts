@@ -11,9 +11,6 @@ import * as cheerio from "cheerio";
 
 const IMAGE_EXTENSION_REGEX = /\.(jpe?g|png|webp|gif|avif|bmp|svg)(\?|#|$)/i;
 
-const DESKTOP_USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-
 export class VyMangaInterceptor extends PaperbackInterceptor {
   constructor(
     id: string,
@@ -31,7 +28,7 @@ export class VyMangaInterceptor extends PaperbackInterceptor {
         headers: {
           ...request.headers,
           referer: `${baseUrl}/`,
-          "user-agent": DESKTOP_USER_AGENT,
+          "user-agent": await Application.getDefaultUserAgent(),
           accept: "image/avif,image/webp,image/apng,image/png,image/svg+xml,*/*;q=0.8",
         },
       };
@@ -43,7 +40,7 @@ export class VyMangaInterceptor extends PaperbackInterceptor {
         ...request.headers,
         referer: `${baseUrl}/`,
         origin: baseUrl,
-        "user-agent": DESKTOP_USER_AGENT,
+        "user-agent": await Application.getDefaultUserAgent(),
         accept:
           "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "accept-language": "en-US,en;q=0.5",
@@ -65,7 +62,7 @@ export class VyMangaInterceptor extends PaperbackInterceptor {
       throw new CloudflareError({
         url: request.url,
         method: request.method ?? "GET",
-        headers: { "user-agent": DESKTOP_USER_AGENT },
+        headers: { "user-agent": await Application.getDefaultUserAgent() },
       });
     }
     return data;

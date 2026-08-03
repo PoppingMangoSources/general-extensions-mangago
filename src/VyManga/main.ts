@@ -60,11 +60,26 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
   cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
   mainInterceptor = new VyMangaInterceptor("main", () => this.baseUrl);
 
-  private featuredItems?: DiscoverSectionItem[];
+  private featuredPromise?: Promise<DiscoverSectionItem[]>;
   private genresPromise?: Promise<OptionItem[]>;
+  private memoBaseUrl?: string;
 
   get baseUrl(): string {
     return getBaseUrlOverride() ?? DEFAULT_DOMAIN;
+  }
+
+  // Both memos hold data scraped from one specific host, so a domain change in
+  // the settings has to drop them before they are read again.
+  private clearMemos(): void {
+    this.featuredPromise = undefined;
+    this.genresPromise = undefined;
+  }
+
+  private memosForCurrentBaseUrl(): void {
+    const baseUrl = this.baseUrl;
+    if (this.memoBaseUrl === baseUrl) return;
+    this.memoBaseUrl = baseUrl;
+    this.clearMemos();
   }
 
   get contentRating(): ContentRating {
@@ -86,8 +101,7 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
     cookies: Cookie[],
     _localStorage: Record<string, string>,
   ): Promise<void> {
-    this.featuredItems = undefined;
-    this.genresPromise = undefined;
+    this.clearMemos();
     for (const cookie of cookies) {
       if (
         cookie.name.startsWith("cf") ||
@@ -215,9 +229,11 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
     if (meta.status?.[0]) builder.setQueryItem("completed", meta.status[0]);
     if (meta.searchDescription) builder.setQueryItem("check_search_desc", "1");
 
-    const sort = sortOverride;
-    if (sort) {
-      builder.setQueryItem("sort", sort);
+    if (sortOverride) builder.setQueryItem("sort", sortOverride);
+    // Order is its own row in the form, so it is sent whenever the reader set
+    // it. Tying it to the sort left the row doing nothing until a sort was
+    // picked as well.
+    if (sortOverride || meta.order?.[0]) {
       builder.setQueryItem("sort_type", meta.order?.[0] ?? "desc");
     }
 
@@ -302,15 +318,24 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
     return `${this.baseUrl}/manga/${mangaId}`;
   }
 
-  private async buildFeaturedItems(): Promise<DiscoverSectionItem[]> {
-    if (this.featuredItems) return this.featuredItems;
+  // Memoises the in-flight request, not just the result, so two carousels
+  // opening at once share one fetch instead of racing.
+  private buildFeaturedItems(): Promise<DiscoverSectionItem[]> {
+    this.memosForCurrentBaseUrl();
+    const request = (this.featuredPromise ??= this.loadFeaturedItems().catch((error: unknown) => {
+      if (this.featuredPromise === request) this.featuredPromise = undefined;
+      throw error;
+    }));
+    return request;
+  }
 
+  private async loadFeaturedItems(): Promise<DiscoverSectionItem[]> {
     const rating = this.contentRating;
     const $ = await fetchCheerio({ url: this.browseUrl("viewed", 1), method: "GET" });
     const cards = parseCards($, this.baseUrl).slice(0, FEATURED_LIMIT);
 
     // "Most viewed" listing only; cards carry no author or synopsis.
-    const items = cards.map(
+    return cards.map(
       (card): DiscoverSectionItem => ({
         type: "featuredCarouselItem",
         mangaId: card.mangaId,
@@ -319,19 +344,15 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
         contentRating: rating,
       }),
     );
-
-    this.featuredItems = items;
-    return items;
   }
 
-  private async getGenres(): Promise<OptionItem[]> {
-    if (this.genresPromise) return this.genresPromise;
-    const request = this.loadGenres().catch((error: unknown) => {
+  private getGenres(): Promise<OptionItem[]> {
+    this.memosForCurrentBaseUrl();
+    const request = (this.genresPromise ??= this.loadGenres().catch((error: unknown) => {
       if (this.genresPromise === request) this.genresPromise = undefined;
       throw error;
-    });
-    this.genresPromise = request;
-    return this.genresPromise;
+    }));
+    return request;
   }
 
   private async loadGenres(): Promise<OptionItem[]> {

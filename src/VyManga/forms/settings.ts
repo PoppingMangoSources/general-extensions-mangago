@@ -3,6 +3,8 @@
 
 import { ButtonRow, Form, InputRow, LabelRow, Section } from "@paperback/types";
 
+import { GENRES_KEY } from "../models";
+
 const BASE_URL_KEY = "vymanga.baseUrlOverride";
 
 export const getBaseUrlOverride = (): string | undefined => {
@@ -15,7 +17,13 @@ export const getBaseUrlOverride = (): string | undefined => {
 };
 
 const setBaseUrlOverride = (value: string): void => {
-  Application.setState(value.trim().replace(/\/+$/, ""), BASE_URL_KEY);
+  const next = value.trim().replace(/\/+$/, "");
+  if (next === (getBaseUrlOverride() ?? "")) return;
+  Application.setState(next, BASE_URL_KEY);
+  // Everything already on screen was scraped from the previous host, including
+  // the genre list cached in state, so drop it all rather than mix the two.
+  Application.setState(undefined, GENRES_KEY);
+  Application.invalidateDiscoverSections();
 };
 
 export class VyMangaSettingsForm extends Form {
