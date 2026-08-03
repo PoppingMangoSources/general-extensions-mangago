@@ -45,14 +45,25 @@ export class TempleScanInterceptor extends PaperbackInterceptor {
   }
 }
 
+// A failed request still returns a body, and that body reaches the flight
+// parser as "no series data found" — a wording that blames the parser for what
+// is really a 404 or a server error. Fail on the status instead.
+const assertOk = (url: string, status: number): void => {
+  if (status === 404) throw new Error(`Content not found: ${url}`);
+  if (status < 200 || status >= 300) {
+    throw new Error(`Request failed with status ${status}: ${url}`);
+  }
+};
+
 // Routes are Next.js App Router pages; the `rsc` header returns the flight
 // stream carrying the page's data instead of the rendered HTML shell.
 const fetchRsc = async (url: string): Promise<string> => {
-  const [, buffer] = await Application.scheduleRequest({
+  const [response, buffer] = await Application.scheduleRequest({
     url,
     method: "GET",
     headers: { rsc: "1" },
   });
+  assertOk(url, response.status);
   return Application.arrayBufferToUTF8String(buffer);
 };
 
@@ -67,10 +78,9 @@ export const fetchChapterPage = (mangaId: string, chapterId: string): Promise<st
   fetchRsc(`${DOMAIN}/comic/${mangaId}/${chapterId}`);
 
 const fetchApi = async (path: string): Promise<string> => {
-  const [, buffer] = await Application.scheduleRequest({
-    url: `${API_URL}${path}`,
-    method: "GET",
-  });
+  const url = `${API_URL}${path}`;
+  const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
+  assertOk(url, response.status);
   return Application.arrayBufferToUTF8String(buffer);
 };
 
