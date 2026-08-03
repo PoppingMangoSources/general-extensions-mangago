@@ -264,26 +264,29 @@ class LikeMangaExtension implements ExtensionImpl<typeof LikeMangaConfig> {
       minChapters: searchMetadata.minChapters?.[0],
     });
     const ranked = searchMetadata.topSeriesSort != null;
-    const items = parseMangaList(document).filter((item) => {
-      const genres = new Set(item.genres.map(normalizedFilterValue));
-      if (
-        genres.size > 0 &&
-        includedGenres.some((genre) => !genres.has(normalizedFilterValue(genre)))
-      ) {
-        return false;
-      }
-      if (excludedGenres.some((genre) => genres.has(normalizedFilterValue(genre)))) return false;
-      const status = statusFilterId(item.status);
-      if (item.status && includedStatuses.length > 0 && !includedStatuses.includes(status)) {
-        return false;
-      }
-      return !item.status || !excludedStatuses.includes(status);
-    });
+    // The Top Series rank is the row's place in the site's own listing, so it
+    // is taken before filtering. Numbering the surviving rows instead made
+    // every entry after a filtered-out one claim a place it does not hold.
+    const items = parseMangaList(document)
+      .map((item, index) => ({ item, rank: (page - 1) * PAGE_SIZE + index + 1 }))
+      .filter(({ item }) => {
+        const genres = new Set(item.genres.map(normalizedFilterValue));
+        if (
+          genres.size > 0 &&
+          includedGenres.some((genre) => !genres.has(normalizedFilterValue(genre)))
+        ) {
+          return false;
+        }
+        if (excludedGenres.some((genre) => genres.has(normalizedFilterValue(genre)))) return false;
+        const status = statusFilterId(item.status);
+        if (item.status && includedStatuses.length > 0 && !includedStatuses.includes(status)) {
+          return false;
+        }
+        return !item.status || !excludedStatuses.includes(status);
+      });
 
     return {
-      items: items.map((item, index) =>
-        toSearchResultItem(item, ranked ? (page - 1) * PAGE_SIZE + index + 1 : undefined),
-      ),
+      items: items.map(({ item, rank }) => toSearchResultItem(item, ranked ? rank : undefined)),
       metadata: hasNextPage(document) ? { page: page + 1 } : undefined,
     };
   }

@@ -47,12 +47,17 @@ export class LikeMangaInterceptor extends PaperbackInterceptor {
     response: Response,
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
+    // The interstitial markers are only meaningful on a blocked response from
+    // this site. Testing them against every body meant a synopsis containing
+    // "Just a moment" turned a perfectly good page into a bypass prompt.
+    const blocked =
+      request.url.startsWith(DOMAIN) && (response.status === 403 || response.status === 503);
     const contentType = response.headers?.["content-type"] ?? "";
-    const body = contentType.includes("text/html") ? Application.arrayBufferToUTF8String(data) : "";
+    const body =
+      blocked && contentType.includes("text/html") ? Application.arrayBufferToUTF8String(data) : "";
     if (
       response.headers?.["cf-mitigated"] === "challenge" ||
-      (response.status === 403 && request.url.startsWith(DOMAIN)) ||
-      /(?:Just a moment|cf-chl-|_cf_chl_opt)/i.test(body)
+      (blocked && /(?:Just a moment|cf-chl-|_cf_chl_opt)/i.test(body))
     ) {
       throw new CloudflareError({
         url: `${DOMAIN}/`,
