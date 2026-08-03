@@ -312,9 +312,8 @@ export const parseChapterPages = ($: CheerioAPI, base: string): string[] => {
   return pages;
 };
 
-// Returns undefined rather than "now" for text we cannot read: an unparseable
-// date that resolves to the current time makes the chapter look freshly
-// released and reshuffles the list on every refresh.
+// Undefined, not "now": a date defaulted to the current time reshuffles the
+// chapter list on every refresh.
 const parseDate = (text: string): Date | undefined => {
   const trimmed = (text || "").trim();
   if (!trimmed) return undefined;

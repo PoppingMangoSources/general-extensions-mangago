@@ -20,8 +20,7 @@ const setBaseUrlOverride = (value: string): void => {
   const next = value.trim().replace(/\/+$/, "");
   if (next === (getBaseUrlOverride() ?? "")) return;
   Application.setState(next, BASE_URL_KEY);
-  // Everything already on screen was scraped from the previous host, including
-  // the genre list cached in state, so drop it all rather than mix the two.
+  // Cached genres and sections belong to the previous host.
   Application.setState(undefined, GENRES_KEY);
   Application.invalidateDiscoverSections();
 };

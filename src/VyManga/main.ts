@@ -51,7 +51,7 @@ import {
 } from "./parsers";
 import type VyMangaConfig from "./pbconfig";
 
-export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
+class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
   globalRateLimiter = new BasicRateLimiter("rateLimiter", {
     numberOfRequests: 5,
     bufferInterval: 2,
@@ -68,18 +68,12 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
     return getBaseUrlOverride() ?? DEFAULT_DOMAIN;
   }
 
-  // Both memos hold data scraped from one specific host, so a domain change in
-  // the settings has to drop them before they are read again.
-  private clearMemos(): void {
+  // Both memos hold data scraped from one host, so a domain change drops them.
+  private syncMemos(): void {
+    if (this.memoBaseUrl === this.baseUrl) return;
+    this.memoBaseUrl = this.baseUrl;
     this.featuredPromise = undefined;
     this.genresPromise = undefined;
-  }
-
-  private memosForCurrentBaseUrl(): void {
-    const baseUrl = this.baseUrl;
-    if (this.memoBaseUrl === baseUrl) return;
-    this.memoBaseUrl = baseUrl;
-    this.clearMemos();
   }
 
   get contentRating(): ContentRating {
@@ -101,7 +95,8 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
     cookies: Cookie[],
     _localStorage: Record<string, string>,
   ): Promise<void> {
-    this.clearMemos();
+    this.featuredPromise = undefined;
+    this.genresPromise = undefined;
     for (const cookie of cookies) {
       if (
         cookie.name.startsWith("cf") ||
@@ -230,9 +225,7 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
     if (meta.searchDescription) builder.setQueryItem("check_search_desc", "1");
 
     if (sortOverride) builder.setQueryItem("sort", sortOverride);
-    // Order is its own row in the form, so it is sent whenever the reader set
-    // it. Tying it to the sort left the row doing nothing until a sort was
-    // picked as well.
+    // Order is its own form row, so it applies with or without a sort.
     if (sortOverride || meta.order?.[0]) {
       builder.setQueryItem("sort_type", meta.order?.[0] ?? "desc");
     }
@@ -318,10 +311,9 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
     return `${this.baseUrl}/manga/${mangaId}`;
   }
 
-  // Memoises the in-flight request, not just the result, so two carousels
-  // opening at once share one fetch instead of racing.
+  // Memoises the in-flight request so concurrent sections share one fetch.
   private buildFeaturedItems(): Promise<DiscoverSectionItem[]> {
-    this.memosForCurrentBaseUrl();
+    this.syncMemos();
     const request = (this.featuredPromise ??= this.loadFeaturedItems().catch((error: unknown) => {
       if (this.featuredPromise === request) this.featuredPromise = undefined;
       throw error;
@@ -347,7 +339,7 @@ export class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
   }
 
   private getGenres(): Promise<OptionItem[]> {
-    this.memosForCurrentBaseUrl();
+    this.syncMemos();
     const request = (this.genresPromise ??= this.loadGenres().catch((error: unknown) => {
       if (this.genresPromise === request) this.genresPromise = undefined;
       throw error;
