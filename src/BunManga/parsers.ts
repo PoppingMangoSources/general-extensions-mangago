@@ -423,8 +423,11 @@ export const parseChapters = ($: cheerio.CheerioAPI, sourceManga: SourceManga): 
     const link = item.find("a").first();
     const id = chapterIdFromUrl(link.attr("href"));
     const rawTitle = cleanText(link.text());
-    const chapNum = chapterNumber(rawTitle || id);
-    if (!id || chapNum == null) return [];
+    if (!id) return [];
+    // Prologues, extras and side stories carry no number, and dropping them
+    // for that reason hid them from the chapter list entirely. They sit at 0
+    // and take their place from sortingIndex, which follows the site's order.
+    const chapNum = chapterNumber(rawTitle || id) ?? 0;
     return [
       {
         chapterId: id,
