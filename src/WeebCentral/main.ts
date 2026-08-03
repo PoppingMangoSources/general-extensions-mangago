@@ -57,8 +57,8 @@ import WeebCentralConfig from "./pbconfig";
 
 export class WeebCentralExtension implements ExtensionImpl<typeof WeebCentralConfig> {
   globalRateLimiter = new BasicRateLimiter("ratelimiter", {
-    numberOfRequests: 10,
-    bufferInterval: 0.5,
+    numberOfRequests: 3,
+    bufferInterval: 1,
     ignoreImages: true,
   });
 
