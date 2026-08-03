@@ -264,9 +264,8 @@ class LikeMangaExtension implements ExtensionImpl<typeof LikeMangaConfig> {
       minChapters: searchMetadata.minChapters?.[0],
     });
     const ranked = searchMetadata.topSeriesSort != null;
-    // The Top Series rank is the row's place in the site's own listing, so it
-    // is taken before filtering. Numbering the surviving rows instead made
-    // every entry after a filtered-out one claim a place it does not hold.
+    // Rank is the row's place in the site's listing, so take it before
+    // filtering shifts the surviving rows up.
     const items = parseMangaList(document)
       .map((item, index) => ({ item, rank: (page - 1) * PAGE_SIZE + index + 1 }))
       .filter(({ item }) => {

@@ -49,7 +49,7 @@ import {
 } from "./parsers";
 import type KaliScanConfig from "./pbconfig";
 
-export class KaliScanExtension implements ExtensionImpl<typeof KaliScanConfig> {
+class KaliScanExtension implements ExtensionImpl<typeof KaliScanConfig> {
   private rateLimiter = new BasicRateLimiter("rateLimiter", {
     numberOfRequests: 5,
     bufferInterval: 4,

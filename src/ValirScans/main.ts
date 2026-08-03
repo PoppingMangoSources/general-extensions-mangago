@@ -55,7 +55,7 @@ import {
 } from "./parsers";
 import type ValirScansConfig from "./pbconfig";
 
-export class ValirScansExtension implements ExtensionImpl<typeof ValirScansConfig> {
+class ValirScansExtension implements ExtensionImpl<typeof ValirScansConfig> {
   mainRateLimiter = new BasicRateLimiter("main", {
     numberOfRequests: 4,
     bufferInterval: 1,

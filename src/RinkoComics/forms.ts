@@ -72,9 +72,7 @@ export class RinkoComicsAdvancedSearchForm extends AdvancedSearchForm {
           layout: "flow",
           value: this.genres,
           items: this.genreOptions,
-          // The site's filter only takes genres to include; there is no
-          // parameter for excluding one, so exclusion stays off rather than
-          // being offered and then dropped when the search URL is built.
+          // The site's filter takes included genres only.
           allowExclusion: false,
           allowEmptySelection: true,
           onValueChange: Application.Selector(

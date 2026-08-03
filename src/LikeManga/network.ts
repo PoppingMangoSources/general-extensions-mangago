@@ -47,9 +47,8 @@ export class LikeMangaInterceptor extends PaperbackInterceptor {
     response: Response,
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
-    // The interstitial markers are only meaningful on a blocked response from
-    // this site. Testing them against every body meant a synopsis containing
-    // "Just a moment" turned a perfectly good page into a bypass prompt.
+    // Only read the interstitial markers out of a blocked response; a synopsis
+    // can contain "Just a moment" of its own.
     const blocked =
       request.url.startsWith(DOMAIN) && (response.status === 403 || response.status === 503);
     const contentType = response.headers?.["content-type"] ?? "";

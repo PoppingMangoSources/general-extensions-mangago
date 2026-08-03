@@ -64,7 +64,7 @@ import {
 import type ScansGGConfig from "./pbconfig";
 import { pageListViaWebView } from "./utils/webView";
 
-export class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
+class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
   globalRateLimiter = new BasicRateLimiter("rateLimiter", {
     numberOfRequests: 5,
     bufferInterval: 2,

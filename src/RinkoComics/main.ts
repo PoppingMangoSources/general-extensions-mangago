@@ -57,7 +57,7 @@ import {
 } from "./parsers";
 import type RinkoComicsConfig from "./pbconfig";
 
-export class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsConfig> {
+class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsConfig> {
   globalRateLimiter = new BasicRateLimiter("rateLimiter", {
     numberOfRequests: 3,
     bufferInterval: 1,

@@ -45,9 +45,7 @@ export class TempleScanInterceptor extends PaperbackInterceptor {
   }
 }
 
-// A failed request still returns a body, and that body reaches the flight
-// parser as "no series data found" — a wording that blames the parser for what
-// is really a 404 or a server error. Fail on the status instead.
+// Without this an error body reaches the flight parser as "no series data".
 const assertOk = (url: string, status: number): void => {
   if (status === 404) throw new Error(`Content not found: ${url}`);
   if (status < 200 || status >= 300) {

@@ -55,7 +55,7 @@ import {
 } from "./parsers";
 import type MyReadingMangaConfig from "./pbconfig";
 
-export class MyReadingMangaExtension implements ExtensionImpl<typeof MyReadingMangaConfig> {
+class MyReadingMangaExtension implements ExtensionImpl<typeof MyReadingMangaConfig> {
   mainRateLimiter = new BasicRateLimiter("main", {
     numberOfRequests: 1,
     bufferInterval: 1,
@@ -170,10 +170,8 @@ export class MyReadingMangaExtension implements ExtensionImpl<typeof MyReadingMa
             contentRating: ContentRating.ADULT,
           },
     );
-    // Paging follows the site's own next link. Stopping when this page's cards
-    // were all filtered out ended the list early, because a page can be
-    // entirely one hidden genre or one unwanted language and still be followed
-    // by pages that are not.
+    // Page off the site's next link: a page can filter down to nothing and
+    // still be followed by pages that do not.
     return { items, metadata: hasNextPage($) ? { page: page + 1 } : undefined };
   }
 
@@ -223,8 +221,7 @@ export class MyReadingMangaExtension implements ExtensionImpl<typeof MyReadingMa
   }
 
   private getTaxonomies(): Promise<FilterTaxonomies> {
-    // Drop a rejected scrape so the next open retries; caching the rejection
-    // left the filter rows empty for the rest of the session.
+    // Drop a rejected scrape so the next open retries.
     const request = (this.taxonomiesPromise ??= fetchSearchPage(1, "", "rand")
       .then(parseFilterTaxonomies)
       .catch((error: unknown) => {

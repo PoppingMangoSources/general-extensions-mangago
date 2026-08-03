@@ -85,7 +85,7 @@ import {
   livewireHeaders,
 } from "./utils/livewire";
 
-export class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
+class OniSagaExtension implements ExtensionImpl<typeof OniSagaConfig> {
   cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
   requestManager = new OniSagaInterceptor("onisaga-request");
   // Browse/search/discover share this generous limiter; images load freely.

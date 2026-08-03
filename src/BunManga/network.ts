@@ -31,8 +31,6 @@ export class BunMangaInterceptor extends PaperbackInterceptor {
             : "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"),
         "accept-language": "en-US,en;q=0.5",
       },
-      // wpmanga-adault is the theme's own adult-content cookie; the site reads
-      // no other name for it.
       cookies: {
         ...request.cookies,
         "wpmanga-adault": "1",

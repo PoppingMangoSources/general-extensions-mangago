@@ -63,7 +63,7 @@ import {
 } from "./parsers";
 import type LuaComicConfig from "./pbconfig";
 
-export class LuaComicExtension implements ExtensionImpl<typeof LuaComicConfig> {
+class LuaComicExtension implements ExtensionImpl<typeof LuaComicConfig> {
   private rateLimiter = new BasicRateLimiter("rateLimiter", {
     numberOfRequests: 15,
     bufferInterval: 10,

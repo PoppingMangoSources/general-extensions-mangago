@@ -60,7 +60,7 @@ import {
 } from "./parsers";
 import type TempleScanConfig from "./pbconfig";
 
-export class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
+class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
   mainRateLimiter = new BasicRateLimiter("main", {
     numberOfRequests: 2,
     bufferInterval: 1,

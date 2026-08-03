@@ -62,7 +62,7 @@ import {
 } from "./parsers";
 import type KingOfShojoConfig from "./pbconfig";
 
-export class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoConfig> {
+class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoConfig> {
   globalRateLimiter = new BasicRateLimiter("rateLimiter", {
     numberOfRequests: 5,
     bufferInterval: 2,
