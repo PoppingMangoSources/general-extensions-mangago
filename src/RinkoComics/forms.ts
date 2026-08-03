@@ -4,6 +4,7 @@
 import {
   AdvancedSearchForm,
   Form,
+  LabelRow,
   Section,
   ToggleRow,
   TriStateSelectRow,
@@ -56,14 +57,9 @@ export class RinkoComicsAdvancedSearchForm extends AdvancedSearchForm {
     if (this.genreOptions.length === 0) {
       return [
         Section("genres", [
-          ToggleRow("genresUnavailable", {
+          LabelRow("genresUnavailable", {
             title: "Genres unavailable",
             subtitle: "Genres could not be loaded. Pull to refresh and try again.",
-            value: false,
-            onValueChange: Application.Selector(
-              this as RinkoComicsAdvancedSearchForm,
-              "handleNoop",
-            ),
           }),
         ]),
       ];
@@ -76,7 +72,10 @@ export class RinkoComicsAdvancedSearchForm extends AdvancedSearchForm {
           layout: "flow",
           value: this.genres,
           items: this.genreOptions,
-          allowExclusion: true,
+          // The site's filter only takes genres to include; there is no
+          // parameter for excluding one, so exclusion stays off rather than
+          // being offered and then dropped when the search URL is built.
+          allowExclusion: false,
           allowEmptySelection: true,
           onValueChange: Application.Selector(
             this as RinkoComicsAdvancedSearchForm,
@@ -90,8 +89,6 @@ export class RinkoComicsAdvancedSearchForm extends AdvancedSearchForm {
   async handleGenresChange(value: Record<string, "included" | "excluded">): Promise<void> {
     this.genres = value;
   }
-
-  async handleNoop(): Promise<void> {}
 
   override getSearchQueryMetadata(): SearchMetadata {
     return Object.keys(this.genres).length > 0 ? { genres: this.genres } : {};

@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
+import type { JSONObject } from "@paperback/types";
+
 export const DOMAIN = "https://rinkocomics.com";
 
 export const AJAX_ENDPOINT = `${DOMAIN}/wp-admin/admin-ajax.php`;
@@ -26,13 +28,13 @@ export const SORTING_OPTIONS = [
   { id: "za", label: "Z-A" },
 ];
 
-export type PageMetadata = {
+export interface PageMetadata extends JSONObject {
   page?: number;
-};
+}
 
-export type SearchMetadata = {
+export interface SearchMetadata extends JSONObject {
   genres?: { [slug: string]: "included" | "excluded" };
-};
+}
 
 export type ComicCard = {
   mangaId: string;
