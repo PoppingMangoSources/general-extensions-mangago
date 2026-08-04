@@ -3,6 +3,7 @@
 
 import {
   BasicRateLimiter,
+  CloudflareError,
   CookieStorageInterceptor,
   DiscoverSectionType,
   type AdvancedSearchForm,
@@ -25,6 +26,7 @@ import { MangaHomeAdvancedSearchForm } from "./forms";
 import {
   AWESOME_TAB_INDEX,
   DOMAIN,
+  GENRES,
   HOME_TITLES,
   RANK_TITLES,
   SECTIONS,
@@ -46,6 +48,7 @@ import {
   searchUrl,
 } from "./network";
 import {
+  contentRatingForGenres,
   parseChapterImages,
   parseChapters,
   parseFeelingSection,
@@ -56,7 +59,6 @@ import {
   parseRecommendList,
   toChapterUpdateItem,
   toFeaturedItem,
-  toRankedItem,
   toSearchResultItem,
   toSimpleItem,
 } from "./parsers";
@@ -71,10 +73,11 @@ export class MangaHomeExtension implements ExtensionImpl<typeof MangaHomeConfig>
   private cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
   private interceptor = new MangaHomeInterceptor("main");
 
-  // Four carousels come from the home page and two from the ranking page; share
+  // Four carousels come from the home page and three from the ranking page; share
   // each in-flight fetch so a refresh burst stays at one request per document.
   private homePromise?: Promise<cheerio.CheerioAPI>;
   private rankPromise?: Promise<cheerio.CheerioAPI>;
+  private rankCoverPromises = new Map<string, Promise<string>>();
 
   async initialise(): Promise<void> {
     this.rateLimiter.registerInterceptor();
@@ -89,6 +92,7 @@ export class MangaHomeExtension implements ExtensionImpl<typeof MangaHomeConfig>
   ): Promise<void> {
     this.homePromise = undefined;
     this.rankPromise = undefined;
+    this.rankCoverPromises.clear();
     for (const cookie of cookies) {
       if (
         cookie.name.startsWith("cf") ||
@@ -114,16 +118,16 @@ export class MangaHomeExtension implements ExtensionImpl<typeof MangaHomeConfig>
         title: "New Shoujo Manga",
         type: DiscoverSectionType.simpleCarousel,
       },
+      {
+        id: SECTIONS.COMPLETED_SHOUJO,
+        title: "Completed Shoujo Manga",
+        type: DiscoverSectionType.simpleCarousel,
+      },
       { id: SECTIONS.LATEST, title: "Latest Releases", type: DiscoverSectionType.chapterUpdates },
       {
         id: SECTIONS.TOP_SHOUJO_WEEK,
         title: "Top Shoujo This Week",
         type: DiscoverSectionType.featured,
-      },
-      {
-        id: SECTIONS.COMPLETED_SHOUJO,
-        title: "Completed Shoujo Manga",
-        type: DiscoverSectionType.simpleCarousel,
       },
       {
         id: SECTIONS.TOP_VIEWED_SHOUJO,
@@ -143,13 +147,14 @@ export class MangaHomeExtension implements ExtensionImpl<typeof MangaHomeConfig>
       {
         id: SECTIONS.TOP_YAOI_WEEK,
         title: "Top Yaoi This Week",
-        type: DiscoverSectionType.simpleCarousel,
+        type: DiscoverSectionType.featured,
       },
       {
         id: SECTIONS.AWESOME,
         title: "Awesome Ranking",
-        type: DiscoverSectionType.simpleCarousel,
+        type: DiscoverSectionType.featured,
       },
+      { id: SECTIONS.GENRES, title: "Genres", type: DiscoverSectionType.genres },
     ];
   }
 
@@ -168,14 +173,14 @@ export class MangaHomeExtension implements ExtensionImpl<typeof MangaHomeConfig>
         return { items: (await this.getRecommended(HOME_TITLES.HOT_YAOI)).map(toSimpleItem) };
       case SECTIONS.NEW_SHOUJO:
         return { items: (await this.getRecommended(HOME_TITLES.NEW_SHOUJO)).map(toSimpleItem) };
-      case SECTIONS.LATEST:
-        return this.getLatestSection(metadata);
-      case SECTIONS.TOP_SHOUJO_WEEK:
-        return { items: (await this.getRanked(RANK_TITLES.SHOUJO)).map(toFeaturedItem) };
       case SECTIONS.COMPLETED_SHOUJO:
         return {
           items: (await this.getRecommended(HOME_TITLES.COMPLETED_SHOUJO)).map(toSimpleItem),
         };
+      case SECTIONS.LATEST:
+        return this.getLatestSection(metadata);
+      case SECTIONS.TOP_SHOUJO_WEEK:
+        return { items: (await this.getRanked(RANK_TITLES.SHOUJO)).map(toFeaturedItem) };
       case SECTIONS.TOP_VIEWED_SHOUJO:
         return this.getDirectorySection("shoujo", "views", metadata);
       case SECTIONS.TOP_RATED_SHOUJO:
@@ -183,11 +188,13 @@ export class MangaHomeExtension implements ExtensionImpl<typeof MangaHomeConfig>
       case SECTIONS.MOST_VIEWED_YAOI:
         return this.getDirectorySection("yaoi", "views", metadata);
       case SECTIONS.TOP_YAOI_WEEK:
-        return { items: (await this.getRanked(RANK_TITLES.YAOI)).map(toRankedItem) };
+        return { items: (await this.getRanked(RANK_TITLES.YAOI)).map(toFeaturedItem) };
       case SECTIONS.AWESOME:
         return {
-          items: (await this.getFeelingRanked(AWESOME_TAB_INDEX)).map(toRankedItem),
+          items: (await this.getFeelingRanked(AWESOME_TAB_INDEX)).map(toFeaturedItem),
         };
+      case SECTIONS.GENRES:
+        return this.getGenreSection();
       default:
         return { items: [] };
     }
@@ -220,20 +227,63 @@ export class MangaHomeExtension implements ExtensionImpl<typeof MangaHomeConfig>
     };
   }
 
+  private getGenreSection(): PagedResults<DiscoverSectionItem> {
+    return {
+      items: GENRES.map((genre) => ({
+        type: "genresCarouselItem",
+        name: genre.title,
+        searchQuery: {
+          title: "",
+          metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
+        },
+        contentRating: contentRatingForGenres([genre.title]),
+      })),
+    };
+  }
+
   private async getRecommended(heading: string): Promise<MangaListItem[]> {
     return parseRecommendList(await this.getHome(), heading);
   }
 
   private async getRanked(heading: string): Promise<MangaListItem[]> {
-    return parseRankSection(await this.getRank(), heading).filter(
-      (item) => item.imageUrl.length > 0,
-    );
+    return this.hydrateRankImages(parseRankSection(await this.getRank(), heading));
   }
 
   private async getFeelingRanked(index: number): Promise<MangaListItem[]> {
-    return parseFeelingSection(await this.getRank(), index).filter(
-      (item) => item.imageUrl.length > 0,
-    );
+    return this.hydrateRankImages(parseFeelingSection(await this.getRank(), index));
+  }
+
+  // The rank page omits covers after third place, so complete only those rows
+  // from their detail pages and memoize the result for the session.
+  private async hydrateRankImages(items: MangaListItem[]): Promise<MangaListItem[]> {
+    const hydrated = [...items];
+    let cursor = 0;
+    const worker = async (): Promise<void> => {
+      while (cursor < hydrated.length) {
+        const index = cursor++;
+        const item = hydrated[index];
+        if (item.imageUrl.length > 0) continue;
+        const imageUrl = await this.getRankCover(item.mangaId);
+        if (imageUrl) hydrated[index] = { ...item, imageUrl };
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(3, hydrated.length) }, worker));
+    return hydrated.filter((item) => item.imageUrl.length > 0);
+  }
+
+  private getRankCover(mangaId: string): Promise<string> {
+    const cached = this.rankCoverPromises.get(mangaId);
+    if (cached) return cached;
+
+    const request = fetchDocument(mangaUrl(mangaId))
+      .then(($) => parseMangaDetails($, mangaId).mangaInfo.thumbnailUrl)
+      .catch((error: unknown) => {
+        this.rankCoverPromises.delete(mangaId);
+        if (error instanceof CloudflareError) throw error;
+        return "";
+      });
+    this.rankCoverPromises.set(mangaId, request);
+    return request;
   }
 
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
