@@ -63,8 +63,8 @@ export class VyMangaSettingsForm extends Form {
           id: "base_url",
           footer:
             "Override the site address if this source moves to another domain. " +
-            `Leave empty to use the default (${this.defaultBaseUrl}) and include the scheme ` +
-            "when entering a custom address.",
+            `Leave empty to use the default (${this.defaultBaseUrl}); ` +
+            "the https://mangavyvy.com mirror also works.",
         },
         [
           InputRow("base_url_input", {
