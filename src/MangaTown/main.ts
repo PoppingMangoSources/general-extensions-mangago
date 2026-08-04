@@ -214,33 +214,12 @@ class MangaTownExtension implements ExtensionImpl<typeof MangaTownConfig> {
     }
   }
 
-  // The featured listing carries no author, so each card is
-  // completed from its details page, capped at FEATURED_LIMIT titles.
+  // The listing already has everything needed for a useful card, so avoid
+  // opening one detail page per title just to decorate the carousel.
   private async buildFeaturedItems(): Promise<DiscoverSectionItem[]> {
-    const cards = parseMangaList(await fetchFeaturedPage()).slice(0, FEATURED_LIMIT);
-    return Promise.all(
-      cards.map(async (card): Promise<DiscoverSectionItem> => {
-        try {
-          const manga = await this.getMangaDetails(card.mangaId);
-          return buildFeaturedItem(
-            {
-              ...card,
-              rating:
-                card.rating ??
-                (manga.mangaInfo.rating != null ? manga.mangaInfo.rating * 5 : undefined),
-              genres:
-                card.genres.length > 0
-                  ? card.genres
-                  : (manga.mangaInfo.tagGroups?.[0]?.tags.map((tag) => tag.title) ?? []),
-            },
-            manga.mangaInfo.author,
-          );
-        } catch (error) {
-          if (error instanceof CloudflareError) throw error;
-          return buildFeaturedItem(card);
-        }
-      }),
-    );
+    return parseMangaList(await fetchFeaturedPage())
+      .slice(0, FEATURED_LIMIT)
+      .map((card) => buildFeaturedItem(card));
   }
 
   private async getHotSection(): Promise<PagedResults<DiscoverSectionItem>> {
@@ -420,9 +399,8 @@ class MangaTownExtension implements ExtensionImpl<typeof MangaTownConfig> {
     return { id: chapter.chapterId, mangaId, pages: validPages };
   }
 
-  // A chapter's images are numbered sequentially in one directory, so the list
-  // can be derived from page one instead of fetching every page. The last page
-  // is still read to confirm the derived list lines up before it is trusted.
+  // Most paged chapters use one zero-padded image sequence. Check a few points
+  // through the chapter instead of rejecting the shortcut over one odd end page.
   private async readPagedChapter(firstPage: CheerioAPI, pageUrls: string[]): Promise<string[]> {
     const firstImage = parseViewerImage(firstPage);
     if (pageUrls.length === 1) return [firstImage];
@@ -431,8 +409,42 @@ class MangaTownExtension implements ExtensionImpl<typeof MangaTownConfig> {
       ? buildSequentialImageUrls(firstImage, 1, pageUrls.length)
       : undefined;
     if (derived) {
-      const lastImage = await this.fetchPageImage(pageUrls[pageUrls.length - 1]);
-      if (lastImage && lastImage === derived[derived.length - 1]) return derived;
+      const lastIndex = pageUrls.length - 1;
+      const checkpoints = Array.from(
+        new Set([
+          Math.floor(lastIndex / 4),
+          Math.floor(lastIndex / 2),
+          Math.floor((lastIndex * 3) / 4),
+          lastIndex,
+        ]),
+      ).filter((index) => index > 0);
+      const checkpointImages = await Promise.all(
+        checkpoints.map((index) => this.fetchPageImage(pageUrls[index])),
+      );
+      const imagePath = (url: string): string => url.replace(/^https?:\/\/[^/]+/i, "");
+
+      let matchedInterior = false;
+      let lastImage = "";
+      for (let position = 0; position < checkpoints.length; position++) {
+        const index = checkpoints[position];
+        const image = checkpointImages[position];
+        if (!image) continue;
+        if (index === lastIndex) {
+          lastImage = image;
+          continue;
+        }
+        if (imagePath(image) !== imagePath(derived[index])) {
+          return this.fetchPageImages(firstPage, pageUrls);
+        }
+        matchedInterior = true;
+      }
+
+      const lastMatches =
+        lastImage.length > 0 && imagePath(lastImage) === imagePath(derived[lastIndex]);
+      if (matchedInterior || lastMatches) {
+        if (lastImage) derived[lastIndex] = lastImage;
+        return derived;
+      }
     }
 
     return this.fetchPageImages(firstPage, pageUrls);
