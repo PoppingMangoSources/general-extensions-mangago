@@ -270,16 +270,20 @@ const readChartsList = (
   return items;
 };
 
-// A ranking block's heading wraps its name in an <em> followed by the period,
-// and the chart itself is the block that comes right after it.
+// A ranking block is a heading followed by its chart, so walk the page in
+// document order and take the first chart after the matching heading.
 export const parseRankSection = ($: cheerio.CheerioAPI, heading: string): MangaListItem[] => {
-  const content = $("div.title-top em")
-    .toArray()
-    .map((element) => $(element))
-    .find((title) => cleanText(title.text()) === heading)
-    ?.closest("div.title-top")
-    .next("div.main-content");
-  return content && content.length > 0 ? readChartsList($, content) : [];
+  const blocks = $("div.title-top, div.main-content").toArray();
+  const headingIndex = blocks.findIndex(
+    (element) =>
+      $(element).hasClass("title-top") && cleanText($(element).text()).startsWith(heading),
+  );
+  if (headingIndex < 0) return [];
+
+  const chart = blocks
+    .slice(headingIndex + 1)
+    .find((element) => $(element).hasClass("main-content"));
+  return chart ? readChartsList($, $(chart)) : [];
 };
 
 // The feelings ranking renders one chart per mood tab, in the order the tabs
