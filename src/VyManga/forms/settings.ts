@@ -6,11 +6,17 @@ import { ButtonRow, Form, InputRow, LabelRow, Section } from "@paperback/types";
 import { GENRES_KEY } from "../models";
 
 const BASE_URL_KEY = "vymanga.baseUrlOverride";
+const LEGACY_DEFAULT_DOMAIN = /^https?:\/\/(?:www\.)?vymanga\.(?:com|net)$/i;
 
 export const getBaseUrlOverride = (): string | undefined => {
   const value = Application.getState(BASE_URL_KEY);
   if (typeof value === "string") {
     const trimmed = value.trim().replace(/\/+$/, "");
+    if (LEGACY_DEFAULT_DOMAIN.test(trimmed)) {
+      Application.setState(undefined, BASE_URL_KEY);
+      Application.setState(undefined, GENRES_KEY);
+      return undefined;
+    }
     if (trimmed.length > 0) return trimmed;
   }
   return undefined;
@@ -56,9 +62,9 @@ export class VyMangaSettingsForm extends Form {
         {
           id: "base_url",
           footer:
-            "Override the site address if this source has moved to a new domain. " +
-            `Leave empty to use the default (${this.defaultBaseUrl}). Include the scheme — ` +
-            "the mirror https://vymanga.net also works.",
+            "Override the site address if this source moves to another domain. " +
+            `Leave empty to use the default (${this.defaultBaseUrl}) and include the scheme ` +
+            "when entering a custom address.",
         },
         [
           InputRow("base_url_input", {
