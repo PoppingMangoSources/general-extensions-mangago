@@ -23,6 +23,7 @@ import type * as cheerio from "cheerio";
 
 import { MangaHomeAdvancedSearchForm } from "./forms";
 import {
+  AWESOME_TAB_INDEX,
   HOME_TITLES,
   RANK_TITLES,
   SECTIONS,
@@ -47,6 +48,7 @@ import {
   buildSequentialImageUrls,
   parseChapterPageUrls,
   parseChapters,
+  parseFeelingSection,
   parseHasNextPage,
   parseMangaDetails,
   parseMangaList,
@@ -144,6 +146,11 @@ export class MangaHomeExtension implements ExtensionImpl<typeof MangaHomeConfig>
         title: "Top Yaoi This Week",
         type: DiscoverSectionType.simpleCarousel,
       },
+      {
+        id: SECTIONS.AWESOME,
+        title: "Awesome Ranking",
+        type: DiscoverSectionType.simpleCarousel,
+      },
     ];
   }
 
@@ -178,6 +185,10 @@ export class MangaHomeExtension implements ExtensionImpl<typeof MangaHomeConfig>
         return this.getDirectorySection("yaoi", "views", metadata);
       case SECTIONS.TOP_YAOI_WEEK:
         return { items: (await this.getRanked(RANK_TITLES.YAOI)).map(toRankedItem) };
+      case SECTIONS.AWESOME:
+        return {
+          items: parseFeelingSection(await this.getRank(), AWESOME_TAB_INDEX).map(toRankedItem),
+        };
       default:
         return { items: [] };
     }

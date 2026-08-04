@@ -16,6 +16,7 @@ export const SECTIONS = {
   TOP_RATED_SHOUJO: "top-rated-shoujo",
   MOST_VIEWED_YAOI: "most-viewed-yaoi",
   TOP_YAOI_WEEK: "top-yaoi-week",
+  AWESOME: "awesome",
 } as const;
 
 // Home-page recommendation blocks, matched by their heading text.
@@ -28,6 +29,9 @@ export const HOME_TITLES = {
 
 // Ranking blocks on /rank; each heading wraps its name in an <em> followed by
 // the period ("This Week"), so the em text alone identifies the block.
+// The feelings ranking tabs render in this order on /rank.
+export const AWESOME_TAB_INDEX = 4;
+
 export const RANK_TITLES = {
   SHOUJO: "Shoujo Manga Ranking",
   YAOI: "Yaoi Manga Ranking",

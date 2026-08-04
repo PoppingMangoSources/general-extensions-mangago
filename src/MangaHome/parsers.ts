@@ -149,7 +149,7 @@ export const parseMangaList = ($: cheerio.CheerioAPI): MangaListItem[] => {
   const items: MangaListItem[] = [];
   const seen = new Set<string>();
 
-  $("ul.manga-list > li, li:has(> div.post)").each((_, element) => {
+  $("ul.manga-list > li").each((_, element) => {
     const item = $(element);
     const cover = item.find("a.post-cover").first();
     if (cover.length === 0) return;
@@ -220,15 +220,10 @@ export const parseRecommendList = ($: cheerio.CheerioAPI, heading: string): Mang
 
 // A ranking block lists its top three as full cards, then the rest as compact
 // rows carrying only a rank, a title and a count.
-export const parseRankSection = ($: cheerio.CheerioAPI, heading: string): MangaListItem[] => {
-  const content = $("div.title-top em")
-    .toArray()
-    .map((element) => $(element))
-    .find((title) => cleanText(title.text()) === heading)
-    ?.closest("div.title-top")
-    .next("div.main-content");
-  if (!content || content.length === 0) return [];
-
+const readChartsList = (
+  $: cheerio.CheerioAPI,
+  content: cheerio.Cheerio<AnyNode>,
+): MangaListItem[] => {
   const items: MangaListItem[] = [];
   const seen = new Set<string>();
 
@@ -241,7 +236,7 @@ export const parseRankSection = ($: cheerio.CheerioAPI, heading: string): MangaL
     seen.add(mangaId);
 
     const rating = Number.parseFloat(cleanText(post.find(".star-score").first().text()));
-    const statsText = cleanText(post.find("p:has(span.viewsnumber)").first().text());
+    const statsText = cleanText(post.find("span.viewsnumber").first().parent().text());
 
     items.push({
       mangaId,
@@ -273,6 +268,25 @@ export const parseRankSection = ($: cheerio.CheerioAPI, heading: string): MangaL
   });
 
   return items;
+};
+
+// A ranking block's heading wraps its name in an <em> followed by the period,
+// and the chart itself is the block that comes right after it.
+export const parseRankSection = ($: cheerio.CheerioAPI, heading: string): MangaListItem[] => {
+  const content = $("div.title-top em")
+    .toArray()
+    .map((element) => $(element))
+    .find((title) => cleanText(title.text()) === heading)
+    ?.closest("div.title-top")
+    .next("div.main-content");
+  return content && content.length > 0 ? readChartsList($, content) : [];
+};
+
+// The feelings ranking renders one chart per mood tab, in the order the tabs
+// are listed; all but the first are hidden until the reader switches tab.
+export const parseFeelingSection = ($: cheerio.CheerioAPI, index: number): MangaListItem[] => {
+  const content = $("div.main-content.feeling_content").eq(index);
+  return content.length > 0 ? readChartsList($, content) : [];
 };
 
 export const parseHasNextPage = ($: cheerio.CheerioAPI): boolean =>
