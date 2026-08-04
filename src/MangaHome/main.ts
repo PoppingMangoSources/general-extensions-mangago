@@ -24,6 +24,7 @@ import type * as cheerio from "cheerio";
 import { MangaHomeAdvancedSearchForm } from "./forms";
 import {
   AWESOME_TAB_INDEX,
+  DOMAIN,
   HOME_TITLES,
   RANK_TITLES,
   SECTIONS,
@@ -318,12 +319,143 @@ export class MangaHomeExtension implements ExtensionImpl<typeof MangaHomeConfig>
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    const $ = await fetchDocument(chapterUrl(chapter.sourceManga.mangaId, chapter.chapterId));
-    const pages = parseChapterImages($);
+    const readerUrl = chapterUrl(chapter.sourceManga.mangaId, chapter.chapterId);
+    const $ = await fetchDocument(readerUrl);
+    const pages = await this.completeLegacyChapterImages($, readerUrl, parseChapterImages($));
     if (pages.length === 0) {
       throw new Error(`No pages found for chapter ${chapter.chapterId}`);
     }
     return { id: chapter.chapterId, mangaId: chapter.sourceManga.mangaId, pages };
+  }
+
+  // Older chapters expose one image at a time through chapterfun.ashx.
+  private async completeLegacyChapterImages(
+    $: cheerio.CheerioAPI,
+    readerUrl: string,
+    existingPages: string[],
+  ): Promise<string[]> {
+    const scripts = $("script:not([src])")
+      .toArray()
+      .map((element) => $(element).text())
+      .join("\n");
+    const chapterId = /(?:var\s+)?chapter_?id\s*=\s*(\d+)/i.exec(scripts)?.[1];
+    const imageCount = Number.parseInt(
+      /(?:var\s+)?imagecount\s*=\s*(\d+)/i.exec(scripts)?.[1] ?? "",
+      10,
+    );
+    if (!chapterId || !Number.isFinite(imageCount) || imageCount < 1) return existingPages;
+    if (existingPages.length >= imageCount) return existingPages;
+
+    const userAgent = await Application.getDefaultUserAgent();
+    const raw = await Application.executeInWebView({
+      source: {
+        html: $.html(),
+        baseUrl: readerUrl,
+        loadCSS: false,
+        loadImages: false,
+        userAgent,
+      },
+      inject: `
+        return (async function () {
+          var chapterId = ${JSON.stringify(chapterId)};
+          var imageCount = ${imageCount};
+          var seed = ${JSON.stringify(existingPages)};
+          var pages = new Array(imageCount);
+
+          function normalize(value) {
+            if (typeof value !== "string" || value.length === 0) return "";
+            var link = document.createElement("a");
+            link.href = value;
+            return link.href;
+          }
+
+          function firstString(value) {
+            if (typeof value === "string") return value;
+            if (!Array.isArray(value)) return "";
+            for (var index = 0; index < value.length; index++) {
+              if (typeof value[index] === "string" && value[index].length > 0) {
+                return value[index];
+              }
+            }
+            return "";
+          }
+
+          for (var seedIndex = 0; seedIndex < seed.length && seedIndex < imageCount; seedIndex++) {
+            pages[seedIndex] = normalize(seed[seedIndex]);
+          }
+
+          var firstImage = document.querySelector("#image");
+          if (!pages[0] && firstImage) {
+            pages[0] = normalize(firstImage.getAttribute("src") || firstImage.src);
+          }
+
+          var keyInput = document.querySelector('input[id$="_key"], input[name="key"]');
+          var key = keyInput && "value" in keyInput ? String(keyInput.value || "") : "";
+
+          async function loadPage(page) {
+            if (pages[page - 1]) return pages[page - 1];
+
+            try {
+              var response = await fetch(
+                "chapterfun.ashx?cid=" + encodeURIComponent(chapterId) +
+                  "&page=" + page +
+                  "&key=" + encodeURIComponent(page === 1 ? key : ""),
+                {
+                  credentials: "include",
+                  headers: { Accept: "*/*", "X-Requested-With": "XMLHttpRequest" },
+                },
+              );
+              if (!response.ok) return "";
+
+              var source = await response.text();
+              window.d = undefined;
+              window.newImgs = undefined;
+              window.pix = undefined;
+              window.pvalue = undefined;
+
+              var result;
+              try {
+                result = window.eval(source);
+              } catch (error) {}
+
+              var pageUrl = firstString(result) || firstString(window.d) || firstString(window.newImgs);
+              if (!pageUrl && typeof window.pix === "string") {
+                var pageValue = firstString(window.pvalue);
+                if (pageValue) pageUrl = window.pix + pageValue;
+              }
+              return normalize(pageUrl);
+            } catch (error) {
+              return "";
+            }
+          }
+
+          for (var start = 1; start <= imageCount; start += 4) {
+            var batch = [];
+            for (var page = start; page < Math.min(start + 4, imageCount + 1); page++) {
+              batch.push(loadPage(page));
+            }
+            var resolved = await Promise.all(batch);
+            for (var offset = 0; offset < resolved.length; offset++) {
+              if (resolved[offset]) pages[start + offset - 1] = resolved[offset];
+            }
+          }
+
+          return JSON.stringify(pages.filter(Boolean));
+        })();
+      `,
+      storage: { cookies: this.cookieStorageInterceptor.cookiesForUrl(`${DOMAIN}/`) },
+    });
+
+    if (typeof raw.result !== "string") return existingPages;
+    try {
+      const pages = JSON.parse(raw.result) as unknown;
+      if (!Array.isArray(pages)) return existingPages;
+      return pages.filter(
+        (page): page is string => typeof page === "string" && /^https?:\/\//i.test(page),
+      );
+    } catch {
+      return existingPages;
+    }
   }
 
   private getHome(): Promise<cheerio.CheerioAPI> {
