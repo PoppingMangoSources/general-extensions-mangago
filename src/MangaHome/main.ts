@@ -185,7 +185,7 @@ export class MangaHomeExtension implements ExtensionImpl<typeof MangaHomeConfig>
         return { items: (await this.getRanked(RANK_TITLES.YAOI)).map(toRankedItem) };
       case SECTIONS.AWESOME:
         return {
-          items: parseFeelingSection(await this.getRank(), AWESOME_TAB_INDEX).map(toRankedItem),
+          items: (await this.getFeelingRanked(AWESOME_TAB_INDEX)).map(toRankedItem),
         };
       default:
         return { items: [] };
@@ -224,7 +224,15 @@ export class MangaHomeExtension implements ExtensionImpl<typeof MangaHomeConfig>
   }
 
   private async getRanked(heading: string): Promise<MangaListItem[]> {
-    return parseRankSection(await this.getRank(), heading);
+    return parseRankSection(await this.getRank(), heading).filter(
+      (item) => item.imageUrl.length > 0,
+    );
+  }
+
+  private async getFeelingRanked(index: number): Promise<MangaListItem[]> {
+    return parseFeelingSection(await this.getRank(), index).filter(
+      (item) => item.imageUrl.length > 0,
+    );
   }
 
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
