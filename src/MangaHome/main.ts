@@ -45,8 +45,7 @@ import {
   searchUrl,
 } from "./network";
 import {
-  buildSequentialImageUrls,
-  parseChapterPageUrls,
+  parseChapterImages,
   parseChapters,
   parseFeelingSection,
   parseHasNextPage,
@@ -54,7 +53,6 @@ import {
   parseMangaList,
   parseRankSection,
   parseRecommendList,
-  parseViewerImage,
   toChapterUpdateItem,
   toFeaturedItem,
   toRankedItem,
@@ -312,25 +310,12 @@ export class MangaHomeExtension implements ExtensionImpl<typeof MangaHomeConfig>
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    const firstUrl = chapterUrl(chapter.sourceManga.mangaId, chapter.chapterId);
-    const $ = await fetchDocument(firstUrl);
-    const pageUrls = parseChapterPageUrls($);
-    const firstImage = parseViewerImage($);
-
-    if (!firstImage) {
+    const $ = await fetchDocument(chapterUrl(chapter.sourceManga.mangaId, chapter.chapterId));
+    const pages = parseChapterImages($);
+    if (pages.length === 0) {
       throw new Error(`No pages found for chapter ${chapter.chapterId}`);
     }
-
-    // Chapter images share one directory and a zero-padded index, so the whole
-    // chapter can be derived from the first page instead of loading each one.
-    const total = Math.max(pageUrls.length, 1);
-    const pages = buildSequentialImageUrls(firstImage, 1, total) ?? [firstImage];
-
-    return {
-      id: chapter.chapterId,
-      mangaId: chapter.sourceManga.mangaId,
-      pages,
-    };
+    return { id: chapter.chapterId, mangaId: chapter.sourceManga.mangaId, pages };
   }
 
   private getHome(): Promise<cheerio.CheerioAPI> {

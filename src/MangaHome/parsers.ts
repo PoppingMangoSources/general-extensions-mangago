@@ -297,21 +297,6 @@ export const parseHasNextPage = ($: cheerio.CheerioAPI): boolean =>
       return href.length > 0 && !href.startsWith("javascript");
     });
 
-// Detail pages label each field with a bold heading followed by its value.
-const labeledText = ($: cheerio.CheerioAPI, label: string): string => {
-  const pattern = new RegExp(`^\\s*${label}\\b[:：]?`, "i");
-  let result = "";
-  $("li, p, div.detail-info-right span, span.name").each((_, element) => {
-    if (result) return;
-    const item = $(element);
-    const text = cleanText(item.text());
-    if (!pattern.test(text)) return;
-    const value = text.replace(pattern, "").trim();
-    if (value) result = value;
-  });
-  return result;
-};
-
 const genreSlug = (value: string): string =>
   value
     .toLowerCase()
@@ -319,44 +304,56 @@ const genreSlug = (value: string): string =>
     .replace(/^-+|-+$/g, "");
 
 export const parseMangaDetails = ($: cheerio.CheerioAPI, mangaId: string): SourceManga => {
-  const title = cleanText($("h1").first().text()) || mangaId;
+  const detail = $("div.manga-detail");
+  const info = detail.find("div.detail-info");
+  const title = cleanText(detail.find("h1").first().text()) || mangaId;
 
-  // Covers are served from the shared image CDN, which makes the store path a
-  // more reliable marker than any layout class.
-  const cover = $('img[src*="/store/manga/"], img[data-src*="/store/manga/"]').first();
+  const linkNames = (selector: string): string =>
+    [
+      ...new Set(
+        info
+          .find(selector)
+          .toArray()
+          .map((element) => cleanText($(element).text()))
+          .filter((name) => name.length > 0),
+      ),
+    ].join(", ");
 
-  const genres = [
-    ...new Set(
-      labeledText($, "Genre(?:s|\\(s\\))?")
-        .split(/\s*[,;]\s*/)
-        .map((genre) => cleanText(genre))
-        .filter((genre) => genre.length > 0),
-    ),
-  ];
+  // Each stat is a <span> label followed by its value; drop the child nodes to
+  // read the value, since the status row also carries a "coming next" link.
+  const stat = (label: string): string => {
+    const row = info
+      .find("p")
+      .toArray()
+      .map((element) => $(element))
+      .find((paragraph) => cleanText(paragraph.find("span").first().text()).startsWith(label));
+    return row ? cleanText(row.clone().children().remove().end().text()) : "";
+  };
 
-  const author = labeledText($, "Author(?:\\(s\\))?");
-  const artist = labeledText($, "Artist(?:\\(s\\))?");
-  const statusText = labeledText($, "Status").toLowerCase();
-  const status = statusText.includes("ongoing")
-    ? "Ongoing"
-    : statusText.includes("completed")
-      ? "Completed"
-      : undefined;
+  // The middle block holds the alternative names and the genre links, each in a
+  // paragraph introduced by its own label.
+  const labelledParagraph = (label: string) =>
+    detail
+      .find("div.manga-detailmiddle p")
+      .toArray()
+      .map((element) => $(element))
+      .find((paragraph) => cleanText(paragraph.find("span").first().text()).startsWith(label));
 
-  const ratingMatch = labeledText($, "Rating").match(/(\d+(?:\.\d+)?)/);
-  const rating = ratingMatch ? Number.parseFloat(ratingMatch[1]) : Number.NaN;
+  const genres = (labelledParagraph("Genre") ?? $())
+    .find("a")
+    .toArray()
+    .map((element) => cleanText($(element).text()))
+    .filter((genre) => genre.length > 0);
 
-  const secondaryTitles = labeledText($, "Alternative(?:\\s+Name)?")
-    .split(/\s*[;,]\s*/)
-    .map((alias) => cleanText(alias))
+  const secondaryTitles = cleanText(
+    (labelledParagraph("Alternative") ?? $()).clone().children().remove().end().text(),
+  )
+    .split(/\s*;\s*/)
+    .map((alias) => alias.trim())
     .filter((alias) => alias.length > 0 && alias.toLowerCase() !== title.toLowerCase());
 
-  const synopsis = cleanDescription(
-    $("#show, p.detail-desc, div.detail-desc, div.manga_summary, p.summary")
-      .first()
-      .text()
-      .replace(/HIDE$/i, ""),
-  );
+  const statusText = stat("Status").toLowerCase();
+  const rating = Number.parseFloat(cleanText(info.find("i.score-number").first().text()));
 
   const tagGroups: TagSection[] = [];
   if (genres.length > 0) {
@@ -372,13 +369,23 @@ export const parseMangaDetails = ($: cheerio.CheerioAPI, mangaId: string): Sourc
     mangaInfo: {
       primaryTitle: title,
       secondaryTitles,
-      thumbnailUrl: imageUrlFrom(cover),
-      author: author || undefined,
-      artist: artist || undefined,
-      synopsis,
+      thumbnailUrl: imageUrlFrom(detail.find("img.detail-cover").first()),
+      author: linkNames('a[href*="/author/"]') || undefined,
+      artist: linkNames('a[href*="/artist/"]') || undefined,
+      synopsis: cleanDescription(
+        detail
+          .find("div.manga-detailmiddle p.hide")
+          .first()
+          .text()
+          .replace(/\s*More$/i, ""),
+      ),
       contentRating: contentRatingForGenres(genres),
-      status,
-      rating: Number.isFinite(rating) ? Math.min(1, Math.max(0, rating / 5)) : undefined,
+      status: statusText.includes("completed")
+        ? "Completed"
+        : statusText.includes("ongoing")
+          ? "Ongoing"
+          : undefined,
+      rating: Number.isFinite(rating) && rating > 0 ? Math.min(1, rating / 5) : undefined,
       tagGroups,
       shareUrl: mangaUrl(mangaId),
     },
@@ -386,92 +393,52 @@ export const parseMangaDetails = ($: cheerio.CheerioAPI, mangaId: string): Sourc
 };
 
 export const parseChapters = ($: cheerio.CheerioAPI, sourceManga: SourceManga): Chapter[] => {
-  const chapters: Chapter[] = [];
-  const seen = new Set<string>();
-  const mangaTitle = sourceManga.mangaInfo.primaryTitle;
+  // Only the chapter list itself: the page also links the not-yet-released
+  // "coming next" chapter and a "Start Reading" shortcut to the first one.
+  const rows = $("ul.detail-chlist > li").toArray();
 
-  // Chapter rows differ between layouts, so collect every link that resolves to
-  // a chapter of this title rather than depending on one list container.
-  const links = $("a[href]")
-    .toArray()
-    .map((element) => $(element))
-    .filter((link) => {
-      const ref = parseChapterRef(link.attr("href"));
-      return ref !== undefined && ref.mangaId === sourceManga.mangaId;
-    });
+  const chapters = rows.flatMap((element, index) => {
+    const row = $(element);
+    const ref = parseChapterRef(row.find("a").first().attr("href"));
+    if (!ref) return [];
 
-  links.forEach((link, index) => {
-    const ref = parseChapterRef(link.attr("href"));
-    if (!ref || seen.has(ref.chapterId)) return;
-    seen.add(ref.chapterId);
+    const label = cleanText(row.find("span.pc-none").first().text());
+    const volume = parseChapterNumber(cleanText(row.find("span.vol").first().text()));
 
-    const label = cleanText(link.attr("title") ?? link.text());
-    const chapNum = parseChapterNumber(label) ?? parseChapterNumber(ref.chapterId);
-    const name = cleanText(label.replace(mangaTitle, "").replace(/^ch\.?\s*[\d.]+/i, ""));
-    const volumeMatch = ref.chapterId.match(/^v(\d+)\//i);
-
-    chapters.push({
-      chapterId: ref.chapterId,
-      sourceManga,
-      langCode: "en",
-      chapNum: chapNum ?? 0,
-      title: name || undefined,
-      volume: volumeMatch ? Number.parseInt(volumeMatch[1], 10) : 0,
-      publishDate: parseSiteDate(
-        link.closest("li, tr, div").find("span.time, p.time").first().text(),
-      ),
-      // The site lists newest chapters first.
-      sortingIndex: links.length - index,
-    });
+    return [
+      {
+        chapterId: ref.chapterId,
+        sourceManga,
+        langCode: "en",
+        chapNum:
+          parseChapterNumber(label) ?? parseChapterNumber(ref.chapterId) ?? rows.length - index,
+        volume: volume ?? 0,
+        publishDate: parseSiteDate(row.find("span.time").first().text()),
+        // The list is newest first.
+        sortingIndex: rows.length - index,
+      },
+    ];
   });
 
   if (chapters.length === 0) {
+    if (/has been licensed/i.test($("div.manga-detailchapter").text())) {
+      throw new Error(`${sourceManga.mangaInfo.primaryTitle} is licensed and cannot be read here.`);
+    }
     throw new Error(`No chapters found for ${sourceManga.mangaId}`);
   }
   return chapters;
 };
 
-export const parseChapterPageUrls = ($: cheerio.CheerioAPI): string[] => {
-  const urls: string[] = [];
-  const seen = new Set<string>();
-  $("select.mangaread-page option, div.page_select option, select#page option").each(
-    (_, element) => {
-      const option = $(element);
-      const value = option.attr("value") ?? "";
-      // The final option advertises a promo page rather than a chapter page.
-      if (!value || /featured/i.test(value) || /featured/i.test(option.text())) return;
-      const url = toAbsoluteUrl(value);
-      if (seen.has(url)) return;
-      seen.add(url);
-      urls.push(url);
-    },
-  );
-  return urls;
-};
-
-// Every image of a chapter sits in one directory under a zero-padded page
-// index, so the whole chapter can be derived from a single page's image URL.
-const SEQUENTIAL_IMAGE_REGEX = /^(.*\/)([^/\d]*)(\d+)(\.[A-Za-z0-9]+)(\?.*)?$/;
-
-export const buildSequentialImageUrls = (
-  imageUrl: string,
-  imagePage: number,
-  totalPages: number,
-): string[] | undefined => {
-  const match = imageUrl.match(SEQUENTIAL_IMAGE_REGEX);
-  if (!match) return undefined;
-  const [, directory, prefix, digits, extension, query] = match;
-  const first = Number.parseInt(digits, 10) - (imagePage - 1);
-  if (!Number.isFinite(first) || first < 0) return undefined;
-  return Array.from(
-    { length: totalPages },
-    (_, index) =>
-      `${directory}${prefix}${String(first + index).padStart(digits.length, "0")}${extension}${query ?? ""}`,
-  );
-};
-
-export const parseViewerImage = ($: cheerio.CheerioAPI): string =>
-  imageUrlFrom($("img#image, div#viewer img, div.read-page img, section.read_img img").first());
+// The reader renders the whole chapter in one viewer, so every page image is
+// already on the chapter page.
+export const parseChapterImages = ($: cheerio.CheerioAPI): string[] => [
+  ...new Set(
+    $("#viewer img, section.mangaread-img img")
+      .toArray()
+      .map((element) => imageUrlFrom($(element)))
+      .filter((url) => url.length > 0),
+  ),
+];
 
 const formatCount = (count: number): string => {
   if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
