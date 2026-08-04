@@ -3,7 +3,7 @@
 
 import { type JSONObject, type Tag } from "@paperback/types";
 
-export const DEFAULT_DOMAIN = "https://vymanga.com";
+export const DEFAULT_DOMAIN = "https://mangavyvy.net";
 export const SEARCH_PATH = "search";
 export const GENRES_KEY = "vymanga_genres";
 export const FEATURED_LIMIT = 8;
