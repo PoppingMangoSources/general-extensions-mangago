@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-08-04T22:27:19.348Z",
+  "buildTime": "2026-08-04T22:28:55.556Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -586,8 +586,8 @@
     },
     {
       "name": "VyManga",
-      "description": "Extension that pulls content from mangavyvy.net.",
-      "version": "1.0.0-alpha.18",
+      "description": "Extension that pulls content from mangavyvy.net and mangavyvy.com.",
+      "version": "1.0.0-alpha.19",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
