@@ -396,7 +396,8 @@ class MangaTownExtension implements ExtensionImpl<typeof MangaTownConfig> {
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
     const mangaId = chapter.sourceManga.mangaId;
-    const cached = this.readerCache.get(chapter.chapterId);
+    const cacheKey = `${mangaId}/${chapter.chapterId}`;
+    const cached = this.readerCache.get(cacheKey);
     if (cached) return { id: chapter.chapterId, mangaId, pages: cached };
 
     const $ = await fetchChapterPage(chapterUrl(mangaId, chapter.chapterId));
@@ -414,7 +415,7 @@ class MangaTownExtension implements ExtensionImpl<typeof MangaTownConfig> {
     // Rebuilding this costs one request per page, so keep a complete result for
     // the session; a partial one is left out so reopening retries the gaps.
     if (validPages.length === pages.length) {
-      this.readerCache.set(chapter.chapterId, validPages);
+      this.readerCache.set(cacheKey, validPages);
     }
     return { id: chapter.chapterId, mangaId, pages: validPages };
   }
