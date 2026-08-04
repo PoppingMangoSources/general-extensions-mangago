@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-08-04T15:17:31.991Z",
+  "buildTime": "2026-08-04T15:17:55.969Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -266,7 +266,7 @@
     {
       "name": "MangaTown",
       "description": "Extension that pulls content from mangatown.com.",
-      "version": "1.0.0-alpha.6",
+      "version": "1.0.0-alpha.7",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
