@@ -29,7 +29,7 @@ PoppingMango is an independent source list for [Paperback](https://paperback.moe
 
 ## Sources
 
-**24 sources** — 20 manga, manhwa & manhua, and 4 novels, all available from `0.9/test`.
+**25 sources** — 21 manga, manhwa & manhua, and 4 novels, all available from `0.9/test`.
 
 ### Manga, Manhwa & Manhua
 
@@ -44,6 +44,7 @@ PoppingMango is an independent source list for [Paperback](https://paperback.moe
 | <img src="media/sources/luacomic.png" width="22" align="top"/> **Lua Comic**            | [luacomic.org](https://luacomic.org)               |
 | <img src="media/sources/mangaberri.png" width="22" align="top"/> **MangaBerri**         | [mangaberri.com](https://mangaberri.com)           |
 | <img src="media/sources/mangacherri.png" width="22" align="top"/> **MangaCherri**       | [mangacherri.com](https://mangacherri.com)         |
+| <img src="media/sources/mangahome.png" width="22" align="top"/> **MangaHome**           | [mangahome.com](https://www.mangahome.com)         |
 | <img src="media/sources/mangatown.png" width="22" align="top"/> **MangaTown**           | [mangatown.com](https://www.mangatown.com)         |
 | <img src="media/sources/myreadingmanga.png" width="22" align="top"/> **MyReadingManga** | [myreadingmanga.info](https://myreadingmanga.info) |
 | <img src="media/sources/omanga.png" width="22" align="top"/> **oManga**                 | [omanga.to](https://omanga.to)                     |
