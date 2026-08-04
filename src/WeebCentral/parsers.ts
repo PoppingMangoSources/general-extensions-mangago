@@ -21,7 +21,7 @@ import {
   type ChapterWithMetadata,
 } from "./models";
 
-const officialTranslationSvgStroke = "#d8b4fe";
+const officialTranslationImg = "/static/images/chapter-badge-official.svg";
 export const parseMangaDetails = async ($: CheerioAPI, mangaId: string): Promise<SourceManga> => {
   const title = $("h1").first().text().trim();
   const image = $("picture > img").attr("src") ?? "";
@@ -107,8 +107,7 @@ export const parseChapters = ($: CheerioAPI, sourceManga: SourceManga): Chapter[
     if (!(chapterType in chapterTypeToIdMap)) {
       chapterTypeToIdMap[chapterType] = currChapterTypeId--;
     }
-    const hasOfficialTranslation =
-      $("svg", chapterObj).attr("stroke") === officialTranslationSvgStroke;
+    const hasOfficialTranslation = $("img", chapterObj).attr("src") === officialTranslationImg;
     let version = undefined;
     if (hasOfficialTranslation) {
       version = "Official";
