@@ -17,6 +17,7 @@ export const SECTIONS = {
   MOST_VIEWED_YAOI: "most-viewed-yaoi",
   TOP_YAOI_WEEK: "top-yaoi-week",
   AWESOME: "awesome",
+  GENRES: "genres",
 } as const;
 
 // Home-page recommendation blocks, matched by their heading text.
