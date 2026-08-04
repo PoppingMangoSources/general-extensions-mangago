@@ -295,27 +295,41 @@ export const toSearchResultItems = (cards: MangaCard[]): SearchResultItem[] =>
     contentRating: contentRatingForGenres(card.genres),
   }));
 
+// Read a labelled attribute from the details sidebar (Status, Released, …).
+const detailField = ($: cheerio.CheerioAPI, label: string): string =>
+  cleanText(
+    $(".section-status.row, .comic-attrs .column")
+      .toArray()
+      .map((element) => $(element))
+      .find((row) => cleanText(row.children().first().text()) === label)
+      ?.children()
+      .last()
+      .text() ?? "",
+  );
+
 export const parseMangaDetails = (html: string, mangaId: string): SourceManga => {
   const $ = cheerio.load(html);
 
-  const title =
-    cleanText($('meta[property="og:title"]').attr("content") ?? "") ||
-    cleanText($("h1").first().text());
+  const title = cleanText($("h1.story-name").first().text());
   if (!title) {
     throw new Error(`No details found for ${mangaId}`);
   }
 
-  const thumbnailUrl = absoluteUrl(
-    $('meta[property="og:image"]').attr("content") ?? coverFrom($(".manga-live-cover").first()),
-  );
-  const synopsis = cleanText(
-    $(".manga-description").first().text() ||
-      $('meta[property="og:description"]').attr("content") ||
-      "",
-  );
+  // The inline cover is the real image; og:image is a generic site card.
+  const thumbnailUrl = absoluteUrl($("img.comic-img").first().attr("src") ?? "");
+  const synopsis = cleanText($(".story-desc").first().text());
+  const author = cleanText($('.comic-attrs a[href*="/author/"]').first().text());
+  const status = detailField($, "Status");
+
+  // Secondary titles sit in the header subtitle, separated by semicolons; the
+  // commas inside a romanised title are part of it, so don't split on those.
+  const secondaryTitles = cleanText($(".comic-info-container h2").first().text())
+    .split(";")
+    .map((alias) => alias.trim())
+    .filter((alias) => alias && alias.toLowerCase() !== title.toLowerCase());
 
   const seen = new Set<string>();
-  const tags: Tag[] = $('a[href*="genre.php?genre="]')
+  const tags: Tag[] = $('.comic-attrs a[href*="genre.php?genre="]')
     .toArray()
     .flatMap((element) => {
       const name = cleanText($(element).text());
@@ -325,16 +339,18 @@ export const parseMangaDetails = (html: string, mangaId: string): SourceManga =>
       return [{ id, title: name }];
     });
 
-  const ratingText = ratingFrom($(".manga-live-badge, .rating").first().text());
+  const ratingText = ratingFrom($(".section-status .row.align-center .text.grey.normal").text());
   const rating = ratingText ? Math.min(1, Math.max(0, parseFloat(ratingText) / 5)) : undefined;
 
   return {
     mangaId,
     mangaInfo: {
       primaryTitle: title,
-      secondaryTitles: [],
+      secondaryTitles,
       thumbnailUrl,
       synopsis,
+      author: author || undefined,
+      status: status || undefined,
       rating,
       contentRating: contentRatingForGenres(tags.map((tag) => tag.title)),
       tagGroups: tags.length > 0 ? [{ id: "genres", title: "Genres", tags }] : undefined,
@@ -345,28 +361,14 @@ export const parseMangaDetails = (html: string, mangaId: string): SourceManga =>
 
 export const parseChapterList = (html: string, sourceManga: SourceManga): Chapter[] => {
   const $ = cheerio.load(html);
-  const slug = sourceManga.mangaId;
 
-  // The chapter selector lists every chapter as <option value="<id>"><number>>;
-  // reader links (/<slug>/<id>) are the fallback when the select isn't present.
-  const options = $("select.chapters-dropdown, select#top_chapter_selection")
-    .first()
-    .find("option")
+  // Each chapter is an anchor to /<slug>/<id> with its number in a child span.
+  const entries = $(".chapters-container a[href]")
     .toArray()
     .flatMap((element) => {
-      const chapterId = cleanText($(element).attr("value") ?? "").replace(/[?#].*$/, "");
+      const chapterId = chapterIdFromHref($(element).attr("href"));
       return chapterId ? [{ chapterId, label: cleanText($(element).text()) }] : [];
     });
-
-  const entries =
-    options.length > 0
-      ? options
-      : $(`a[href*="/${slug}/"]`)
-          .toArray()
-          .flatMap((element) => {
-            const chapterId = chapterIdFromHref($(element).attr("href"));
-            return chapterId ? [{ chapterId, label: cleanText($(element).text()) }] : [];
-          });
 
   const seen = new Set<string>();
   const total = entries.length;
