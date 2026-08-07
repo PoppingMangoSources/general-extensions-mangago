@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-08-07T12:25:54.442Z",
+  "buildTime": "2026-08-07T13:30:15.361Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -167,6 +167,29 @@
         }
       ],
       "id": "LuaComic"
+    },
+    {
+      "name": "MGJinx",
+      "description": "Extension that pulls content from mgjinx.com.",
+      "version": "1.0.0-alpha.1",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "ADULT",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "MGJinx"
     },
     {
       "name": "MVLEMPYR",
