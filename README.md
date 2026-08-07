@@ -5,7 +5,7 @@
 <p align="center">
   <img src="media/badge-ios.svg?v=2" alt="iOS / iPadOS" height="28"/>
   <img src="media/badge-version.svg?v=2" alt="Paperback 0.9+" height="28"/>
-  <img src="media/badge-count.svg?v=2" alt="22 sources" height="28"/>
+  <img src="media/badge-count.svg?v=3" alt="25 sources" height="28"/>
 </p>
 
 <p align="center">
