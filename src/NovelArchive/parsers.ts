@@ -348,12 +348,8 @@ export const parseSourceChapters = (
   sourceManga: SourceManga,
 ): Chapter[] => {
   const displayName =
-    novelSource.id === "fucknovelpia"
-      ? "Novelpia"
-      : novelSource.label?.trim() ||
-        novelSource.id
-          .replace(/[-_]+/g, " ")
-          .replace(/\b\w/g, (character) => character.toUpperCase());
+    novelSource.label?.trim() ||
+    novelSource.id.replace(/[-_]+/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
   return chapters.map((chapter, index) => {
     const parsedNumber =
       typeof chapter.number === "number" ? chapter.number : parseFloat(String(chapter.number));
