@@ -73,62 +73,39 @@ const baseCard = (node: ComicNode) => ({
   contentRating: toContentRating(node.data.contentRating, node.data.sfw_result),
 });
 
-export const toSearchResultItem = (node: ComicNode): SearchResultItem => {
-  const chapter = formatChapter(latestChapter(node.data));
-  const type = formatType(node.data.type);
-  return {
-    ...baseCard(node),
-    subtitle:
-      [chapter, type].filter((value): value is string => Boolean(value)).join(" • ") || undefined,
-  };
-};
+const cardSubtitle = (comic: ComicData): string | undefined =>
+  [formatChapter(latestChapter(comic)), formatType(comic.type)]
+    .filter((value): value is string => Boolean(value))
+    .join(" • ") || undefined;
 
-export const toTopRatedItem = (node: ComicNode): DiscoverSectionItem => {
-  const chapter = formatChapter(latestChapter(node.data));
-  const type = formatType(node.data.type);
-  return {
-    type: "prominentCarouselItem",
-    ...baseCard(node),
-    subtitle:
-      [chapter, type].filter((value): value is string => Boolean(value)).join(" • ") || undefined,
-  };
-};
+export const toSearchResultItem = (node: ComicNode): SearchResultItem => ({
+  ...baseCard(node),
+  subtitle: cardSubtitle(node.data),
+});
 
-export const toLatestUploadItem = (node: ComicNode): DiscoverSectionItem => {
-  const chapter = latestChapter(node.data);
-  if (!chapter?.id) return toRecentlyAddedItem(node);
-  const number = formatChapter(chapter);
-  const type = formatType(node.data.type);
-  return {
-    type: "chapterUpdatesCarouselItem",
-    ...baseCard(node),
-    chapterId: chapter.urlPath ?? chapter.id,
-    subtitle:
-      [number, type].filter((value): value is string => Boolean(value)).join(" • ") || undefined,
-    publishDate: dateFromTimestamp(chapter.dateModify ?? chapter.dateCreate ?? chapter.datePublic),
-  };
-};
+export type CarouselItemType =
+  | "prominentCarouselItem"
+  | "simpleCarouselItem"
+  | "chapterUpdatesCarouselItem";
 
-export const toRecentlyAddedItem = (node: ComicNode): DiscoverSectionItem => {
-  const chapter = formatChapter(latestChapter(node.data));
-  const type = formatType(node.data.type);
-  return {
-    type: "simpleCarouselItem",
-    ...baseCard(node),
-    subtitle:
-      [chapter, type].filter((value): value is string => Boolean(value)).join(" • ") || undefined,
-  };
-};
-
-export const toMostChaptersItem = (node: ComicNode): DiscoverSectionItem => {
-  const chapter = formatChapter(latestChapter(node.data));
-  const type = formatType(node.data.type);
-  return {
-    type: "simpleCarouselItem",
-    ...baseCard(node),
-    subtitle:
-      [chapter, type].filter((value): value is string => Boolean(value)).join(" • ") || undefined,
-  };
+export const toDiscoverItem = (node: ComicNode, type: CarouselItemType): DiscoverSectionItem => {
+  if (type === "chapterUpdatesCarouselItem") {
+    const chapter = latestChapter(node.data);
+    // Without a chapter to open, the updates row degrades to a plain card.
+    if (chapter?.id) {
+      return {
+        type,
+        ...baseCard(node),
+        chapterId: chapter.urlPath ?? chapter.id,
+        subtitle: cardSubtitle(node.data),
+        publishDate: dateFromTimestamp(
+          chapter.dateModify ?? chapter.dateCreate ?? chapter.datePublic,
+        ),
+      };
+    }
+    return { type: "simpleCarouselItem", ...baseCard(node), subtitle: cardSubtitle(node.data) };
+  }
+  return { type, ...baseCard(node), subtitle: cardSubtitle(node.data) };
 };
 
 const nodeNames = (nodes?: Array<{ data?: { name?: string } | null } | null> | null): string[] =>

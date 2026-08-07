@@ -37,7 +37,6 @@ import {
   SECTIONS,
   SORTING_OPTIONS,
   type BrowseSelect,
-  type ComicNode,
   type PageMetadata,
   type SearchMetadata,
   type SectionId,
@@ -52,12 +51,10 @@ import {
 import {
   parseChapterDetails,
   toChapter,
-  toLatestUploadItem,
-  toMostChaptersItem,
-  toRecentlyAddedItem,
+  toDiscoverItem,
   toSearchResultItem,
   toSourceManga,
-  toTopRatedItem,
+  type CarouselItemType,
 } from "./parsers";
 import type XComicConfig from "./pbconfig";
 
@@ -133,13 +130,13 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
       case SECTIONS.TOP_RATED:
-        return this.getBrowseSection(metadata, "field_score", toTopRatedItem);
+        return this.getBrowseSection(metadata, "field_score", "prominentCarouselItem");
       case SECTIONS.LATEST_UPLOADS:
-        return this.getBrowseSection(metadata, "field_upload", toLatestUploadItem);
+        return this.getBrowseSection(metadata, "field_upload", "chapterUpdatesCarouselItem");
       case SECTIONS.RECENTLY_ADDED:
-        return this.getBrowseSection(metadata, "field_public", toRecentlyAddedItem);
+        return this.getBrowseSection(metadata, "field_public", "simpleCarouselItem");
       case SECTIONS.MOST_CHAPTERS:
-        return this.getBrowseSection(metadata, "field_chapter", toMostChaptersItem);
+        return this.getBrowseSection(metadata, "field_chapter", "simpleCarouselItem");
       case SECTIONS.GENRES:
         return this.getGenreSection();
       default:
@@ -150,12 +147,12 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   private async getBrowseSection(
     metadata: PageMetadata | undefined,
     sortby: string,
-    mapper: (node: ComicNode) => DiscoverSectionItem,
+    itemType: CarouselItemType,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const page = metadata?.page ?? 1;
     const response = await fetchBrowse(this.buildSelect(page, sortby, "", undefined));
     return {
-      items: (response.get_comic_browse_items ?? []).map(mapper),
+      items: (response.get_comic_browse_items ?? []).map((node) => toDiscoverItem(node, itemType)),
       metadata: response.get_comic_browse_pager?.next ? { page: page + 1 } : undefined,
     };
   }
