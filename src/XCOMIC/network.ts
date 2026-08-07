@@ -123,10 +123,7 @@ export class XComicInterceptor extends PaperbackInterceptor {
   }
 }
 
-const graphQL = async <T>(
-  query: string,
-  variables: Record<string, unknown>,
-): Promise<T> => {
+const graphQL = async <T>(query: string, variables: Record<string, unknown>): Promise<T> => {
   const [response, buffer] = await Application.scheduleRequest({
     url: API_URL,
     method: "POST",

@@ -50,13 +50,13 @@ const md5 = (input: Uint8Array): Uint8Array => {
   view.setUint32(paddedLength - 4, Math.floor(bitLength / 0x100000000), true);
 
   const shifts = [
-    7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,
-    5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20,
-    4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23,
-    6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21,
+    7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9,
+    14, 20, 5, 9, 14, 20, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 6, 10, 15, 21,
+    6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21,
   ];
-  const constants = Array.from({ length: 64 }, (_, i) =>
-    Math.floor(Math.abs(Math.sin(i + 1)) * 0x100000000) >>> 0,
+  const constants = Array.from(
+    { length: 64 },
+    (_, i) => Math.floor(Math.abs(Math.sin(i + 1)) * 0x100000000) >>> 0,
   );
 
   let a0 = 0x67452301;
@@ -121,7 +121,10 @@ const base64Bytes = (value: string): Uint8Array => {
   return new Uint8Array(decoded);
 };
 
-const deriveOpenSslKey = (password: string, salt: Uint8Array): { key: Uint8Array; iv: Uint8Array } => {
+const deriveOpenSslKey = (
+  password: string,
+  salt: Uint8Array,
+): { key: Uint8Array; iv: Uint8Array } => {
   const passwordBytes = utf8Bytes(password);
   const blocks: Uint8Array[] = [];
   let previous: Uint8Array = new Uint8Array();
@@ -141,10 +144,7 @@ const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => bytes.slice().buffer a
 
 export const decryptOpenSslAes = async (encrypted: string, password: string): Promise<string> => {
   const payload = base64Bytes(encrypted);
-  if (
-    payload.length < 32 ||
-    String.fromCharCode(...payload.slice(0, 8)) !== "Salted__"
-  ) {
+  if (payload.length < 32 || String.fromCharCode(...payload.slice(0, 8)) !== "Salted__") {
     throw new Error("Invalid encrypted chapter payload");
   }
 

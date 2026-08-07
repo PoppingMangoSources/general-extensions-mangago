@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import * as cheerio from "cheerio";
 import {
   ContentRating,
   type Chapter,
@@ -11,6 +10,7 @@ import {
   type SourceManga,
   type TagSection,
 } from "@paperback/types";
+import * as cheerio from "cheerio";
 
 import {
   DEMOGRAPHIC_OPTIONS,
@@ -32,9 +32,7 @@ const absoluteUrl = (url: string | null | undefined): string => {
 };
 
 const titleCase = (value: string): string =>
-  value
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 export const toContentRating = (rating?: string | null, sfw?: boolean | null): ContentRating => {
   if (rating === "pornographic") return ContentRating.ADULT;
@@ -64,7 +62,7 @@ const dateFromTimestamp = (value?: number | null): Date | undefined => {
 };
 
 const formatType = (type?: string | null): string | undefined =>
-  type ? TYPE_OPTIONS.find((option) => option.id === type)?.title ?? titleCase(type) : undefined;
+  type ? (TYPE_OPTIONS.find((option) => option.id === type)?.title ?? titleCase(type)) : undefined;
 
 const imageUrl = (comic: ComicData): string => absoluteUrl(comic.urlCover);
 
@@ -80,7 +78,8 @@ export const toSearchResultItem = (node: ComicNode): SearchResultItem => {
   const type = formatType(node.data.type);
   return {
     ...baseCard(node),
-    subtitle: [chapter, type].filter((value): value is string => Boolean(value)).join(" • ") || undefined,
+    subtitle:
+      [chapter, type].filter((value): value is string => Boolean(value)).join(" • ") || undefined,
   };
 };
 
@@ -90,7 +89,8 @@ export const toTopRatedItem = (node: ComicNode): DiscoverSectionItem => {
   return {
     type: "prominentCarouselItem",
     ...baseCard(node),
-    subtitle: [chapter, type].filter((value): value is string => Boolean(value)).join(" • ") || undefined,
+    subtitle:
+      [chapter, type].filter((value): value is string => Boolean(value)).join(" • ") || undefined,
   };
 };
 
@@ -103,7 +103,8 @@ export const toLatestUploadItem = (node: ComicNode): DiscoverSectionItem => {
     type: "chapterUpdatesCarouselItem",
     ...baseCard(node),
     chapterId: chapter.id,
-    subtitle: [number, type].filter((value): value is string => Boolean(value)).join(" • ") || undefined,
+    subtitle:
+      [number, type].filter((value): value is string => Boolean(value)).join(" • ") || undefined,
     publishDate: dateFromTimestamp(chapter.dateModify ?? chapter.dateCreate ?? chapter.datePublic),
   };
 };
@@ -114,7 +115,8 @@ export const toRecentlyAddedItem = (node: ComicNode): DiscoverSectionItem => {
   return {
     type: "simpleCarouselItem",
     ...baseCard(node),
-    subtitle: [chapter, type].filter((value): value is string => Boolean(value)).join(" • ") || undefined,
+    subtitle:
+      [chapter, type].filter((value): value is string => Boolean(value)).join(" • ") || undefined,
   };
 };
 
@@ -124,30 +126,37 @@ export const toMostChaptersItem = (node: ComicNode): DiscoverSectionItem => {
   return {
     type: "simpleCarouselItem",
     ...baseCard(node),
-    subtitle: [chapter, type].filter((value): value is string => Boolean(value)).join(" • ") || undefined,
+    subtitle:
+      [chapter, type].filter((value): value is string => Boolean(value)).join(" • ") || undefined,
   };
 };
 
-const nodeNames = (
-  nodes?: Array<{ data?: { name?: string } | null } | null> | null,
-): string[] =>
-  nodes
-    ?.map((node) => node?.data?.name?.trim())
-    .filter((name): name is string => Boolean(name)) ?? [];
+const nodeNames = (nodes?: Array<{ data?: { name?: string } | null } | null> | null): string[] =>
+  nodes?.map((node) => node?.data?.name?.trim()).filter((name): name is string => Boolean(name)) ??
+  [];
 
 const stripHtml = (html?: string | null): string => {
   if (!html) return "";
   const $ = cheerio.load(html);
   $("br").replaceWith("\n");
-  $("p, div, li, blockquote").each((_, element) => $(element).append("\n"));
-  return Application.decodeHTMLEntities($.root().text().replace(/\n{3,}/g, "\n\n").trim());
+  $("p, div, li, blockquote").each((_, element) => {
+    $(element).append("\n");
+  });
+  return Application.decodeHTMLEntities(
+    $.root()
+      .text()
+      .replace(/\n{3,}/g, "\n\n")
+      .trim(),
+  );
 };
 
-const formatDateYmd = (value?: {
-  y?: number | null;
-  m?: number | null;
-  d?: number | null;
-} | null): string | undefined => {
+const formatDateYmd = (
+  value?: {
+    y?: number | null;
+    m?: number | null;
+    d?: number | null;
+  } | null,
+): string | undefined => {
   if (!value?.y) return undefined;
   return [value.y, value.m?.toString().padStart(2, "0"), value.d?.toString().padStart(2, "0")]
     .filter(Boolean)
@@ -196,8 +205,8 @@ export const toSourceManga = (node: ComicNode): SourceManga => {
       secondaryTitles: comic.altNames ?? [],
       thumbnailUrl: cover,
       synopsis: stripHtml(comic.summary),
-      author: (authors.length > 0 ? authors : comic.authors ?? []).join(", ") || undefined,
-      artist: (artists.length > 0 ? artists : comic.artists ?? []).join(", ") || undefined,
+      author: (authors.length > 0 ? authors : (comic.authors ?? [])).join(", ") || undefined,
+      artist: (artists.length > 0 ? artists : (comic.artists ?? [])).join(", ") || undefined,
       contentRating: toContentRating(comic.contentRating, comic.sfw_result),
       rating,
       status: comic.originalStatus
@@ -219,9 +228,7 @@ export const toSourceManga = (node: ComicNode): SourceManga => {
             }
           : {}),
         ...(comic.originalPubZone ? { Region: comic.originalPubZone } : {}),
-        ...(typeof comic.chaps_normal === "number"
-          ? { Chapters: String(comic.chaps_normal) }
-          : {}),
+        ...(typeof comic.chaps_normal === "number" ? { Chapters: String(comic.chaps_normal) } : {}),
         ...(typeof comic.follows === "number" ? { Follows: String(comic.follows) } : {}),
         ...(typeof comic.reviews === "number" ? { Reviews: String(comic.reviews) } : {}),
         ...(publishers.length > 0 ? { Publishers: publishers.join(", ") } : {}),

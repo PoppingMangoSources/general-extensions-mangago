@@ -97,7 +97,10 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           items: CONTENT_RATING_OPTIONS,
           minItemCount: 1,
           maxItemCount: CONTENT_RATING_OPTIONS.length,
-          onValueChange: Application.Selector(this as XComicAdvancedSearchForm, "handleContentRatings"),
+          onValueChange: Application.Selector(
+            this as XComicAdvancedSearchForm,
+            "handleContentRatings",
+          ),
         }),
         SelectRow("demographics", {
           title: "Demographics",
@@ -106,7 +109,10 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           items: DEMOGRAPHIC_OPTIONS,
           minItemCount: 0,
           maxItemCount: DEMOGRAPHIC_OPTIONS.length,
-          onValueChange: Application.Selector(this as XComicAdvancedSearchForm, "handleDemographics"),
+          onValueChange: Application.Selector(
+            this as XComicAdvancedSearchForm,
+            "handleDemographics",
+          ),
         }),
       ]),
       Section({ id: "genres", footer: "Tap once to include, twice to exclude." }, [
@@ -135,7 +141,10 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           items: MODE_OPTIONS,
           minItemCount: 1,
           maxItemCount: 1,
-          onValueChange: Application.Selector(this as XComicAdvancedSearchForm, "handleIncludeMode"),
+          onValueChange: Application.Selector(
+            this as XComicAdvancedSearchForm,
+            "handleIncludeMode",
+          ),
         }),
         SelectRow("exclude_mode", {
           title: "Exclude mode",
@@ -144,7 +153,10 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           items: MODE_OPTIONS,
           minItemCount: 1,
           maxItemCount: 1,
-          onValueChange: Application.Selector(this as XComicAdvancedSearchForm, "handleExcludeMode"),
+          onValueChange: Application.Selector(
+            this as XComicAdvancedSearchForm,
+            "handleExcludeMode",
+          ),
         }),
       ]),
       Section("status", [
@@ -155,7 +167,10 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           items: STATUS_OPTIONS,
           minItemCount: 0,
           maxItemCount: 1,
-          onValueChange: Application.Selector(this as XComicAdvancedSearchForm, "handleOriginalStatus"),
+          onValueChange: Application.Selector(
+            this as XComicAdvancedSearchForm,
+            "handleOriginalStatus",
+          ),
         }),
         SelectRow("upload_status", {
           title: "Upload status",
@@ -164,7 +179,10 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           items: STATUS_OPTIONS,
           minItemCount: 0,
           maxItemCount: 1,
-          onValueChange: Application.Selector(this as XComicAdvancedSearchForm, "handleUploadStatus"),
+          onValueChange: Application.Selector(
+            this as XComicAdvancedSearchForm,
+            "handleUploadStatus",
+          ),
         }),
         SelectRow("chapter_count", {
           title: "Chapter count",
@@ -173,7 +191,10 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           items: CHAPTER_COUNT_OPTIONS,
           minItemCount: 1,
           maxItemCount: 1,
-          onValueChange: Application.Selector(this as XComicAdvancedSearchForm, "handleChapterCount"),
+          onValueChange: Application.Selector(
+            this as XComicAdvancedSearchForm,
+            "handleChapterCount",
+          ),
         }),
         InputRow("year", {
           title: "Year or range",
@@ -189,7 +210,10 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           items: LANGUAGE_OPTIONS,
           minItemCount: 0,
           maxItemCount: LANGUAGE_OPTIONS.length,
-          onValueChange: Application.Selector(this as XComicAdvancedSearchForm, "handleOriginalLanguages"),
+          onValueChange: Application.Selector(
+            this as XComicAdvancedSearchForm,
+            "handleOriginalLanguages",
+          ),
         }),
         SelectRow("translated_languages", {
           title: "Translated languages",
@@ -198,7 +222,10 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           items: LANGUAGE_OPTIONS,
           minItemCount: 0,
           maxItemCount: LANGUAGE_OPTIONS.length,
-          onValueChange: Application.Selector(this as XComicAdvancedSearchForm, "handleTranslatedLanguages"),
+          onValueChange: Application.Selector(
+            this as XComicAdvancedSearchForm,
+            "handleTranslatedLanguages",
+          ),
         }),
       ]),
     ];

@@ -1,14 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import {
-  EditSection,
-  Form,
-  LabelRow,
-  NavigationRow,
-  Section,
-  SelectRow,
-} from "@paperback/types";
+import { EditSection, Form, LabelRow, NavigationRow, Section, SelectRow } from "@paperback/types";
 
 import {
   CONTENT_RATING_OPTIONS,
@@ -28,7 +21,8 @@ import {
 export const getPreferences = (): XComicPreferences => {
   const validRatings = new Set(CONTENT_RATING_OPTIONS.map((option) => option.id));
   const storedRatings =
-    (Application.getState(STATE_KEYS.CONTENT_RATINGS) as ContentPreferenceRating[] | undefined) ?? [];
+    (Application.getState(STATE_KEYS.CONTENT_RATINGS) as ContentPreferenceRating[] | undefined) ??
+    [];
   const ratings = storedRatings.filter((rating) => validRatings.has(rating));
 
   const validTypes = new Set(TYPE_OPTIONS.map((option) => option.id));
@@ -41,8 +35,7 @@ export const getPreferences = (): XComicPreferences => {
     types: types.length ? types : DEFAULT_CONTENT_TYPES,
     excludedGenres:
       (Application.getState(STATE_KEYS.EXCLUDED_GENRES) as string[] | undefined) ?? [],
-    excludedTags:
-      (Application.getState(STATE_KEYS.EXCLUDED_TAGS) as string[] | undefined) ?? [],
+    excludedTags: (Application.getState(STATE_KEYS.EXCLUDED_TAGS) as string[] | undefined) ?? [],
   };
 };
 
