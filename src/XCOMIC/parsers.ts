@@ -274,10 +274,45 @@ const parseImageArray = (script: string): string[] | undefined => {
 const scriptValue = (script: string, key: string): string =>
   new RegExp(`${key}\\s*=\\s*["']([^"']*)["']`).exec(script)?.[1] ?? "";
 
+// The reader is a Qwik SSR app: the page images never appear as <img> tags in
+// the delivered HTML, only as relative /_f/<a>/<b>/<name>.webp paths inside the
+// serialized state. Every page of one chapter shares a single /_f/<a>/<b>/
+// folder, so grouping by it and keeping the largest run drops the cover and any
+// stray thumbnail while preserving reading order.
+const FLIGHT_IMAGE_REGEX =
+  /\/_f\/[A-Za-z0-9]+\/[A-Za-z0-9]+\/[A-Za-z0-9._-]+\.(?:webp|jpe?g|png|avif)/gi;
+
+const parseFlightImages = (html: string): string[] => {
+  const groups = new Map<string, string[]>();
+  for (const path of html.match(FLIGHT_IMAGE_REGEX) ?? []) {
+    const folder = path.split("/").slice(0, 4).join("/");
+    const group = groups.get(folder) ?? [];
+    group.push(path);
+    groups.set(folder, group);
+  }
+
+  let best: string[] = [];
+  for (const group of groups.values()) {
+    if (group.length > best.length) best = group;
+  }
+
+  const seen = new Set<string>();
+  return best.filter((path) => {
+    if (seen.has(path)) return false;
+    seen.add(path);
+    return true;
+  });
+};
+
 export const parseChapterDetails = async (
   html: string,
   chapter: Chapter,
 ): Promise<ChapterDetails> => {
+  const flightPages = parseFlightImages(html).map((path) => absoluteUrl(path));
+  if (flightPages.length > 0) {
+    return { id: chapter.chapterId, mangaId: chapter.sourceManga.mangaId, pages: flightPages };
+  }
+
   const $ = cheerio.load(html);
   const selectors = [
     'div[data-name="image-item"] img[src]',
