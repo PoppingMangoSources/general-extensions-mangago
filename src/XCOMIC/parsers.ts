@@ -34,6 +34,13 @@ const absoluteUrl = (url: string | null | undefined): string => {
 const titleCase = (value: string): string =>
   value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
+// Genre/format/demographic ids share one display vocabulary.
+const optionTitle = (id: string): string =>
+  GENRE_OPTIONS.find((option) => option.id === id)?.title ??
+  DEMOGRAPHIC_OPTIONS.find((option) => option.id === id)?.title ??
+  FORMAT_OPTIONS.find((option) => option.id === id)?.title ??
+  titleCase(id);
+
 export const toContentRating = (rating?: string | null, sfw?: boolean | null): ContentRating => {
   if (rating === "pornographic") return ContentRating.ADULT;
   if (rating === "erotica") return ContentRating.MATURE;
@@ -84,11 +91,25 @@ export const toSearchResultItem = (node: ComicNode): SearchResultItem => ({
 });
 
 export type CarouselItemType =
-  | "prominentCarouselItem"
+  | "featuredCarouselItem"
   | "simpleCarouselItem"
   | "chapterUpdatesCarouselItem";
 
 export const toDiscoverItem = (node: ComicNode, type: CarouselItemType): DiscoverSectionItem => {
+  if (type === "featuredCarouselItem") {
+    const genres = (node.data.genres ?? []).slice(0, 4).map(optionTitle);
+    const score =
+      typeof node.data.score_val === "number" && Number.isFinite(node.data.score_val)
+        ? node.data.score_val.toFixed(1)
+        : undefined;
+    return {
+      type,
+      ...baseCard(node),
+      supertitle: genres.length > 0 ? genres.join(", ") : undefined,
+      summary: stripHtml(node.data.summary) || undefined,
+      infoItems: score ? [{ symbol: "star.fill", text: score }] : undefined,
+    };
+  }
   if (type === "chapterUpdatesCarouselItem") {
     const chapter = latestChapter(node.data);
     // Without a chapter to open, the updates row degrades to a plain card.
@@ -150,14 +171,7 @@ export const toSourceManga = (node: ComicNode): SourceManga => {
     {
       id: "genres",
       title: "Genres",
-      tags: genres.map((id) => ({
-        id,
-        title:
-          GENRE_OPTIONS.find((option) => option.id === id)?.title ??
-          DEMOGRAPHIC_OPTIONS.find((option) => option.id === id)?.title ??
-          FORMAT_OPTIONS.find((option) => option.id === id)?.title ??
-          titleCase(id),
-      })),
+      tags: genres.map((id) => ({ id, title: optionTitle(id) })),
     },
     {
       id: "tags",

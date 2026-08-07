@@ -62,7 +62,7 @@ const SECTION_DEFINITIONS: Record<SectionId, DiscoverSection> = {
   [SECTIONS.TOP_RATED]: {
     id: SECTIONS.TOP_RATED,
     title: "Top Rated",
-    type: DiscoverSectionType.prominentCarousel,
+    type: DiscoverSectionType.featured,
   },
   [SECTIONS.LATEST_UPLOADS]: {
     id: SECTIONS.LATEST_UPLOADS,
@@ -130,7 +130,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
       case SECTIONS.TOP_RATED:
-        return this.getBrowseSection(metadata, "field_score", "prominentCarouselItem");
+        return this.getBrowseSection(metadata, "field_score", "featuredCarouselItem");
       case SECTIONS.LATEST_UPLOADS:
         return this.getBrowseSection(metadata, "field_upload", "chapterUpdatesCarouselItem");
       case SECTIONS.RECENTLY_ADDED:

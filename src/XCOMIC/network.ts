@@ -31,6 +31,7 @@ query get_comic_browse($select: Comic_Browse_Select) {
       originalLanguage translatedLanguage
       urlPath urlCover
       type demographics contentRating genres
+      summary
       is_hot is_new sfw_result
       score_val follows reviews comments_total chaps_normal
       chapterNodes_last(amount: 1) {
