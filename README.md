@@ -5,7 +5,7 @@
 <p align="center">
   <img src="media/badge-ios.svg?v=2" alt="iOS / iPadOS" height="28"/>
   <img src="media/badge-version.svg?v=2" alt="Paperback 0.9+" height="28"/>
-  <img src="media/badge-count.svg?v=5" alt="27 sources" height="28"/>
+  <img src="media/badge-count.svg?v=6" alt="28 sources" height="28"/>
 </p>
 
 <p align="center">
@@ -29,7 +29,7 @@ PoppingMango is an independent source list for [Paperback](https://paperback.moe
 
 ## Sources
 
-**27 sources** — 23 manga, manhwa & manhua, and 4 novels, all available from `0.9/test`.
+**28 sources** — 24 manga, manhwa & manhua, and 4 novels, all available from `0.9/test`.
 
 ### Manga, Manhwa & Manhua
 
@@ -45,11 +45,12 @@ PoppingMango is an independent source list for [Paperback](https://paperback.moe
 | <img src="media/sources/mangaberri.png" width="22" align="top"/> **MangaBerri**         | [mangaberri.com](https://mangaberri.com)           |
 | <img src="media/sources/mangacherri.png" width="22" align="top"/> **MangaCherri**       | [mangacherri.com](https://mangacherri.com)         |
 | <img src="media/sources/mangahome.png" width="22" align="top"/> **MangaHome**           | [mangahome.com](https://www.mangahome.com)         |
+| <img src="media/sources/mgjinx.png" width="22" align="top"/> **MGJinx**                 | [mgjinx.com](https://mgjinx.com)                   |
 | <img src="media/sources/mangatown.png" width="22" align="top"/> **MangaTown**           | [mangatown.com](https://www.mangatown.com)         |
 | <img src="media/sources/myreadingmanga.png" width="22" align="top"/> **MyReadingManga** | [myreadingmanga.info](https://myreadingmanga.info) |
 | <img src="media/sources/omanga.png" width="22" align="top"/> **oManga**                 | [omanga.to](https://omanga.to)                     |
 | <img src="media/sources/onisaga.png" width="22" align="top"/> **OniSaga**               | [onisaga.com](https://onisaga.com)                 |
-| <img src="media/sources/reimanga.png" width="22" align="top"/> **ReiManga**            | [reimanga.com](https://reimanga.com)               |
+| <img src="media/sources/reimanga.png" width="22" align="top"/> **ReiManga**             | [reimanga.com](https://reimanga.com)               |
 | <img src="media/sources/rinkocomics.png" width="22" align="top"/> **RinkoComics**       | [rinkocomics.com](https://rinkocomics.com)         |
 | <img src="media/sources/rokaricomics.png" width="22" align="top"/> **RokariComics**     | [rokaricomics.com](https://rokaricomics.com)       |
 | <img src="media/sources/scansgg.png" width="22" align="top"/> **Scans.GG**              | [scans.gg](https://scans.gg)                       |
