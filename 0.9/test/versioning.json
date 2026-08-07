@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-08-07T16:01:36.627Z",
+  "buildTime": "2026-08-07T16:04:03.626Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -652,6 +652,29 @@
         }
       ],
       "id": "VyManga"
+    },
+    {
+      "name": "XCOMIC",
+      "description": "Extension that pulls content from xcomic.me.",
+      "version": "1.0.0-alpha.1",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "SAFE",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "XCOMIC"
     }
   ]
 }
