@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-08-07T13:30:15.361Z",
+  "buildTime": "2026-08-07T13:44:40.288Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -468,6 +468,29 @@
         }
       ],
       "id": "Ranobes"
+    },
+    {
+      "name": "ReiManga",
+      "description": "Extension that pulls content from reimanga.com.",
+      "version": "1.0.0-alpha.1",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "ADULT",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "ReiManga"
     },
     {
       "name": "RinkoComics",
