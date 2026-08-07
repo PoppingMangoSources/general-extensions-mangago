@@ -24,8 +24,9 @@ export const repairMojibake = (value: string): string => {
     for (let offset = 0; offset < bytes.length; offset++) {
       bytes[offset] = value.charCodeAt(index + offset);
     }
-    const decoded = Application.arrayBufferToUTF8String(bytes.buffer);
-    output += decoded.includes(String.fromCharCode(0xfffd)) ? value.slice(index, end) : decoded;
+    // A run that isn't valid UTF-8 decodes to undefined, not U+FFFD; keep it as-is.
+    const decoded: string | undefined = Application.arrayBufferToUTF8String(bytes.buffer);
+    output += decoded && !decoded.includes("�") ? decoded : value.slice(index, end);
     index = end;
   }
   return output;
