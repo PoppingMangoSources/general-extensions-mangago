@@ -102,7 +102,7 @@ export const toLatestUploadItem = (node: ComicNode): DiscoverSectionItem => {
   return {
     type: "chapterUpdatesCarouselItem",
     ...baseCard(node),
-    chapterId: chapter.id,
+    chapterId: chapter.urlPath ?? chapter.id,
     subtitle:
       [number, type].filter((value): value is string => Boolean(value)).join(" • ") || undefined,
     publishDate: dateFromTimestamp(chapter.dateModify ?? chapter.dateCreate ?? chapter.datePublic),
@@ -255,7 +255,10 @@ export const toChapter = (data: ChapterData, sourceManga: SourceManga): Chapter 
       : "en";
 
   return {
-    chapterId: data.id,
+    // Prefer the chapter's own path: the /comic/chapter/<id> route the bare id
+    // builds does not resolve for every chapter, so a missing urlPath is the
+    // only time we fall back to it.
+    chapterId: data.urlPath ?? data.id,
     sourceManga,
     chapNum: number,
     volume: typeof data.volNum === "number" && Number.isFinite(data.volNum) ? data.volNum : 0,
