@@ -97,17 +97,15 @@ export type CarouselItemType =
 
 export const toDiscoverItem = (node: ComicNode, type: CarouselItemType): DiscoverSectionItem => {
   if (type === "featuredCarouselItem") {
-    const genres = (node.data.genres ?? []).slice(0, 4).map(optionTitle);
-    const score =
-      typeof node.data.score_val === "number" && Number.isFinite(node.data.score_val)
-        ? node.data.score_val.toFixed(1)
-        : undefined;
+    const chapter = formatChapter(latestChapter(node.data));
     return {
       type,
       ...baseCard(node),
-      supertitle: genres.length > 0 ? genres.join(", ") : undefined,
+      // Type (Manga/Manhwa/…) sits above the title; the chapter number rides a
+      // book icon beneath the description.
+      supertitle: formatType(node.data.type),
       summary: stripHtml(node.data.summary) || undefined,
-      infoItems: score ? [{ symbol: "star.fill", text: score }] : undefined,
+      infoItems: chapter ? [{ symbol: "book.fill", text: chapter }] : undefined,
     };
   }
   if (type === "chapterUpdatesCarouselItem") {
