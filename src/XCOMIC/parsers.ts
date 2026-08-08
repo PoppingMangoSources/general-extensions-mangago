@@ -22,12 +22,13 @@ import {
   type ComicData,
   type ComicNode,
 } from "./models";
-import { decryptOpenSslAes } from "./utils";
 
 const ADULT_GENRES = new Set(["adult", "hentai", "pornographic", "smut"]);
 const MATURE_GENRES = new Set(["ecchi", "erotica", "mature", "yaoi", "yuri"]);
+// Paperback rejects ids containing characters outside this set.
+const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
 
-const absoluteUrl = (url: string | null | undefined): string => {
+export const toAbsoluteUrl = (url: string | null | undefined): string => {
   if (!url) return "";
   if (/^https?:\/\//i.test(url)) return url;
   if (url.startsWith("//")) return `https:${url}`;
@@ -37,14 +38,13 @@ const absoluteUrl = (url: string | null | undefined): string => {
 const titleCase = (value: string): string =>
   value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
-// Genre/format/demographic ids share one display vocabulary.
 const optionTitle = (id: string): string =>
   GENRE_OPTIONS.find((option) => option.id === id)?.title ??
   DEMOGRAPHIC_OPTIONS.find((option) => option.id === id)?.title ??
   FORMAT_OPTIONS.find((option) => option.id === id)?.title ??
   titleCase(id);
 
-export const toContentRating = (
+const contentRatingForComic = (
   rating?: string | null,
   sfw?: boolean | null,
   genres: string[] = [],
@@ -75,9 +75,6 @@ const formatChapter = (chapter?: ChapterData | null): string | undefined => {
   return `Ch. ${String(number).replace(/\.0$/, "")}`;
 };
 
-const latestChapter = (comic: ComicData): ChapterData | undefined =>
-  comic.chapterNodes_last?.[0]?.data;
-
 const dateFromTimestamp = (value?: number | null): Date | undefined => {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return undefined;
   const date = new Date(value < 1_000_000_000_000 ? value * 1000 : value);
@@ -87,13 +84,11 @@ const dateFromTimestamp = (value?: number | null): Date | undefined => {
 const formatType = (type?: string | null): string | undefined =>
   type ? (TYPE_OPTIONS.find((option) => option.id === type)?.title ?? titleCase(type)) : undefined;
 
-const imageUrl = (comic: ComicData): string => absoluteUrl(comic.urlCover);
-
 const baseCard = (node: ComicNode) => ({
-  mangaId: node.data.id || node.id,
+  mangaId: node.data.id.replace(SAFE_ID_REGEX, "-"),
   title: Application.decodeHTMLEntities(node.data.name),
-  imageUrl: imageUrl(node.data),
-  contentRating: toContentRating(
+  imageUrl: toAbsoluteUrl(node.data.urlCover),
+  contentRating: contentRatingForComic(
     node.data.contentRating,
     node.data.sfw_result,
     node.data.genres ?? [],
@@ -101,7 +96,7 @@ const baseCard = (node: ComicNode) => ({
 });
 
 const cardSubtitle = (comic: ComicData): string | undefined =>
-  [formatChapter(latestChapter(comic)), formatType(comic.type)]
+  [formatChapter(comic.chapterNodes_last?.[0]?.data), formatType(comic.type)]
     .filter((value): value is string => Boolean(value))
     .join(" • ") || undefined;
 
@@ -116,21 +111,18 @@ export type CarouselItemType =
   | "chapterUpdatesCarouselItem";
 
 export const toDiscoverItem = (node: ComicNode, type: CarouselItemType): DiscoverSectionItem => {
+  const chapter = node.data.chapterNodes_last?.[0]?.data;
   if (type === "featuredCarouselItem") {
-    const number = chapterNumber(latestChapter(node.data));
+    const number = chapterNumber(chapter);
     return {
       type,
       ...baseCard(node),
-      // Type (Manga/Manhwa/…) sits above the title; the bare chapter number
-      // rides a book icon beneath the description.
       supertitle: formatType(node.data.type),
       summary: stripHtml(node.data.summary) || undefined,
       infoItems: number != null ? [{ symbol: "book.fill", text: String(number) }] : undefined,
     };
   }
   if (type === "chapterUpdatesCarouselItem") {
-    const chapter = latestChapter(node.data);
-    // Without a chapter to open, the updates row degrades to a plain card.
     if (chapter?.id) {
       return {
         type,
@@ -207,20 +199,19 @@ export const toSourceManga = (node: ComicNode): SourceManga => {
     typeof comic.score_val === "number" && Number.isFinite(comic.score_val)
       ? Math.min(1, Math.max(0, comic.score_val / 10))
       : undefined;
-  const cover = imageUrl(comic);
+  const cover = toAbsoluteUrl(comic.urlCover);
   const publishers = nodeNames(comic.publisherNodes);
 
   return {
-    mangaId: comic.id || node.id,
+    mangaId: comic.id.replace(SAFE_ID_REGEX, "-"),
     mangaInfo: {
       primaryTitle: Application.decodeHTMLEntities(comic.name),
       secondaryTitles: (comic.altNames ?? []).map((title) => Application.decodeHTMLEntities(title)),
       thumbnailUrl: cover,
       synopsis: stripHtml(comic.summary),
-      author: (authors.length > 0 ? authors : (comic.authors ?? [])).join(", ") || undefined,
-      artist:
-        (artists.length > 0 ? distinctArtists : (comic.artists ?? [])).join(", ") || undefined,
-      contentRating: toContentRating(comic.contentRating, comic.sfw_result, [
+      author: authors.join(", ") || undefined,
+      artist: distinctArtists.join(", ") || undefined,
+      contentRating: contentRatingForComic(comic.contentRating, comic.sfw_result, [
         ...(comic.genres ?? []),
         ...(comic.tags ?? []),
       ]),
@@ -249,7 +240,7 @@ export const toSourceManga = (node: ComicNode): SourceManga => {
         ...(typeof comic.reviews === "number" ? { Reviews: String(comic.reviews) } : {}),
         ...(publishers.length > 0 ? { Publishers: publishers.join(", ") } : {}),
       },
-      shareUrl: absoluteUrl(comic.urlPath || `/comic/${comic.id}`),
+      shareUrl: toAbsoluteUrl(comic.urlPath || `/comic/${comic.id}`),
     },
   };
 };
@@ -259,9 +250,11 @@ export const toChapter = (data: ChapterData, sourceManga: SourceManga): Chapter 
   const title = [data.dname?.trim(), data.title?.trim()]
     .filter((value): value is string => Boolean(value))
     .filter((value, index, values) => index === 0 || value !== values[0])
+    .map((value) => Application.decodeHTMLEntities(value))
     .join(": ");
   const scanlators = nodeNames(data.groupNodes);
-  const uploader = data.userNode?.data?.name?.trim();
+  const uploaderName = data.userNode?.data?.name?.trim();
+  const uploader = uploaderName ? Application.decodeHTMLEntities(uploaderName) : undefined;
   const language = sourceManga.mangaInfo.additionalInfo?.["Translated Language"];
   const langCode =
     typeof language === "string" && language
@@ -271,10 +264,7 @@ export const toChapter = (data: ChapterData, sourceManga: SourceManga): Chapter 
       : "en";
 
   return {
-    // Prefer the chapter's own path: the /comic/chapter/<id> route the bare id
-    // builds does not resolve for every chapter, so a missing urlPath is the
-    // only time we fall back to it.
-    chapterId: data.urlPath ?? data.id,
+    chapterId: (data.urlPath ?? `/comic/chapter/${data.id}`).replace(SAFE_ID_REGEX, "-"),
     sourceManga,
     chapNum: number,
     volume: typeof data.volNum === "number" && Number.isFinite(data.volNum) ? data.volNum : 0,
@@ -285,27 +275,6 @@ export const toChapter = (data: ChapterData, sourceManga: SourceManga): Chapter 
   };
 };
 
-const parseImageArray = (script: string): string[] | undefined => {
-  const match = /const\s+imgHttps\s*=\s*(\[[\s\S]*?\])\s*;/.exec(script);
-  if (!match?.[1]) return undefined;
-  try {
-    const parsed = JSON.parse(match[1]) as unknown;
-    return Array.isArray(parsed) && parsed.every((item) => typeof item === "string")
-      ? (parsed as string[])
-      : undefined;
-  } catch {
-    return undefined;
-  }
-};
-
-const scriptValue = (script: string, key: string): string =>
-  new RegExp(`${key}\\s*=\\s*["']([^"']*)["']`).exec(script)?.[1] ?? "";
-
-// The reader is a Qwik SSR app: the page images never appear as <img> tags in
-// the delivered HTML, only as relative /_f/<a>/<b>/<name>.webp paths inside the
-// serialized state. Every page of one chapter shares a single /_f/<a>/<b>/
-// folder, so grouping by it and keeping the largest run drops the cover and any
-// stray thumbnail while preserving reading order.
 const FLIGHT_IMAGE_REGEX =
   /\/_f\/[A-Za-z0-9]+\/[A-Za-z0-9]+\/[A-Za-z0-9._-]+\.(?:webp|jpe?g|png|avif)/gi;
 
@@ -331,70 +300,8 @@ const parseFlightImages = (html: string): string[] => {
   });
 };
 
-export const parseChapterDetails = async (
-  html: string,
-  chapter: Chapter,
-): Promise<ChapterDetails> => {
-  const flightPages = parseFlightImages(html).map((path) => absoluteUrl(path));
-  if (flightPages.length > 0) {
-    return { id: chapter.chapterId, mangaId: chapter.sourceManga.mangaId, pages: flightPages };
-  }
-
-  const $ = cheerio.load(html);
-  const selectors = [
-    'div[data-name="image-item"] img[src]',
-    'img[src^="/_f/"]',
-    'img[src*="/_f/"]',
-  ];
-
-  for (const selector of selectors) {
-    const pages = $(selector)
-      .map((_, element) => absoluteUrl($(element).attr("src")))
-      .get()
-      .filter(Boolean);
-    if (pages.length > 0) {
-      return { id: chapter.chapterId, mangaId: chapter.sourceManga.mangaId, pages };
-    }
-  }
-
-  const fallbackPages = $("img[src]")
-    .map((_, element) => absoluteUrl($(element).attr("src")))
-    .get()
-    .filter((url) => /\/_f\/|\/images\/|\.(?:webp|jpe?g)(?:\?|$)/i.test(url));
-  if (fallbackPages.length > 0) {
-    return { id: chapter.chapterId, mangaId: chapter.sourceManga.mangaId, pages: fallbackPages };
-  }
-
-  for (const element of $("script").toArray()) {
-    const script = $(element).html() ?? "";
-    const images = parseImageArray(script);
-    if (!images?.length) continue;
-
-    const password = scriptValue(script, "batoPass");
-    const encrypted = scriptValue(script, "batoWord");
-    let args: string[] = [];
-    if (password && encrypted) {
-      const decrypted = await decryptOpenSslAes(encrypted, password);
-      try {
-        const parsed = JSON.parse(decrypted) as unknown;
-        if (Array.isArray(parsed)) {
-          args = parsed.filter((item): item is string => typeof item === "string");
-        }
-      } catch {
-        args = [];
-      }
-    }
-
-    return {
-      id: chapter.chapterId,
-      mangaId: chapter.sourceManga.mangaId,
-      pages: images.map((url, index) => {
-        const page = absoluteUrl(url);
-        const arg = args[index];
-        return arg ? `${page}${page.includes("?") ? "&" : "?"}${arg}` : page;
-      }),
-    };
-  }
-
-  throw new Error("Cannot find chapter images");
+export const parseChapterDetails = (html: string, chapter: Chapter): ChapterDetails => {
+  const pages = parseFlightImages(html).map(toAbsoluteUrl);
+  if (!pages.length) throw new Error("XCOMIC returned no chapter images");
+  return { id: chapter.chapterId, mangaId: chapter.sourceManga.mangaId, pages };
 };

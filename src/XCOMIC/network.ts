@@ -10,6 +10,7 @@ import {
 
 import {
   API_URL,
+  CHAPTER_PAGE_SIZE,
   DOMAIN,
   type BrowseResponse,
   type BrowseSelect,
@@ -21,22 +22,16 @@ import {
 const BROWSE_QUERY = `
 query get_comic_browse_items($select: Comic_Browse_Select) {
   get_comic_browse_items(select: $select) {
-    id
     data {
-      id dbStatus isPublic
-      name altNames
-      originalLanguage translatedLanguage
-      urlPath urlCover
-      type demographics contentRating genres
+      id name
+      urlCover
+      type contentRating genres
       summary
-      is_hot is_new sfw_result
-      score_val follows reviews comments_total chaps_normal
+      sfw_result
       chapterNodes_last(amount: 1) {
-        id
         data {
           id dateCreate dateModify datePublic
-          dbStatus isFinal sfw_result
-          dname title urlPath is_new serial chaNum volNum
+          urlPath serial chaNum
         }
       }
     }
@@ -47,7 +42,7 @@ query get_comic_browse_items($select: Comic_Browse_Select) {
 const BROWSE_PAGER_QUERY = `
 query get_comic_browse_pager($select: Comic_Browse_Select) {
   get_comic_browse_pager(select: $select) {
-    total pages page init size skip limit prev next
+    next
   }
 }
 `;
@@ -55,24 +50,20 @@ query get_comic_browse_pager($select: Comic_Browse_Select) {
 const COMIC_QUERY = `
 query get_comicNode($id: ID!) {
   get_comicNode(id: $id) {
-    id
     data {
-      id dbStatus isPublic
-      name altNames
-      authors artists
+      id name altNames
       originalLanguage translatedLanguage
       originalStatus originalPubFrom { y m d }
       originalPubTill { y m d }
       originalPubZone uploadStatus
-      type demographics contentRating genres tags publishers
-      authorNodes { id data { id name urlPath } }
-      artistNodes { id data { id name urlPath } }
-      tagNodes { id data { id name urlPath } }
-      publisherNodes { id data { id name urlPath } }
-      summary extraInfo
+      type demographics contentRating genres tags
+      authorNodes { data { name } }
+      artistNodes { data { name } }
+      tagNodes { data { name } }
+      publisherNodes { data { name } }
+      summary
       urlPath urlCover
-      is_hot is_new sfw_result
-      score_val follows reviews comments_total chaps_normal
+      sfw_result score_val follows reviews chaps_normal
     }
   }
 }
@@ -83,22 +74,17 @@ query get_comic_chapterList_uniqList($select: Select_Comic_ChapterList_UniqList)
   get_comic_chapterList_uniqList(select: $select) {
     paging { next }
     items {
-      id
       data {
         id dbStatus serial chaNum volNum
         dname title urlPath
         dateCreate dateModify datePublic
-        userNode { id data { id name urlPath } }
-        groupNodes { id data { id name urlPath } }
+        userNode { data { name } }
+        groupNodes { data { name } }
       }
     }
   }
 }
 `;
-
-let userAgentPromise: Promise<string> | undefined;
-const getUserAgent = (): Promise<string> =>
-  (userAgentPromise ??= Application.getDefaultUserAgent());
 
 export class XComicInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
@@ -108,7 +94,7 @@ export class XComicInterceptor extends PaperbackInterceptor {
         ...request.headers,
         referer: `${DOMAIN}/`,
         origin: DOMAIN,
-        "user-agent": await getUserAgent(),
+        "user-agent": await Application.getDefaultUserAgent(),
       },
     };
   }
@@ -120,16 +106,17 @@ export class XComicInterceptor extends PaperbackInterceptor {
   ): Promise<ArrayBuffer> {
     if (response.headers?.["cf-mitigated"] === "challenge") {
       throw new CloudflareError({
-        url: request.url,
+        // The JSON endpoint cannot render the challenge interstitial.
+        url: request.url.startsWith(API_URL) ? `${DOMAIN}/` : request.url,
         method: request.method ?? "GET",
-        headers: { "user-agent": await getUserAgent() },
+        headers: { "user-agent": await Application.getDefaultUserAgent() },
       });
     }
     return data;
   }
 }
 
-const graphQL = async <T>(query: string, variables: Record<string, unknown>): Promise<T> => {
+const fetchGraphQL = async <T>(query: string, variables: Record<string, unknown>): Promise<T> => {
   const [response, buffer] = await Application.scheduleRequest({
     url: API_URL,
     method: "POST",
@@ -145,12 +132,18 @@ const graphQL = async <T>(query: string, variables: Record<string, unknown>): Pr
   }
 
   const body = Application.arrayBufferToUTF8String(buffer);
-  let payload: GraphQLResponse<T>;
+  let parsed: unknown;
   try {
-    payload = JSON.parse(body) as GraphQLResponse<T>;
+    parsed = JSON.parse(body) as unknown;
   } catch (error: unknown) {
     throw new Error(`Failed to parse JSON from ${API_URL}`, { cause: error });
   }
+
+  if (!parsed || typeof parsed !== "object" || (!("data" in parsed) && !("errors" in parsed))) {
+    throw new Error(`XCOMIC returned a malformed response from ${API_URL}`);
+  }
+
+  const payload = parsed as GraphQLResponse<T>;
 
   if (payload.errors?.length) {
     throw new Error(payload.errors.map((error) => error.message ?? "Unknown API error").join("\n"));
@@ -161,22 +154,18 @@ const graphQL = async <T>(query: string, variables: Record<string, unknown>): Pr
 
 export const fetchBrowse = async (select: BrowseSelect): Promise<BrowseResponse> => {
   const [items, pager] = await Promise.all([
-    graphQL<BrowseResponse>(BROWSE_QUERY, { select }),
-    graphQL<BrowseResponse>(BROWSE_PAGER_QUERY, { select }),
+    fetchGraphQL<BrowseResponse>(BROWSE_QUERY, { select }),
+    fetchGraphQL<BrowseResponse>(BROWSE_PAGER_QUERY, { select }),
   ]);
   return { ...items, ...pager };
 };
 
 export const fetchComic = (id: string): Promise<ComicNodeResponse> =>
-  graphQL<ComicNodeResponse>(COMIC_QUERY, { id });
+  fetchGraphQL<ComicNodeResponse>(COMIC_QUERY, { id });
 
-export const fetchChapters = (
-  comicId: string,
-  page: number,
-  size: number,
-): Promise<ChapterListResponse> =>
-  graphQL<ChapterListResponse>(CHAPTERS_QUERY, {
-    select: { comic_id: comicId, page, size, sortby: "chapter_desc" },
+export const fetchChapters = (comicId: string, page: number): Promise<ChapterListResponse> =>
+  fetchGraphQL<ChapterListResponse>(CHAPTERS_QUERY, {
+    select: { comic_id: comicId, page, size: CHAPTER_PAGE_SIZE, sortby: "chapter_desc" },
   });
 
 export const fetchChapterHtml = async (url: string): Promise<string> => {

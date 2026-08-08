@@ -5,7 +5,6 @@ import {
   BasicRateLimiter,
   ContentRating,
   CookieStorageInterceptor,
-  DiscoverSectionType,
   type AdvancedSearchForm,
   type Chapter,
   type ChapterDetails,
@@ -30,8 +29,7 @@ import {
   getVisibleSections,
 } from "./forms/settings";
 import {
-  CHAPTER_PAGE_SIZE,
-  DOMAIN,
+  DISCOVER_SECTIONS,
   GENRE_OPTIONS,
   PAGE_SIZE,
   SECTIONS,
@@ -39,7 +37,6 @@ import {
   type BrowseSelect,
   type PageMetadata,
   type SearchMetadata,
-  type SectionId,
 } from "./models";
 import {
   fetchBrowse,
@@ -50,6 +47,7 @@ import {
 } from "./network";
 import {
   parseChapterDetails,
+  toAbsoluteUrl,
   toChapter,
   toDiscoverItem,
   toSearchResultItem,
@@ -58,36 +56,8 @@ import {
 } from "./parsers";
 import type XComicConfig from "./pbconfig";
 
-const SECTION_DEFINITIONS: Record<SectionId, DiscoverSection> = {
-  [SECTIONS.TOP_RATED]: {
-    id: SECTIONS.TOP_RATED,
-    title: "Top Rated",
-    type: DiscoverSectionType.featured,
-  },
-  [SECTIONS.LATEST_UPLOADS]: {
-    id: SECTIONS.LATEST_UPLOADS,
-    title: "Latest Uploads",
-    type: DiscoverSectionType.chapterUpdates,
-  },
-  [SECTIONS.RECENTLY_ADDED]: {
-    id: SECTIONS.RECENTLY_ADDED,
-    title: "Recently Added",
-    type: DiscoverSectionType.simpleCarousel,
-  },
-  [SECTIONS.MOST_CHAPTERS]: {
-    id: SECTIONS.MOST_CHAPTERS,
-    title: "Most Chapters",
-    type: DiscoverSectionType.simpleCarousel,
-  },
-  [SECTIONS.GENRES]: {
-    id: SECTIONS.GENRES,
-    title: "Genres",
-    type: DiscoverSectionType.genres,
-  },
-};
-
 class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
-  private rateLimiter = new BasicRateLimiter("rateLimiter", {
+  private rateLimiter = new BasicRateLimiter("xcomic-rate-limiter", {
     numberOfRequests: 3,
     bufferInterval: 1,
     ignoreImages: true,
@@ -121,7 +91,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     const visible = new Set(getVisibleSections());
     return getSectionOrder()
       .filter((id) => visible.has(id))
-      .map((id) => SECTION_DEFINITIONS[id]);
+      .map((id) => DISCOVER_SECTIONS[id]);
   }
 
   async getDiscoverSectionItems(
@@ -160,7 +130,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     };
   }
 
-  private async getGenreSection(): Promise<PagedResults<DiscoverSectionItem>> {
+  private getGenreSection(): PagedResults<DiscoverSectionItem> {
     return {
       items: GENRE_OPTIONS.map((genre) => ({
         type: "genresCarouselItem",
@@ -268,7 +238,9 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       query.trim(),
     );
     if (!match?.[1]) return undefined;
-    const sourceManga = await this.getMangaDetails(match[1]);
+    const response = await fetchComic(match[1]);
+    if (!response.get_comicNode) return undefined;
+    const sourceManga = toSourceManga(response.get_comicNode);
     return {
       items: [
         {
@@ -291,7 +263,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     const chapters: Chapter[] = [];
     let page = 1;
     while (true) {
-      const response = await fetchChapters(sourceManga.mangaId, page, CHAPTER_PAGE_SIZE);
+      const response = await fetchChapters(sourceManga.mangaId, page);
       const result = response.get_comic_chapterList_uniqList;
       if (!result) break;
       chapters.push(
@@ -306,13 +278,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    const chapterUrl = /^https?:\/\//i.test(chapter.chapterId)
-      ? chapter.chapterId
-      : chapter.chapterId.startsWith("/")
-        ? `${DOMAIN}${chapter.chapterId}`
-        : `${DOMAIN}/comic/chapter/${chapter.chapterId}`;
-
-    return parseChapterDetails(await fetchChapterHtml(chapterUrl), chapter);
+    return parseChapterDetails(await fetchChapterHtml(toAbsoluteUrl(chapter.chapterId)), chapter);
   }
 }
 

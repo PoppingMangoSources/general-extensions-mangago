@@ -1,7 +1,13 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import type { JSONObject, SortingOption, Tag } from "@paperback/types";
+import {
+  DiscoverSectionType,
+  type DiscoverSection,
+  type JSONObject,
+  type SortingOption,
+  type Tag,
+} from "@paperback/types";
 
 export const DOMAIN = "https://xcomic.me";
 export const API_URL = `${DOMAIN}/query/`;
@@ -18,13 +24,39 @@ export const SECTIONS = {
 
 export type SectionId = (typeof SECTIONS)[keyof typeof SECTIONS];
 
-export const SECTION_OPTIONS: Array<{ id: SectionId; title: string }> = [
-  { id: SECTIONS.TOP_RATED, title: "Top Rated" },
-  { id: SECTIONS.LATEST_UPLOADS, title: "Latest Uploads" },
-  { id: SECTIONS.RECENTLY_ADDED, title: "Recently Added" },
-  { id: SECTIONS.MOST_CHAPTERS, title: "Most Chapters" },
-  { id: SECTIONS.GENRES, title: "Genres" },
-];
+export const DISCOVER_SECTIONS: Record<SectionId, DiscoverSection> = {
+  [SECTIONS.TOP_RATED]: {
+    id: SECTIONS.TOP_RATED,
+    title: "Top Rated",
+    type: DiscoverSectionType.featured,
+  },
+  [SECTIONS.LATEST_UPLOADS]: {
+    id: SECTIONS.LATEST_UPLOADS,
+    title: "Latest Uploads",
+    type: DiscoverSectionType.chapterUpdates,
+  },
+  [SECTIONS.RECENTLY_ADDED]: {
+    id: SECTIONS.RECENTLY_ADDED,
+    title: "Recently Added",
+    type: DiscoverSectionType.simpleCarousel,
+  },
+  [SECTIONS.MOST_CHAPTERS]: {
+    id: SECTIONS.MOST_CHAPTERS,
+    title: "Most Chapters",
+    type: DiscoverSectionType.simpleCarousel,
+  },
+  [SECTIONS.GENRES]: {
+    id: SECTIONS.GENRES,
+    title: "Genres",
+    type: DiscoverSectionType.genres,
+  },
+};
+
+export const SECTION_IDS = Object.values(SECTIONS);
+export const SECTION_OPTIONS = Object.values(DISCOVER_SECTIONS).map(({ id, title }) => ({
+  id,
+  title,
+}));
 
 export const STATE_KEYS = {
   CONTENT_RATINGS: "xcomic_content_ratings",
@@ -354,18 +386,15 @@ export interface BrowseSelect {
   ignoreGlobalBlocks: boolean;
 }
 
-export interface DateYmd {
+interface DateYmd {
   y?: number | null;
   m?: number | null;
   d?: number | null;
 }
 
-export interface NamedNode {
-  id?: string;
+interface NamedNode {
   data?: {
-    id?: string;
     name?: string;
-    urlPath?: string;
   } | null;
 }
 
@@ -385,19 +414,14 @@ export interface ChapterData {
   groupNodes?: Array<NamedNode | null> | null;
 }
 
-export interface ChapterNode {
-  id: string;
+interface ChapterNode {
   data: ChapterData;
 }
 
 export interface ComicData {
   id: string;
-  dbStatus?: string | null;
-  isPublic?: boolean | null;
   name: string;
   altNames?: string[] | null;
-  authors?: string[] | null;
-  artists?: string[] | null;
   originalLanguage?: string | null;
   translatedLanguage?: string | null;
   originalStatus?: string | null;
@@ -410,49 +434,40 @@ export interface ComicData {
   contentRating?: string | null;
   genres?: string[] | null;
   tags?: string[] | null;
-  publishers?: string[] | null;
   authorNodes?: NamedNode[] | null;
   artistNodes?: NamedNode[] | null;
   tagNodes?: NamedNode[] | null;
   publisherNodes?: NamedNode[] | null;
   summary?: string | null;
-  extraInfo?: string | null;
   urlPath?: string | null;
   urlCover?: string | null;
-  is_hot?: boolean | null;
-  is_new?: boolean | null;
   sfw_result?: boolean | null;
   score_val?: number | null;
   follows?: number | null;
   reviews?: number | null;
-  comments_total?: number | null;
   chaps_normal?: number | null;
   chapterNodes_last?: ChapterNode[] | null;
 }
 
 export interface ComicNode {
-  id: string;
   data: ComicData;
 }
 
-export interface BrowsePager {
-  total?: number;
-  pages?: number;
-  page?: number;
+interface Pagination {
   next?: number | null;
 }
 
 export interface BrowseResponse {
   get_comic_browse_items?: ComicNode[] | null;
-  get_comic_browse_pager?: BrowsePager | null;
+  get_comic_browse_pager?: Pagination | null;
 }
 
 export interface ComicNodeResponse {
   get_comicNode?: ComicNode | null;
 }
 
-export interface ChapterListResult {
-  paging?: BrowsePager | null;
+interface ChapterListResult {
+  paging?: Pagination | null;
   items?: ChapterNode[] | null;
 }
 

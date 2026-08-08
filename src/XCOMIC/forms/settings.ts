@@ -9,6 +9,7 @@ import {
   DEFAULT_CONTENT_TYPES,
   FORMAT_OPTIONS,
   GENRE_OPTIONS,
+  SECTION_IDS,
   SECTION_OPTIONS,
   STATE_KEYS,
   TYPE_OPTIONS,
@@ -40,17 +41,15 @@ export const getPreferences = (): XComicPreferences => {
 };
 
 export const getSectionOrder = (): SectionId[] => {
-  const validIds = SECTION_OPTIONS.map((section) => section.id);
   const stored = (Application.getState(STATE_KEYS.SECTION_ORDER) as SectionId[] | undefined) ?? [];
-  const order = [...new Set(stored.filter((id) => validIds.includes(id)))];
-  return [...order, ...validIds.filter((id) => !order.includes(id))];
+  const order = [...new Set(stored.filter((id) => SECTION_IDS.includes(id)))];
+  return [...order, ...SECTION_IDS.filter((id) => !order.includes(id))];
 };
 
 export const getVisibleSections = (): SectionId[] => {
-  const validIds = SECTION_OPTIONS.map((section) => section.id);
   const stored = Application.getState(STATE_KEYS.VISIBLE_SECTIONS) as SectionId[] | undefined;
-  const visible = stored?.filter((id) => validIds.includes(id)) ?? [];
-  return visible.length ? visible : validIds;
+  const visible = stored?.filter((id) => SECTION_IDS.includes(id)) ?? [];
+  return visible.length ? visible : SECTION_IDS;
 };
 
 export class XComicSectionOrderForm extends Form {
