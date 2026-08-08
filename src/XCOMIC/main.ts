@@ -102,9 +102,9 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       case SECTIONS.TOP_RATED:
         return this.getBrowseSection(metadata, "field_score", "featuredCarouselItem");
       case SECTIONS.LATEST_UPLOADS:
-        return this.getBrowseSection(metadata, "field_upload", "chapterUpdatesCarouselItem");
+        return this.getBrowseSection(metadata, "field_update", "chapterUpdatesCarouselItem");
       case SECTIONS.RECENTLY_ADDED:
-        return this.getBrowseSection(metadata, "field_public", "simpleCarouselItem");
+        return this.getBrowseSection(metadata, "field_create", "simpleCarouselItem");
       case SECTIONS.MOST_CHAPTERS:
         return this.getBrowseSection(metadata, "field_chapter", "simpleCarouselItem");
       case SECTIONS.GENRES:

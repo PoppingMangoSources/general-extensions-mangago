@@ -327,17 +327,11 @@ export const LANGUAGE_OPTIONS: Tag[] = [
 
 export const SORTING_OPTIONS: SortingOption[] = [
   { id: "field_score", label: "Rating Score" },
-  { id: "field_follow", label: "Most Follows" },
-  { id: "field_review", label: "Most Reviews" },
-  { id: "field_comment", label: "Most Comments" },
+  { id: "field_update", label: "Latest Update" },
+  { id: "field_create", label: "Recently Added" },
+  { id: "field_name_asc", label: "Name A-Z" },
+  { id: "field_name_desc", label: "Name Z-A" },
   { id: "field_chapter", label: "Most Chapters" },
-  { id: "field_upload", label: "Latest Upload" },
-  { id: "field_public", label: "Recently Created" },
-  { id: "field_name", label: "Name A-Z" },
-  { id: "views_d000", label: "Most Views (Total)" },
-  { id: "views_d030", label: "Most Views (30 days)" },
-  { id: "views_d007", label: "Most Views (7 days)" },
-  { id: "views_h024", label: "Most Views (24 hours)" },
 ];
 
 export interface PageMetadata extends JSONObject {
