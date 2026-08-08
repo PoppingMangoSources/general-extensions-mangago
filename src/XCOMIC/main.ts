@@ -150,10 +150,12 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     itemType: CarouselItemType,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const page = metadata?.page ?? 1;
-    const response = await fetchBrowse(this.buildSelect(page, sortby, "", undefined));
+    const nodes =
+      (await fetchBrowse(this.buildSelect(page, sortby, "", undefined))).get_comic_browse_items ??
+      [];
     return {
-      items: (response.get_comic_browse_items ?? []).map((node) => toDiscoverItem(node, itemType)),
-      metadata: response.get_comic_browse_pager?.next ? { page: page + 1 } : undefined,
+      items: nodes.map((node) => toDiscoverItem(node, itemType)),
+      metadata: nodes.length >= PAGE_SIZE ? { page: page + 1 } : undefined,
     };
   }
 
@@ -193,10 +195,10 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       (query.title ?? "").trim(),
       query.metadata,
     );
-    const response = await fetchBrowse(select);
+    const nodes = (await fetchBrowse(select)).get_comic_browse_items ?? [];
     return {
-      items: (response.get_comic_browse_items ?? []).map(toSearchResultItem),
-      metadata: response.get_comic_browse_pager?.next ? { page: page + 1 } : undefined,
+      items: nodes.map(toSearchResultItem),
+      metadata: nodes.length >= PAGE_SIZE ? { page: page + 1 } : undefined,
     };
   }
 
@@ -303,7 +305,17 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       : chapter.chapterId.startsWith("/")
         ? `${DOMAIN}${chapter.chapterId}`
         : `${DOMAIN}/comic/chapter/${chapter.chapterId}`;
-    return parseChapterDetails(await fetchChapterHtml(chapterUrl), chapter);
+
+    // The Qwik data endpoint carries the same image list without the rendered
+    // HTML shell, so it is smaller and faster; the full page is the fallback.
+    try {
+      return await parseChapterDetails(
+        await fetchChapterHtml(`${chapterUrl}/q-data.json`),
+        chapter,
+      );
+    } catch {
+      return parseChapterDetails(await fetchChapterHtml(chapterUrl), chapter);
+    }
   }
 }
 

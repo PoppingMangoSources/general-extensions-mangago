@@ -442,7 +442,6 @@ export interface BrowsePager {
 }
 
 export interface BrowseResponse {
-  get_comic_browse_pager?: BrowsePager | null;
   get_comic_browse_items?: ComicNode[] | null;
 }
 

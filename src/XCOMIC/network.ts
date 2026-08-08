@@ -18,11 +18,11 @@ import {
   type GraphQLResponse,
 } from "./models";
 
+// The API rejects a query carrying more than one root field, so the pager is
+// not requested alongside the items; callers derive "has next page" from the
+// returned count instead.
 const BROWSE_QUERY = `
-query get_comic_browse($select: Comic_Browse_Select) {
-  get_comic_browse_pager(select: $select) {
-    total pages page init size skip limit prev next
-  }
+query get_comic_browse_items($select: Comic_Browse_Select) {
   get_comic_browse_items(select: $select) {
     id
     data {
