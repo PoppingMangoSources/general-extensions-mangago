@@ -97,15 +97,15 @@ export type CarouselItemType =
 
 export const toDiscoverItem = (node: ComicNode, type: CarouselItemType): DiscoverSectionItem => {
   if (type === "featuredCarouselItem") {
-    const chapter = formatChapter(latestChapter(node.data));
+    const number = chapterNumber(latestChapter(node.data));
     return {
       type,
       ...baseCard(node),
-      // Type (Manga/Manhwa/…) sits above the title; the chapter number rides a
-      // book icon beneath the description.
+      // Type (Manga/Manhwa/…) sits above the title; the bare chapter number
+      // rides a book icon beneath the description.
       supertitle: formatType(node.data.type),
       summary: stripHtml(node.data.summary) || undefined,
-      infoItems: chapter ? [{ symbol: "book.fill", text: chapter }] : undefined,
+      infoItems: number != null ? [{ symbol: "book.fill", text: String(number) }] : undefined,
     };
   }
   if (type === "chapterUpdatesCarouselItem") {
