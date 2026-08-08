@@ -150,12 +150,13 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     itemType: CarouselItemType,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const page = metadata?.page ?? 1;
-    const nodes =
-      (await fetchBrowse(this.buildSelect(page, sortby, "", undefined))).get_comic_browse_items ??
-      [];
+    const response = await fetchBrowse(this.buildSelect(page, sortby, "", undefined));
+    const nodes = response.get_comic_browse_items ?? [];
     return {
-      items: nodes.map((node) => toDiscoverItem(node, itemType)),
-      metadata: nodes.length >= PAGE_SIZE ? { page: page + 1 } : undefined,
+      items: nodes
+        .filter((node) => Boolean(node.data.urlCover?.trim()))
+        .map((node) => toDiscoverItem(node, itemType)),
+      metadata: response.get_comic_browse_pager?.next ? { page: page + 1 } : undefined,
     };
   }
 
@@ -195,10 +196,11 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       (query.title ?? "").trim(),
       query.metadata,
     );
-    const nodes = (await fetchBrowse(select)).get_comic_browse_items ?? [];
+    const response = await fetchBrowse(select);
+    const nodes = response.get_comic_browse_items ?? [];
     return {
-      items: nodes.map(toSearchResultItem),
-      metadata: nodes.length >= PAGE_SIZE ? { page: page + 1 } : undefined,
+      items: nodes.filter((node) => Boolean(node.data.urlCover?.trim())).map(toSearchResultItem),
+      metadata: response.get_comic_browse_pager?.next ? { page: page + 1 } : undefined,
     };
   }
 
@@ -290,9 +292,13 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     let page = 1;
     while (true) {
       const response = await fetchChapters(sourceManga.mangaId, page, CHAPTER_PAGE_SIZE);
-      const result = response.get_comic_chapterList;
+      const result = response.get_comic_chapterList_uniqList;
       if (!result) break;
-      chapters.push(...(result.items ?? []).map((item) => toChapter(item.data, sourceManga)));
+      chapters.push(
+        ...(result.items ?? [])
+          .filter((item) => item.data.dbStatus === "normal")
+          .map((item) => toChapter(item.data, sourceManga)),
+      );
       if (!result.paging?.next) break;
       page++;
     }
@@ -306,16 +312,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
         ? `${DOMAIN}${chapter.chapterId}`
         : `${DOMAIN}/comic/chapter/${chapter.chapterId}`;
 
-    // The Qwik data endpoint carries the same image list without the rendered
-    // HTML shell, so it is smaller and faster; the full page is the fallback.
-    try {
-      return await parseChapterDetails(
-        await fetchChapterHtml(`${chapterUrl}/q-data.json`),
-        chapter,
-      );
-    } catch {
-      return parseChapterDetails(await fetchChapterHtml(chapterUrl), chapter);
-    }
+    return parseChapterDetails(await fetchChapterHtml(chapterUrl), chapter);
   }
 }
 

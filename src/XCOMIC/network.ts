@@ -18,9 +18,6 @@ import {
   type GraphQLResponse,
 } from "./models";
 
-// The API rejects a query carrying more than one root field, so the pager is
-// not requested alongside the items; callers derive "has next page" from the
-// returned count instead.
 const BROWSE_QUERY = `
 query get_comic_browse_items($select: Comic_Browse_Select) {
   get_comic_browse_items(select: $select) {
@@ -43,6 +40,14 @@ query get_comic_browse_items($select: Comic_Browse_Select) {
         }
       }
     }
+  }
+}
+`;
+
+const BROWSE_PAGER_QUERY = `
+query get_comic_browse_pager($select: Comic_Browse_Select) {
+  get_comic_browse_pager(select: $select) {
+    total pages page init size skip limit prev next
   }
 }
 `;
@@ -74,13 +79,13 @@ query get_comicNode($id: ID!) {
 `;
 
 const CHAPTERS_QUERY = `
-query get_comic_chapterList($select: Select_Comic_ChapterList) {
-  get_comic_chapterList(select: $select) {
+query get_comic_chapterList_uniqList($select: Select_Comic_ChapterList_UniqList) {
+  get_comic_chapterList_uniqList(select: $select) {
     paging { next }
     items {
       id
       data {
-        id serial chaNum volNum
+        id dbStatus serial chaNum volNum
         dname title urlPath
         dateCreate dateModify datePublic
         userNode { id data { id name urlPath } }
@@ -132,7 +137,7 @@ const graphQL = async <T>(query: string, variables: Record<string, unknown>): Pr
       accept: "application/json",
       "content-type": "application/json",
     },
-    body: JSON.stringify({ query, variables }),
+    body: JSON.stringify({ query: query.trim(), variables }),
   });
 
   if (response.status < 200 || response.status >= 300) {
@@ -154,8 +159,13 @@ const graphQL = async <T>(query: string, variables: Record<string, unknown>): Pr
   return payload.data;
 };
 
-export const fetchBrowse = (select: BrowseSelect): Promise<BrowseResponse> =>
-  graphQL<BrowseResponse>(BROWSE_QUERY, { select });
+export const fetchBrowse = async (select: BrowseSelect): Promise<BrowseResponse> => {
+  const [items, pager] = await Promise.all([
+    graphQL<BrowseResponse>(BROWSE_QUERY, { select }),
+    graphQL<BrowseResponse>(BROWSE_PAGER_QUERY, { select }),
+  ]);
+  return { ...items, ...pager };
+};
 
 export const fetchComic = (id: string): Promise<ComicNodeResponse> =>
   graphQL<ComicNodeResponse>(COMIC_QUERY, { id });
@@ -166,7 +176,7 @@ export const fetchChapters = (
   size: number,
 ): Promise<ChapterListResponse> =>
   graphQL<ChapterListResponse>(CHAPTERS_QUERY, {
-    select: { comic_id: comicId, page, size },
+    select: { comic_id: comicId, page, size, sortby: "chapter_desc" },
   });
 
 export const fetchChapterHtml = async (url: string): Promise<string> => {

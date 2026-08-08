@@ -24,6 +24,9 @@ import {
 } from "./models";
 import { decryptOpenSslAes } from "./utils";
 
+const ADULT_GENRES = new Set(["adult", "hentai", "pornographic", "smut"]);
+const MATURE_GENRES = new Set(["ecchi", "erotica", "mature", "yaoi", "yuri"]);
+
 const absoluteUrl = (url: string | null | undefined): string => {
   if (!url) return "";
   if (/^https?:\/\//i.test(url)) return url;
@@ -41,10 +44,23 @@ const optionTitle = (id: string): string =>
   FORMAT_OPTIONS.find((option) => option.id === id)?.title ??
   titleCase(id);
 
-export const toContentRating = (rating?: string | null, sfw?: boolean | null): ContentRating => {
-  if (rating === "pornographic") return ContentRating.ADULT;
-  if (rating === "erotica") return ContentRating.MATURE;
-  if (sfw === false) return ContentRating.MATURE;
+export const toContentRating = (
+  rating?: string | null,
+  sfw?: boolean | null,
+  genres: string[] = [],
+): ContentRating => {
+  const normalized = genres.map((genre) => genre.trim().toLowerCase());
+  if (rating === "pornographic" || normalized.some((genre) => ADULT_GENRES.has(genre))) {
+    return ContentRating.ADULT;
+  }
+  if (
+    rating === "suggestive" ||
+    rating === "erotica" ||
+    sfw === false ||
+    normalized.some((genre) => MATURE_GENRES.has(genre))
+  ) {
+    return ContentRating.MATURE;
+  }
   return ContentRating.EVERYONE;
 };
 
@@ -75,9 +91,13 @@ const imageUrl = (comic: ComicData): string => absoluteUrl(comic.urlCover);
 
 const baseCard = (node: ComicNode) => ({
   mangaId: node.data.id || node.id,
-  title: node.data.name,
+  title: Application.decodeHTMLEntities(node.data.name),
   imageUrl: imageUrl(node.data),
-  contentRating: toContentRating(node.data.contentRating, node.data.sfw_result),
+  contentRating: toContentRating(
+    node.data.contentRating,
+    node.data.sfw_result,
+    node.data.genres ?? [],
+  ),
 });
 
 const cardSubtitle = (comic: ComicData): string | undefined =>
@@ -128,8 +148,10 @@ export const toDiscoverItem = (node: ComicNode, type: CarouselItemType): Discove
 };
 
 const nodeNames = (nodes?: Array<{ data?: { name?: string } | null } | null> | null): string[] =>
-  nodes?.map((node) => node?.data?.name?.trim()).filter((name): name is string => Boolean(name)) ??
-  [];
+  nodes
+    ?.map((node) => node?.data?.name?.trim())
+    .filter((name): name is string => Boolean(name))
+    .map((name) => Application.decodeHTMLEntities(name)) ?? [];
 
 const stripHtml = (html?: string | null): string => {
   if (!html) return "";
@@ -163,6 +185,7 @@ export const toSourceManga = (node: ComicNode): SourceManga => {
   const comic = node.data;
   const authors = nodeNames(comic.authorNodes);
   const artists = nodeNames(comic.artistNodes);
+  const distinctArtists = artists.filter((artist) => !authors.includes(artist));
   const genres = [...new Set([...(comic.genres ?? []), ...(comic.demographics ?? [])])];
   const tags = comic.tags ?? nodeNames(comic.tagNodes);
   const tagGroups: TagSection[] = [
@@ -190,13 +213,17 @@ export const toSourceManga = (node: ComicNode): SourceManga => {
   return {
     mangaId: comic.id || node.id,
     mangaInfo: {
-      primaryTitle: comic.name,
-      secondaryTitles: comic.altNames ?? [],
+      primaryTitle: Application.decodeHTMLEntities(comic.name),
+      secondaryTitles: (comic.altNames ?? []).map((title) => Application.decodeHTMLEntities(title)),
       thumbnailUrl: cover,
       synopsis: stripHtml(comic.summary),
       author: (authors.length > 0 ? authors : (comic.authors ?? [])).join(", ") || undefined,
-      artist: (artists.length > 0 ? artists : (comic.artists ?? [])).join(", ") || undefined,
-      contentRating: toContentRating(comic.contentRating, comic.sfw_result),
+      artist:
+        (artists.length > 0 ? distinctArtists : (comic.artists ?? [])).join(", ") || undefined,
+      contentRating: toContentRating(comic.contentRating, comic.sfw_result, [
+        ...(comic.genres ?? []),
+        ...(comic.tags ?? []),
+      ]),
       rating,
       status: comic.originalStatus
         ? titleCase(comic.originalStatus)

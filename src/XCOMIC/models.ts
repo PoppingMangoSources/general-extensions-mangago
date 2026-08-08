@@ -371,6 +371,7 @@ export interface NamedNode {
 
 export interface ChapterData {
   id: string;
+  dbStatus?: string | null;
   serial?: number | null;
   chaNum?: number | null;
   volNum?: number | null;
@@ -443,6 +444,7 @@ export interface BrowsePager {
 
 export interface BrowseResponse {
   get_comic_browse_items?: ComicNode[] | null;
+  get_comic_browse_pager?: BrowsePager | null;
 }
 
 export interface ComicNodeResponse {
@@ -455,7 +457,7 @@ export interface ChapterListResult {
 }
 
 export interface ChapterListResponse {
-  get_comic_chapterList?: ChapterListResult | null;
+  get_comic_chapterList_uniqList?: ChapterListResult | null;
 }
 
 export interface GraphQLResponse<T> {
