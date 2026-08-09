@@ -125,7 +125,8 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     return {
       items: nodes
         .filter((node) => Boolean(node.data.urlCover?.trim()))
-        .map((node) => toDiscoverItem(node, itemType)),
+        .map((node) => toDiscoverItem(node, itemType))
+        .filter((item): item is DiscoverSectionItem => item !== undefined),
       metadata: response.get_comic_browse_pager?.next ? { page: page + 1 } : undefined,
     };
   }

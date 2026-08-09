@@ -110,7 +110,10 @@ export type CarouselItemType =
   | "simpleCarouselItem"
   | "chapterUpdatesCarouselItem";
 
-export const toDiscoverItem = (node: ComicNode, type: CarouselItemType): DiscoverSectionItem => {
+export const toDiscoverItem = (
+  node: ComicNode,
+  type: CarouselItemType,
+): DiscoverSectionItem | undefined => {
   const chapter = node.data.chapterNodes_last?.[0]?.data;
   if (type === "featuredCarouselItem") {
     const number = chapterNumber(chapter);
@@ -123,18 +126,16 @@ export const toDiscoverItem = (node: ComicNode, type: CarouselItemType): Discove
     };
   }
   if (type === "chapterUpdatesCarouselItem") {
-    if (chapter?.id) {
-      return {
-        type,
-        ...baseCard(node),
-        chapterId: chapter.urlPath ?? chapter.id,
-        subtitle: cardSubtitle(node.data),
-        publishDate: dateFromTimestamp(
-          chapter.dateModify ?? chapter.dateCreate ?? chapter.datePublic,
-        ),
-      };
-    }
-    return { type: "simpleCarouselItem", ...baseCard(node), subtitle: cardSubtitle(node.data) };
+    if (!chapter?.id) return undefined;
+    return {
+      type,
+      ...baseCard(node),
+      chapterId: chapter.urlPath ?? chapter.id,
+      subtitle: cardSubtitle(node.data),
+      publishDate: dateFromTimestamp(
+        chapter.dateModify ?? chapter.dateCreate ?? chapter.datePublic,
+      ),
+    };
   }
   return { type, ...baseCard(node), subtitle: cardSubtitle(node.data) };
 };
