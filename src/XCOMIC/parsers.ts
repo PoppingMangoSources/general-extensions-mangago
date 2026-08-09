@@ -21,6 +21,7 @@ import {
   type ChapterData,
   type ComicData,
   type ComicNode,
+  type LatestUploadsResult,
 } from "./models";
 
 const ADULT_GENRES = new Set(["adult", "hentai", "pornographic", "smut"]);
@@ -70,7 +71,9 @@ const chapterNumber = (chapter?: ChapterData | null): number | undefined => {
 };
 
 const formatChapter = (chapter?: ChapterData | null): string | undefined => {
-  const number = chapterNumber(chapter);
+  const number =
+    chapterNumber(chapter) ??
+    /(?:chapter|ch\.?)[\s_]*(\d+(?:\.\d+)?)/i.exec(chapter?.dname ?? "")?.[1];
   if (number == null) return undefined;
   return `Ch. ${String(number).replace(/\.0$/, "")}`;
 };
@@ -138,6 +141,90 @@ export const toDiscoverItem = (
     };
   }
   return { type, ...baseCard(node), subtitle: cardSubtitle(node.data) };
+};
+
+export const parseLatestUploads = (
+  input: string,
+): { items: DiscoverSectionItem[]; before?: number } => {
+  const parsed = JSON.parse(input) as { _entry?: unknown; _objs?: unknown };
+  if (typeof parsed._entry !== "string" || !Array.isArray(parsed._objs)) {
+    throw new Error("XCOMIC returned malformed latest-upload data");
+  }
+
+  const objects = parsed._objs;
+  const objectAt = (reference: string): unknown => {
+    const id = reference.replace(/[!~_]$/, "");
+    if (!/^[0-9a-z]+$/.test(id)) return undefined;
+    return objects[Number.parseInt(id, 36)];
+  };
+  const resolve = (reference: unknown, ancestors = new Set<number>()): unknown => {
+    if (typeof reference !== "string") return reference;
+    const id = reference.replace(/[!~_]$/, "");
+    if (!/^[0-9a-z]+$/.test(id)) return reference;
+    const index = Number.parseInt(id, 36);
+    if (!Number.isInteger(index) || index < 0 || index >= objects.length) return reference;
+    const value = objects[index];
+    if (value === null || typeof value !== "object") return value;
+    if (ancestors.has(index)) return undefined;
+    const nextAncestors = new Set(ancestors).add(index);
+    return Array.isArray(value)
+      ? value.map((item) => resolve(item, nextAncestors))
+      : Object.fromEntries(
+          Object.entries(value).map(([key, item]) => [key, resolve(item, nextAncestors)]),
+        );
+  };
+
+  const entry = objectAt(parsed._entry);
+  if (!entry || typeof entry !== "object" || !("loaders" in entry)) {
+    throw new Error("XCOMIC latest-upload loader was missing");
+  }
+  const loaders = objectAt(String(entry.loaders));
+  if (!loaders || typeof loaders !== "object") {
+    throw new Error("XCOMIC latest-upload loader was malformed");
+  }
+
+  let result: LatestUploadsResult | undefined;
+  for (const loaderReference of Object.values(loaders)) {
+    const loader = objectAt(String(loaderReference));
+    if (!loader || typeof loader !== "object" || !("select" in loader) || !("result" in loader)) {
+      continue;
+    }
+    const select = resolve(loader.select);
+    const candidate = resolve(loader.result) as LatestUploadsResult;
+    if (
+      select &&
+      typeof select === "object" &&
+      "before" in select &&
+      Array.isArray(candidate.items)
+    ) {
+      result = candidate;
+      break;
+    }
+  }
+  if (!result?.items) throw new Error("XCOMIC latest-upload results were missing");
+
+  return {
+    items: result.items
+      .map(({ comic, chapters }) =>
+        toDiscoverItem(
+          {
+            data: {
+              ...comic.data,
+              type:
+                comic.data.type ??
+                TYPE_OPTIONS.find((option) => comic.data.genres?.includes(option.id))?.id,
+              chapterNodes_last: chapters,
+            },
+          },
+          "chapterUpdatesCarouselItem",
+        ),
+      )
+      .filter((item): item is DiscoverSectionItem => item !== undefined),
+    before:
+      typeof result.before === "number" && Number.isFinite(result.before)
+        ? result.before
+        : undefined,
+  };
 };
 
 const nodeNames = (nodes?: Array<{ data?: { name?: string } | null } | null> | null): string[] =>

@@ -105,9 +105,11 @@ export class XComicInterceptor extends PaperbackInterceptor {
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
     if (response.headers?.["cf-mitigated"] === "challenge") {
+      const isDataEndpoint =
+        request.url.startsWith(API_URL) || request.url.includes("/q-data.json");
       throw new CloudflareError({
-        // The JSON endpoint cannot render the challenge interstitial.
-        url: request.url.startsWith(API_URL) ? `${DOMAIN}/` : request.url,
+        // Data endpoints cannot render the challenge interstitial.
+        url: isDataEndpoint ? `${DOMAIN}/` : request.url,
         method: request.method ?? "GET",
         headers: { "user-agent": await Application.getDefaultUserAgent() },
       });
@@ -158,6 +160,19 @@ export const fetchBrowse = async (select: BrowseSelect): Promise<BrowseResponse>
     fetchGraphQL<BrowseResponse>(BROWSE_PAGER_QUERY, { select }),
   ]);
   return { ...items, ...pager };
+};
+
+export const fetchLatestUploads = async (before?: number): Promise<string> => {
+  const url = `${DOMAIN}/latest/q-data.json${before != null ? `?before=${before}` : ""}`;
+  const [response, buffer] = await Application.scheduleRequest({
+    url,
+    method: "GET",
+    headers: { accept: "application/json" },
+  });
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error(`Request failed with status ${response.status}: ${url}`);
+  }
+  return Application.arrayBufferToUTF8String(buffer);
 };
 
 export const fetchComic = (id: string): Promise<ComicNodeResponse> =>

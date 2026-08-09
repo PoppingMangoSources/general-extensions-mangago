@@ -335,7 +335,8 @@ export const SORTING_OPTIONS: SortingOption[] = [
 ];
 
 export interface PageMetadata extends JSONObject {
-  page: number;
+  before?: number;
+  page?: number;
 }
 
 export interface SearchMetadata extends JSONObject {
@@ -408,8 +409,18 @@ export interface ChapterData {
   groupNodes?: Array<NamedNode | null> | null;
 }
 
-interface ChapterNode {
+export interface ChapterNode {
   data: ChapterData;
+}
+
+export interface LatestUploadItem {
+  comic: ComicNode;
+  chapters: ChapterNode[];
+}
+
+export interface LatestUploadsResult {
+  before?: number | null;
+  items?: LatestUploadItem[] | null;
 }
 
 export interface ComicData {

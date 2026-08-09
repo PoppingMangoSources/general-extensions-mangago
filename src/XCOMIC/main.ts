@@ -43,10 +43,12 @@ import {
   fetchChapterHtml,
   fetchChapters,
   fetchComic,
+  fetchLatestUploads,
   XComicInterceptor,
 } from "./network";
 import {
   parseChapterDetails,
+  parseLatestUploads,
   toAbsoluteUrl,
   toChapter,
   toDiscoverItem,
@@ -102,7 +104,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       case SECTIONS.TOP_RATED:
         return this.getBrowseSection(metadata, "field_score", "featuredCarouselItem");
       case SECTIONS.LATEST_UPLOADS:
-        return this.getBrowseSection(metadata, "field_update", "chapterUpdatesCarouselItem");
+        return this.getLatestUploadsSection(metadata);
       case SECTIONS.RECENTLY_ADDED:
         return this.getBrowseSection(metadata, "field_create", "simpleCarouselItem");
       case SECTIONS.MOST_CHAPTERS:
@@ -112,6 +114,16 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       default:
         return { items: [] };
     }
+  }
+
+  private async getLatestUploadsSection(
+    metadata: PageMetadata | undefined,
+  ): Promise<PagedResults<DiscoverSectionItem>> {
+    const result = parseLatestUploads(await fetchLatestUploads(metadata?.before));
+    return {
+      items: result.items,
+      metadata: result.before != null ? { before: result.before } : undefined,
+    };
   }
 
   private async getBrowseSection(

@@ -40,9 +40,12 @@ export async function runTests(logger: TestLogger) {
         (item) =>
           item.type === "chapterUpdatesCarouselItem" &&
           Boolean(item.mangaId) &&
-          Boolean(item.chapterId),
+          Boolean(item.chapterId) &&
+          item.publishDate instanceof Date,
       ),
     ).to.equal(true);
+    const publishTimes = result.items.map((item) => item.publishDate?.getTime() ?? 0);
+    expect(publishTimes).to.deep.equal([...publishTimes].sort((a, b) => b - a));
 
     if (result.metadata) {
       const nextPage = await XCOMIC.getDiscoverSectionItems(
