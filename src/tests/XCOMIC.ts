@@ -1,8 +1,9 @@
 import { type TestLogger } from "@paperback/types";
 import { expect } from "chai";
 
+import { getPreferences } from "../XCOMIC/forms/settings.js";
 import { XCOMIC } from "../XCOMIC/main.js";
-import { DISCOVER_SECTIONS, SECTIONS } from "../XCOMIC/models.js";
+import { DEFAULT_CONTENT_RATINGS, DISCOVER_SECTIONS, SECTIONS } from "../XCOMIC/models.js";
 import sourceInfo from "../XCOMIC/pbconfig.js";
 import { TestSuite, registerDefaultTests } from "./suite.js";
 
@@ -27,6 +28,16 @@ export async function runTests(logger: TestLogger) {
       incGenresMode: "or",
       excGenresMode: "and",
     });
+  });
+
+  suite.test("all content ratings are enabled by default", async () => {
+    expect(DEFAULT_CONTENT_RATINGS).to.deep.equal([
+      "safe",
+      "suggestive",
+      "erotica",
+      "pornographic",
+    ]);
+    expect(getPreferences().contentRatings).to.deep.equal(DEFAULT_CONTENT_RATINGS);
   });
 
   suite.test("latest uploads contain valid chapter cards", async () => {
@@ -72,7 +83,7 @@ export async function runTests(logger: TestLogger) {
     const numbers = chapters.map((chapter) => chapter.chapNum);
 
     expect(chapters.length).to.be.greaterThan(0);
-    expect(chapters.every((chapter) => chapter.volume == null)).to.equal(true);
+    expect(chapters.every((chapter) => chapter.volume === 0)).to.equal(true);
     expect(numbers).to.deep.equal([...numbers].sort((a, b) => b - a));
     expect(chapters.some((chapter) => chapter.title?.startsWith("Volume "))).to.equal(true);
   });

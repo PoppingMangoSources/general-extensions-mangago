@@ -95,7 +95,12 @@ export interface XComicPreferences {
   types: SeriesType[];
 }
 
-export const DEFAULT_CONTENT_RATINGS: ContentPreferenceRating[] = ["safe", "suggestive"];
+export const DEFAULT_CONTENT_RATINGS: ContentPreferenceRating[] = [
+  "safe",
+  "suggestive",
+  "erotica",
+  "pornographic",
+];
 export const DEFAULT_CONTENT_TYPES: SeriesType[] = ["manga", "manhwa", "manhua"];
 
 export const CONTENT_RATING_OPTIONS: Array<{ id: ContentPreferenceRating; title: string }> = [

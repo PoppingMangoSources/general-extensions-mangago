@@ -355,6 +355,7 @@ export const toChapter = (data: ChapterData, sourceManga: SourceManga): Chapter 
     chapterId: (data.urlPath ?? `/comic/chapter/${data.id}`).replace(SAFE_ID_REGEX, "-"),
     sourceManga,
     chapNum: number,
+    volume: 0,
     title: title || undefined,
     langCode,
     publishDate: dateFromTimestamp(data.dateModify ?? data.dateCreate ?? data.datePublic),
