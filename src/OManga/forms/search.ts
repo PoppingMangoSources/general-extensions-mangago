@@ -6,7 +6,7 @@ import {
   InputRow,
   Section,
   SelectRow,
-  ToggleRow,
+  SelectSection,
   TriStateSelectRow,
   type SearchQuery,
   type Tag,
@@ -14,6 +14,7 @@ import {
 
 import {
   AGE_RATING_OPTIONS,
+  GENRE_MATCH_OPTIONS,
   GENRE_OPTIONS,
   MIN_RATING_OPTIONS,
   STATUS_OPTIONS,
@@ -47,7 +48,7 @@ const pickState = (record: TriState, state: "included" | "excluded"): string[] =
 
 export class OMangaAdvancedSearchForm extends AdvancedSearchForm {
   private genres: TriState;
-  private genreStrict: boolean;
+  private genreMatch: string[];
   private types: TriState;
   private statuses: string[];
   private ageRatings: string[];
@@ -61,7 +62,7 @@ export class OMangaAdvancedSearchForm extends AdvancedSearchForm {
     super();
     const meta = searchQuery.metadata ?? {};
     this.genres = toTriState(meta.genres, meta.excludeGenres);
-    this.genreStrict = meta.genreStrict ?? false;
+    this.genreMatch = [meta.genreStrict ? "and" : "or"];
     this.types = toTriState(meta.types, meta.excludeTypes);
     this.statuses = meta.statuses ?? [];
     this.ageRatings = meta.ageRatings ?? [];
@@ -87,15 +88,15 @@ export class OMangaAdvancedSearchForm extends AdvancedSearchForm {
             "handleGenresChange",
           ),
         }),
-        ToggleRow("genre_strict", {
-          title: "Match All Genres",
-          value: this.genreStrict,
-          onValueChange: Application.Selector(
-            this as OMangaAdvancedSearchForm,
-            "handleGenreStrictChange",
-          ),
-        }),
       ]),
+      SelectSection(this, {
+        id: "genre_match",
+        layout: "flow",
+        value: this.genreMatch,
+        items: GENRE_MATCH_OPTIONS,
+        minItemCount: 1,
+        maxItemCount: 1,
+      }),
       Section({ id: "types", footer: "Tap once to require a type, twice to exclude it." }, [
         TriStateSelectRow("types", {
           title: "Type",
@@ -198,10 +199,6 @@ export class OMangaAdvancedSearchForm extends AdvancedSearchForm {
     this.genres = value;
   }
 
-  async handleGenreStrictChange(value: boolean): Promise<void> {
-    this.genreStrict = value;
-  }
-
   async handleTypesChange(value: TriState): Promise<void> {
     this.types = value;
   }
@@ -243,7 +240,7 @@ export class OMangaAdvancedSearchForm extends AdvancedSearchForm {
 
     if (genres.length > 0) result.genres = genres;
     if (excludeGenres.length > 0) result.excludeGenres = excludeGenres;
-    if (this.genreStrict) result.genreStrict = true;
+    if (this.genreMatch[0] === "and") result.genreStrict = true;
     if (types.length > 0) result.types = types;
     if (excludeTypes.length > 0) result.excludeTypes = excludeTypes;
     if (this.statuses.length > 0) result.statuses = this.statuses;

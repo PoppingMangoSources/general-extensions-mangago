@@ -10,6 +10,7 @@ import {
   NavigationRow,
   Section,
   SelectRow,
+  SelectSection,
   TriStateSelectRow,
   type SearchQuery,
 } from "@paperback/types";
@@ -156,19 +157,15 @@ export class MvlempyrAdvancedSearchForm extends AdvancedSearchForm {
             "handleGenresChange",
           ),
         }),
-        SelectRow("genre_match", {
-          title: "Genre match",
-          layout: "flow",
-          value: this.genreMatch,
-          items: GENRE_MATCH_OPTIONS,
-          minItemCount: 1,
-          maxItemCount: 1,
-          onValueChange: Application.Selector(
-            this as MvlempyrAdvancedSearchForm,
-            "handleGenreMatchChange",
-          ),
-        }),
       ]),
+      SelectSection(this, {
+        id: "genre_match",
+        layout: "flow",
+        value: this.genreMatch,
+        items: GENRE_MATCH_OPTIONS,
+        minItemCount: 1,
+        maxItemCount: 1,
+      }),
       Section("status", [
         SelectRow("status", {
           title: "Status",
@@ -214,10 +211,6 @@ export class MvlempyrAdvancedSearchForm extends AdvancedSearchForm {
 
   async handleGenresChange(value: TriState): Promise<void> {
     this.genres = value;
-  }
-
-  async handleGenreMatchChange(value: string[]): Promise<void> {
-    this.genreMatch = value;
   }
 
   async handleStatusesChange(value: string[]): Promise<void> {

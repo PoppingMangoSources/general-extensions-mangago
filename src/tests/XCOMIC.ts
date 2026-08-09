@@ -10,6 +10,25 @@ export async function runTests(logger: TestLogger) {
   const suite = new TestSuite("XCOMIC tests", logger);
   registerDefaultTests(suite, XCOMIC, sourceInfo);
 
+  suite.test("genre modes use full-width AND/OR controls", async () => {
+    const form = await XCOMIC.getAdvancedSearchForm({
+      title: "",
+      metadata: { incGenresMode: "or", excGenresMode: "and" },
+    });
+    const sections = form
+      .getSections()
+      .filter((section) => section.id === "include_mode" || section.id === "exclude_mode");
+    expect(sections.map((section) => section.type)).to.deep.equal(["flowSection", "flowSection"]);
+    expect(sections.map((section) => section.items.map((item) => item.id))).to.deep.equal([
+      ["and", "or"],
+      ["and", "or"],
+    ]);
+    expect(form.getSearchQueryMetadata()).to.deep.include({
+      incGenresMode: "or",
+      excGenresMode: "and",
+    });
+  });
+
   suite.test("latest uploads contain valid chapter cards", async () => {
     const result = await XCOMIC.getDiscoverSectionItems(
       DISCOVER_SECTIONS[SECTIONS.LATEST_UPLOADS],

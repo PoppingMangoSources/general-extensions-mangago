@@ -6,6 +6,7 @@ import {
   InputRow,
   Section,
   SelectRow,
+  SelectSection,
   TriStateSelectRow,
   type SearchQuery,
 } from "@paperback/types";
@@ -34,9 +35,9 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
   private chapCount: string;
   private contentRatings: ContentPreferenceRating[];
   private demographics: Demographic[];
-  private excGenresMode: GenreMode;
+  private excGenresMode: GenreMode[];
   private genres: TriState;
-  private incGenresMode: GenreMode;
+  private incGenresMode: GenreMode[];
   private originalLanguages: string[];
   private originalStatus: WorkStatus[];
   private tags: TriState;
@@ -66,9 +67,9 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
     this.chapCount = metadata.chapCount;
     this.contentRatings = metadata.contentRatings;
     this.demographics = metadata.demographics;
-    this.excGenresMode = metadata.excGenresMode;
+    this.excGenresMode = [metadata.excGenresMode];
     this.genres = metadata.genres;
-    this.incGenresMode = metadata.incGenresMode;
+    this.incGenresMode = [metadata.incGenresMode];
     this.originalLanguages = metadata.originalLanguages;
     this.originalStatus = metadata.originalStatus;
     this.tags = metadata.tags;
@@ -134,31 +135,25 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           allowEmptySelection: true,
           onValueChange: Application.Selector(this as XComicAdvancedSearchForm, "handleTags"),
         }),
-        SelectRow("include_mode", {
-          title: "Include mode",
-          layout: "flow",
-          value: [this.incGenresMode],
-          items: MODE_OPTIONS,
-          minItemCount: 1,
-          maxItemCount: 1,
-          onValueChange: Application.Selector(
-            this as XComicAdvancedSearchForm,
-            "handleIncludeMode",
-          ),
-        }),
-        SelectRow("exclude_mode", {
-          title: "Exclude mode",
-          layout: "flow",
-          value: [this.excGenresMode],
-          items: MODE_OPTIONS,
-          minItemCount: 1,
-          maxItemCount: 1,
-          onValueChange: Application.Selector(
-            this as XComicAdvancedSearchForm,
-            "handleExcludeMode",
-          ),
-        }),
       ]),
+      SelectSection(this, {
+        id: "include_mode",
+        header: "Include mode",
+        layout: "flow",
+        value: this.incGenresMode,
+        items: MODE_OPTIONS,
+        minItemCount: 1,
+        maxItemCount: 1,
+      }),
+      SelectSection(this, {
+        id: "exclude_mode",
+        header: "Exclude mode",
+        layout: "flow",
+        value: this.excGenresMode,
+        items: MODE_OPTIONS,
+        minItemCount: 1,
+        maxItemCount: 1,
+      }),
       Section("status", [
         SelectRow("original_status", {
           title: "Original work status",
@@ -251,14 +246,6 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
     this.tags = value;
   }
 
-  async handleIncludeMode(value: string[]): Promise<void> {
-    this.incGenresMode = (value[0] as GenreMode | undefined) ?? "and";
-  }
-
-  async handleExcludeMode(value: string[]): Promise<void> {
-    this.excGenresMode = (value[0] as GenreMode | undefined) ?? "or";
-  }
-
   async handleOriginalStatus(value: string[]): Promise<void> {
     this.originalStatus = value as WorkStatus[];
   }
@@ -291,8 +278,8 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
     if (this.demographics.length) metadata.demographics = this.demographics;
     if (Object.keys(this.genres).length) metadata.genres = this.genres;
     if (Object.keys(this.tags).length) metadata.tags = this.tags;
-    if (this.incGenresMode !== "and") metadata.incGenresMode = this.incGenresMode;
-    if (this.excGenresMode !== "or") metadata.excGenresMode = this.excGenresMode;
+    if (this.incGenresMode[0] !== "and") metadata.incGenresMode = this.incGenresMode[0];
+    if (this.excGenresMode[0] !== "or") metadata.excGenresMode = this.excGenresMode[0];
     if (this.originalStatus.length) metadata.originalStatus = this.originalStatus;
     if (this.uploadStatus.length) metadata.uploadStatus = this.uploadStatus;
     if (this.chapCount) metadata.chapCount = this.chapCount;

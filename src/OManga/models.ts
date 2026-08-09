@@ -190,6 +190,11 @@ export const GENRE_OPTIONS: OptionItem[] = toOptions([
   "Yuri",
 ]);
 
+export const GENRE_MATCH_OPTIONS = [
+  { id: "and", title: "AND" },
+  { id: "or", title: "OR" },
+];
+
 export const TYPE_OPTIONS: OptionItem[] = toOptions([
   "Manga",
   "Manhwa",

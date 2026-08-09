@@ -133,6 +133,14 @@ export async function runTests(logger: TestLogger) {
     },
   );
 
+  suite.test("genre match uses full-width AND/OR controls", async () => {
+    const form = await OManga.getAdvancedSearchForm({ title: "", metadata: { genreStrict: true } });
+    const section = form.getSections().find((candidate) => candidate.id === "genre_match");
+    expect(section?.type).to.equal("flowSection");
+    expect(section?.items.map((item) => item.id)).to.deep.equal(["and", "or"]);
+    expect(form.getSearchQueryMetadata()).to.deep.include({ genreStrict: true });
+  });
+
   registerDefaultTests(suite, OManga, sourceInfo);
 
   await suite.run();
