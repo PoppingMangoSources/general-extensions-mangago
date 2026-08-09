@@ -398,7 +398,6 @@ export interface ChapterData {
   dbStatus?: string | null;
   serial?: number | null;
   chaNum?: number | null;
-  volNum?: number | null;
   dname?: string | null;
   title?: string | null;
   urlPath?: string | null;

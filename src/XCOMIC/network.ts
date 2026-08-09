@@ -75,7 +75,7 @@ query get_comic_chapterList_uniqList($select: Select_Comic_ChapterList_UniqList)
     paging { next }
     items {
       data {
-        id dbStatus serial chaNum volNum
+        id dbStatus serial chaNum
         dname title urlPath
         dateCreate dateModify datePublic
         userNode { data { name } }

@@ -66,5 +66,16 @@ export async function runTests(logger: TestLogger) {
     }
   });
 
+  suite.test("globally numbered chapters are not regrouped by volume", async () => {
+    const manga = await XCOMIC.getMangaDetails("x6bbg6");
+    const chapters = await XCOMIC.getChapters(manga);
+    const numbers = chapters.map((chapter) => chapter.chapNum);
+
+    expect(chapters.length).to.be.greaterThan(0);
+    expect(chapters.every((chapter) => chapter.volume == null)).to.equal(true);
+    expect(numbers).to.deep.equal([...numbers].sort((a, b) => b - a));
+    expect(chapters.some((chapter) => chapter.title?.startsWith("Volume "))).to.equal(true);
+  });
+
   await suite.run();
 }
