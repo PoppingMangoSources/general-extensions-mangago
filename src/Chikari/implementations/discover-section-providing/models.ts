@@ -8,14 +8,25 @@ import type { Period, SeriesType } from "../shared/models";
 export const SECTIONS = {
   FEATURED: "featured",
   TRENDING: "trending",
+  TRENDING_NOVELS: "trending-novels",
   RECENTLY_ADDED: "recently-added",
   RECENTLY_UPDATED: "recently-updated",
+  RECENTLY_UPDATED_NOVELS: "recently-updated-novels",
   MOST_BOOKMARKED: "most-bookmarked",
+  MOST_BOOKMARKED_NOVELS: "most-bookmarked-novels",
   POPULAR: "popular",
   TOP_RATED: "top-rated",
 } as const;
 
 export type SectionId = (typeof SECTIONS)[keyof typeof SECTIONS];
+
+export const SECTION_SCHEMA_VERSION = 2;
+
+export const NOVEL_SECTION_IDS: SectionId[] = [
+  SECTIONS.TRENDING_NOVELS,
+  SECTIONS.RECENTLY_UPDATED_NOVELS,
+  SECTIONS.MOST_BOOKMARKED_NOVELS,
+];
 
 export const SECTION_DEFINITIONS: Record<SectionId, DiscoverSection> = {
   [SECTIONS.FEATURED]: {
@@ -25,22 +36,37 @@ export const SECTION_DEFINITIONS: Record<SectionId, DiscoverSection> = {
   },
   [SECTIONS.TRENDING]: {
     id: SECTIONS.TRENDING,
-    title: "Trending",
+    title: "Trending Comics",
+    type: DiscoverSectionType.genres,
+  },
+  [SECTIONS.TRENDING_NOVELS]: {
+    id: SECTIONS.TRENDING_NOVELS,
+    title: "Trending Novels",
     type: DiscoverSectionType.genres,
   },
   [SECTIONS.RECENTLY_ADDED]: {
     id: SECTIONS.RECENTLY_ADDED,
-    title: "Recently Added",
+    title: "Recently Added Comics",
     type: DiscoverSectionType.simpleCarousel,
   },
   [SECTIONS.RECENTLY_UPDATED]: {
     id: SECTIONS.RECENTLY_UPDATED,
-    title: "Recently Updated",
+    title: "Recently Updated Comics",
+    type: DiscoverSectionType.chapterUpdates,
+  },
+  [SECTIONS.RECENTLY_UPDATED_NOVELS]: {
+    id: SECTIONS.RECENTLY_UPDATED_NOVELS,
+    title: "Recently Updated Novels",
     type: DiscoverSectionType.chapterUpdates,
   },
   [SECTIONS.MOST_BOOKMARKED]: {
     id: SECTIONS.MOST_BOOKMARKED,
-    title: "Most Bookmarked",
+    title: "Most Bookmarked Comics",
+    type: DiscoverSectionType.genres,
+  },
+  [SECTIONS.MOST_BOOKMARKED_NOVELS]: {
+    id: SECTIONS.MOST_BOOKMARKED_NOVELS,
+    title: "Most Bookmarked Novels",
     type: DiscoverSectionType.genres,
   },
   [SECTIONS.POPULAR]: {
@@ -57,10 +83,13 @@ export const SECTION_DEFINITIONS: Record<SectionId, DiscoverSection> = {
 
 export const SECTION_OPTIONS: Array<{ id: SectionId; title: string }> = [
   { id: SECTIONS.FEATURED, title: "Popular" },
-  { id: SECTIONS.TRENDING, title: "Trending" },
-  { id: SECTIONS.RECENTLY_ADDED, title: "Recently Added" },
-  { id: SECTIONS.RECENTLY_UPDATED, title: "Recently Updated" },
-  { id: SECTIONS.MOST_BOOKMARKED, title: "Most Bookmarked" },
+  { id: SECTIONS.TRENDING, title: "Trending Comics" },
+  { id: SECTIONS.TRENDING_NOVELS, title: "Trending Novels" },
+  { id: SECTIONS.RECENTLY_ADDED, title: "Recently Added Comics" },
+  { id: SECTIONS.RECENTLY_UPDATED, title: "Recently Updated Comics" },
+  { id: SECTIONS.RECENTLY_UPDATED_NOVELS, title: "Recently Updated Novels" },
+  { id: SECTIONS.MOST_BOOKMARKED, title: "Most Bookmarked Comics" },
+  { id: SECTIONS.MOST_BOOKMARKED_NOVELS, title: "Most Bookmarked Novels" },
   { id: SECTIONS.POPULAR, title: "Popular by Type" },
   { id: SECTIONS.TOP_RATED, title: "Top Rated by Type" },
 ];
@@ -77,6 +106,7 @@ export const TYPE_FILTERS: Array<{ id: SeriesType; title: string }> = [
   { id: "manga", title: "Manga" },
   { id: "manhwa", title: "Manhwa" },
   { id: "manhua", title: "Manhua" },
+  { id: "novel", title: "Novel" },
 ];
 
 export interface FilterItem {

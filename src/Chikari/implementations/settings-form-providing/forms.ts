@@ -11,7 +11,11 @@ import {
   type Tag,
 } from "@paperback/types";
 
-import { SECTION_OPTIONS, type SectionId } from "../discover-section-providing/models";
+import {
+  SECTION_OPTIONS,
+  SECTION_SCHEMA_VERSION,
+  type SectionId,
+} from "../discover-section-providing/models";
 import {
   STATE_KEYS,
   type ChikariPreferences,
@@ -90,7 +94,7 @@ export class ChikariSettingsForm extends Form {
     return [
       Section("content", [
         SelectRow("content_types", {
-          title: "Content types",
+          title: "Comic types",
           layout: "flow",
           value: this.contentTypes,
           items: CONTENT_TYPE_OPTIONS,
@@ -192,6 +196,7 @@ export class ChikariSettingsForm extends Form {
   async handleVisibleSectionsChange(value: string[]): Promise<void> {
     this.visibleSections = value as SectionId[];
     Application.setState(this.visibleSections, STATE_KEYS.VISIBLE_SECTIONS);
+    Application.setState(SECTION_SCHEMA_VERSION, STATE_KEYS.SECTIONS_VERSION);
     Application.invalidateDiscoverSections();
     this.reloadForm();
   }

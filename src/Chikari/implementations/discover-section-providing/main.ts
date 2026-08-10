@@ -44,12 +44,18 @@ export class DiscoverProvider {
         return this.getFeaturedSection();
       case SECTIONS.TRENDING:
         return this.getTrendingSection();
+      case SECTIONS.TRENDING_NOVELS:
+        return this.getTrendingNovelsSection();
       case SECTIONS.RECENTLY_ADDED:
         return this.getRecentlyAddedSection();
       case SECTIONS.RECENTLY_UPDATED:
         return this.getRecentlyUpdatedSection();
+      case SECTIONS.RECENTLY_UPDATED_NOVELS:
+        return this.getRecentlyUpdatedNovelsSection();
       case SECTIONS.MOST_BOOKMARKED:
         return this.getMostBookmarkedSection();
+      case SECTIONS.MOST_BOOKMARKED_NOVELS:
+        return this.getMostBookmarkedNovelsSection();
       case SECTIONS.POPULAR:
         return this.getPopularSection();
       case SECTIONS.TOP_RATED:
@@ -71,6 +77,10 @@ export class DiscoverProvider {
     return { items: toPeriodFilterItems(PERIOD_FILTERS, "trending") };
   }
 
+  async getTrendingNovelsSection(): Promise<PagedResults<DiscoverSectionItem>> {
+    return { items: toPeriodFilterItems(PERIOD_FILTERS, "trending", ["novel"]) };
+  }
+
   async getRecentlyAddedSection(
     this: ChikariImplementation,
   ): Promise<PagedResults<DiscoverSectionItem>> {
@@ -90,9 +100,26 @@ export class DiscoverProvider {
     };
   }
 
+  async getRecentlyUpdatedNovelsSection(
+    this: ChikariImplementation,
+  ): Promise<PagedResults<DiscoverSectionItem>> {
+    return {
+      items: findHomeRow(await this.getNovelHomeData(), "recently-updated").flatMap((series) => {
+        const item = toRecentlyUpdatedItem(series, "novel");
+        return item ? [item] : [];
+      }),
+    };
+  }
+
   async getMostBookmarkedSection(): Promise<PagedResults<DiscoverSectionItem>> {
     return {
       items: toPeriodFilterItems(BOOKMARK_PERIOD_FILTERS, "most_bookmarked"),
+    };
+  }
+
+  async getMostBookmarkedNovelsSection(): Promise<PagedResults<DiscoverSectionItem>> {
+    return {
+      items: toPeriodFilterItems(BOOKMARK_PERIOD_FILTERS, "most_bookmarked", ["novel"]),
     };
   }
 

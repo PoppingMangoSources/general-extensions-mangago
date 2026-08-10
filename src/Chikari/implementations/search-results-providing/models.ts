@@ -32,6 +32,7 @@ export const TYPE_OPTIONS: Array<{ id: SeriesType; title: string }> = [
   { id: "manhwa", title: "Manhwa" },
   { id: "manhua", title: "Manhua" },
   { id: "oel", title: "OEL" },
+  { id: "novel", title: "Novel" },
 ];
 
 export const STATUS_OPTIONS: Array<{ id: SeriesStatus; title: string }> = [

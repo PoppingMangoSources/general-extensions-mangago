@@ -20,12 +20,21 @@ import { getPreferences } from "./implementations/settings-form-providing/main";
 import type { HomeResponse } from "./implementations/shared/models";
 import { toGenreOptions, toTagOptions } from "./implementations/shared/parsers";
 import { applyMixins } from "./implementations/shared/utils";
-import { ChikariInterceptor, fetchGenres, fetchHome, fetchTags } from "./services/network";
+import {
+  ChikariInterceptor,
+  fetchGenres,
+  fetchHome,
+  fetchNovelGenres,
+  fetchNovelHome,
+  fetchNovelTags,
+  fetchTags,
+} from "./services/network";
 
 export interface ChikariImplementation
   extends SearchProvider, MangaProvider, ChapterProvider, DiscoverProvider, SettingsFormProvider {
   getGenreOptions(): Promise<Tag[]>;
   getHomeData(): Promise<HomeResponse>;
+  getNovelHomeData(): Promise<HomeResponse>;
   getTagOptions(): Promise<Tag[]>;
 }
 
@@ -42,6 +51,7 @@ class ChikariExtension implements Omit<Extension, keyof MangaProviding> {
   private genresAdult?: boolean;
   private genresPromise?: Promise<Tag[]>;
   private homePromise?: Promise<HomeResponse>;
+  private novelHomePromise?: Promise<HomeResponse>;
   private tagsAdult?: boolean;
   private tagsPromise?: Promise<Tag[]>;
 
@@ -62,6 +72,7 @@ class ChikariExtension implements Omit<Extension, keyof MangaProviding> {
     }
     this.genresPromise = undefined;
     this.homePromise = undefined;
+    this.novelHomePromise = undefined;
     this.tagsPromise = undefined;
   }
 
@@ -74,13 +85,24 @@ class ChikariExtension implements Omit<Extension, keyof MangaProviding> {
     }
   }
 
+  async getNovelHomeData(): Promise<HomeResponse> {
+    const request = (this.novelHomePromise ??= fetchNovelHome(getPreferences().adult));
+    try {
+      return await request;
+    } finally {
+      if (this.novelHomePromise === request) this.novelHomePromise = undefined;
+    }
+  }
+
   getGenreOptions(): Promise<Tag[]> {
     const adult = getPreferences().adult;
     if (adult !== this.genresAdult) {
       this.genresAdult = adult;
       this.genresPromise = undefined;
     }
-    return (this.genresPromise ??= fetchGenres(adult).then(toGenreOptions));
+    return (this.genresPromise ??= Promise.all([fetchGenres(adult), fetchNovelGenres(adult)]).then(
+      (genres) => toGenreOptions(genres.flat()),
+    ));
   }
 
   getTagOptions(): Promise<Tag[]> {
@@ -89,7 +111,9 @@ class ChikariExtension implements Omit<Extension, keyof MangaProviding> {
       this.tagsAdult = adult;
       this.tagsPromise = undefined;
     }
-    return (this.tagsPromise ??= fetchTags(adult).then(toTagOptions));
+    return (this.tagsPromise ??= Promise.all([fetchTags(adult), fetchNovelTags(adult)]).then(
+      (tags) => toTagOptions(tags.flat()),
+    ));
   }
 }
 

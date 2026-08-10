@@ -3,13 +3,13 @@
 
 import type { SearchResultItem } from "@paperback/types";
 
-import type { SeriesDetails, SeriesItem } from "../shared/models";
+import type { Medium, SeriesDetails, SeriesItem } from "../shared/models";
 import {
+  encodeMangaId,
   formatCoverUrl,
   formatRating,
   formatSeriesType,
   formatViews,
-  sanitizeId,
   toContentRating,
 } from "../shared/parsers";
 import type { TriState } from "./models";
@@ -22,16 +22,19 @@ export const pickTriState = (
     .filter(([, value]) => value === state)
     .map(([id]) => id);
 
-export const toSearchResultItem = (series: SeriesItem): SearchResultItem => {
+export const toSearchResultItem = (
+  series: SeriesItem,
+  medium: Medium = series.medium === "novel" ? "novel" : "comic",
+): SearchResultItem => {
   const subtitle = [
-    formatSeriesType(series.type),
+    formatSeriesType(series.type, medium),
     formatRating(series.rating),
     formatViews(series.views),
   ]
     .filter((value): value is string => Boolean(value))
     .join(" • ");
   return {
-    mangaId: sanitizeId(series.slug),
+    mangaId: encodeMangaId(series.slug, medium),
     title: series.title,
     imageUrl: formatCoverUrl(series.cover_url),
     subtitle: subtitle || undefined,
@@ -39,16 +42,19 @@ export const toSearchResultItem = (series: SeriesItem): SearchResultItem => {
   };
 };
 
-export const detailsToSearchResultItem = (series: SeriesDetails): SearchResultItem => {
+export const detailsToSearchResultItem = (
+  series: SeriesDetails,
+  medium: Medium = series.medium === "novel" ? "novel" : "comic",
+): SearchResultItem => {
   const subtitle = [
-    formatSeriesType(series.type),
+    formatSeriesType(series.type, medium),
     formatRating(series.rating),
     formatViews(series.views),
   ]
     .filter((value): value is string => Boolean(value))
     .join(" • ");
   return {
-    mangaId: sanitizeId(series.slug),
+    mangaId: encodeMangaId(series.slug, medium),
     title: series.title,
     imageUrl: formatCoverUrl(series.cover_url),
     subtitle: subtitle || undefined,

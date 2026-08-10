@@ -18,6 +18,7 @@ import {
   type ChikariPreferences,
   type GenreOption,
   type HomeResponse,
+  type NovelChapterDetailsResponse,
   type Period,
   type SeriesDetails,
   type SeriesListResponse,
@@ -109,6 +110,8 @@ const apiUrl = (...segments: string[]): URL => {
   return url;
 };
 
+const novelApiUrl = (...segments: string[]): URL => apiUrl("novels", ...segments);
+
 const addPreferences = (url: URL, preferences: ChikariPreferences): URL => {
   url
     .setQueryItem("adult", String(preferences.adult))
@@ -126,11 +129,20 @@ const addPreferences = (url: URL, preferences: ChikariPreferences): URL => {
 export const fetchHome = async (preferences: ChikariPreferences): Promise<HomeResponse> =>
   fetchApi<HomeResponse>(addPreferences(apiUrl("home"), preferences).toString());
 
+export const fetchNovelHome = async (adult: boolean): Promise<HomeResponse> =>
+  fetchApi<HomeResponse>(novelApiUrl("home").setQueryItem("adult", String(adult)).toString());
+
 export const fetchGenres = async (adult: boolean): Promise<GenreOption[]> =>
   fetchApi<GenreOption[]>(apiUrl("genres").setQueryItem("adult", String(adult)).toString());
 
+export const fetchNovelGenres = async (adult: boolean): Promise<GenreOption[]> =>
+  fetchApi<GenreOption[]>(novelApiUrl("genres").setQueryItem("adult", String(adult)).toString());
+
 export const fetchTags = async (adult: boolean): Promise<TagOption[]> =>
   fetchApi<TagOption[]>(apiUrl("tags").setQueryItem("adult", String(adult)).toString());
+
+export const fetchNovelTags = async (adult: boolean): Promise<TagOption[]> =>
+  fetchApi<TagOption[]>(novelApiUrl("tags").setQueryItem("adult", String(adult)).toString());
 
 export interface SeriesQueryOptions {
   contentRatings: ChikariPreferences["contentRatings"];
@@ -180,8 +192,39 @@ const buildSeriesUrl = (options: SeriesQueryOptions): string => {
 export const fetchSeries = async (options: SeriesQueryOptions): Promise<SeriesListResponse> =>
   fetchApi<SeriesListResponse>(buildSeriesUrl(options));
 
+export type NovelQueryOptions = Omit<SeriesQueryOptions, "contentRatings" | "types">;
+
+const buildNovelUrl = (options: NovelQueryOptions): string => {
+  const url = novelApiUrl()
+    .setQueryItem("sort", options.sort)
+    .setQueryItem("adult", String(options.adult))
+    .setQueryItem("limit", String(options.limit ?? PAGE_SIZE))
+    .setQueryItem("offset", String(options.offset));
+
+  if (options.query) url.setQueryItem("q", options.query);
+  if (options.genres.length > 0) url.setQueryItem("genre", options.genres);
+  if (options.excludedGenres.length > 0) {
+    url.setQueryItem("genre_exclude", options.excludedGenres);
+  }
+  if (options.tags.length > 0) url.setQueryItem("tag", options.tags);
+  if (options.excludedTags.length > 0) url.setQueryItem("tag_exclude", options.excludedTags);
+  if (options.statuses.length > 0) url.setQueryItem("status", options.statuses);
+  if (options.years.length > 0) url.setQueryItem("year", options.years);
+  if (options.minChapters !== undefined) {
+    url.setQueryItem("min_chapters", String(options.minChapters));
+  }
+  if (options.period) url.setQueryItem("period", options.period);
+  return url.toString();
+};
+
+export const fetchNovels = async (options: NovelQueryOptions): Promise<SeriesListResponse> =>
+  fetchApi<SeriesListResponse>(buildNovelUrl(options));
+
 export const fetchSeriesDetails = async (slug: string): Promise<SeriesDetails> =>
   fetchApi<SeriesDetails>(apiUrl("series", slug).toString());
+
+export const fetchNovelDetails = async (slug: string): Promise<SeriesDetails> =>
+  fetchApi<SeriesDetails>(novelApiUrl(slug).toString());
 
 export const fetchChapters = async (slug: string): Promise<ChapterListResponse> =>
   fetchApi<ChapterListResponse>(
@@ -192,8 +235,37 @@ export const fetchChapters = async (slug: string): Promise<ChapterListResponse> 
       .toString(),
   );
 
+export const fetchNovelChapters = async (slug: string): Promise<ChapterListResponse> => {
+  const items: ChapterListResponse["items"] = [];
+  const limit = 500;
+  let total = 0;
+
+  do {
+    const response = await fetchApi<ChapterListResponse>(
+      novelApiUrl(slug, "chapters")
+        .setQueryItem("order", "asc")
+        .setQueryItem("limit", String(limit))
+        .setQueryItem("offset", String(items.length))
+        .toString(),
+    );
+    items.push(...response.items);
+    total = response.total;
+    if (response.items.length === 0) break;
+  } while (items.length < total);
+
+  return { items, total };
+};
+
 export const fetchChapterDetails = async (
   slug: string,
   chapterId: string,
 ): Promise<ChapterDetailsResponse> =>
   fetchApi<ChapterDetailsResponse>(apiUrl("series", slug, "chapters", chapterId).toString());
+
+export const fetchNovelChapterDetails = async (
+  slug: string,
+  chapterId: string,
+): Promise<NovelChapterDetailsResponse> =>
+  fetchApi<NovelChapterDetailsResponse>(
+    novelApiUrl(slug, "chapters", chapterId, "read").toString(),
+  );

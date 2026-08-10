@@ -3,8 +3,9 @@
 
 import type { SourceManga } from "@paperback/types";
 
-import { DOMAIN, type SeriesDetails } from "../shared/models";
+import { DOMAIN, type Medium, type SeriesDetails } from "../shared/models";
 import {
+  encodeMangaId,
   formatCoverUrl,
   formatSeriesStatus,
   formatSeriesType,
@@ -13,7 +14,7 @@ import {
   toContentRating,
 } from "../shared/parsers";
 
-export const parseMangaDetails = (series: SeriesDetails): SourceManga => {
+export const parseMangaDetails = (series: SeriesDetails, medium: Medium): SourceManga => {
   const authors = series.authors
     .filter((credit) => credit.role === "author")
     .map((credit) => credit.name)
@@ -24,13 +25,14 @@ export const parseMangaDetails = (series: SeriesDetails): SourceManga => {
     .join(", ");
 
   return {
-    mangaId: sanitizeId(series.slug),
+    mangaId: encodeMangaId(series.slug, medium),
     mangaInfo: {
       primaryTitle: series.title,
       secondaryTitles: series.alt_titles,
       thumbnailUrl: formatCoverUrl(series.cover_url, 600),
       synopsis: series.description,
       contentRating: toContentRating(series.is_nsfw),
+      contentType: medium === "novel" ? "novel" : "comic",
       status: formatSeriesStatus(series.status),
       author: authors || undefined,
       artist: artists || undefined,
@@ -60,12 +62,12 @@ export const parseMangaDetails = (series: SeriesDetails): SourceManga => {
       ],
       artworkUrls: [formatCoverUrl(series.cover_url, 600), series.cover_url],
       additionalInfo: {
-        Type: formatSeriesType(series.type),
+        Type: formatSeriesType(series.type, medium),
         Chapters: String(series.chapter_count),
         Views: formatViews(series.views),
         ...(series.year ? { Year: String(series.year) } : {}),
       },
-      shareUrl: `${DOMAIN}/series/${series.slug}`,
+      shareUrl: `${DOMAIN}/${medium === "novel" ? "novels" : "series"}/${series.slug}`,
     },
   };
 };

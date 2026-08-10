@@ -4,7 +4,13 @@
 import type { Form } from "@paperback/types";
 
 import type { ChikariImplementation } from "../../main";
-import { SECTION_OPTIONS, type SectionId } from "../discover-section-providing/models";
+import {
+  NOVEL_SECTION_IDS,
+  SECTIONS,
+  SECTION_OPTIONS,
+  SECTION_SCHEMA_VERSION,
+  type SectionId,
+} from "../discover-section-providing/models";
 import {
   DEFAULT_CONTENT_RATINGS,
   DEFAULT_CONTENT_TYPES,
@@ -41,6 +47,16 @@ export const getSectionOrder = (): SectionId[] => {
   const validIds = SECTION_OPTIONS.map((section) => section.id);
   const stored = (Application.getState(STATE_KEYS.SECTION_ORDER) as SectionId[] | undefined) ?? [];
   const order = [...new Set(stored.filter((id) => validIds.includes(id)))];
+  const insertions: Array<{ after: SectionId; id: SectionId }> = [
+    { after: SECTIONS.TRENDING, id: SECTIONS.TRENDING_NOVELS },
+    { after: SECTIONS.RECENTLY_UPDATED, id: SECTIONS.RECENTLY_UPDATED_NOVELS },
+    { after: SECTIONS.MOST_BOOKMARKED, id: SECTIONS.MOST_BOOKMARKED_NOVELS },
+  ];
+  for (const insertion of insertions) {
+    if (order.includes(insertion.id)) continue;
+    const index = order.indexOf(insertion.after);
+    if (index >= 0) order.splice(index + 1, 0, insertion.id);
+  }
   return [...order, ...validIds.filter((id) => !order.includes(id))];
 };
 
@@ -48,6 +64,15 @@ export const getVisibleSections = (): SectionId[] => {
   const validIds = SECTION_OPTIONS.map((section) => section.id);
   const stored = Application.getState(STATE_KEYS.VISIBLE_SECTIONS) as SectionId[] | undefined;
   const visible = stored?.filter((id) => validIds.includes(id)) ?? [];
+  const schemaVersion =
+    (Application.getState(STATE_KEYS.SECTIONS_VERSION) as number | undefined) ?? 1;
+  if (stored && schemaVersion < SECTION_SCHEMA_VERSION) {
+    for (const id of NOVEL_SECTION_IDS) {
+      if (!visible.includes(id)) visible.push(id);
+    }
+    Application.setState(visible, STATE_KEYS.VISIBLE_SECTIONS);
+    Application.setState(SECTION_SCHEMA_VERSION, STATE_KEYS.SECTIONS_VERSION);
+  }
   return visible.length > 0 ? visible : validIds;
 };
 

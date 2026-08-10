@@ -1,4 +1,5 @@
 import { type TestLogger } from "@paperback/types";
+import { expect } from "chai";
 
 import { Chikari } from "../Chikari/main.js";
 import sourceInfo from "../Chikari/pbconfig.js";
@@ -7,6 +8,53 @@ import { TestSuite, registerDefaultTests } from "./suite.js";
 export async function runTests(logger: TestLogger) {
   const suite = new TestSuite("Chikari tests", logger);
   registerDefaultTests(suite, Chikari, sourceInfo);
+
+  suite.test("discover separates comic and novel rails", async () => {
+    const sections = await Chikari.getDiscoverSections();
+    expect(sections.map((section) => section.title)).to.deep.equal([
+      "Popular",
+      "Trending Comics",
+      "Trending Novels",
+      "Recently Added Comics",
+      "Recently Updated Comics",
+      "Recently Updated Novels",
+      "Most Bookmarked Comics",
+      "Most Bookmarked Novels",
+      "Popular by Type",
+      "Top Rated by Type",
+    ]);
+
+    const latestNovels = sections.find((section) => section.title === "Recently Updated Novels");
+    if (!latestNovels) throw new Error("Recently Updated Novels section is missing.");
+    const results = await Chikari.getDiscoverSectionItems(latestNovels, undefined);
+    expect(results.items.length).to.be.greaterThan(0);
+    expect(results.items.every((item) => item.type === "chapterUpdatesCarouselItem")).to.equal(
+      true,
+    );
+  });
+
+  suite.test("novel chapters return XHTML", async () => {
+    const novel = await Chikari.getMangaDetails("novel:shadow-slave");
+    expect(novel.mangaInfo.contentType).to.equal("novel");
+
+    const chapters = await Chikari.getChapters(novel);
+    expect(chapters.length).to.be.greaterThan(0);
+
+    const details = await Chikari.getChapterDetails(chapters[0]);
+    expect(details.type).to.equal("html");
+    if (details.type !== "html") throw new Error("Expected an HTML novel chapter.");
+    expect(details.html).to.contain('xmlns="http://www.w3.org/1999/xhtml"');
+    expect(details.html).to.contain("<body>");
+  });
+
+  suite.test("novel search uses novel ids", async () => {
+    const results = await Chikari.getSearchResults(
+      { title: "Shadow Slave", metadata: { types: ["novel"] } },
+      undefined,
+    );
+    expect(results.items.length).to.be.greaterThan(0);
+    expect(results.items[0]?.mangaId.startsWith("novel:")).to.equal(true);
+  });
 
   await suite.run();
 }

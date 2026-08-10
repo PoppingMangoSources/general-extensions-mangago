@@ -17,6 +17,7 @@ export const STATE_KEYS = {
   EXCLUDED_GENRES: "chikari_excluded_genres",
   EXCLUDED_TAGS: "chikari_excluded_tags",
   SECTION_ORDER: "chikari_section_order",
+  SECTIONS_VERSION: "chikari_sections_version",
   VISIBLE_SECTIONS: "chikari_visible_sections",
 } as const;
 
@@ -24,9 +25,10 @@ export const DEFAULT_CONTENT_RATINGS: ContentPreferenceRating[] = ["safe", "sugg
 export const DEFAULT_CONTENT_TYPES: SeriesType[] = ["manga", "manhwa", "manhua"];
 
 export type ContentPreferenceRating = "safe" | "suggestive" | "erotica" | "pornographic";
+export type Medium = "comic" | "novel";
 export type Period = "day" | "week" | "month" | "all";
 export type SeriesStatus = "releasing" | "completed" | "hiatus" | "cancelled" | "upcoming";
-export type SeriesType = "manga" | "manhwa" | "manhua" | "oel";
+export type SeriesType = "manga" | "manhwa" | "manhua" | "oel" | "novel";
 export type SortId = "popular" | "top_rated" | "trending" | "updated" | "added" | "most_bookmarked";
 
 export interface ChikariPreferences {
@@ -40,7 +42,7 @@ export interface ChikariPreferences {
 export interface SeriesItem {
   slug: string;
   title: string;
-  type: SeriesType;
+  type: string;
   status: SeriesStatus;
   is_nsfw: boolean;
   chapter_count: number;
@@ -49,6 +51,7 @@ export interface SeriesItem {
   last_chapter_at: string | null;
   rating: number | null;
   views: number;
+  medium?: Medium;
 }
 
 export interface HomeRow {
@@ -92,7 +95,7 @@ export interface ChapterItem {
 export interface SeriesDetails {
   slug: string;
   title: string;
-  type: SeriesType;
+  type: string;
   status: SeriesStatus;
   is_nsfw: boolean;
   chapter_count: number;
@@ -105,14 +108,22 @@ export interface SeriesDetails {
   rating: number | null;
   views: number;
   year: number | null;
+  medium?: Medium;
 }
 
 export interface ChapterListResponse {
   items: ChapterItem[];
+  total: number;
 }
 
 export interface ChapterDetailsResponse {
   pages: string[];
+}
+
+export interface NovelChapterDetailsResponse {
+  body: string;
+  locked: boolean;
+  lock_reason: string;
 }
 
 export interface GenreOption {
@@ -127,5 +138,6 @@ export interface TagOption {
 }
 
 export interface PageMetadata extends JSONObject {
-  offset: number;
+  offset?: number;
+  novelOffset?: number;
 }

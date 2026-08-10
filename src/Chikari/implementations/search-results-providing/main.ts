@@ -11,9 +11,14 @@ import {
 } from "@paperback/types";
 
 import type { ChikariImplementation } from "../../main";
-import { fetchSeries, fetchSeriesDetails } from "../../services/network";
+import {
+  fetchNovelDetails,
+  fetchNovels,
+  fetchSeries,
+  fetchSeriesDetails,
+} from "../../services/network";
 import { getPreferences } from "../settings-form-providing/main";
-import type { PageMetadata, SeriesType, SortId } from "../shared/models";
+import { PAGE_SIZE, type PageMetadata, type SeriesType, type SortId } from "../shared/models";
 import { ChikariAdvancedSearchForm } from "./forms";
 import { SORT_OPTIONS, type SearchMetadata } from "./models";
 import { detailsToSearchResultItem, pickTriState, toSearchResultItem } from "./parsers";
@@ -63,47 +68,79 @@ export class SearchProvider {
         ...pickTriState(searchMetadata.tags, "excluded"),
       ]),
     ];
-    const offset = metadata?.offset ?? 0;
     const minimum = Number(searchMetadata.minChapters);
-    const data = await fetchSeries({
+    const selectedTypes = (searchMetadata.types ?? preferences.types) as SeriesType[];
+    const comicTypes = selectedTypes.filter((type) => type !== "novel");
+    const includeNovels = selectedTypes.includes("novel");
+    const includeComics = comicTypes.length > 0;
+    const limit = includeComics && includeNovels ? Math.floor(PAGE_SIZE / 2) : PAGE_SIZE;
+    const comicOffset = metadata?.offset ?? 0;
+    const novelOffset = metadata?.novelOffset ?? 0;
+    const options = {
       adult: preferences.adult,
-      contentRatings: preferences.contentRatings,
       excludedGenres,
       excludedTags,
       genres: includedGenres,
+      limit,
       minChapters:
         searchMetadata.minChapters && Number.isFinite(minimum) ? Math.max(0, minimum) : undefined,
-      offset,
       period: searchMetadata.period,
       query: query.title.trim() || undefined,
       sort: searchMetadata.sort ?? (sortingOption?.id as SortId | undefined) ?? "popular",
       statuses: searchMetadata.statuses,
       tags: includedTags,
-      types: searchMetadata.types as SeriesType[],
       years: searchMetadata.year ? [searchMetadata.year] : [],
-    });
+    };
+    const [comicData, novelData] = await Promise.all([
+      includeComics
+        ? fetchSeries({
+            ...options,
+            contentRatings: preferences.contentRatings,
+            offset: comicOffset,
+            types: comicTypes,
+          })
+        : undefined,
+      includeNovels ? fetchNovels({ ...options, offset: novelOffset }) : undefined,
+    ]);
 
-    const nextOffset = offset + data.items.length;
+    const nextComicOffset = comicOffset + (comicData?.items.length ?? 0);
+    const nextNovelOffset = novelOffset + (novelData?.items.length ?? 0);
+    const hasMoreComics = Boolean(
+      comicData && comicData.items.length > 0 && nextComicOffset < comicData.total,
+    );
+    const hasMoreNovels = Boolean(
+      novelData && novelData.items.length > 0 && nextNovelOffset < novelData.total,
+    );
     return {
-      items: data.items.map(toSearchResultItem),
+      items: [
+        ...(comicData?.items.map((series) => toSearchResultItem(series, "comic")) ?? []),
+        ...(novelData?.items.map((series) => toSearchResultItem(series, "novel")) ?? []),
+      ],
       metadata:
-        nextOffset < data.total && data.items.length > 0 ? { offset: nextOffset } : undefined,
+        hasMoreComics || hasMoreNovels
+          ? { offset: nextComicOffset, novelOffset: nextNovelOffset }
+          : undefined,
     };
   }
 
   async resolveUrlQuery(query: string): Promise<PagedResults<SearchResultItem> | undefined> {
-    const match = query.trim().match(/^https?:\/\/(?:www\.)?chikari\.moe\/series\/([^/?#]+)/i);
-    if (!match?.[1]) return undefined;
+    const match = query
+      .trim()
+      .match(/^https?:\/\/(?:www\.)?chikari\.moe\/(series|novels)\/([^/?#]+)/i);
+    if (!match?.[1] || !match[2]) return undefined;
 
     let slug: string;
     try {
-      slug = decodeURIComponent(match[1]);
+      slug = decodeURIComponent(match[2]);
     } catch {
       return undefined;
     }
 
     try {
-      return { items: [detailsToSearchResultItem(await fetchSeriesDetails(slug))] };
+      const medium = match[1].toLowerCase() === "novels" ? "novel" : "comic";
+      const details =
+        medium === "novel" ? await fetchNovelDetails(slug) : await fetchSeriesDetails(slug);
+      return { items: [detailsToSearchResultItem(details, medium)] };
     } catch (error: unknown) {
       if (error instanceof CloudflareError) throw error;
       return undefined;

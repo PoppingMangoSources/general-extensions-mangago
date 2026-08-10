@@ -3,16 +3,23 @@
 
 import type { DiscoverSectionItem } from "@paperback/types";
 
-import type { HomeResponse, HomeRow, SeriesItem, SeriesType, SortId } from "../shared/models";
+import type {
+  HomeResponse,
+  HomeRow,
+  Medium,
+  SeriesItem,
+  SeriesType,
+  SortId,
+} from "../shared/models";
 import {
   chapterToken,
+  encodeMangaId,
   formatChapterNumber,
   formatCoverUrl,
   formatRating,
   formatSeriesStatus,
   formatSeriesType,
   formatViews,
-  sanitizeId,
   toContentRating,
 } from "../shared/parsers";
 import type { FilterItem } from "./models";
@@ -24,7 +31,7 @@ export const toFeaturedItem = (series: SeriesItem): DiscoverSectionItem => {
   const rating = formatRating(series.rating);
   return {
     type: "featuredCarouselItem",
-    mangaId: sanitizeId(series.slug),
+    mangaId: encodeMangaId(series.slug, "comic"),
     imageUrl: formatCoverUrl(series.cover_url, 600),
     title: series.title,
     supertitle: formatSeriesType(series.type),
@@ -45,7 +52,7 @@ export const toRecentlyAddedItem = (series: SeriesItem): DiscoverSectionItem => 
     .join(" • ");
   return {
     type: "simpleCarouselItem",
-    mangaId: sanitizeId(series.slug),
+    mangaId: encodeMangaId(series.slug, "comic"),
     imageUrl: formatCoverUrl(series.cover_url),
     title: series.title,
     subtitle: subtitle || undefined,
@@ -53,7 +60,10 @@ export const toRecentlyAddedItem = (series: SeriesItem): DiscoverSectionItem => 
   };
 };
 
-export const toRecentlyUpdatedItem = (series: SeriesItem): DiscoverSectionItem | undefined => {
+export const toRecentlyUpdatedItem = (
+  series: SeriesItem,
+  medium: Medium = "comic",
+): DiscoverSectionItem | undefined => {
   if (series.latest_chapter == null) return undefined;
   const subtitle = [
     `Ch. ${formatChapterNumber(series.latest_chapter)}`,
@@ -64,7 +74,7 @@ export const toRecentlyUpdatedItem = (series: SeriesItem): DiscoverSectionItem |
   const date = series.last_chapter_at ? new Date(series.last_chapter_at) : undefined;
   return {
     type: "chapterUpdatesCarouselItem",
-    mangaId: sanitizeId(series.slug),
+    mangaId: encodeMangaId(series.slug, medium),
     chapterId: chapterToken(series.latest_chapter),
     imageUrl: formatCoverUrl(series.cover_url, 200),
     title: series.title,
@@ -74,13 +84,17 @@ export const toRecentlyUpdatedItem = (series: SeriesItem): DiscoverSectionItem |
   };
 };
 
-export const toPeriodFilterItems = (filters: FilterItem[], sort: SortId): DiscoverSectionItem[] =>
+export const toPeriodFilterItems = (
+  filters: FilterItem[],
+  sort: SortId,
+  types?: SeriesType[],
+): DiscoverSectionItem[] =>
   filters.map((filter) => ({
     type: "genresCarouselItem",
     name: filter.title,
     searchQuery: {
       title: "",
-      metadata: { sort, period: filter.id },
+      metadata: { sort, period: filter.id, ...(types ? { types } : {}) },
     },
   }));
 
