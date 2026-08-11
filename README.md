@@ -5,7 +5,7 @@
 <p align="center">
   <img src="media/badge-ios.svg?v=2" alt="iOS / iPadOS" height="28"/>
   <img src="media/badge-version.svg?v=2" alt="Paperback 0.9+" height="28"/>
-  <img src="media/badge-count.svg?v=6" alt="28 sources" height="28"/>
+  <img src="media/badge-count.svg?v=7" alt="27 sources" height="28"/>
 </p>
 
 <p align="center">
@@ -29,7 +29,7 @@ PoppingMango is an independent source list for [Paperback](https://paperback.moe
 
 ## Sources
 
-**28 sources** — 24 manga, manhwa & manhua, and 4 novels, all available from `0.9/test`.
+**27 sources** — 23 manga, manhwa & manhua, and 4 novels, all available from `0.9/test`.
 
 ### Manga, Manhwa & Manhua
 
@@ -38,14 +38,13 @@ PoppingMango is an independent source list for [Paperback](https://paperback.moe
 | <img src="media/sources/bunmanga.png" width="22" align="top"/> **BunManga**             | [bunmanga.com](https://bunmanga.com)               |
 | <img src="media/sources/chikari.png" width="22" align="top"/> **Chikari**               | [chikari.moe](https://chikari.moe)                 |
 | <img src="media/sources/galaxymanga.png" width="22" align="top"/> **Galaxy Manga**      | [galaxymanga.io](https://galaxymanga.io)           |
-| <img src="media/sources/kaliscan.png" width="22" align="top"/> **KaliScan**             | [kaliscan.io](https://kaliscan.io)                 |
+| <img src="media/sources/kaliscan.png" width="22" align="top"/> **KaliScan**             | [kaliscan.com](https://kaliscan.com)               |
 | <img src="media/sources/kingofshojo.png" width="22" align="top"/> **KingOfShojo**       | [kingofshojo.com](https://kingofshojo.com)         |
 | <img src="media/sources/likemanga.png" width="22" align="top"/> **LikeManga**           | [likemanga.ink](https://likemanga.ink)             |
 | <img src="media/sources/luacomic.png" width="22" align="top"/> **Lua Comic**            | [luacomic.org](https://luacomic.org)               |
 | <img src="media/sources/mangaberri.png" width="22" align="top"/> **MangaBerri**         | [mangaberri.com](https://mangaberri.com)           |
 | <img src="media/sources/mangacherri.png" width="22" align="top"/> **MangaCherri**       | [mangacherri.com](https://mangacherri.com)         |
 | <img src="media/sources/mangahome.png" width="22" align="top"/> **MangaHome**           | [mangahome.com](https://www.mangahome.com)         |
-| <img src="media/sources/mgjinx.png" width="22" align="top"/> **MGJinx**                 | [mgjinx.com](https://mgjinx.com)                   |
 | <img src="media/sources/mangatown.png" width="22" align="top"/> **MangaTown**           | [mangatown.com](https://www.mangatown.com)         |
 | <img src="media/sources/myreadingmanga.png" width="22" align="top"/> **MyReadingManga** | [myreadingmanga.info](https://myreadingmanga.info) |
 | <img src="media/sources/omanga.png" width="22" align="top"/> **oManga**                 | [omanga.to](https://omanga.to)                     |

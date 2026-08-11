@@ -8,41 +8,84 @@ import {
   Section,
   SelectRow,
   SelectSection,
+  ToggleRow,
   TriStateSelectRow,
   type SearchQuery,
   type Tag,
 } from "@paperback/types";
 
-import { DOMAIN, GENRE_MODE_OPTIONS, GENRES, STATUS_OPTIONS, type SearchMetadata } from "./models";
+import {
+  DOMAIN,
+  GENRE_MODE_OPTIONS,
+  GENRES,
+  MIRRORS,
+  STATUS_OPTIONS,
+  type SearchMetadata,
+} from "./models";
 
 const BASE_URL_KEY = "kaliscan.baseUrl";
+const ACTIVE_BASE_URL_KEY = "kaliscan.activeBaseUrl";
+const FAILOVER_KEY = "kaliscan.automaticFailover";
+const MIRROR_IDS = new Set(MIRRORS.map((mirror) => mirror.id));
 
-export const getBaseUrl = (): string =>
-  (Application.getState(BASE_URL_KEY) as string | undefined) ?? DOMAIN;
+export const getSelectedBaseUrl = (): string => {
+  const value = Application.getState(BASE_URL_KEY);
+  return typeof value === "string" && MIRROR_IDS.has(value) ? value : DOMAIN;
+};
+
+export const getAutomaticFailover = (): boolean => Application.getState(FAILOVER_KEY) !== false;
+
+export const getBaseUrl = (): string => {
+  if (!getAutomaticFailover()) return getSelectedBaseUrl();
+  const active = Application.getState(ACTIVE_BASE_URL_KEY);
+  return typeof active === "string" && MIRROR_IDS.has(active) ? active : getSelectedBaseUrl();
+};
 
 export const setBaseUrl = (value: string): void => {
-  const trimmed = value.trim().replace(/\/+$/, "");
-  Application.setState(/^https?:\/\/[^\s/]+$/.test(trimmed) ? trimmed : undefined, BASE_URL_KEY);
+  const mirror = MIRROR_IDS.has(value) ? value : DOMAIN;
+  Application.setState(mirror, BASE_URL_KEY);
+  Application.setState(mirror, ACTIVE_BASE_URL_KEY);
   Application.invalidateDiscoverSections();
 };
 
+export const setActiveBaseUrl = (value: string): void => {
+  if (getAutomaticFailover() && MIRROR_IDS.has(value)) {
+    Application.setState(value, ACTIVE_BASE_URL_KEY);
+  }
+};
+
 export class KaliScanSettingsForm extends Form {
-  private baseUrl = getBaseUrl();
+  private baseUrl = getSelectedBaseUrl();
+  private automaticFailover = getAutomaticFailover();
 
   override getSections() {
     return [
       Section(
         {
-          id: "domain",
-          footer: `Override the site address if it moves. Leave empty to use ${DOMAIN}.`,
+          id: "mirror",
+          footer:
+            "All four domains share the same catalog. Automatic failover rotates to another " +
+            "mirror only when the selected site is blocked, unavailable, or returning a server error.",
         },
         [
-          InputRow("base_url", {
-            title: "Base URL",
-            value: this.baseUrl === DOMAIN ? "" : this.baseUrl,
+          SelectRow("base_url", {
+            title: "Preferred Mirror",
+            layout: "list",
+            value: [this.baseUrl],
+            items: MIRRORS,
+            minItemCount: 1,
+            maxItemCount: 1,
             onValueChange: Application.Selector(
               this as KaliScanSettingsForm,
               "handleBaseUrlChange",
+            ),
+          }),
+          ToggleRow("automatic_failover", {
+            title: "Automatic Mirror Failover",
+            value: this.automaticFailover,
+            onValueChange: Application.Selector(
+              this as KaliScanSettingsForm,
+              "handleAutomaticFailoverChange",
             ),
           }),
         ],
@@ -50,9 +93,16 @@ export class KaliScanSettingsForm extends Form {
     ];
   }
 
-  async handleBaseUrlChange(value: string): Promise<void> {
-    this.baseUrl = value;
-    setBaseUrl(value);
+  async handleBaseUrlChange(value: string[]): Promise<void> {
+    this.baseUrl = value[0] ?? DOMAIN;
+    setBaseUrl(this.baseUrl);
+  }
+
+  async handleAutomaticFailoverChange(value: boolean): Promise<void> {
+    this.automaticFailover = value;
+    Application.setState(value, FAILOVER_KEY);
+    Application.setState(this.baseUrl, ACTIVE_BASE_URL_KEY);
+    Application.invalidateDiscoverSections();
   }
 }
 

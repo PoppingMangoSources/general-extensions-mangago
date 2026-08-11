@@ -1,44 +1,56 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import type { SortingOption, Tag } from "@paperback/types";
+import type { JSONObject, SortingOption, Tag } from "@paperback/types";
 
-export const DOMAIN = "https://kaliscan.io";
+export const MIRRORS: Tag[] = [
+  { id: "https://kaliscan.com", title: "kaliscan.com" },
+  { id: "https://kaliscan.me", title: "kaliscan.me" },
+  { id: "https://kaliscan.io", title: "kaliscan.io" },
+  { id: "https://mgjinx.com", title: "mgjinx.com" },
+];
+
+export const DOMAIN = MIRRORS[0].id;
 
 export const SECTIONS = {
-  TOP_WEEK: "top-week",
+  POPULAR: "popular",
+  TOP: "top",
   HOT: "hot-updates",
   LATEST: "latest",
-  TRENDING: "trending",
-  REVIEWS: "most-talked",
-  MOST_VIEWED: "most-viewed",
-  EDITORS: "editors",
+  NEWEST: "newest",
+  REVIEWS: "top-reviews",
   GENRES: "genres",
 } as const;
+
+export const TOP_RANGES: Tag[] = [
+  { id: "day", title: "Day" },
+  { id: "week", title: "Week" },
+  { id: "month", title: "Month" },
+];
 
 export type OptionItem = {
   id: string;
   value: string;
 };
 
-export type PageMetadata = {
+export interface PageMetadata extends JSONObject {
   page?: number;
   seen?: string[];
-};
+}
 
-export type SearchMetadata = {
+export interface SearchMetadata extends JSONObject {
   status?: string[];
   author?: string;
   genres?: Record<string, "included" | "excluded">;
   genreMode?: string[];
-};
+  topRange?: string;
+}
 
 export const SORTING_OPTIONS: SortingOption[] = [
   { id: "views", label: "Views" },
   { id: "updated_at", label: "Updated" },
   { id: "created_at", label: "Created" },
   { id: "name", label: "Name A-Z" },
-  { id: "total_chapters", label: "Chapters" },
   { id: "rating", label: "Rating" },
 ];
 
@@ -58,21 +70,13 @@ export interface KaliCard {
   title: string;
   cover: string;
   latestChapter?: string;
+  latestChapterUrl?: string;
   views?: string;
   rating?: string;
   genres: string[];
   summary?: string;
-}
-
-export interface KaliGridEntry {
-  url: string;
-  title: string;
-  cover: string;
-  rating?: string;
   updatedAt?: string;
-  genres: string[];
-  chapterName?: string;
-  chapterUrl?: string;
+  isAdult?: boolean;
 }
 
 export const GENRES: OptionItem[] = [
@@ -152,4 +156,13 @@ export const GENRES: OptionItem[] = [
   { id: "zombies", value: "Zombies" },
 ];
 
-export const ADULT_GENRES = ["adult", "smut", "ecchi", "mature", "yaoi", "soft yaoi", "yuri"];
+export const ADULT_GENRES = [
+  "adult",
+  "smut",
+  "ecchi",
+  "mature",
+  "yaoi",
+  "soft yaoi",
+  "yuri",
+  "doujinshi",
+];

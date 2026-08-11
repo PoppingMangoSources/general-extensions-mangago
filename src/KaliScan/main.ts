@@ -5,6 +5,7 @@ import {
   BasicRateLimiter,
   CookieStorageInterceptor,
   DiscoverSectionType,
+  URL,
   type AdvancedSearchForm,
   type Chapter,
   type ChapterDetails,
@@ -21,11 +22,18 @@ import {
   type SourceManga,
 } from "@paperback/types";
 
-import { getBaseUrl, KaliScanAdvancedSearchForm, KaliScanSettingsForm } from "./forms";
+import {
+  getBaseUrl,
+  KaliScanAdvancedSearchForm,
+  KaliScanSettingsForm,
+  setActiveBaseUrl,
+} from "./forms";
 import {
   GENRES,
+  MIRRORS,
   SECTIONS,
   SORTING_OPTIONS,
+  TOP_RANGES,
   type PageMetadata,
   type SearchMetadata,
 } from "./models";
@@ -35,16 +43,14 @@ import {
   decodeSlugId,
   encodeSlugId,
   hasNextPage,
+  parseCards,
   parseChapterList,
   parseChapterPages,
-  parseDetailedCards,
   parseHotCells,
-  parseGridEntries,
   parseMangaDetails,
   toFeaturedItems,
-  toLatestGridItems,
   toLatestItems,
-  toRankedCardItems,
+  toRankedItems,
   toSearchResultItems,
 } from "./parsers";
 import type KaliScanConfig from "./pbconfig";
@@ -71,14 +77,17 @@ class KaliScanExtension implements ExtensionImpl<typeof KaliScanConfig> {
   }
 
   async cloudflareBypassCompleted(
-    _request: Request,
+    request: Request,
     cookies: Cookie[],
     _localStorage: Record<string, string>,
   ): Promise<void> {
     this.homePage = undefined;
-    // Forward every cookie: the backend chapter-list fragment sits behind the
-    // same session cookies as the pages, so a clearance-only filter would let
-    // browsing recover while chapter lists stay challenged.
+    try {
+      const url = new URL(request.url);
+      setActiveBaseUrl(`${url.protocol}://${url.hostname}${url.port ? `:${url.port}` : ""}`);
+    } catch {
+      // Cookies still need storing if the callback URL is malformed.
+    }
     for (const cookie of cookies) {
       this.cookieStorageInterceptor.setCookie(cookie);
     }
@@ -87,21 +96,12 @@ class KaliScanExtension implements ExtensionImpl<typeof KaliScanConfig> {
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
-      { id: SECTIONS.TOP_WEEK, title: "Top of the Week", type: DiscoverSectionType.featured },
+      { id: SECTIONS.POPULAR, title: "Popular", type: DiscoverSectionType.featured },
+      { id: SECTIONS.TOP, title: "Top Manga", type: DiscoverSectionType.genres },
       { id: SECTIONS.HOT, title: "Hot Updates", type: DiscoverSectionType.simpleCarousel },
       { id: SECTIONS.LATEST, title: "Latest Updates", type: DiscoverSectionType.chapterUpdates },
-      { id: SECTIONS.TRENDING, title: "Trending", type: DiscoverSectionType.featured },
-      {
-        id: SECTIONS.REVIEWS,
-        title: "Most Talked About",
-        type: DiscoverSectionType.simpleCarousel,
-      },
-      {
-        id: SECTIONS.MOST_VIEWED,
-        title: "Most Viewed",
-        type: DiscoverSectionType.simpleCarousel,
-      },
-      { id: SECTIONS.EDITORS, title: "Editor's Choice", type: DiscoverSectionType.simpleCarousel },
+      { id: SECTIONS.NEWEST, title: "Newest", type: DiscoverSectionType.simpleCarousel },
+      { id: SECTIONS.REVIEWS, title: "Top Reviewed", type: DiscoverSectionType.simpleCarousel },
       { id: SECTIONS.GENRES, title: "Genres", type: DiscoverSectionType.genres },
     ];
   }
@@ -115,36 +115,41 @@ class KaliScanExtension implements ExtensionImpl<typeof KaliScanConfig> {
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
-      case SECTIONS.TOP_WEEK:
-        return this.getTopSection("week");
+      case SECTIONS.POPULAR:
+        return this.getPopularSection();
+      case SECTIONS.TOP:
+        return { items: this.topRangeChips(), metadata: undefined };
       case SECTIONS.HOT:
         return this.getHotSection();
       case SECTIONS.LATEST:
         return this.getLatestSection(metadata);
-      case SECTIONS.TRENDING:
-        return this.getTopSection("day");
+      case SECTIONS.NEWEST:
+        return this.getListingSection(`${getBaseUrl()}/newest`, "chapter");
       case SECTIONS.REVIEWS:
-        return this.getRankedSection(`${getBaseUrl()}/top/reviews`, "views");
-      case SECTIONS.MOST_VIEWED:
-        return this.getRankedSection(`${getBaseUrl()}/az-list`, "views");
-      case SECTIONS.EDITORS:
-        return this.getRankedSection(`${getBaseUrl()}/top/comments`, "chapter");
+        return this.getListingSection(`${getBaseUrl()}/top/reviews`, "rating");
       case SECTIONS.GENRES:
-        return { items: this.genreChipItems(), metadata: undefined };
+        return { items: this.genreChips(), metadata: undefined };
       default:
         return { items: [], metadata: undefined };
     }
   }
 
-  private async getTopSection(range: "day" | "week"): Promise<PagedResults<DiscoverSectionItem>> {
-    const html = await fetchHtml(`${getBaseUrl()}/top/${range}`);
-    return { items: toFeaturedItems(parseDetailedCards(html)), metadata: undefined };
+  private async getPopularSection(): Promise<PagedResults<DiscoverSectionItem>> {
+    const html = await fetchHtml(`${getBaseUrl()}/popular`);
+    return { items: toFeaturedItems(parseCards(html)), metadata: undefined };
   }
 
   private async getHotSection(): Promise<PagedResults<DiscoverSectionItem>> {
-    const html = await this.getHomePage();
-    const cards = parseHotCells(html);
-    return { items: toRankedCardItems(cards, "chapter"), metadata: undefined };
+    const cards = parseHotCells(await this.getHomePage());
+    return { items: toRankedItems(cards, "chapter", false), metadata: undefined };
+  }
+
+  private async getListingSection(
+    url: string,
+    detail: "chapter" | "views" | "rating",
+  ): Promise<PagedResults<DiscoverSectionItem>> {
+    const html = await fetchHtml(url);
+    return { items: toRankedItems(parseCards(html), detail), metadata: undefined };
   }
 
   // The first page comes from the homepage grid, whose embedded metadata
@@ -156,7 +161,7 @@ class KaliScanExtension implements ExtensionImpl<typeof KaliScanConfig> {
     const page = metadata?.page ?? 1;
 
     if (page === 1) {
-      const items = toLatestGridItems(parseGridEntries(await this.getHomePage()));
+      const items = toLatestItems(parseCards(await this.getHomePage()));
       if (items.length > 0) {
         const seen = items.flatMap((item) => ("mangaId" in item ? [item.mangaId] : []));
         return { items, metadata: { page: 2, seen } };
@@ -166,7 +171,7 @@ class KaliScanExtension implements ExtensionImpl<typeof KaliScanConfig> {
     const listingPage = Math.max(1, page - 1);
     const html = await fetchHtml(`${getBaseUrl()}/latest?page=${listingPage}`);
     const seen = new Set(metadata?.seen ?? []);
-    const items = toLatestItems(parseDetailedCards(html)).filter(
+    const items = toLatestItems(parseCards(html)).filter(
       (item) => !("mangaId" in item) || !seen.has(item.mangaId),
     );
 
@@ -176,16 +181,19 @@ class KaliScanExtension implements ExtensionImpl<typeof KaliScanConfig> {
     };
   }
 
-  private async getRankedSection(
-    url: string,
-    detail: "views" | "chapter",
-  ): Promise<PagedResults<DiscoverSectionItem>> {
-    const html = await fetchHtml(url);
-    const cards = parseDetailedCards(html);
-    return { items: toRankedCardItems(cards, detail), metadata: undefined };
+  private topRangeChips(): DiscoverSectionItem[] {
+    return TOP_RANGES.map((range) => ({
+      type: "genresCarouselItem",
+      name: range.title,
+      searchQuery: {
+        title: "",
+        metadata: { topRange: range.id } satisfies SearchMetadata,
+      },
+      metadata: undefined,
+    }));
   }
 
-  private genreChipItems(): DiscoverSectionItem[] {
+  private genreChips(): DiscoverSectionItem[] {
     return GENRES.map((genre) => ({
       type: "genresCarouselItem",
       name: genre.value,
@@ -205,11 +213,13 @@ class KaliScanExtension implements ExtensionImpl<typeof KaliScanConfig> {
     if (!this.homePage) {
       const promise = fetchHtml(`${base}/home`);
       const entry = { base, promise };
-      // A failed fetch must not stay memoized, or the section it feeds would
-      // remain empty until the app restarts.
-      promise.catch(() => {
-        if (this.homePage === entry) this.homePage = undefined;
-      });
+      promise
+        .then(() => {
+          entry.base = getBaseUrl();
+        })
+        .catch(() => {
+          if (this.homePage === entry) this.homePage = undefined;
+        });
       this.homePage = entry;
     }
     return this.homePage.promise;
@@ -228,10 +238,14 @@ class KaliScanExtension implements ExtensionImpl<typeof KaliScanConfig> {
     if (pasted) return pasted;
 
     const page = metadata?.page ?? 1;
-    const html = await fetchHtml(this.buildSearchUrl(query, sortingOption, page));
+    const range = query.metadata?.topRange;
+    const url = range
+      ? `${getBaseUrl()}/top/${encodeURIComponent(range)}?page=${page}`
+      : this.buildSearchUrl(query, sortingOption, page);
+    const html = await fetchHtml(url);
 
     return {
-      items: toSearchResultItems(parseDetailedCards(html)),
+      items: toSearchResultItems(parseCards(html)),
       metadata: hasNextPage(html) ? { page: page + 1 } : undefined,
     };
   }
@@ -268,27 +282,34 @@ class KaliScanExtension implements ExtensionImpl<typeof KaliScanConfig> {
   private async resolveUrlQuery(
     query: string,
   ): Promise<PagedResults<SearchResultItem> | undefined> {
-    const trimmed = query.trim();
-    const host = getBaseUrl().replace(/^https?:\/\//, "");
-    const pattern = new RegExp(
-      `^https?://(?:www\\.)?(?:kaliscan\\.io|${host.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})/manga/([^/?#]+)`,
-      "i",
-    );
-    const slug = pattern.exec(trimmed)?.[1];
+    let url: URL;
+    try {
+      url = new URL(query.trim());
+    } catch {
+      return undefined;
+    }
+    const supportedHosts = new Set(MIRRORS.map((mirror) => new URL(mirror.id).hostname));
+    const slug = supportedHosts.has(url.hostname.replace(/^www\./, ""))
+      ? /^\/manga\/([^/?#]+)/.exec(url.path)?.[1]
+      : undefined;
     if (!slug) return undefined;
 
-    const manga = await this.getMangaDetails(encodeSlugId(decodeURIComponent(slug)));
-    return {
-      items: [
-        {
-          mangaId: manga.mangaId,
-          title: manga.mangaInfo.primaryTitle,
-          imageUrl: manga.mangaInfo.thumbnailUrl,
-          contentRating: manga.mangaInfo.contentRating,
-        },
-      ],
-      metadata: undefined,
-    };
+    try {
+      const manga = await this.getMangaDetails(encodeSlugId(decodeSlugId(slug)));
+      return {
+        items: [
+          {
+            mangaId: manga.mangaId,
+            title: manga.mangaInfo.primaryTitle,
+            imageUrl: manga.mangaInfo.thumbnailUrl,
+            contentRating: manga.mangaInfo.contentRating,
+          },
+        ],
+        metadata: undefined,
+      };
+    } catch {
+      return undefined;
+    }
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {

@@ -14,7 +14,7 @@ import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
 import { getBaseUrl } from "./forms";
-import { ADULT_GENRES, type KaliCard, type KaliGridEntry } from "./models";
+import { ADULT_GENRES, type KaliCard } from "./models";
 
 // Paperback rejects ids containing characters outside this set.
 const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
@@ -51,7 +51,8 @@ const absoluteUrl = (url: string): string => {
   return `${getBaseUrl()}${url.startsWith("/") ? "" : "/"}${url}`;
 };
 
-export const contentRatingForGenres = (genres: string[]): ContentRating => {
+export const contentRatingForGenres = (genres: string[], isAdult = false): ContentRating => {
+  if (isAdult) return ContentRating.ADULT;
   const normalized = genres.map((genre) => genre.trim().toLowerCase());
   return normalized.some((genre) => ADULT_GENRES.includes(genre))
     ? ContentRating.ADULT
@@ -102,101 +103,185 @@ const coverFrom = (element: cheerio.Cheerio<AnyNode>): string => {
   return source && !source.includes("/static/") ? absoluteUrl(source) : "";
 };
 
-// The detailed cards on /top/* and /search share one layout.
-export const parseDetailedCards = (html: string): KaliCard[] => {
+interface EmbeddedData {
+  name?: string;
+  url?: string;
+  cover?: string;
+  rating?: string;
+  views?: string;
+  summary?: string;
+  updated_at?: string;
+  is_adult?: number | boolean;
+  genres?: { name?: string }[];
+}
+
+const isEmbeddedData = (value: unknown): value is EmbeddedData => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  const strings = ["name", "url", "cover", "rating", "views", "summary", "updated_at"];
+  if (strings.some((key) => record[key] != null && typeof record[key] !== "string")) return false;
+  if (
+    record.is_adult != null &&
+    typeof record.is_adult !== "number" &&
+    typeof record.is_adult !== "boolean"
+  ) {
+    return false;
+  }
+  return (
+    record.genres == null ||
+    (Array.isArray(record.genres) &&
+      record.genres.every(
+        (genre) =>
+          genre != null &&
+          typeof genre === "object" &&
+          !Array.isArray(genre) &&
+          ((genre as Record<string, unknown>).name == null ||
+            typeof (genre as Record<string, unknown>).name === "string"),
+      ))
+  );
+};
+
+const embeddedData = (item: cheerio.Cheerio<AnyNode>): EmbeddedData | undefined => {
+  const raw = item.find("script#json-data").first().text().trim();
+  if (!raw) return undefined;
+  try {
+    const value: unknown = JSON.parse(raw);
+    return isEmbeddedData(value) ? value : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const cardFrom = ($: cheerio.CheerioAPI, element: AnyNode): KaliCard | undefined => {
+  const item = $(element);
+  const data = embeddedData(item);
+  const link = item.find(".title a, h3 a, h4 a, a").first();
+  const url = data?.url ?? link.attr("href") ?? "";
+  if (!mangaSlugFromUrl(url)) return undefined;
+
+  const title = cleanText(data?.name ?? item.find(".title, .name, h3, h4").first().text());
+  if (!title) return undefined;
+
+  const chapterLink = item.find('a[href*="chapter"]').first();
+  const markupGenres = item
+    .find(".genres span, .genres a")
+    .toArray()
+    .map((genre) => cleanText($(genre).text()))
+    .filter(Boolean);
+  const embeddedGenres = (data?.genres ?? []).map((genre) => genre.name ?? "").filter(Boolean);
+
+  return {
+    url,
+    title,
+    cover: data?.cover ? absoluteUrl(data.cover) : coverFrom(item),
+    latestChapter:
+      cleanText(item.find(".latest-chapter").first().text()) ||
+      cleanText(chapterLink.text()) ||
+      undefined,
+    latestChapterUrl: chapterLink.attr("href") ?? undefined,
+    views: cleanText(data?.views ?? item.find(".views span, .views").first().text()) || undefined,
+    rating:
+      (data?.rating ?? cleanText(item.find(".rating .score, .rating").first().text())).replace(
+        /[^\d.]/g,
+        "",
+      ) || undefined,
+    genres: embeddedGenres.length > 0 ? embeddedGenres : markupGenres,
+    summary: cleanText(data?.summary ?? item.find(".summary p, .summary").first().text()),
+    updatedAt: data?.updated_at,
+    isAdult: data?.is_adult === 1 || data?.is_adult === true,
+  };
+};
+
+export const parseCards = (html: string): KaliCard[] => {
   const $ = cheerio.load(html);
   const cards: KaliCard[] = [];
+  const seen = new Set<string>();
 
-  $(".book-detailed-item").each((_, element) => {
-    const item = $(element);
-    const link = item.find(".title a, h3 a").first();
-    const url = link.attr("href") ?? "";
-    if (!mangaSlugFromUrl(url)) return;
-
-    cards.push({
-      url,
-      title: cleanText(link.text()),
-      cover: coverFrom(item),
-      latestChapter: cleanText(item.find(".latest-chapter").first().text()) || undefined,
-      views: cleanText(item.find(".views span").first().text()) || undefined,
-      rating:
-        cleanText(item.find(".rating .score").first().text()).replace(/[^\d.]/g, "") || undefined,
-      genres: item
-        .find(".genres span")
-        .toArray()
-        .map((genre) => cleanText($(genre).text()))
-        .filter(Boolean),
-      summary: cleanText(item.find(".summary p").first().text()) || undefined,
-    });
-  });
+  for (const element of $(".book-detailed-item, .book-item").toArray()) {
+    const card = cardFrom($, element);
+    const slug = card ? mangaSlugFromUrl(card.url) : undefined;
+    if (!card || !slug || seen.has(slug)) continue;
+    seen.add(slug);
+    cards.push(card);
+  }
 
   return cards;
 };
 
-// The homepage hot carousel uses compact trending cells.
 export const parseHotCells = (html: string): KaliCard[] => {
   const $ = cheerio.load(html);
   const cards: KaliCard[] = [];
+  const seen = new Set<string>();
 
-  $(".trending-item").each((_, element) => {
+  for (const element of $(".trending-item").toArray()) {
     const item = $(element);
     const url = item.find("a").first().attr("href") ?? "";
-    if (!mangaSlugFromUrl(url)) return;
+    const slug = mangaSlugFromUrl(url);
+    if (!slug || seen.has(slug)) continue;
 
+    const title = cleanText(
+      item.find(".name").first().text() || item.find("a").first().attr("title") || "",
+    );
+    if (!title) continue;
+
+    seen.add(slug);
     cards.push({
       url,
-      title: cleanText(item.find(".name").first().text()),
+      title,
       cover: coverFrom(item),
       latestChapter: cleanText(item.find(".latest-chapter").first().text()) || undefined,
       genres: [],
     });
-  });
+  }
 
   return cards;
 };
 
-const featuredItem = (card: KaliCard): DiscoverSectionItem | undefined => {
-  const slug = mangaSlugFromUrl(card.url);
-  if (!slug || !card.title) return undefined;
-
-  const ratingInfo = card.rating ? { symbol: "star.fill" as const, text: card.rating } : undefined;
-  const viewsInfo = card.views ? { symbol: "eye.fill" as const, text: card.views } : undefined;
-
-  return {
-    type: "featuredCarouselItem",
-    mangaId: encodeSlugId(slug),
-    imageUrl: card.cover,
-    title: card.title,
-    supertitle: card.genres.length > 0 ? card.genres.join(", ") : undefined,
-    summary: card.summary,
-    infoItems:
-      ratingInfo && viewsInfo
-        ? [ratingInfo, viewsInfo]
-        : ratingInfo
-          ? [ratingInfo]
-          : viewsInfo
-            ? [viewsInfo]
-            : undefined,
-    contentRating: contentRatingForGenres(card.genres),
-  };
+const ratingText = (card: KaliCard): string | undefined => {
+  const value = card.rating ? parseFloat(card.rating) : NaN;
+  return Number.isFinite(value) && value > 0 ? value.toFixed(1) : undefined;
 };
 
 export const toFeaturedItems = (cards: KaliCard[]): DiscoverSectionItem[] =>
-  cards
-    .map((card) => featuredItem(card))
-    .filter((item): item is DiscoverSectionItem => Boolean(item));
+  cards.flatMap((card) => {
+    const slug = mangaSlugFromUrl(card.url);
+    if (!slug) return [];
 
-export const toRankedCardItems = (
+    const rating = ratingText(card);
+    const score = rating ? { symbol: "star.fill" as const, text: rating } : undefined;
+    const views = card.views ? { symbol: "eye.fill" as const, text: card.views } : undefined;
+
+    return [
+      {
+        type: "featuredCarouselItem",
+        mangaId: encodeSlugId(slug),
+        imageUrl: card.cover,
+        title: card.title,
+        supertitle: card.genres.length > 0 ? card.genres.join(", ") : undefined,
+        summary: card.summary || undefined,
+        infoItems: score && views ? [score, views] : score ? [score] : views ? [views] : undefined,
+        contentRating: contentRatingForGenres(card.genres, card.isAdult),
+      },
+    ];
+  });
+
+export const toRankedItems = (
   cards: KaliCard[],
-  detail: "views" | "chapter",
+  detail: "chapter" | "views" | "rating",
+  ranked = true,
 ): DiscoverSectionItem[] =>
   cards.flatMap((card, index) => {
     const slug = mangaSlugFromUrl(card.url);
-    if (!slug || !card.title) return [];
+    if (!slug) return [];
 
+    const rating = ratingText(card);
     const lead =
-      detail === "views" ? (card.views ? `${card.views} views` : undefined) : card.latestChapter;
-    const subtitle = [`#${index + 1}`, lead].filter(Boolean).join(" • ");
+      detail === "chapter"
+        ? card.latestChapter
+        : detail === "views"
+          ? card.views && `${card.views} views`
+          : rating && `${rating} ★`;
+    const subtitle = [ranked ? `#${index + 1}` : undefined, lead].filter(Boolean).join(" • ");
 
     return [
       {
@@ -205,98 +290,28 @@ export const toRankedCardItems = (
         imageUrl: card.cover,
         title: card.title,
         subtitle,
-        contentRating: contentRatingForGenres(card.genres),
+        contentRating: contentRatingForGenres(card.genres, card.isAdult),
       },
     ];
   });
 
-// The homepage's latest grid embeds a JSON metadata block per card carrying
-// the update timestamp and rating the listing page itself omits.
-export const parseGridEntries = (html: string): KaliGridEntry[] => {
-  const $ = cheerio.load(html);
-  const entries: KaliGridEntry[] = [];
-
-  $(".book-item").each((_, element) => {
-    const item = $(element);
-    const raw = item.find("script#json-data").first().text();
-    if (!raw) return;
-
-    let data:
-      | {
-          name?: string;
-          url?: string;
-          cover?: string;
-          rating?: string;
-          updated_at?: string;
-          genres?: { name?: string }[];
-        }
-      | undefined;
-    try {
-      data = JSON.parse(raw) as typeof data;
-    } catch {
-      return;
-    }
-
-    const url = data?.url ?? item.find("a").first().attr("href") ?? "";
-    if (!mangaSlugFromUrl(url)) return;
-
-    const chapterLink = item.find('a[href*="chapter"]').first();
-
-    entries.push({
-      url,
-      title: cleanText(data?.name ?? item.find(".title, .name").first().text()),
-      cover: data?.cover ? absoluteUrl(data.cover) : coverFrom(item),
-      rating: data?.rating,
-      updatedAt: data?.updated_at,
-      genres: (data?.genres ?? []).map((genre) => genre.name ?? "").filter(Boolean),
-      chapterName: cleanText(chapterLink.text()) || undefined,
-      chapterUrl: chapterLink.attr("href") ?? undefined,
-    });
-  });
-
-  return entries;
-};
-
-export const toLatestGridItems = (entries: KaliGridEntry[]): DiscoverSectionItem[] =>
-  entries.flatMap((entry) => {
-    const slug = mangaSlugFromUrl(entry.url);
-    if (!slug || !entry.title || !entry.chapterUrl) return [];
-
-    const chapNum = entry.chapterName ? chapterNumberFrom(entry.chapterName) : undefined;
-    const rating = entry.rating && parseFloat(entry.rating) > 0 ? entry.rating : undefined;
-    const subtitle = [
-      chapNum !== undefined ? `Ch. ${chapNum}` : entry.chapterName,
-      rating ? `Rating ${parseFloat(rating).toFixed(1)}` : undefined,
-    ]
-      .filter(Boolean)
-      .join(" • ");
-
-    return [
-      {
-        type: "chapterUpdatesCarouselItem",
-        mangaId: encodeSlugId(slug),
-        chapterId: encodeSlugId((entry.chapterUrl.split("/").pop() ?? "").replace(/[?#].*$/, "")),
-        imageUrl: entry.cover,
-        title: entry.title,
-        subtitle: subtitle || undefined,
-        publishDate: entry.updatedAt ? parseSiteDate(entry.updatedAt) : undefined,
-        contentRating: contentRatingForGenres(entry.genres),
-      },
-    ];
-  });
-
-// The latest listing labels each series with its newest chapter; reader URLs
-// follow the same chapter-{n} shape, so the id is derived from that label.
 export const toLatestItems = (cards: KaliCard[]): DiscoverSectionItem[] =>
   cards.flatMap((card) => {
     const slug = mangaSlugFromUrl(card.url);
-    const chapNum = card.latestChapter ? chapterNumberFrom(card.latestChapter) : undefined;
-    if (!slug || !card.title || chapNum === undefined) return [];
+    if (!slug) return [];
 
-    const rating = card.rating && parseFloat(card.rating) > 0 ? card.rating : undefined;
+    const chapNum = card.latestChapter ? chapterNumberFrom(card.latestChapter) : undefined;
+    const chapterSlug = card.latestChapterUrl
+      ? (card.latestChapterUrl.split("/").pop() ?? "").replace(/[?#].*$/, "")
+      : chapNum !== undefined
+        ? `chapter-${chapNum}`
+        : undefined;
+    if (!chapterSlug) return [];
+
+    const rating = ratingText(card);
     const subtitle = [
-      `Ch. ${chapNum}`,
-      rating ? `Rating ${parseFloat(rating).toFixed(1)}` : undefined,
+      chapNum !== undefined ? `Ch. ${chapNum}` : card.latestChapter,
+      rating ? `${rating} ★` : undefined,
     ]
       .filter(Boolean)
       .join(" • ");
@@ -305,11 +320,12 @@ export const toLatestItems = (cards: KaliCard[]): DiscoverSectionItem[] =>
       {
         type: "chapterUpdatesCarouselItem",
         mangaId: encodeSlugId(slug),
-        chapterId: `chapter-${chapNum}`,
+        chapterId: encodeSlugId(chapterSlug),
         imageUrl: card.cover,
         title: card.title,
         subtitle: subtitle || undefined,
-        contentRating: contentRatingForGenres(card.genres),
+        publishDate: card.updatedAt ? parseSiteDate(card.updatedAt) : undefined,
+        contentRating: contentRatingForGenres(card.genres, card.isAdult),
       },
     ];
   });
@@ -317,8 +333,10 @@ export const toLatestItems = (cards: KaliCard[]): DiscoverSectionItem[] =>
 export const toSearchResultItems = (cards: KaliCard[]): SearchResultItem[] =>
   cards.flatMap((card) => {
     const slug = mangaSlugFromUrl(card.url);
-    if (!slug || !card.title) return [];
-    const subtitle = [card.rating ? `Rating ${card.rating}` : undefined, card.genres[0]]
+    if (!slug) return [];
+
+    const rating = ratingText(card);
+    const subtitle = [rating ? `${rating} ★` : undefined, card.genres[0]]
       .filter(Boolean)
       .join(" • ");
 
@@ -328,20 +346,20 @@ export const toSearchResultItems = (cards: KaliCard[]): SearchResultItem[] =>
         title: card.title,
         imageUrl: card.cover,
         subtitle: subtitle || undefined,
-        contentRating: contentRatingForGenres(card.genres),
+        contentRating: contentRatingForGenres(card.genres, card.isAdult),
       },
     ];
   });
 
 export const hasNextPage = (html: string): boolean => {
   const $ = cheerio.load(html);
-  return $(".paginator > a.active + a:not([rel=next])").length > 0;
+  return $(".paginator > a.active + a:not([rel=next]), .pagination a[rel=next]").length > 0;
 };
 
 export const parseMangaDetails = (html: string, mangaId: string): SourceManga => {
   const $ = cheerio.load(html);
 
-  const title = cleanText($(".detail h1").first().text());
+  const title = cleanText($(".detail h1, .name h1").first().text());
   if (!title) {
     throw new Error(`No details found for ${mangaId}`);
   }
@@ -381,7 +399,7 @@ export const parseMangaDetails = (html: string, mangaId: string): SourceManga =>
     .filter((text) => text && !/^you are reading\b/i.test(text))
     .join("\n\n");
 
-  const secondaryTitles = cleanText($(".detail h2").first().text())
+  const secondaryTitles = cleanText($(".detail h2, .name h2").first().text())
     .split(/[,;]/)
     .map((alias) => alias.trim())
     .filter((alias) => alias && alias.toLowerCase() !== title.toLowerCase());
@@ -394,11 +412,9 @@ export const parseMangaDetails = (html: string, mangaId: string): SourceManga =>
     return [{ id, title: genre }];
   });
 
-  const ratingText = cleanText($(".rating .score").first().text()).replace(/[^\d.]/g, "");
+  const score = cleanText($(".rating .score, #score-board").first().text()).replace(/[^\d.]/g, "");
   const rating =
-    ratingText && parseFloat(ratingText) > 0
-      ? Math.min(1, Math.max(0, parseFloat(ratingText) / 5))
-      : undefined;
+    score && parseFloat(score) > 0 ? Math.min(1, Math.max(0, parseFloat(score) / 5)) : undefined;
 
   return {
     mangaId,
@@ -419,7 +435,7 @@ export const parseMangaDetails = (html: string, mangaId: string): SourceManga =>
 
 export const parseChapterList = (html: string, sourceManga: SourceManga): Chapter[] => {
   const $ = cheerio.load(html);
-  const rows = $("#chapter-list > li").toArray();
+  const rows = $("#chapter-list > li, .chapter-list > li").toArray();
 
   const chapters = rows.flatMap((element, index) => {
     const row = $(element);
@@ -458,7 +474,7 @@ export const parseChapterList = (html: string, sourceManga: SourceManga): Chapte
 export const parseChapterPages = (html: string, chapter: Chapter): ChapterDetails => {
   const $ = cheerio.load(html);
 
-  let pages = $("#chapter-images img, .chapter-image")
+  let pages = $("#chapter-images img, .chapter-image, .chapter-image img, .chapter-lazy-image")
     .toArray()
     .map((element) => {
       const image = $(element);
@@ -473,10 +489,10 @@ export const parseChapterPages = (html: string, chapter: Chapter): ChapterDetail
     .filter((url) => url.length > 0 && !url.includes("/static/"));
 
   if (pages.length === 0) {
-    const script = /var\s+chapImages\s*=\s*['"]([^'"]+)['"]/.exec(html)?.[1];
-    if (script) {
+    const list = /var\s+chapImages\s*=\s*['"]([^'"]+)['"]/.exec(html)?.[1];
+    if (list) {
       const server = /var\s+mainServer\s*=\s*['"]([^'"]+)['"]/.exec(html)?.[1] ?? "";
-      pages = script
+      pages = list
         .split(",")
         .map((path) => path.trim())
         .filter(Boolean)
