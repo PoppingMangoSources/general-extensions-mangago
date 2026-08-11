@@ -5,7 +5,7 @@
 <p align="center">
   <img src="media/badge-ios.svg?v=2" alt="iOS / iPadOS" height="28"/>
   <img src="media/badge-version.svg?v=2" alt="Paperback 0.9+" height="28"/>
-  <img src="media/badge-count.svg?v=7" alt="27 sources" height="28"/>
+  <img src="media/badge-count.svg?v=8" alt="28 sources" height="28"/>
 </p>
 
 <p align="center">
@@ -29,7 +29,7 @@ PoppingMango is an independent source list for [Paperback](https://paperback.moe
 
 ## Sources
 
-**27 sources** — 23 manga, manhwa & manhua, and 4 novels, all available from `0.9/test`.
+**28 sources** — 24 manga, manhwa & manhua, and 4 novels, all available from `0.9/test`.
 
 ### Manga, Manhwa & Manhua
 
@@ -37,6 +37,7 @@ PoppingMango is an independent source list for [Paperback](https://paperback.moe
 | :-------------------------------------------------------------------------------------- | :------------------------------------------------- |
 | <img src="media/sources/bunmanga.png" width="22" align="top"/> **BunManga**             | [bunmanga.com](https://bunmanga.com)               |
 | <img src="media/sources/chikari.png" width="22" align="top"/> **Chikari**               | [chikari.moe](https://chikari.moe)                 |
+| <img src="media/sources/cocomic.png" width="22" align="top"/> **Cocomic**               | [cocomic.co](https://cocomic.co)                   |
 | <img src="media/sources/galaxymanga.png" width="22" align="top"/> **Galaxy Manga**      | [galaxymanga.io](https://galaxymanga.io)           |
 | <img src="media/sources/kaliscan.png" width="22" align="top"/> **KaliScan**             | [kaliscan.com](https://kaliscan.com)               |
 | <img src="media/sources/kingofshojo.png" width="22" align="top"/> **KingOfShojo**       | [kingofshojo.com](https://kingofshojo.com)         |
