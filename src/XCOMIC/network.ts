@@ -26,7 +26,7 @@ query get_comic_browse_items($select: Comic_Browse_Select) {
       id name
       urlCover
       type contentRating genres
-      summary
+      summary { html }
       sfw_result
       chapterNodes_last(amount: 1) {
         data {
@@ -61,7 +61,7 @@ query get_comicNode($id: ID!) {
       artistNodes { data { name } }
       tagNodes { data { name } }
       publisherNodes { data { name } }
-      summary
+      summary { html }
       urlPath urlCover
       sfw_result score_val follows reviews chaps_normal
     }
@@ -105,11 +105,9 @@ export class XComicInterceptor extends PaperbackInterceptor {
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
     if (response.headers?.["cf-mitigated"] === "challenge") {
-      const isDataEndpoint =
-        request.url.startsWith(API_URL) || request.url.includes("/q-data.json");
       throw new CloudflareError({
         // Data endpoints cannot render the challenge interstitial.
-        url: isDataEndpoint ? `${DOMAIN}/` : request.url,
+        url: request.url.startsWith(API_URL) ? `${DOMAIN}/` : request.url,
         method: request.method ?? "GET",
         headers: { "user-agent": await Application.getDefaultUserAgent() },
       });
@@ -163,11 +161,11 @@ export const fetchBrowse = async (select: BrowseSelect): Promise<BrowseResponse>
 };
 
 export const fetchLatestUploads = async (before?: number): Promise<string> => {
-  const url = `${DOMAIN}/latest/q-data.json${before != null ? `?before=${before}` : ""}`;
+  const url = `${DOMAIN}/latest${before != null ? `?before=${before}` : ""}`;
   const [response, buffer] = await Application.scheduleRequest({
     url,
     method: "GET",
-    headers: { accept: "application/json" },
+    headers: { accept: "text/html,application/xhtml+xml" },
   });
   if (response.status < 200 || response.status >= 300) {
     throw new Error(`Request failed with status ${response.status}: ${url}`);

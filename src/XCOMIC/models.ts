@@ -417,16 +417,6 @@ export interface ChapterNode {
   data: ChapterData;
 }
 
-export interface LatestUploadItem {
-  comic: ComicNode;
-  chapters: ChapterNode[];
-}
-
-export interface LatestUploadsResult {
-  before?: number | null;
-  items?: LatestUploadItem[] | null;
-}
-
 export interface ComicData {
   id: string;
   name: string;
@@ -447,7 +437,7 @@ export interface ComicData {
   artistNodes?: NamedNode[] | null;
   tagNodes?: NamedNode[] | null;
   publisherNodes?: NamedNode[] | null;
-  summary?: string | null;
+  summary?: { html?: string | null } | null;
   urlPath?: string | null;
   urlCover?: string | null;
   sfw_result?: boolean | null;

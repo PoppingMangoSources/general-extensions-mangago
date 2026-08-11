@@ -21,7 +21,6 @@ import {
   type ChapterData,
   type ComicData,
   type ComicNode,
-  type LatestUploadsResult,
 } from "./models";
 
 const ADULT_GENRES = new Set(["adult", "hentai", "pornographic", "smut"]);
@@ -124,7 +123,7 @@ export const toDiscoverItem = (
       type,
       ...baseCard(node),
       supertitle: formatType(node.data.type),
-      summary: stripHtml(node.data.summary) || undefined,
+      summary: stripHtml(node.data.summary?.html) || undefined,
       infoItems: number != null ? [{ symbol: "book.fill", text: String(number) }] : undefined,
     };
   }
@@ -146,84 +145,80 @@ export const toDiscoverItem = (
 export const parseLatestUploads = (
   input: string,
 ): { items: DiscoverSectionItem[]; before?: number } => {
-  const parsed = JSON.parse(input) as { _entry?: unknown; _objs?: unknown };
-  if (typeof parsed._entry !== "string" || !Array.isArray(parsed._objs)) {
-    throw new Error("XCOMIC returned malformed latest-upload data");
-  }
-
-  const objects = parsed._objs;
-  const objectAt = (reference: string): unknown => {
-    const id = reference.replace(/[!~_]$/, "");
-    if (!/^[0-9a-z]+$/.test(id)) return undefined;
-    return objects[Number.parseInt(id, 36)];
-  };
-  const resolve = (reference: unknown, ancestors = new Set<number>()): unknown => {
-    if (typeof reference !== "string") return reference;
-    const id = reference.replace(/[!~_]$/, "");
-    if (!/^[0-9a-z]+$/.test(id)) return reference;
-    const index = Number.parseInt(id, 36);
-    if (!Number.isInteger(index) || index < 0 || index >= objects.length) return reference;
-    const value = objects[index];
-    if (value === null || typeof value !== "object") return value;
-    if (ancestors.has(index)) return undefined;
-    const nextAncestors = new Set(ancestors).add(index);
-    return Array.isArray(value)
-      ? value.map((item) => resolve(item, nextAncestors))
-      : Object.fromEntries(
-          Object.entries(value).map(([key, item]) => [key, resolve(item, nextAncestors)]),
-        );
-  };
-
-  const entry = objectAt(parsed._entry);
-  if (!entry || typeof entry !== "object" || !("loaders" in entry)) {
-    throw new Error("XCOMIC latest-upload loader was missing");
-  }
-  const loaders = objectAt(String(entry.loaders));
-  if (!loaders || typeof loaders !== "object") {
-    throw new Error("XCOMIC latest-upload loader was malformed");
-  }
-
-  let result: LatestUploadsResult | undefined;
-  for (const loaderReference of Object.values(loaders)) {
-    const loader = objectAt(String(loaderReference));
-    if (!loader || typeof loader !== "object" || !("select" in loader) || !("result" in loader)) {
-      continue;
-    }
-    const select = resolve(loader.select);
-    const candidate = resolve(loader.result) as LatestUploadsResult;
-    if (
-      select &&
-      typeof select === "object" &&
-      "before" in select &&
-      Array.isArray(candidate.items)
-    ) {
-      result = candidate;
-      break;
-    }
-  }
-  if (!result?.items) throw new Error("XCOMIC latest-upload results were missing");
+  const $ = cheerio.load(input);
+  const cards = $("main > .space-y-5 > .space-y-5 > .grid > div");
+  if (!cards.length) throw new Error("XCOMIC returned no latest uploads");
 
   return {
-    items: result.items
-      .map(({ comic, chapters }) =>
-        toDiscoverItem(
+    items: cards
+      .map((_, element) => {
+        const card = $(element);
+        const mangaAnchor = card.find('h3 a[href^="/comic/"]').first();
+        const mangaPath = mangaAnchor.attr("href");
+        const mangaId = /^\/comic\/([a-zA-Z0-9]+)(?:[-/]|$)/.exec(mangaPath ?? "")?.[1];
+        const chapterAnchor = card
+          .find('a[href^="/comic/"]')
+          .filter((_, anchor) => $(anchor).attr("href")?.startsWith(`${mangaPath}/`) === true)
+          .first();
+        const chapterPath = chapterAnchor.attr("href");
+        const chapterId = /\/([a-zA-Z0-9]+)(?:[-/]|$)/.exec(
+          chapterPath?.slice(mangaPath?.length ?? 0) ?? "",
+        )?.[1];
+        const timestamp = Number(card.find("time[data-time]").first().attr("data-time"));
+        const name = mangaAnchor.text().trim();
+        const cover = card.find("img").first().attr("src")?.trim();
+        if (
+          !mangaId ||
+          !chapterId ||
+          !mangaPath ||
+          !chapterPath ||
+          !name ||
+          !cover ||
+          !Number.isFinite(timestamp)
+        ) {
+          return undefined;
+        }
+
+        const genres = card
+          .find("h3 + div .whitespace-nowrap")
+          .map((_, genre) => $(genre).text().trim())
+          .get()
+          .filter(Boolean);
+        const type = TYPE_OPTIONS.find((option) =>
+          genres.some((genre) => genre.toLowerCase() === option.title.toLowerCase()),
+        )?.id;
+
+        return toDiscoverItem(
           {
             data: {
-              ...comic.data,
-              type:
-                comic.data.type ??
-                TYPE_OPTIONS.find((option) => comic.data.genres?.includes(option.id))?.id,
-              chapterNodes_last: chapters,
+              id: mangaId,
+              name,
+              urlCover: cover,
+              type,
+              genres,
+              chapterNodes_last: [
+                {
+                  data: {
+                    id: chapterId,
+                    dname: chapterAnchor.text().trim(),
+                    urlPath: chapterPath,
+                    datePublic: timestamp,
+                  },
+                },
+              ],
             },
           },
           "chapterUpdatesCarouselItem",
-        ),
-      )
+        );
+      })
+      .get()
       .filter((item): item is DiscoverSectionItem => item !== undefined),
     before:
-      typeof result.before === "number" && Number.isFinite(result.before)
-        ? result.before
-        : undefined,
+      Number(
+        $("a[href*='?before=']")
+          .attr("href")
+          ?.match(/[?&]before=(\d+)/)?.[1],
+      ) || undefined,
   };
 };
 
@@ -296,7 +291,7 @@ export const toSourceManga = (node: ComicNode): SourceManga => {
       primaryTitle: Application.decodeHTMLEntities(comic.name),
       secondaryTitles: (comic.altNames ?? []).map((title) => Application.decodeHTMLEntities(title)),
       thumbnailUrl: cover,
-      synopsis: stripHtml(comic.summary),
+      synopsis: stripHtml(comic.summary?.html),
       author: authors.join(", ") || undefined,
       artist: distinctArtists.join(", ") || undefined,
       contentRating: contentRatingForComic(comic.contentRating, comic.sfw_result, [
