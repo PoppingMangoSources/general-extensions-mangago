@@ -1,6 +1,7 @@
 import { type TestLogger } from "@paperback/types";
 import { expect } from "chai";
 
+import { DEFAULT_SEARCH_TYPES } from "../Chikari/implementations/search-results-providing/models.js";
 import { Chikari } from "../Chikari/main.js";
 import sourceInfo from "../Chikari/pbconfig.js";
 import { TestSuite, registerDefaultTests } from "./suite.js";
@@ -14,10 +15,10 @@ export async function runTests(logger: TestLogger) {
     expect(sections.map((section) => section.title)).to.deep.equal([
       "Popular",
       "Trending Comics",
-      "Trending Novels",
-      "Recently Added",
       "Recently Updated Comics",
+      "Trending Novels",
       "Recently Updated Novels",
+      "Recently Added",
       "Most Bookmarked Comics",
       "Most Bookmarked Novels",
       "Popular by Type",
@@ -61,13 +62,14 @@ export async function runTests(logger: TestLogger) {
     expect(details.html).to.contain("<body>");
   });
 
-  suite.test("novel search uses novel ids", async () => {
-    const results = await Chikari.getSearchResults(
-      { title: "Shadow Slave", metadata: { types: ["novel"] } },
-      undefined,
-    );
+  suite.test("search includes novels by default", async () => {
+    const form = await Chikari.getAdvancedSearchForm({ title: "" });
+    expect(DEFAULT_SEARCH_TYPES).to.deep.equal(["manga", "manhwa", "manhua", "novel"]);
+    expect(form.getSearchQueryMetadata().types).to.deep.equal(DEFAULT_SEARCH_TYPES);
+
+    const results = await Chikari.getSearchResults({ title: "Shadow Slave" }, undefined);
     expect(results.items.length).to.be.greaterThan(0);
-    expect(results.items[0]?.mangaId.startsWith("novel:")).to.equal(true);
+    expect(results.items.some((item) => item.mangaId.startsWith("novel:"))).to.equal(true);
   });
 
   await suite.run();

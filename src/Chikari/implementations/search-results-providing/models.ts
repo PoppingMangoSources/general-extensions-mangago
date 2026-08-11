@@ -18,6 +18,8 @@ export interface SearchMetadata extends JSONObject {
   year?: string;
 }
 
+export const DEFAULT_SEARCH_TYPES: SeriesType[] = ["manga", "manhwa", "manhua", "novel"];
+
 export const SORT_OPTIONS: SortingOption[] = [
   { id: "popular", label: "Popularity" },
   { id: "top_rated", label: "Top Rated" },

@@ -11,14 +11,14 @@ import {
   type Tag,
 } from "@paperback/types";
 
-import type {
-  ChikariPreferences,
-  Period,
-  SeriesStatus,
-  SeriesType,
-  SortId,
-} from "../shared/models";
-import { STATUS_OPTIONS, TYPE_OPTIONS, type SearchMetadata, type TriState } from "./models";
+import type { Period, SeriesStatus, SeriesType, SortId } from "../shared/models";
+import {
+  DEFAULT_SEARCH_TYPES,
+  STATUS_OPTIONS,
+  TYPE_OPTIONS,
+  type SearchMetadata,
+  type TriState,
+} from "./models";
 
 export class ChikariAdvancedSearchForm extends AdvancedSearchForm {
   private genres: TriState;
@@ -32,7 +32,6 @@ export class ChikariAdvancedSearchForm extends AdvancedSearchForm {
 
   constructor(
     searchQuery: SearchQuery<SearchMetadata>,
-    preferences: ChikariPreferences,
     private readonly genreOptions: Tag[],
     private readonly tagOptions: Tag[],
   ) {
@@ -42,7 +41,7 @@ export class ChikariAdvancedSearchForm extends AdvancedSearchForm {
       minChapters: "",
       statuses: [],
       tags: {},
-      types: preferences.types,
+      types: DEFAULT_SEARCH_TYPES,
       year: "",
       ...searchQuery.metadata,
     };
@@ -52,7 +51,7 @@ export class ChikariAdvancedSearchForm extends AdvancedSearchForm {
     this.sort = metadata.sort;
     this.statuses = metadata.statuses;
     this.tags = metadata.tags;
-    this.types = metadata.types;
+    this.types = metadata.types ?? DEFAULT_SEARCH_TYPES;
     this.year = metadata.year;
   }
 

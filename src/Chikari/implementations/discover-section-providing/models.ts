@@ -84,10 +84,10 @@ export const SECTION_DEFINITIONS: Record<SectionId, DiscoverSection> = {
 export const SECTION_OPTIONS: Array<{ id: SectionId; title: string }> = [
   { id: SECTIONS.FEATURED, title: "Popular" },
   { id: SECTIONS.TRENDING, title: "Trending Comics" },
-  { id: SECTIONS.TRENDING_NOVELS, title: "Trending Novels" },
-  { id: SECTIONS.RECENTLY_ADDED, title: "Recently Added" },
   { id: SECTIONS.RECENTLY_UPDATED, title: "Recently Updated Comics" },
+  { id: SECTIONS.TRENDING_NOVELS, title: "Trending Novels" },
   { id: SECTIONS.RECENTLY_UPDATED_NOVELS, title: "Recently Updated Novels" },
+  { id: SECTIONS.RECENTLY_ADDED, title: "Recently Added" },
   { id: SECTIONS.MOST_BOOKMARKED, title: "Most Bookmarked Comics" },
   { id: SECTIONS.MOST_BOOKMARKED_NOVELS, title: "Most Bookmarked Novels" },
   { id: SECTIONS.POPULAR, title: "Popular by Type" },

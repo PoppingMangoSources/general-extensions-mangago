@@ -20,7 +20,7 @@ import {
 import { getPreferences } from "../settings-form-providing/main";
 import { PAGE_SIZE, type PageMetadata, type SeriesType, type SortId } from "../shared/models";
 import { ChikariAdvancedSearchForm } from "./forms";
-import { SORT_OPTIONS, type SearchMetadata } from "./models";
+import { DEFAULT_SEARCH_TYPES, SORT_OPTIONS, type SearchMetadata } from "./models";
 import { detailsToSearchResultItem, pickTriState, toSearchResultItem } from "./parsers";
 
 export class SearchProvider {
@@ -33,7 +33,7 @@ export class SearchProvider {
     query: SearchQuery<SearchMetadata>,
   ): Promise<AdvancedSearchForm> {
     const [genres, tags] = await Promise.all([this.getGenreOptions(), this.getTagOptions()]);
-    return new ChikariAdvancedSearchForm(query, getPreferences(), genres, tags);
+    return new ChikariAdvancedSearchForm(query, genres, tags);
   }
 
   async getSearchResults(
@@ -50,7 +50,7 @@ export class SearchProvider {
       minChapters: "",
       statuses: [],
       tags: {},
-      types: preferences.types,
+      types: DEFAULT_SEARCH_TYPES,
       year: "",
       ...query.metadata,
     };
@@ -69,7 +69,7 @@ export class SearchProvider {
       ]),
     ];
     const minimum = Number(searchMetadata.minChapters);
-    const selectedTypes = (searchMetadata.types ?? preferences.types) as SeriesType[];
+    const selectedTypes = (searchMetadata.types ?? DEFAULT_SEARCH_TYPES) as SeriesType[];
     const comicTypes = selectedTypes.filter((type) => type !== "novel");
     const includeNovels = selectedTypes.includes("novel");
     const includeComics = comicTypes.length > 0;
