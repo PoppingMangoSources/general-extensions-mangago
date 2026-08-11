@@ -8,6 +8,7 @@ import {
   type DiscoverSectionItem,
   type SearchResultItem,
   type SourceManga,
+  type Tag,
   type TagSection,
 } from "@paperback/types";
 import * as cheerio from "cheerio";
@@ -16,9 +17,9 @@ import {
   DEMOGRAPHIC_OPTIONS,
   DOMAIN,
   FORMAT_OPTIONS,
-  GENRE_OPTIONS,
   TYPE_OPTIONS,
   type ChapterData,
+  type ChapterPagesResponse,
   type ComicData,
   type ComicNode,
   type LatestUploadsResult,
@@ -41,10 +42,30 @@ const titleCase = (value: string): string =>
   value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 const optionTitle = (id: string): string =>
-  GENRE_OPTIONS.find((option) => option.id === id)?.title ??
   DEMOGRAPHIC_OPTIONS.find((option) => option.id === id)?.title ??
   FORMAT_OPTIONS.find((option) => option.id === id)?.title ??
   titleCase(id);
+
+export const parseGenreOptions = (html: string): Tag[] => {
+  const $ = cheerio.load(html);
+  const formatIds = new Set(FORMAT_OPTIONS.map((option) => option.id));
+  const genres: Tag[] = [];
+  const seen = new Set<string>();
+  const genrePicker = $("details.group")
+    .filter((_, element) => $(element).find("summary").first().text().trim().startsWith("Genres"))
+    .first();
+
+  genrePicker.find("div").each((_, element) => {
+    const id = $(element).attr(":")?.trim();
+    const title = $(element).find("span").first().text().trim();
+    if (!id || !title || formatIds.has(id) || seen.has(id)) return;
+    seen.add(id);
+    genres.push({ id, title: Application.decodeHTMLEntities(title) });
+  });
+
+  if (!genres.length) throw new Error("XCOMIC returned no genre filters");
+  return genres;
+};
 
 const contentRatingForComic = (
   rating?: string | null,
@@ -313,33 +334,13 @@ export const toChapter = (data: ChapterData, sourceManga: SourceManga): Chapter 
   };
 };
 
-const FLIGHT_IMAGE_REGEX =
-  /\/_f\/[A-Za-z0-9]+\/[A-Za-z0-9]+\/[A-Za-z0-9._-]+\.(?:webp|jpe?g|png|avif)/gi;
-
-const parseFlightImages = (html: string): string[] => {
-  const groups = new Map<string, string[]>();
-  for (const path of html.match(FLIGHT_IMAGE_REGEX) ?? []) {
-    const folder = path.split("/").slice(0, 4).join("/");
-    const group = groups.get(folder) ?? [];
-    group.push(path);
-    groups.set(folder, group);
-  }
-
-  let best: string[] = [];
-  for (const group of groups.values()) {
-    if (group.length > best.length) best = group;
-  }
-
-  const seen = new Set<string>();
-  return best.filter((path) => {
-    if (seen.has(path)) return false;
-    seen.add(path);
-    return true;
-  });
-};
-
-export const parseChapterDetails = (html: string, chapter: Chapter): ChapterDetails => {
-  const pages = parseFlightImages(html).map(toAbsoluteUrl);
+export const parseChapterDetails = (
+  response: ChapterPagesResponse,
+  chapter: Chapter,
+): ChapterDetails => {
+  const pages = (response.get_chapterNode?.data?.imageUrls ?? [])
+    .map(toAbsoluteUrl)
+    .filter(Boolean);
   if (!pages.length) throw new Error("XCOMIC returned no chapter images");
   return { id: chapter.chapterId, mangaId: chapter.sourceManga.mangaId, pages };
 };

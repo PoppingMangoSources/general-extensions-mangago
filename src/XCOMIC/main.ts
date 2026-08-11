@@ -19,6 +19,7 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
+  type Tag,
 } from "@paperback/types";
 
 import { XComicAdvancedSearchForm } from "./forms/search";
@@ -30,26 +31,27 @@ import {
 } from "./forms/settings";
 import {
   DISCOVER_SECTIONS,
-  GENRE_OPTIONS,
   PAGE_SIZE,
   SECTIONS,
   SORTING_OPTIONS,
+  STATE_KEYS,
   type BrowseSelect,
   type PageMetadata,
   type SearchMetadata,
 } from "./models";
 import {
   fetchBrowse,
-  fetchChapterHtml,
+  fetchChapterPages,
   fetchChapters,
   fetchComic,
   fetchLatestUploads,
+  fetchSearchPage,
   XComicInterceptor,
 } from "./network";
 import {
   parseChapterDetails,
+  parseGenreOptions,
   parseLatestUploads,
-  toAbsoluteUrl,
   toChapter,
   toDiscoverItem,
   toSearchResultItem,
@@ -59,6 +61,7 @@ import {
 import type XComicConfig from "./pbconfig";
 
 class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
+  private genresPromise?: Promise<Tag[]>;
   private rateLimiter = new BasicRateLimiter("xcomic-rate-limiter", {
     numberOfRequests: 3,
     bufferInterval: 1,
@@ -82,11 +85,17 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       if (cookie.expires && cookie.expires.getTime() <= Date.now()) continue;
       this.cookieStorageInterceptor.setCookie(cookie);
     }
+    this.genresPromise = undefined;
     Application.invalidateDiscoverSections();
   }
 
   async getSettingsForm(): Promise<Form> {
-    return new XComicSettingsForm(getPreferences(), getSectionOrder(), getVisibleSections());
+    return new XComicSettingsForm(
+      getPreferences(),
+      getSectionOrder(),
+      getVisibleSections(),
+      await this.getGenres(),
+    );
   }
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
@@ -132,20 +141,23 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     itemType: CarouselItemType,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const page = metadata?.page ?? 1;
-    const response = await fetchBrowse(this.buildSelect(page, sortby, "", undefined));
+    const response = await fetchBrowse(
+      this.buildSelect(page, sortby, "", undefined),
+      itemType === "featuredCarouselItem",
+    );
     const nodes = response.get_comic_browse_items ?? [];
     return {
       items: nodes
         .filter((node) => Boolean(node.data.urlCover?.trim()))
         .map((node) => toDiscoverItem(node, itemType))
         .filter((item): item is DiscoverSectionItem => item !== undefined),
-      metadata: response.get_comic_browse_pager?.next ? { page: page + 1 } : undefined,
+      metadata: nodes.length === PAGE_SIZE ? { page: page + 1 } : undefined,
     };
   }
 
-  private getGenreSection(): PagedResults<DiscoverSectionItem> {
+  private async getGenreSection(): Promise<PagedResults<DiscoverSectionItem>> {
     return {
-      items: GENRE_OPTIONS.map((genre) => ({
+      items: (await this.getGenres()).map((genre) => ({
         type: "genresCarouselItem",
         name: genre.title,
         searchQuery: {
@@ -156,8 +168,16 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     };
   }
 
+  private async getGenres(): Promise<Tag[]> {
+    const stored = Application.getState(STATE_KEYS.GENRES) as Tag[] | undefined;
+    if (stored?.length) return stored;
+    const genres = await (this.genresPromise ??= fetchSearchPage().then(parseGenreOptions));
+    Application.setState(genres, STATE_KEYS.GENRES);
+    return genres;
+  }
+
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
-    return new XComicAdvancedSearchForm(query, getPreferences());
+    return new XComicAdvancedSearchForm(query, getPreferences(), await this.getGenres());
   }
 
   async getSortingOptions(): Promise<SortingOption[]> {
@@ -183,7 +203,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     const nodes = response.get_comic_browse_items ?? [];
     return {
       items: nodes.filter((node) => Boolean(node.data.urlCover?.trim())).map(toSearchResultItem),
-      metadata: response.get_comic_browse_pager?.next ? { page: page + 1 } : undefined,
+      metadata: nodes.length === PAGE_SIZE ? { page: page + 1 } : undefined,
     };
   }
 
@@ -273,25 +293,31 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
-    const chapters: Chapter[] = [];
-    let page = 1;
-    while (true) {
-      const response = await fetchChapters(sourceManga.mangaId, page);
-      const result = response.get_comic_chapterList_uniqList;
-      if (!result) break;
-      chapters.push(
-        ...(result.items ?? [])
-          .filter((item) => item.data.dbStatus === "normal")
-          .map((item) => toChapter(item.data, sourceManga)),
-      );
-      if (!result.paging?.next) break;
-      page++;
-    }
-    return chapters;
+    const first = await fetchChapters(sourceManga.mangaId, 1);
+    const firstResult = first.get_comic_chapterList_uniqList;
+    if (!firstResult) return [];
+    const pageCount = firstResult.paging?.pages ?? 1;
+    const responses = [
+      first,
+      ...(pageCount > 1
+        ? await Promise.all(
+            Array.from({ length: pageCount - 1 }, (_, index) =>
+              fetchChapters(sourceManga.mangaId, index + 2),
+            ),
+          )
+        : []),
+    ];
+    return responses.flatMap((response) =>
+      (response.get_comic_chapterList_uniqList?.items ?? [])
+        .filter((item) => item.data.dbStatus === "normal")
+        .map((item) => toChapter(item.data, sourceManga)),
+    );
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    return parseChapterDetails(await fetchChapterHtml(toAbsoluteUrl(chapter.chapterId)), chapter);
+    const id = chapter.chapterId.split("/").pop()?.split("-")[0];
+    if (!id) throw new Error(`Invalid XCOMIC chapter ID: ${chapter.chapterId}`);
+    return parseChapterDetails(await fetchChapterPages(id), chapter);
   }
 }
 

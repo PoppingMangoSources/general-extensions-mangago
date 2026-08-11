@@ -15,6 +15,7 @@ import {
   type BrowseResponse,
   type BrowseSelect,
   type ChapterListResponse,
+  type ChapterPagesResponse,
   type ComicNodeResponse,
   type GraphQLResponse,
 } from "./models";
@@ -22,29 +23,20 @@ import {
 const LATEST_UPLOADS_URL = `${DOMAIN}/latest/q-loader-JrIz3zZm8Ms.dev.json`;
 
 const BROWSE_QUERY = `
-query get_comic_browse_items($select: Comic_Browse_Select) {
+query get_comic_browse_items($select: Comic_Browse_Select, $includeSummary: Boolean!) {
   get_comic_browse_items(select: $select) {
     data {
       id name
       urlCover
       type contentRating genres
-      summary { html }
+      summary @include(if: $includeSummary) { html }
       sfw_result
       chapterNodes_last(amount: 1) {
         data {
-          id dateCreate dateModify datePublic
-          urlPath serial chaNum
+          serial chaNum
         }
       }
     }
-  }
-}
-`;
-
-const BROWSE_PAGER_QUERY = `
-query get_comic_browse_pager($select: Comic_Browse_Select) {
-  get_comic_browse_pager(select: $select) {
-    next
   }
 }
 `;
@@ -74,7 +66,7 @@ query get_comicNode($id: ID!) {
 const CHAPTERS_QUERY = `
 query get_comic_chapterList_uniqList($select: Select_Comic_ChapterList_UniqList) {
   get_comic_chapterList_uniqList(select: $select) {
-    paging { next }
+    paging { pages }
     items {
       data {
         id dbStatus serial chaNum
@@ -155,13 +147,19 @@ const fetchGraphQL = async <T>(query: string, variables: Record<string, unknown>
   return payload.data;
 };
 
-export const fetchBrowse = async (select: BrowseSelect): Promise<BrowseResponse> => {
-  const [items, pager] = await Promise.all([
-    fetchGraphQL<BrowseResponse>(BROWSE_QUERY, { select }),
-    fetchGraphQL<BrowseResponse>(BROWSE_PAGER_QUERY, { select }),
-  ]);
-  return { ...items, ...pager };
-};
+const CHAPTER_PAGES_QUERY = `
+query get_chapterNode($id: ID!) {
+  get_chapterNode(id: $id) {
+    data { imageUrls }
+  }
+}
+`;
+
+export const fetchBrowse = (
+  select: BrowseSelect,
+  includeSummary = false,
+): Promise<BrowseResponse> =>
+  fetchGraphQL<BrowseResponse>(BROWSE_QUERY, { select, includeSummary });
 
 export const fetchLatestUploads = async (before?: number): Promise<string> => {
   const url = `${LATEST_UPLOADS_URL}${before != null ? `?before=${before}` : ""}`;
@@ -184,15 +182,18 @@ export const fetchChapters = (comicId: string, page: number): Promise<ChapterLis
     select: { comic_id: comicId, page, size: CHAPTER_PAGE_SIZE, sortby: "chapter_desc" },
   });
 
-export const fetchChapterHtml = async (url: string): Promise<string> => {
+export const fetchSearchPage = async (): Promise<string> => {
+  const url = `${DOMAIN}/search`;
   const [response, buffer] = await Application.scheduleRequest({
     url,
     method: "GET",
     headers: { accept: "text/html,application/xhtml+xml" },
   });
-  if (response.status === 404) throw new Error(`Chapter not found: ${url}`);
   if (response.status < 200 || response.status >= 300) {
     throw new Error(`Request failed with status ${response.status}: ${url}`);
   }
   return Application.arrayBufferToUTF8String(buffer);
 };
+
+export const fetchChapterPages = (id: string): Promise<ChapterPagesResponse> =>
+  fetchGraphQL<ChapterPagesResponse>(CHAPTER_PAGES_QUERY, { id });

@@ -1,9 +1,15 @@
-import { ContentRating, type TestLogger } from "@paperback/types";
+import { ContentRating, type Tag, type TestLogger } from "@paperback/types";
 import { expect } from "chai";
 
 import { getPreferences } from "../XCOMIC/forms/settings.js";
 import { XCOMIC } from "../XCOMIC/main.js";
-import { DEFAULT_CONTENT_RATINGS, DISCOVER_SECTIONS, SECTIONS } from "../XCOMIC/models.js";
+import {
+  CHAPTER_COUNT_OPTIONS,
+  DEFAULT_CONTENT_RATINGS,
+  DISCOVER_SECTIONS,
+  SECTIONS,
+  STATE_KEYS,
+} from "../XCOMIC/models.js";
 import sourceInfo from "../XCOMIC/pbconfig.js";
 import { TestSuite, registerDefaultTests } from "./suite.js";
 
@@ -28,6 +34,23 @@ export async function runTests(logger: TestLogger) {
       incGenresMode: "or",
       excGenresMode: "and",
     });
+  });
+
+  suite.test("search filters follow the current site taxonomy", async () => {
+    await XCOMIC.getAdvancedSearchForm({ title: "" });
+    const genres = Application.getState(STATE_KEYS.GENRES) as Tag[] | undefined;
+    expect(genres?.length).to.be.greaterThan(100);
+    expect(genres?.some((item) => item.id === "action")).to.equal(true);
+    expect(CHAPTER_COUNT_OPTIONS.map((option) => option.id)).to.include.members([
+      "60",
+      "70",
+      "80",
+      "90",
+      "60-69",
+      "70-79",
+      "80-89",
+      "90-99",
+    ]);
   });
 
   suite.test("mature source defaults exclude pornographic content", async () => {
@@ -82,6 +105,15 @@ export async function runTests(logger: TestLogger) {
     expect(chapters.every((chapter) => chapter.volume === 0)).to.equal(true);
     expect(numbers).to.deep.equal([...numbers].sort((a, b) => b - a));
     expect(chapters.some((chapter) => chapter.title?.startsWith("Volume "))).to.equal(true);
+  });
+
+  suite.test("multi-page chapters and reader use the GraphQL payloads", async () => {
+    const manga = await XCOMIC.getMangaDetails("vg7ypp");
+    const chapters = await XCOMIC.getChapters(manga);
+    expect(chapters.length).to.be.greaterThan(200);
+    const details = await XCOMIC.getChapterDetails(chapters[0]!);
+    expect(details.pages.length).to.be.greaterThan(0);
+    expect(details.pages.every((page) => page.startsWith("https://xcomic.me/_f/"))).to.equal(true);
   });
 
   await suite.run();

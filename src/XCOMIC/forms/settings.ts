@@ -1,14 +1,21 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import { EditSection, Form, LabelRow, NavigationRow, Section, SelectRow } from "@paperback/types";
+import {
+  EditSection,
+  Form,
+  LabelRow,
+  NavigationRow,
+  Section,
+  SelectRow,
+  type Tag,
+} from "@paperback/types";
 
 import {
   CONTENT_RATING_OPTIONS,
   DEFAULT_CONTENT_RATINGS,
   DEFAULT_CONTENT_TYPES,
   FORMAT_OPTIONS,
-  GENRE_OPTIONS,
   SECTION_IDS,
   SECTION_OPTIONS,
   STATE_KEYS,
@@ -107,6 +114,7 @@ export class XComicSettingsForm extends Form {
     preferences: XComicPreferences,
     private readonly sectionOrder: SectionId[],
     visibleSections: SectionId[],
+    private readonly genreOptions: Tag[],
   ) {
     super();
     this.contentRatings = preferences.contentRatings;
@@ -143,9 +151,9 @@ export class XComicSettingsForm extends Form {
           title: "Excluded genres",
           layout: "flow",
           value: this.excludedGenres,
-          items: GENRE_OPTIONS,
+          items: this.genreOptions,
           minItemCount: 0,
-          maxItemCount: GENRE_OPTIONS.length,
+          maxItemCount: this.genreOptions.length,
           onValueChange: Application.Selector(this as XComicSettingsForm, "handleExcludedGenres"),
         }),
         SelectRow("excluded_tags", {

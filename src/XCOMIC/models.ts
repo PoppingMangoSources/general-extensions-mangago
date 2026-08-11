@@ -63,6 +63,7 @@ export const STATE_KEYS = {
   CONTENT_TYPES: "xcomic_content_types",
   EXCLUDED_GENRES: "xcomic_excluded_genres",
   EXCLUDED_TAGS: "xcomic_excluded_tags",
+  GENRES: "xcomic_genres_v1",
   SECTION_ORDER: "xcomic_section_order",
   VISIBLE_SECTIONS: "xcomic_visible_sections",
 } as const;
@@ -147,6 +148,10 @@ export const CHAPTER_COUNT_OPTIONS: Tag[] = [
   { id: "30", title: "30+" },
   { id: "40", title: "40+" },
   { id: "50", title: "50+" },
+  { id: "60", title: "60+" },
+  { id: "70", title: "70+" },
+  { id: "80", title: "80+" },
+  { id: "90", title: "90+" },
   { id: "100", title: "100+" },
   { id: "200", title: "200+" },
   { id: "300", title: "300+" },
@@ -156,6 +161,10 @@ export const CHAPTER_COUNT_OPTIONS: Tag[] = [
   { id: "30-39", title: "30–39" },
   { id: "40-49", title: "40–49" },
   { id: "50-59", title: "50–59" },
+  { id: "60-69", title: "60–69" },
+  { id: "70-79", title: "70–79" },
+  { id: "80-89", title: "80–89" },
+  { id: "90-99", title: "90–99" },
   { id: "100-199", title: "100–199" },
   { id: "200-299", title: "200–299" },
 ];
@@ -173,130 +182,6 @@ export const FORMAT_OPTIONS: Tag[] = [
   { id: "oneshot", title: "Oneshot" },
   { id: "web_comic", title: "Web Comic" },
   { id: "webtoon", title: "Webtoon" },
-];
-
-export const GENRE_OPTIONS: Tag[] = [
-  { id: "action", title: "Action" },
-  { id: "adventure", title: "Adventure" },
-  { id: "age_gap", title: "Age Gap" },
-  { id: "aliens", title: "Aliens" },
-  { id: "animals", title: "Animals" },
-  { id: "art_by_ai", title: "Art-by-AI" },
-  { id: "bara", title: "Bara" },
-  { id: "beasts", title: "Beasts" },
-  { id: "blackmail", title: "Blackmail" },
-  { id: "bodyswap", title: "Bodyswap" },
-  { id: "boys", title: "Boys" },
-  { id: "boys_love", title: "Boys Love" },
-  { id: "brocon_siscon", title: "Brocon Siscon" },
-  { id: "cars", title: "Cars" },
-  { id: "cheating_infidelity", title: "Cheating/Infidelity" },
-  { id: "childhood_friends", title: "Childhood Friends" },
-  { id: "college_life", title: "College Life" },
-  { id: "comedy", title: "Comedy" },
-  { id: "comic", title: "Comic" },
-  { id: "contest_winning", title: "Contest Winning" },
-  { id: "cooking", title: "Cooking" },
-  { id: "crime", title: "Crime" },
-  { id: "crossdressing", title: "Crossdressing" },
-  { id: "cultivation", title: "Cultivation" },
-  { id: "death_game", title: "Death Game" },
-  { id: "degeneratemc", title: "Degeneratemc" },
-  { id: "delinquents", title: "Delinquents" },
-  { id: "dementia", title: "Dementia" },
-  { id: "demons", title: "Demons" },
-  { id: "drama", title: "Drama" },
-  { id: "dungeons", title: "Dungeons" },
-  { id: "emperors_daughter", title: "Emperor's Daughter" },
-  { id: "family", title: "Family" },
-  { id: "fantasy", title: "Fantasy" },
-  { id: "female_protagonists", title: "Female Protagonists" },
-  { id: "fetish", title: "Fetish" },
-  { id: "futa", title: "Futa" },
-  { id: "game", title: "Game" },
-  { id: "genderswap", title: "Genderswap" },
-  { id: "ghosts", title: "Ghosts" },
-  { id: "girls", title: "Girls" },
-  { id: "girls_love", title: "Girls Love" },
-  { id: "gyaru", title: "Gyaru" },
-  { id: "harem", title: "Harem" },
-  { id: "harlequin", title: "Harlequin" },
-  { id: "historical", title: "Historical" },
-  { id: "horror", title: "Horror" },
-  { id: "incest", title: "Incest" },
-  { id: "isekai", title: "Isekai" },
-  { id: "kids", title: "Kids" },
-  { id: "loli", title: "Loli" },
-  { id: "mafia", title: "Mafia" },
-  { id: "magic", title: "Magic" },
-  { id: "magical_girls", title: "Magical Girls" },
-  { id: "mahjong", title: "Mahjong" },
-  { id: "male_protagonists", title: "Male Protagonists" },
-  { id: "martial_arts", title: "Martial Arts" },
-  { id: "master_servant", title: "Master-Servant" },
-  { id: "mecha", title: "Mecha" },
-  { id: "medical", title: "Medical" },
-  { id: "milf", title: "Milf" },
-  { id: "military", title: "Military" },
-  { id: "monster_girls", title: "Monster Girls" },
-  { id: "monsters", title: "Monsters" },
-  { id: "music", title: "Music" },
-  { id: "mystery", title: "Mystery" },
-  { id: "netorare_ntr", title: "Netorare/NTR" },
-  { id: "netori", title: "Netori" },
-  { id: "ninja", title: "Ninja" },
-  { id: "office_workers", title: "Office Workers" },
-  { id: "omegaverse", title: "Omegaverse" },
-  { id: "parody", title: "Parody" },
-  { id: "philosophical", title: "Philosophical" },
-  { id: "police", title: "Police" },
-  { id: "post_apocalyptic", title: "Post-Apocalyptic" },
-  { id: "psychological", title: "Psychological" },
-  { id: "regression", title: "Regression" },
-  { id: "reincarnation", title: "Reincarnation" },
-  { id: "revenge", title: "Revenge" },
-  { id: "reverse_harem", title: "Reverse Harem" },
-  { id: "reverse_isekai", title: "Reverse Isekai" },
-  { id: "romance", title: "Romance" },
-  { id: "royal_family", title: "Royal Family" },
-  { id: "royalty", title: "Royalty" },
-  { id: "samurai", title: "Samurai" },
-  { id: "school_life", title: "School Life" },
-  { id: "sci_fi", title: "Sci-Fi" },
-  { id: "sexual_violence", title: "Sexual Violence" },
-  { id: "shota", title: "Shota" },
-  { id: "shoujo_ai", title: "Shoujo Ai" },
-  { id: "shounen_ai", title: "Shounen Ai" },
-  { id: "showbiz", title: "Showbiz" },
-  { id: "slice_of_life", title: "Slice of Life" },
-  { id: "sm_bdsm_sub_dom", title: "SM/BDSM/SUB-DOM" },
-  { id: "space", title: "Space" },
-  { id: "sports", title: "Sports" },
-  { id: "spy", title: "Spy" },
-  { id: "step_family", title: "Step-family" },
-  { id: "story_by_ai", title: "Story-by-AI" },
-  { id: "super_power", title: "Super Power" },
-  { id: "superhero", title: "Superhero" },
-  { id: "supernatural", title: "Supernatural" },
-  { id: "survival", title: "Survival" },
-  { id: "suspense", title: "Suspense" },
-  { id: "teacher_student", title: "Teacher-Student" },
-  { id: "thriller", title: "Thriller" },
-  { id: "time_travel", title: "Time Travel" },
-  { id: "tower_climbing", title: "Tower Climbing" },
-  { id: "traditional_games", title: "Traditional Games" },
-  { id: "tragedy", title: "Tragedy" },
-  { id: "transmigration", title: "Transmigration" },
-  { id: "vampires", title: "Vampires" },
-  { id: "video_games", title: "Video Games" },
-  { id: "villainess", title: "Villainess" },
-  { id: "virtual_reality", title: "Virtual Reality" },
-  { id: "wuxia", title: "Wuxia" },
-  { id: "xianxia", title: "Xianxia" },
-  { id: "xuanhuan", title: "Xuanhuan" },
-  { id: "yakuzas", title: "Yakuzas" },
-  { id: "youkai", title: "Youkai" },
-  { id: "zombies", title: "Zombies" },
 ];
 
 export const LANGUAGE_OPTIONS: Tag[] = [
@@ -458,12 +343,11 @@ export interface ComicNode {
 }
 
 interface Pagination {
-  next?: number | null;
+  pages?: number | null;
 }
 
 export interface BrowseResponse {
   get_comic_browse_items?: ComicNode[] | null;
-  get_comic_browse_pager?: Pagination | null;
 }
 
 export interface ComicNodeResponse {
@@ -477,6 +361,14 @@ interface ChapterListResult {
 
 export interface ChapterListResponse {
   get_comic_chapterList_uniqList?: ChapterListResult | null;
+}
+
+export interface ChapterPagesResponse {
+  get_chapterNode?: {
+    data?: {
+      imageUrls?: string[] | null;
+    } | null;
+  } | null;
 }
 
 export interface GraphQLResponse<T> {

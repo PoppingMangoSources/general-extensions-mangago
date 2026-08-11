@@ -9,6 +9,7 @@ import {
   SelectSection,
   TriStateSelectRow,
   type SearchQuery,
+  type Tag,
 } from "@paperback/types";
 
 import {
@@ -16,7 +17,6 @@ import {
   CONTENT_RATING_OPTIONS,
   DEMOGRAPHIC_OPTIONS,
   FORMAT_OPTIONS,
-  GENRE_OPTIONS,
   LANGUAGE_OPTIONS,
   MODE_OPTIONS,
   STATUS_OPTIONS,
@@ -46,7 +46,11 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
   private uploadStatus: WorkStatus[];
   private year: string;
 
-  constructor(searchQuery: SearchQuery<SearchMetadata>, preferences: XComicPreferences) {
+  constructor(
+    searchQuery: SearchQuery<SearchMetadata>,
+    preferences: XComicPreferences,
+    private readonly genreOptions: Tag[],
+  ) {
     super();
     const metadata = {
       chapCount: "",
@@ -121,7 +125,7 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           title: "Genres",
           layout: "flow",
           value: this.genres,
-          items: GENRE_OPTIONS,
+          items: this.genreOptions,
           allowExclusion: true,
           allowEmptySelection: true,
           onValueChange: Application.Selector(this as XComicAdvancedSearchForm, "handleGenres"),
