@@ -1,4 +1,4 @@
-import { type TestLogger } from "@paperback/types";
+import { ContentRating, type TestLogger } from "@paperback/types";
 import { expect } from "chai";
 
 import { getPreferences } from "../XCOMIC/forms/settings.js";
@@ -30,13 +30,9 @@ export async function runTests(logger: TestLogger) {
     });
   });
 
-  suite.test("all content ratings are enabled by default", async () => {
-    expect(DEFAULT_CONTENT_RATINGS).to.deep.equal([
-      "safe",
-      "suggestive",
-      "erotica",
-      "pornographic",
-    ]);
+  suite.test("mature source defaults exclude pornographic content", async () => {
+    expect(sourceInfo.contentRating).to.equal(ContentRating.MATURE);
+    expect(DEFAULT_CONTENT_RATINGS).to.deep.equal(["safe", "suggestive", "erotica"]);
     expect(getPreferences().contentRatings).to.deep.equal(DEFAULT_CONTENT_RATINGS);
   });
 
