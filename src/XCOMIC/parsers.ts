@@ -21,7 +21,9 @@ import {
   type ChapterData,
   type ComicData,
   type ComicNode,
+  type LatestUploadsResult,
 } from "./models";
+import { decodeQwikLoader } from "./utils";
 
 const ADULT_GENRES = new Set(["adult", "hentai", "pornographic", "smut"]);
 const MATURE_GENRES = new Set(["ecchi", "erotica", "mature", "yaoi", "yuri"]);
@@ -145,80 +147,33 @@ export const toDiscoverItem = (
 export const parseLatestUploads = (
   input: string,
 ): { items: DiscoverSectionItem[]; before?: number } => {
-  const $ = cheerio.load(input);
-  const cards = $("main > .space-y-5 > .space-y-5 > .grid > div");
-  if (!cards.length) throw new Error("XCOMIC returned no latest uploads");
+  const root = decodeQwikLoader(input);
+  const result = (root as { d?: { result?: LatestUploadsResult } })?.d?.result;
+  if (!result || !Array.isArray(result.items)) {
+    throw new Error("XCOMIC latest-upload results were missing");
+  }
 
   return {
-    items: cards
-      .map((_, element) => {
-        const card = $(element);
-        const mangaAnchor = card.find('h3 a[href^="/comic/"]').first();
-        const mangaPath = mangaAnchor.attr("href");
-        const mangaId = /^\/comic\/([a-zA-Z0-9]+)(?:[-/]|$)/.exec(mangaPath ?? "")?.[1];
-        const chapterAnchor = card
-          .find('a[href^="/comic/"]')
-          .filter((_, anchor) => $(anchor).attr("href")?.startsWith(`${mangaPath}/`) === true)
-          .first();
-        const chapterPath = chapterAnchor.attr("href");
-        const chapterId = /\/([a-zA-Z0-9]+)(?:[-/]|$)/.exec(
-          chapterPath?.slice(mangaPath?.length ?? 0) ?? "",
-        )?.[1];
-        const timestamp = Number(card.find("time[data-time]").first().attr("data-time"));
-        const name = mangaAnchor.text().trim();
-        const cover = card.find("img").first().attr("src")?.trim();
-        if (
-          !mangaId ||
-          !chapterId ||
-          !mangaPath ||
-          !chapterPath ||
-          !name ||
-          !cover ||
-          !Number.isFinite(timestamp)
-        ) {
-          return undefined;
-        }
-
-        const genres = card
-          .find("h3 + div .whitespace-nowrap")
-          .map((_, genre) => $(genre).text().trim())
-          .get()
-          .filter(Boolean);
-        const type = TYPE_OPTIONS.find((option) =>
-          genres.some((genre) => genre.toLowerCase() === option.title.toLowerCase()),
-        )?.id;
-
-        return toDiscoverItem(
+    items: result.items
+      .map(({ comic, chapters }) =>
+        toDiscoverItem(
           {
             data: {
-              id: mangaId,
-              name,
-              urlCover: cover,
-              type,
-              genres,
-              chapterNodes_last: [
-                {
-                  data: {
-                    id: chapterId,
-                    dname: chapterAnchor.text().trim(),
-                    urlPath: chapterPath,
-                    datePublic: timestamp,
-                  },
-                },
-              ],
+              ...comic.data,
+              type:
+                comic.data.type ??
+                TYPE_OPTIONS.find((option) => comic.data.genres?.includes(option.id))?.id,
+              chapterNodes_last: chapters,
             },
           },
           "chapterUpdatesCarouselItem",
-        );
-      })
-      .get()
+        ),
+      )
       .filter((item): item is DiscoverSectionItem => item !== undefined),
     before:
-      Number(
-        $("a[href*='?before=']")
-          .attr("href")
-          ?.match(/[?&]before=(\d+)/)?.[1],
-      ) || undefined,
+      typeof result.before === "number" && Number.isFinite(result.before)
+        ? result.before
+        : undefined,
   };
 };
 

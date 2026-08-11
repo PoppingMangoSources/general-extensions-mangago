@@ -417,6 +417,16 @@ export interface ChapterNode {
   data: ChapterData;
 }
 
+export interface LatestUploadItem {
+  comic: ComicNode;
+  chapters: ChapterNode[];
+}
+
+export interface LatestUploadsResult {
+  before?: number | null;
+  items?: LatestUploadItem[] | null;
+}
+
 export interface ComicData {
   id: string;
   name: string;

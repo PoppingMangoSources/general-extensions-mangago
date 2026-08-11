@@ -45,7 +45,7 @@ export async function runTests(logger: TestLogger) {
       DISCOVER_SECTIONS[SECTIONS.LATEST_UPLOADS],
       undefined,
     );
-    expect(result.items.length).to.be.greaterThan(0);
+    expect(result.items.length).to.equal(36);
     expect(
       result.items.every(
         (item) =>
