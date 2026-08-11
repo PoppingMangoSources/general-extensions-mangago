@@ -9,19 +9,33 @@ export async function runTests(logger: TestLogger) {
   const suite = new TestSuite("Chikari tests", logger);
   registerDefaultTests(suite, Chikari, sourceInfo);
 
-  suite.test("discover separates comic and novel rails", async () => {
+  suite.test("discover separates comic and novel browsing", async () => {
     const sections = await Chikari.getDiscoverSections();
     expect(sections.map((section) => section.title)).to.deep.equal([
       "Popular",
       "Trending Comics",
       "Trending Novels",
-      "Recently Added Comics",
+      "Recently Added",
       "Recently Updated Comics",
       "Recently Updated Novels",
       "Most Bookmarked Comics",
       "Most Bookmarked Novels",
       "Popular by Type",
       "Top Rated by Type",
+    ]);
+
+    const recentlyAdded = sections.find((section) => section.title === "Recently Added");
+    if (!recentlyAdded) throw new Error("Recently Added section is missing.");
+    const recentlyAddedResults = await Chikari.getDiscoverSectionItems(recentlyAdded, undefined);
+    expect(recentlyAddedResults.items).to.have.length(2);
+    expect(recentlyAddedResults.items.map((item) => item.type)).to.deep.equal([
+      "genresCarouselItem",
+      "genresCarouselItem",
+    ]);
+    expect(recentlyAddedResults.items.map((item) => item.name)).to.deep.equal(["Comics", "Novels"]);
+    expect(recentlyAddedResults.items.map((item) => item.searchQuery.metadata)).to.deep.equal([
+      { sort: "added", types: ["manga", "manhwa", "manhua", "oel"] },
+      { sort: "added", types: ["novel"] },
     ]);
 
     const latestNovels = sections.find((section) => section.title === "Recently Updated Novels");

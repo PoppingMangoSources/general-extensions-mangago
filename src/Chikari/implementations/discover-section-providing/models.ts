@@ -46,8 +46,8 @@ export const SECTION_DEFINITIONS: Record<SectionId, DiscoverSection> = {
   },
   [SECTIONS.RECENTLY_ADDED]: {
     id: SECTIONS.RECENTLY_ADDED,
-    title: "Recently Added Comics",
-    type: DiscoverSectionType.simpleCarousel,
+    title: "Recently Added",
+    type: DiscoverSectionType.genres,
   },
   [SECTIONS.RECENTLY_UPDATED]: {
     id: SECTIONS.RECENTLY_UPDATED,
@@ -85,7 +85,7 @@ export const SECTION_OPTIONS: Array<{ id: SectionId; title: string }> = [
   { id: SECTIONS.FEATURED, title: "Popular" },
   { id: SECTIONS.TRENDING, title: "Trending Comics" },
   { id: SECTIONS.TRENDING_NOVELS, title: "Trending Novels" },
-  { id: SECTIONS.RECENTLY_ADDED, title: "Recently Added Comics" },
+  { id: SECTIONS.RECENTLY_ADDED, title: "Recently Added" },
   { id: SECTIONS.RECENTLY_UPDATED, title: "Recently Updated Comics" },
   { id: SECTIONS.RECENTLY_UPDATED_NOVELS, title: "Recently Updated Novels" },
   { id: SECTIONS.MOST_BOOKMARKED, title: "Most Bookmarked Comics" },
@@ -102,14 +102,24 @@ export const PERIOD_FILTERS: Array<{ id: Period; title: string }> = [
 
 export const BOOKMARK_PERIOD_FILTERS: Array<{ id: Period; title: string }> = PERIOD_FILTERS;
 
-export const TYPE_FILTERS: Array<{ id: SeriesType; title: string }> = [
-  { id: "manga", title: "Manga" },
-  { id: "manhwa", title: "Manhwa" },
-  { id: "manhua", title: "Manhua" },
-  { id: "novel", title: "Novel" },
+export const RECENTLY_ADDED_TYPE_FILTERS: TypeFilter[] = [
+  { title: "Comics", types: ["manga", "manhwa", "manhua", "oel"] },
+  { title: "Novels", types: ["novel"] },
+];
+
+export const TYPE_FILTERS: TypeFilter[] = [
+  { title: "Manga", types: ["manga"] },
+  { title: "Manhwa", types: ["manhwa"] },
+  { title: "Manhua", types: ["manhua"] },
+  { title: "Novel", types: ["novel"] },
 ];
 
 export interface FilterItem {
-  id: Period | SeriesType;
+  id: Period;
   title: string;
+}
+
+export interface TypeFilter {
+  title: string;
+  types: SeriesType[];
 }

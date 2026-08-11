@@ -22,7 +22,7 @@ import {
   formatViews,
   toContentRating,
 } from "../shared/parsers";
-import type { FilterItem } from "./models";
+import type { FilterItem, TypeFilter } from "./models";
 
 export const findHomeRow = (response: HomeResponse, slug: HomeRow["slug"]): SeriesItem[] =>
   response.rows.find((row) => row.slug === slug)?.items ?? [];
@@ -42,20 +42,6 @@ export const toFeaturedItem = (series: SeriesItem): DiscoverSectionItem => {
           { symbol: "eye.fill", text: formatViews(series.views) },
         ]
       : [{ symbol: "eye.fill", text: formatViews(series.views) }],
-    contentRating: toContentRating(series.is_nsfw),
-  };
-};
-
-export const toRecentlyAddedItem = (series: SeriesItem): DiscoverSectionItem => {
-  const subtitle = [formatSeriesType(series.type), formatRating(series.rating)]
-    .filter((value): value is string => Boolean(value))
-    .join(" • ");
-  return {
-    type: "simpleCarouselItem",
-    mangaId: encodeMangaId(series.slug, "comic"),
-    imageUrl: formatCoverUrl(series.cover_url),
-    title: series.title,
-    subtitle: subtitle || undefined,
     contentRating: toContentRating(series.is_nsfw),
   };
 };
@@ -98,12 +84,12 @@ export const toPeriodFilterItems = (
     },
   }));
 
-export const toTypeFilterItems = (filters: FilterItem[], sort: SortId): DiscoverSectionItem[] =>
+export const toTypeFilterItems = (filters: TypeFilter[], sort: SortId): DiscoverSectionItem[] =>
   filters.map((filter) => ({
     type: "genresCarouselItem",
     name: filter.title,
     searchQuery: {
       title: "",
-      metadata: { sort, types: [filter.id as SeriesType] },
+      metadata: { sort, types: filter.types },
     },
   }));

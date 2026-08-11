@@ -1,16 +1,16 @@
 <p align="center">
-  <img src="media/header.svg?v=2" alt="PoppingMango Sources — Novels, Manga, Manhwa & Manhua for Paperback 0.9, maintained by Popmango" width="100%"/>
+  <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/header.svg?v=2" alt="PoppingMango Sources — Novels, Manga, Manhwa & Manhua for Paperback 0.9, maintained by Popmango" width="100%"/>
 </p>
 
 <p align="center">
-  <img src="media/badge-ios.svg?v=2" alt="iOS / iPadOS" height="28"/>
-  <img src="media/badge-version.svg?v=2" alt="Paperback 0.9+" height="28"/>
-  <img src="media/badge-count.svg?v=8" alt="28 sources" height="28"/>
+  <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/badge-ios.svg?v=2" alt="iOS / iPadOS" height="28"/>
+  <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/badge-version.svg?v=2" alt="Paperback 0.9+" height="28"/>
+  <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/badge-count.svg?v=8" alt="28 sources" height="28"/>
 </p>
 
 <p align="center">
   <a href="https://poppingmangosources.github.io/general-extensions-mangago/0.9/test/">
-    <img src="media/button-add.svg?v=2" alt="Add PoppingMango to Paperback" height="52"/>
+    <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/button-add.svg?v=2" alt="Add PoppingMango to Paperback" height="52"/>
   </a>
 </p>
 
@@ -33,47 +33,47 @@ PoppingMango is an independent source list for [Paperback](https://paperback.moe
 
 ### Manga, Manhwa & Manhua
 
-| Source                                                                                  | Site                                               |
-| :-------------------------------------------------------------------------------------- | :------------------------------------------------- |
-| <img src="media/sources/bunmanga.png" width="22" align="top"/> **BunManga**             | [bunmanga.com](https://bunmanga.com)               |
-| <img src="media/sources/chikari.png" width="22" align="top"/> **Chikari**               | [chikari.moe](https://chikari.moe)                 |
-| <img src="media/sources/cocomic.png" width="22" align="top"/> **Cocomic**               | [cocomic.co](https://cocomic.co)                   |
-| <img src="media/sources/galaxymanga.png" width="22" align="top"/> **Galaxy Manga**      | [galaxymanga.io](https://galaxymanga.io)           |
-| <img src="media/sources/kaliscan.png" width="22" align="top"/> **KaliScan**             | [kaliscan.com](https://kaliscan.com)               |
-| <img src="media/sources/kingofshojo.png" width="22" align="top"/> **KingOfShojo**       | [kingofshojo.com](https://kingofshojo.com)         |
-| <img src="media/sources/likemanga.png" width="22" align="top"/> **LikeManga**           | [likemanga.ink](https://likemanga.ink)             |
-| <img src="media/sources/luacomic.png" width="22" align="top"/> **Lua Comic**            | [luacomic.org](https://luacomic.org)               |
-| <img src="media/sources/mangaberri.png" width="22" align="top"/> **MangaBerri**         | [mangaberri.com](https://mangaberri.com)           |
-| <img src="media/sources/mangacherri.png" width="22" align="top"/> **MangaCherri**       | [mangacherri.com](https://mangacherri.com)         |
-| <img src="media/sources/mangahome.png" width="22" align="top"/> **MangaHome**           | [mangahome.com](https://www.mangahome.com)         |
-| <img src="media/sources/mangatown.png" width="22" align="top"/> **MangaTown**           | [mangatown.com](https://www.mangatown.com)         |
-| <img src="media/sources/myreadingmanga.png" width="22" align="top"/> **MyReadingManga** | [myreadingmanga.info](https://myreadingmanga.info) |
-| <img src="media/sources/omanga.png" width="22" align="top"/> **oManga**                 | [omanga.to](https://omanga.to)                     |
-| <img src="media/sources/onisaga.png" width="22" align="top"/> **OniSaga**               | [onisaga.com](https://onisaga.com)                 |
-| <img src="media/sources/reimanga.png" width="22" align="top"/> **ReiManga**             | [reimanga.com](https://reimanga.com)               |
-| <img src="media/sources/rinkocomics.png" width="22" align="top"/> **RinkoComics**       | [rinkocomics.com](https://rinkocomics.com)         |
-| <img src="media/sources/rokaricomics.png" width="22" align="top"/> **RokariComics**     | [rokaricomics.com](https://rokaricomics.com)       |
-| <img src="media/sources/scansgg.png" width="22" align="top"/> **Scans.GG**              | [scans.gg](https://scans.gg)                       |
-| <img src="media/sources/stonescape.png" width="22" align="top"/> **StoneScape**         | [stonescape.xyz](https://stonescape.xyz)           |
-| <img src="media/sources/templescan.png" width="22" align="top"/> **Temple Scan**        | [templetoons.com](https://templetoons.com)         |
-| <img src="media/sources/valirscans.png" width="22" align="top"/> **ValirScans**         | [valirscans.org](https://valirscans.org)           |
-| <img src="media/sources/vymanga.png" width="22" align="top"/> **VyManga**               | [vymanga.com](https://vymanga.com)                 |
-| <img src="media/sources/xcomic.png" width="22" align="top"/> **XCOMIC**                 | [xcomic.me](https://xcomic.me)                     |
+| Source                                                                                                                                                                            | Site                                               |
+| :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------- |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/bunmanga.png" width="22" align="top"/> **BunManga**             | [bunmanga.com](https://bunmanga.com)               |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/chikari.png" width="22" align="top"/> **Chikari**               | [chikari.moe](https://chikari.moe)                 |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/cocomic.png" width="22" align="top"/> **Cocomic**               | [cocomic.co](https://cocomic.co)                   |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/galaxymanga.png" width="22" align="top"/> **Galaxy Manga**      | [galaxymanga.io](https://galaxymanga.io)           |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/kaliscan.png" width="22" align="top"/> **KaliScan**             | [kaliscan.com](https://kaliscan.com)               |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/kingofshojo.png" width="22" align="top"/> **KingOfShojo**       | [kingofshojo.com](https://kingofshojo.com)         |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/likemanga.png" width="22" align="top"/> **LikeManga**           | [likemanga.ink](https://likemanga.ink)             |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/luacomic.png" width="22" align="top"/> **Lua Comic**            | [luacomic.org](https://luacomic.org)               |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/mangaberri.png" width="22" align="top"/> **MangaBerri**         | [mangaberri.com](https://mangaberri.com)           |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/mangacherri.png" width="22" align="top"/> **MangaCherri**       | [mangacherri.com](https://mangacherri.com)         |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/mangahome.png" width="22" align="top"/> **MangaHome**           | [mangahome.com](https://www.mangahome.com)         |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/mangatown.png" width="22" align="top"/> **MangaTown**           | [mangatown.com](https://www.mangatown.com)         |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/myreadingmanga.png" width="22" align="top"/> **MyReadingManga** | [myreadingmanga.info](https://myreadingmanga.info) |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/omanga.png" width="22" align="top"/> **oManga**                 | [omanga.to](https://omanga.to)                     |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/onisaga.png" width="22" align="top"/> **OniSaga**               | [onisaga.com](https://onisaga.com)                 |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/reimanga.png" width="22" align="top"/> **ReiManga**             | [reimanga.com](https://reimanga.com)               |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/rinkocomics.png" width="22" align="top"/> **RinkoComics**       | [rinkocomics.com](https://rinkocomics.com)         |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/rokaricomics.png" width="22" align="top"/> **RokariComics**     | [rokaricomics.com](https://rokaricomics.com)       |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/scansgg.png" width="22" align="top"/> **Scans.GG**              | [scans.gg](https://scans.gg)                       |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/stonescape.png" width="22" align="top"/> **StoneScape**         | [stonescape.xyz](https://stonescape.xyz)           |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/templescan.png" width="22" align="top"/> **Temple Scan**        | [templetoons.com](https://templetoons.com)         |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/valirscans.png" width="22" align="top"/> **ValirScans**         | [valirscans.org](https://valirscans.org)           |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/vymanga.png" width="22" align="top"/> **VyManga**               | [vymanga.com](https://vymanga.com)                 |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/xcomic.png" width="22" align="top"/> **XCOMIC**                 | [xcomic.me](https://xcomic.me)                     |
 
 ### Novels
 
-| Source                                                                              | Site                                       |
-| :---------------------------------------------------------------------------------- | :----------------------------------------- |
-| <img src="media/sources/mvlempyr.png" width="22" align="top"/> **MVLEMPYR**         | [mvlempyr.io](https://www.mvlempyr.io)     |
-| <img src="media/sources/novelarchive.png" width="22" align="top"/> **NovelArchive** | [novelarchive.cc](https://novelarchive.cc) |
-| <img src="media/sources/novelcool.png" width="22" align="top"/> **NovelCool**       | [novelcool.com](https://www.novelcool.com) |
-| <img src="media/sources/ranobes.png" width="22" align="top"/> **Ranobes**           | [ranobes.net](https://ranobes.net)         |
+| Source                                                                                                                                                                        | Site                                       |
+| :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------- |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/mvlempyr.png" width="22" align="top"/> **MVLEMPYR**         | [mvlempyr.io](https://www.mvlempyr.io)     |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/novelarchive.png" width="22" align="top"/> **NovelArchive** | [novelarchive.cc](https://novelarchive.cc) |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/novelcool.png" width="22" align="top"/> **NovelCool**       | [novelcool.com](https://www.novelcool.com) |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/ranobes.png" width="22" align="top"/> **Ranobes**           | [ranobes.net](https://ranobes.net)         |
 
 ## Support
 
 <p align="center">
   <a href="https://discord.com/invite/inkdex">
-    <img src="media/button-discord.svg?v=2" alt="Join the support Discord" height="36"/>
+    <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/button-discord.svg?v=2" alt="Join the support Discord" height="36"/>
   </a>
 </p>
 

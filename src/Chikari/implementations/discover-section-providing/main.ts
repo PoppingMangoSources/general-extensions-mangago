@@ -13,6 +13,7 @@ import { getSectionOrder, getVisibleSections } from "../settings-form-providing/
 import {
   BOOKMARK_PERIOD_FILTERS,
   PERIOD_FILTERS,
+  RECENTLY_ADDED_TYPE_FILTERS,
   SECTIONS,
   SECTION_DEFINITIONS,
   TYPE_FILTERS,
@@ -21,7 +22,6 @@ import {
   findHomeRow,
   toFeaturedItem,
   toPeriodFilterItems,
-  toRecentlyAddedItem,
   toRecentlyUpdatedItem,
   toTypeFilterItems,
 } from "./parsers";
@@ -81,12 +81,8 @@ export class DiscoverProvider {
     return { items: toPeriodFilterItems(PERIOD_FILTERS, "trending", ["novel"]) };
   }
 
-  async getRecentlyAddedSection(
-    this: ChikariImplementation,
-  ): Promise<PagedResults<DiscoverSectionItem>> {
-    return {
-      items: findHomeRow(await this.getHomeData(), "recently-added").map(toRecentlyAddedItem),
-    };
+  async getRecentlyAddedSection(): Promise<PagedResults<DiscoverSectionItem>> {
+    return { items: toTypeFilterItems(RECENTLY_ADDED_TYPE_FILTERS, "added") };
   }
 
   async getRecentlyUpdatedSection(
