@@ -32,11 +32,15 @@ const MATURE_GENRES = new Set(["ecchi", "erotica", "mature", "yaoi", "yuri"]);
 const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
 
 export const toAbsoluteUrl = (url: string | null | undefined): string => {
-  if (!url) return "";
-  if (/^https?:\/\//i.test(url)) return url;
-  if (url.startsWith("//")) return `https:${url}`;
-  return `${DOMAIN}${url.startsWith("/") ? "" : "/"}${url}`;
+  if (typeof url !== "string" || !url.trim()) return "";
+  const normalized = url.trim();
+  if (/^https?:\/\//i.test(normalized)) return normalized;
+  if (normalized.startsWith("//")) return `https:${normalized}`;
+  return `${DOMAIN}${normalized.startsWith("/") ? "" : "/"}${normalized}`;
 };
+
+const hasTextUrl = (url: string | null | undefined): url is string =>
+  typeof url === "string" && url.trim().length > 0;
 
 const titleCase = (value: string): string =>
   value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -151,7 +155,7 @@ export const toDiscoverItem = (
     };
   }
   if (type === "chapterUpdatesCarouselItem") {
-    if (!chapter?.id) return undefined;
+    if (!chapter?.id || !hasTextUrl(node.data.urlCover)) return undefined;
     return {
       type,
       ...baseCard(node),
@@ -176,6 +180,11 @@ export const parseLatestUploads = (
 
   return {
     items: result.items
+      .filter(({ comic, chapters }) => {
+        const cover = comic.data.urlCover;
+        const chapterPath = chapters[0]?.data.urlPath;
+        return hasTextUrl(cover) && hasTextUrl(chapterPath);
+      })
       .map(({ comic, chapters }) =>
         toDiscoverItem(
           {

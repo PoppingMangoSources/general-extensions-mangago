@@ -64,13 +64,16 @@ export async function runTests(logger: TestLogger) {
       DISCOVER_SECTIONS[SECTIONS.LATEST_UPLOADS],
       undefined,
     );
-    expect(result.items.length).to.equal(36);
+    expect(result.items.length).to.be.greaterThan(0);
+    expect(result.items.length).to.be.at.most(36);
     expect(
       result.items.every(
         (item) =>
           item.type === "chapterUpdatesCarouselItem" &&
           Boolean(item.mangaId) &&
           Boolean(item.chapterId) &&
+          item.imageUrl.startsWith("https://xcomic.me/") &&
+          item.chapterId.startsWith("/comic/") &&
           item.publishDate instanceof Date,
       ),
     ).to.equal(true);
