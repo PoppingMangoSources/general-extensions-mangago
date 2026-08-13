@@ -1,10 +1,10 @@
-import { type SourceManga, type TestLogger } from "@paperback/types";
+import { ContentRating, type SourceManga, type TestLogger } from "@paperback/types";
 import { expect } from "chai";
 import * as cheerio from "cheerio";
 
 import { Cocomic } from "../Cocomic/main.js";
 import { SORT_OPTIONS } from "../Cocomic/models.js";
-import { parseChapters } from "../Cocomic/parsers.js";
+import { parseChapters, toFeaturedItem } from "../Cocomic/parsers.js";
 import sourceInfo from "../Cocomic/pbconfig.js";
 import { TestSuite, registerDefaultTests } from "./suite.js";
 
@@ -104,6 +104,32 @@ export async function runTests(logger: TestLogger) {
       manga,
     );
     expect(chapters.map((chapter) => chapter.chapterId)).to.deep.equal(["chapter-2", "chapter-1"]);
+  });
+
+  suite.test("featured cards show chapter numbers instead of chapter titles", async () => {
+    const base = {
+      mangaId: "example",
+      title: "Example",
+      imageUrl: "https://cocomic.co/example.jpg",
+      contentRating: ContentRating.EVERYONE,
+      genres: [],
+      rating: 5,
+    };
+    expect(
+      toFeaturedItem({
+        ...base,
+        chapter: { chapterId: "chapter-113", title: "The Final Battle" },
+      }).infoItems,
+    ).to.deep.equal([
+      { symbol: "book.fill", text: "Ch. 113" },
+      { symbol: "star.fill", text: "5" },
+    ]);
+    expect(
+      toFeaturedItem({
+        ...base,
+        chapter: { chapterId: "notice-s3-info", title: "Notice: Season 3 Info" },
+      }).infoItems,
+    ).to.deep.equal([{ symbol: "star.fill", text: "5" }]);
   });
 
   await suite.run();

@@ -264,7 +264,12 @@ export const hasNextPage = ($: cheerio.CheerioAPI): boolean =>
 
 export const toFeaturedItem = (item: MangaListItem): FeaturedCarouselItem => {
   const infoItems: { symbol: string; text: string }[] = [];
-  if (item.chapter) infoItems.push({ symbol: "book.fill", text: item.chapter.title });
+  const latestChapterNumber = item.chapter
+    ? chapterNumber(`${item.chapter.title} ${item.chapter.chapterId.replace(/-/g, " ")}`)
+    : undefined;
+  if (latestChapterNumber != null) {
+    infoItems.push({ symbol: "book.fill", text: `Ch. ${latestChapterNumber}` });
+  }
   if (item.rating != null) infoItems.push({ symbol: "star.fill", text: item.rating.toString() });
   return {
     type: "featuredCarouselItem",
