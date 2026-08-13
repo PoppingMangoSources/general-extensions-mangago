@@ -18,6 +18,10 @@ export async function runTests(logger: TestLogger) {
     expect(result.items.length).to.be.greaterThan(0);
     expect(result.items[0]?.title).not.to.equal("Apocalypse Descent: Farming With My Harem");
     expect(result.items[0]?.publishDate?.getUTCFullYear()).to.be.at.least(2026);
+    const latestAge = Date.now() - (result.items[0]?.publishDate?.getTime() ?? 0);
+    expect(latestAge)
+      .to.be.at.least(0)
+      .and.lessThan(48 * 60 * 60 * 1000);
     expect(
       result.items.every(
         (item) =>

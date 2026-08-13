@@ -18,6 +18,7 @@ import {
   DOMAIN,
   PAGE_SIZE,
   REQUIRED_COOKIES,
+  STATE_KEYS,
   type BookInfoResponse,
   type BrowseOrder,
   type BrowseResponse,
@@ -129,6 +130,14 @@ const fetchDocument = async (url: string): Promise<cheerio.CheerioAPI> => {
   if (/^404 Not Found$/i.test($("title").first().text().trim())) {
     throw new Error(`NovelCool returned its not-found page for ${url}.`);
   }
+  const dateHeader = Object.entries(response.headers ?? {}).find(
+    ([name]) => name.toLowerCase() === "date",
+  )?.[1];
+  const responseDate = Date.parse(dateHeader ?? "");
+  Application.setState(
+    Number.isNaN(responseDate) ? Date.now() : responseDate,
+    STATE_KEYS.RELATIVE_DATE_ANCHOR,
+  );
   return $;
 };
 
