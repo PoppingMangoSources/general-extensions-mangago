@@ -289,6 +289,8 @@ export interface ChapterData {
   dateCreate?: number | null;
   dateModify?: number | null;
   datePublic?: number | null;
+  srcName?: string | null;
+  profileNodes?: Array<NamedNode | null> | null;
   userNode?: NamedNode | null;
   groupNodes?: Array<NamedNode | null> | null;
 }

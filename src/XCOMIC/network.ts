@@ -72,6 +72,8 @@ query get_comic_chapterList_uniqList($select: Select_Comic_ChapterList_UniqList)
         id dbStatus serial chaNum
         dname title urlPath
         dateCreate dateModify datePublic
+        srcName
+        profileNodes { data { name } }
         userNode { data { name } }
         groupNodes { data { name } }
       }

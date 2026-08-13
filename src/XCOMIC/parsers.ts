@@ -320,7 +320,13 @@ export const toChapter = (data: ChapterData, sourceManga: SourceManga): Chapter 
     .filter((value, index, values) => index === 0 || value !== values[0])
     .map((value) => Application.decodeHTMLEntities(value))
     .join(": ");
-  const scanlators = nodeNames(data.groupNodes);
+  const sourceName = data.srcName?.trim();
+  const profileNames = nodeNames(data.profileNodes);
+  const scanlators = sourceName
+    ? [Application.decodeHTMLEntities(sourceName.charAt(0).toUpperCase() + sourceName.slice(1))]
+    : profileNames.length > 0
+      ? profileNames
+      : nodeNames(data.groupNodes);
   const uploaderName = data.userNode?.data?.name?.trim();
   const uploader = uploaderName ? Application.decodeHTMLEntities(uploaderName) : undefined;
   const language = sourceManga.mangaInfo.additionalInfo?.["Translated Language"];

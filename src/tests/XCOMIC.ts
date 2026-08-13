@@ -110,6 +110,13 @@ export async function runTests(logger: TestLogger) {
     expect(chapters.some((chapter) => chapter.title?.startsWith("Volume "))).to.equal(true);
   });
 
+  suite.test("chapter groups use the source name returned by XCOMIC", async () => {
+    const manga = await XCOMIC.getMangaDetails("5xwzll");
+    const chapters = await XCOMIC.getChapters(manga);
+    expect(chapters.length).to.be.greaterThan(0);
+    expect(chapters.some((chapter) => chapter.version === "Mbato")).to.equal(true);
+  });
+
   suite.test("multi-page chapters and reader use the GraphQL payloads", async () => {
     const manga = await XCOMIC.getMangaDetails("vg7ypp");
     const chapters = await XCOMIC.getChapters(manga);
