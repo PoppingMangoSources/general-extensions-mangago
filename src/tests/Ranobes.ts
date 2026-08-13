@@ -1,12 +1,43 @@
-import { type TestLogger } from "@paperback/types";
+import { CloudflareError, type TestLogger } from "@paperback/types";
+import { expect } from "chai";
 
-import { Ranobes } from "../Ranobes/main.js";
+import { Ranobes, resumeChapterPageCrawl } from "../Ranobes/main.js";
+import type { ChapterCrawlCheckpoint } from "../Ranobes/models.js";
 import sourceInfo from "../Ranobes/pbconfig.js";
 import { TestSuite, registerDefaultTests } from "./suite.js";
 
 export async function runTests(logger: TestLogger) {
   const suite = new TestSuite("Ranobes tests", logger);
   registerDefaultTests(suite, Ranobes, sourceInfo);
+
+  suite.test("chapter crawl resumes after a challenge without refetching saved pages", async () => {
+    const checkpoint: ChapterCrawlCheckpoint = {
+      novelId: "1207185",
+      pages: { "1": { cstart: 1 } },
+    };
+    const challenge = new CloudflareError({ url: "https://ranobes.net/", method: "GET" });
+    const requestedPages: number[] = [];
+    let firstAttempt = true;
+    const fetchPage = async (page: number) => {
+      requestedPages.push(page);
+      if (firstAttempt && page === 3) throw challenge;
+      return { cstart: page };
+    };
+
+    let caught: unknown;
+    try {
+      await resumeChapterPageCrawl(checkpoint, 4, fetchPage);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).to.equal(challenge);
+    expect(Object.keys(checkpoint.pages).sort()).to.deep.equal(["1", "2", "4"]);
+
+    firstAttempt = false;
+    const pages = await resumeChapterPageCrawl(checkpoint, 4, fetchPage);
+    expect(requestedPages).to.deep.equal([2, 3, 4, 3]);
+    expect(pages.map((page) => page.cstart)).to.deep.equal([1, 2, 3, 4]);
+  });
 
   await suite.run();
 }

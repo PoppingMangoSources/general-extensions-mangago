@@ -14,6 +14,10 @@ export const SECTIONS = {
   COMPLETED: "completed",
 } as const;
 
+export const STATE_KEYS = {
+  CHAPTER_CRAWL: "ranobes_chapter_crawl",
+} as const;
+
 export const DISCOVER_SECTIONS: DiscoverSection[] = [
   { id: SECTIONS.FEATURED, title: "Featured", type: DiscoverSectionType.featured },
   { id: SECTIONS.LATEST, title: "Latest Updates", type: DiscoverSectionType.chapterUpdates },
@@ -176,6 +180,13 @@ export interface RanobesChapterPage {
   count_all?: number;
   cstart?: number;
   limit?: number;
+}
+
+export interface ChapterCrawlCheckpoint {
+  novelId: string;
+  pages: Record<string, RanobesChapterPage>;
+  pageCount?: number;
+  completedAt?: number;
 }
 
 export const LANGUAGE_OPTIONS: OptionItem[] = ["Chinese", "Korean", "English", "Japanese"].map(

@@ -28,8 +28,11 @@ import {
   PAGE_SIZE,
   SECTIONS,
   SORT_ORDERS,
+  STATE_KEYS,
+  type ChapterCrawlCheckpoint,
   type FilterTaxonomy,
   type PageMetadata,
+  type RanobesChapterPage,
   type SearchMetadata,
 } from "./models";
 import {
@@ -60,6 +63,58 @@ import {
 } from "./parsers";
 import type RanobesConfig from "./pbconfig";
 
+const isChapterCrawlCheckpoint = (value: unknown): value is ChapterCrawlCheckpoint => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const checkpoint = value as Partial<ChapterCrawlCheckpoint>;
+  return (
+    typeof checkpoint.novelId === "string" &&
+    !!checkpoint.pages &&
+    typeof checkpoint.pages === "object" &&
+    !Array.isArray(checkpoint.pages) &&
+    (checkpoint.pageCount === undefined || typeof checkpoint.pageCount === "number") &&
+    (checkpoint.completedAt === undefined || typeof checkpoint.completedAt === "number")
+  );
+};
+
+const orderedChapterPages = (
+  checkpoint: ChapterCrawlCheckpoint,
+  pageCount: number,
+): RanobesChapterPage[] => {
+  const pages = Array.from(
+    { length: pageCount },
+    (_, index) => checkpoint.pages[String(index + 1)],
+  ).filter((page): page is RanobesChapterPage => page !== undefined);
+  if (pages.length !== pageCount) {
+    throw new Error(`Ranobes: loaded ${pages.length} of ${pageCount} chapter-list pages`);
+  }
+  return pages;
+};
+
+export const resumeChapterPageCrawl = async (
+  checkpoint: ChapterCrawlCheckpoint,
+  pageCount: number,
+  fetchPage: (page: number) => Promise<RanobesChapterPage>,
+): Promise<RanobesChapterPage[]> => {
+  const missingPages = Array.from({ length: pageCount }, (_, index) => index + 1).filter(
+    (page) => checkpoint.pages[String(page)] === undefined,
+  );
+  const batchSize = 3;
+
+  for (let offset = 0; offset < missingPages.length; offset += batchSize) {
+    const results = await Promise.allSettled(
+      missingPages.slice(offset, offset + batchSize).map(async (page) => {
+        checkpoint.pages[String(page)] = await fetchPage(page);
+      }),
+    );
+    const failure = results.find(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+    if (failure) throw failure.reason;
+  }
+
+  return orderedChapterPages(checkpoint, pageCount);
+};
+
 class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   mainRateLimiter = new BasicRateLimiter("ranobes-rate-limiter", {
     numberOfRequests: 3,
@@ -71,13 +126,8 @@ class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
 
   private taxonomyPromise?: Promise<FilterTaxonomy>;
 
-  // A long chapter list spans dozens of sequential fetches; repeating that
-  // crawl every visit reads as automation, so one crawl is cached for a while.
-  private chapterPagesCache?: {
-    novelId: string;
-    pages: ReturnType<typeof parseChapterPage>[];
-    fetchedAt: number;
-  };
+  // Successful pages survive a challenge so the resumed crawl skips them.
+  private chapterCrawl?: ChapterCrawlCheckpoint;
 
   async initialise(): Promise<void> {
     this.requestManager.registerInterceptor();
@@ -95,7 +145,6 @@ class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     _localStorage: Record<string, string>,
   ): Promise<void> {
     this.taxonomyPromise = undefined;
-    this.chapterPagesCache = undefined;
     storeSessionCookies(cookies);
   }
 
@@ -191,15 +240,38 @@ class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
     const novelId = extractNovelId(sourceManga.mangaId);
-
-    const cached = this.chapterPagesCache;
-    if (cached?.novelId === novelId && Date.now() - cached.fetchedAt < 10 * 60 * 1000) {
-      return parseChapters(cached.pages, sourceManga);
+    const current = this.chapterCrawl;
+    if (
+      current?.novelId === novelId &&
+      current.completedAt !== undefined &&
+      current.pageCount !== undefined &&
+      Date.now() - current.completedAt < 10 * 60 * 1000
+    ) {
+      return parseChapters(orderedChapterPages(current, current.pageCount), sourceManga);
     }
 
-    const firstPage = parseChapterPage(cheerio.load(await fetchChapterListPage(novelId)));
-    if (firstPage.cstart !== undefined && firstPage.cstart !== 1) {
-      throw new Error(`Ranobes returned chapter page ${firstPage.cstart} instead of 1`);
+    const saved = Application.getState(STATE_KEYS.CHAPTER_CRAWL);
+    const checkpoint =
+      current?.novelId === novelId && current.completedAt === undefined
+        ? current
+        : isChapterCrawlCheckpoint(saved) &&
+            saved.novelId === novelId &&
+            saved.completedAt === undefined
+          ? saved
+          : { novelId, pages: {} };
+    if (
+      !isChapterCrawlCheckpoint(saved) ||
+      saved.novelId !== novelId ||
+      saved.completedAt !== undefined
+    ) {
+      Application.setState(undefined, STATE_KEYS.CHAPTER_CRAWL);
+    }
+    this.chapterCrawl = checkpoint;
+
+    let firstPage = checkpoint.pages["1"];
+    if (!firstPage) {
+      firstPage = await this.fetchChapterPage(novelId, 1);
+      checkpoint.pages["1"] = firstPage;
     }
     const pageCount = Math.max(
       1,
@@ -208,30 +280,25 @@ class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
           ? Math.ceil(firstPage.count_all / firstPage.limit)
           : 1),
     );
-    const pages = [
-      firstPage,
-      ...(await Promise.all(
-        Array.from({ length: pageCount - 1 }, async (_, index) => {
-          const page = index + 2;
-          const chapterPage = parseChapterPage(
-            cheerio.load(await fetchChapterListPage(novelId, page)),
-          );
-          if (chapterPage.cstart !== undefined && chapterPage.cstart !== page) {
-            throw new Error(
-              `Ranobes returned chapter page ${chapterPage.cstart} instead of ${page}`,
-            );
-          }
-          return chapterPage;
-        }),
-      )),
-    ];
+    checkpoint.pageCount = pageCount;
+
+    let pages: RanobesChapterPage[];
+    try {
+      pages = await resumeChapterPageCrawl(checkpoint, pageCount, (page) =>
+        this.fetchChapterPage(novelId, page),
+      );
+    } catch (error) {
+      Application.setState(checkpoint, STATE_KEYS.CHAPTER_CRAWL);
+      throw error;
+    }
     const chapters = parseChapters(pages, sourceManga);
     if (firstPage.count_all && chapters.length < firstPage.count_all) {
       throw new Error(
         `Ranobes: loaded ${chapters.length} of ${firstPage.count_all} chapters for ${sourceManga.mangaId}`,
       );
     }
-    this.chapterPagesCache = { novelId, pages, fetchedAt: Date.now() };
+    checkpoint.completedAt = Date.now();
+    Application.setState(undefined, STATE_KEYS.CHAPTER_CRAWL);
     return chapters;
   }
 
@@ -255,6 +322,14 @@ class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
 
   private async getFilterTaxonomy(): Promise<FilterTaxonomy> {
     return parseFilterTaxonomy(cheerio.load(await fetchListingPage("/novels/")));
+  }
+
+  private async fetchChapterPage(novelId: string, page: number): Promise<RanobesChapterPage> {
+    const chapterPage = parseChapterPage(cheerio.load(await fetchChapterListPage(novelId, page)));
+    if (chapterPage.cstart !== undefined && chapterPage.cstart !== page) {
+      throw new Error(`Ranobes returned chapter page ${chapterPage.cstart} instead of ${page}`);
+    }
+    return chapterPage;
   }
 }
 
