@@ -37,6 +37,7 @@ import {
   fetchAdvancedSearchPage,
   fetchContentPage,
   fetchHomePage,
+  fetchHotPage,
   fetchSearchPage,
   LikeMangaInterceptor,
 } from "./network";
@@ -181,7 +182,7 @@ class LikeMangaExtension implements ExtensionImpl<typeof LikeMangaConfig> {
           ),
         };
       case SECTIONS.HOT:
-        return this.getListingSection("hot", metadata, toHotItem);
+        return this.getHotSection(metadata);
       case SECTIONS.GENRES:
         return this.getGenreSection();
       default:
@@ -209,6 +210,17 @@ class LikeMangaExtension implements ExtensionImpl<typeof LikeMangaConfig> {
         const mapped = mapper(item);
         return mapped ? [mapped] : [];
       }),
+      metadata: hasNextPage(document) ? { page: page + 1 } : undefined,
+    };
+  }
+
+  private async getHotSection(
+    metadata: PageMetadata | undefined,
+  ): Promise<PagedResults<DiscoverSectionItem>> {
+    const page = metadata?.page ?? 1;
+    const document = await fetchHotPage(page);
+    return {
+      items: parseMangaList(document).map(toHotItem),
       metadata: hasNextPage(document) ? { page: page + 1 } : undefined,
     };
   }

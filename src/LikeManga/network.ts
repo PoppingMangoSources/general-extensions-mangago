@@ -109,6 +109,18 @@ export const buildSearchUrl = (request: SearchRequest): string => {
 
 export const fetchHomePage = (): Promise<cheerio.CheerioAPI> => fetchCheerio(`${DOMAIN}/`);
 
+export const fetchHotPage = (page = 1): Promise<cheerio.CheerioAPI> =>
+  fetchCheerio(
+    page === 1
+      ? `${DOMAIN}/hot/`
+      : new URL(DOMAIN)
+          .setQueryItem("act", "search")
+          .setQueryItem("f[status]", "all")
+          .setQueryItem("f[sortby]", "hot")
+          .setQueryItem("pageNum", page.toString())
+          .toString(),
+  );
+
 export const fetchAdvancedSearchPage = (): Promise<cheerio.CheerioAPI> =>
   fetchCheerio(`${DOMAIN}/searchadvance/`);
 
