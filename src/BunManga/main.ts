@@ -53,6 +53,7 @@ import {
   parseMangaDetails,
   parseMangaId,
   parseMangaList,
+  parsePopular,
   parseTopDaily,
   parseTotalResults,
   toChapterUpdateItem,
@@ -141,7 +142,7 @@ class BunMangaExtension implements ExtensionImpl<typeof BunMangaConfig> {
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
       case SECTIONS.POPULAR:
-        return this.getSearchSection("views", metadata, toFeaturedItem);
+        return this.getPopularSection();
       case SECTIONS.TOP_DAILY:
         return {
           items: parseTopDaily(await this.getHomePage()).map(toSimpleItem),
@@ -173,6 +174,12 @@ class BunMangaExtension implements ExtensionImpl<typeof BunMangaConfig> {
     } finally {
       if (this.homePromise === request) this.homePromise = undefined;
     }
+  }
+
+  private async getPopularSection(): Promise<PagedResults<DiscoverSectionItem>> {
+    return {
+      items: parsePopular(await this.getHomePage()).map(toFeaturedItem),
+    };
   }
 
   private getGenres(): Promise<Tag[]> {

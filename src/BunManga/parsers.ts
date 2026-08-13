@@ -187,6 +187,33 @@ export const parseMangaList = ($: cheerio.CheerioAPI): MangaListItem[] => {
   return items;
 };
 
+export const parsePopular = ($: cheerio.CheerioAPI): MangaListItem[] =>
+  $(".widget-manga-popular-slider")
+    .filter((_, element) =>
+      /^popular$/i.test(cleanText($(element).find(".heading").first().text())),
+    )
+    .first()
+    .find(".slider__item")
+    .toArray()
+    .flatMap((element) => {
+      const item = $(element);
+      const titleLink = item.find(".post-title a").first();
+      const mangaId = parseMangaId(titleLink.attr("href"));
+      const title = cleanText(titleLink.text() || titleLink.attr("title"));
+      const imageUrl = imageUrlFrom(item.find(".slider__thumb img").first());
+      if (!mangaId || !title || !imageUrl) return [];
+      return [
+        {
+          mangaId,
+          title,
+          imageUrl,
+          contentRating: ContentRating.ADULT,
+          genres: [],
+          chapter: parseListingChapter(item),
+        },
+      ];
+    });
+
 export const parseTopDaily = ($: cheerio.CheerioAPI): MangaListItem[] => {
   const widget = $(".widget-manga-recent")
     .filter((_, element) =>
