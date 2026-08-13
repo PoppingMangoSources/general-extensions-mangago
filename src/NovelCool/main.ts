@@ -149,10 +149,17 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
     };
   }
 
-  private getLatestSection(
+  private async getLatestSection(
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    return this.getApiSection("latest", metadata, (item) => toLatestItem(item, this.dateAnchor()));
+    const page = metadata?.page ?? 1;
+    const document = await fetchCategoryPage(CATEGORY_PATHS.LATEST, page);
+    return {
+      items: parseListings(document)
+        .filter((item) => item.imageUrl.length > 0)
+        .map((item) => toLatestItem(item, this.dateAnchor())),
+      metadata: hasNextPage(document) ? { page: page + 1 } : undefined,
+    };
   }
 
   private async getApiSection(
