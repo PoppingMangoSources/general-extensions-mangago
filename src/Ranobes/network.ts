@@ -118,9 +118,16 @@ const responseHeader = (response: Response, name: string): string => {
 };
 
 const isChallengeResponse = (response: Response, body: string): boolean => {
-  if (responseHeader(response, "cf-mitigated") === "challenge") return true;
-  if (!body || body.includes("window.__DATA__")) return false;
-  return /(?:<title>\s*(?:Just a moment|Bot Verification)\b|vb-custom-captcha-shell|checking your browser)/i.test(
+  if (responseHeader(response, "cf-mitigated").toLowerCase() === "challenge") return true;
+  if (body.includes("window.__DATA__")) return false;
+  if (
+    response.status === 403 &&
+    responseHeader(response, "server").toLowerCase().includes("ddos-guard")
+  ) {
+    return true;
+  }
+  if (!body) return false;
+  return /(?:<title>\s*(?:Just a moment|Bot Verification)\b|vb-custom-captcha-shell|checking your browser|check\.ddos-guard\.net|__ddg\d+_)/i.test(
     body,
   );
 };
@@ -144,7 +151,7 @@ export class RanobesInterceptor extends PaperbackInterceptor {
   }
 
   override async interceptResponse(
-    _request: Request,
+    request: Request,
     response: Response,
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
@@ -155,9 +162,11 @@ export class RanobesInterceptor extends PaperbackInterceptor {
         : "";
     if (isChallengeResponse(response, body)) {
       throw new CloudflareError({
-        url: `${DOMAIN}/`,
-        method: "GET",
+        url: request.url.replace(MIRROR_HOST, DOMAIN),
+        method: request.method ?? "GET",
         headers: {
+          accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+          "accept-language": "en-US,en;q=0.9",
           referer: `${DOMAIN}/`,
           "user-agent": await getRanobesUserAgent(),
         },
