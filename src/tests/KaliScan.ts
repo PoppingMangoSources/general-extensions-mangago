@@ -4,7 +4,12 @@ import { expect } from "chai";
 import { KaliScan } from "../KaliScan/main.js";
 import { MIRRORS } from "../KaliScan/models.js";
 import { completeMobileSafariUserAgent } from "../KaliScan/network.js";
-import { parseCards, parseChapterPages, toLatestItems } from "../KaliScan/parsers.js";
+import {
+  parseCards,
+  parseChapterPages,
+  parseHotCells,
+  toLatestItems,
+} from "../KaliScan/parsers.js";
 import sourceInfo from "../KaliScan/pbconfig.js";
 import { TestSuite, registerDefaultTests } from "./suite.js";
 
@@ -47,6 +52,30 @@ export async function runTests(logger: TestLogger) {
     expect(updates.map((item) => ("chapterId" in item ? item.chapterId : undefined))).to.deep.equal(
       ["chapter-4.5", "chapter-8"],
     );
+  });
+
+  suite.test("current hot-update carousel cards are detected", async () => {
+    const cards = parseHotCells(`
+      <div class="trending-item carousel-cell">
+          <a href="/manga/123-paladin" title="My Husband Was Definitely a Paladin">
+            <img data-lazy-src="/covers/paladin.webp" />
+            <span class="name">My Husband Was Definitely a Paladin</span>
+            <span class="latest-chapter">Chapter 24</span>
+          </a>
+      </div>
+      <div class="trending-item carousel-cell">
+        <a href="/manga/456-coverless" title="Coverless Entry">
+          <img src="/static/common/x.gif" />
+          <span class="name">Coverless Entry</span>
+        </a>
+      </div>
+    `);
+    expect(cards).to.have.length(1);
+    expect(cards[0]).to.deep.include({
+      title: "My Husband Was Definitely a Paladin",
+      latestChapter: "Chapter 24",
+      cover: "https://kaliscan.com/covers/paladin.webp",
+    });
   });
 
   suite.test("reader accepts rendered and scripted image lists", async () => {

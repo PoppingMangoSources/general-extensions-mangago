@@ -99,7 +99,13 @@ const parseSiteDate = (value: string): Date | undefined => {
 
 const coverFrom = (element: cheerio.Cheerio<AnyNode>): string => {
   const img = element.find("img").first();
-  const source = img.attr("data-src") ?? img.attr("src") ?? "";
+  const source =
+    img.attr("data-src") ??
+    img.attr("data-lazy-src") ??
+    img.attr("data-cfsrc") ??
+    img.attr("srcset")?.split(",")[0]?.trim().split(/\s+/)[0] ??
+    img.attr("src") ??
+    "";
   return source && !source.includes("/static/") ? absoluteUrl(source) : "";
 };
 
@@ -214,24 +220,11 @@ export const parseHotCells = (html: string): KaliCard[] => {
   const seen = new Set<string>();
 
   for (const element of $(".trending-item").toArray()) {
-    const item = $(element);
-    const url = item.find("a").first().attr("href") ?? "";
-    const slug = mangaSlugFromUrl(url);
-    if (!slug || seen.has(slug)) continue;
-
-    const title = cleanText(
-      item.find(".name").first().text() || item.find("a").first().attr("title") || "",
-    );
-    if (!title) continue;
-
+    const card = cardFrom($, element);
+    const slug = card ? mangaSlugFromUrl(card.url) : undefined;
+    if (!card || !slug || !card.cover || seen.has(slug)) continue;
     seen.add(slug);
-    cards.push({
-      url,
-      title,
-      cover: coverFrom(item),
-      latestChapter: cleanText(item.find(".latest-chapter").first().text()) || undefined,
-      genres: [],
-    });
+    cards.push(card);
   }
 
   return cards;
