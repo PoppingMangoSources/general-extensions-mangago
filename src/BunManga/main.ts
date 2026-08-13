@@ -232,17 +232,15 @@ class BunMangaExtension implements ExtensionImpl<typeof BunMangaConfig> {
 
   private async getGenreSection(): Promise<PagedResults<DiscoverSectionItem>> {
     return {
-      items: (await this.getGenres()).map(
-        (genre): DiscoverSectionItem => ({
-          type: "genresCarouselItem",
-          name: genre.title,
-          searchQuery: {
-            title: "",
-            metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
-          },
-          contentRating: contentRatingForGenres([genre.title]),
-        }),
-      ),
+      items: (await this.getGenres()).map((genre): DiscoverSectionItem => ({
+        type: "genresCarouselItem",
+        name: genre.title,
+        searchQuery: {
+          title: "",
+          metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
+        },
+        contentRating: contentRatingForGenres([genre.title]),
+      })),
     };
   }
 

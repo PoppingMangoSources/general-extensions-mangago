@@ -167,8 +167,8 @@ class SectionOrderForm extends Form {
         id: "order",
         header: "Home Sections",
         footer: "Long press to reorder, swipe to remove.",
-        items: getOrderedSections().map(
-          (section): FormItemElement<unknown> => LabelRow(section.id, { title: section.title }),
+        items: getOrderedSections().map((section): FormItemElement<unknown> =>
+          LabelRow(section.id, { title: section.title }),
         ),
         allowDeletion: true,
         allowReorder: true,

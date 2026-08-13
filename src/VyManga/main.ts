@@ -327,15 +327,13 @@ class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
     const cards = parseCards($, this.baseUrl).slice(0, FEATURED_LIMIT);
 
     // "Most viewed" listing only; cards carry no author or synopsis.
-    return cards.map(
-      (card): DiscoverSectionItem => ({
-        type: "featuredCarouselItem",
-        mangaId: card.mangaId,
-        title: card.title,
-        imageUrl: card.imageUrl,
-        contentRating: rating,
-      }),
-    );
+    return cards.map((card): DiscoverSectionItem => ({
+      type: "featuredCarouselItem",
+      mangaId: card.mangaId,
+      title: card.title,
+      imageUrl: card.imageUrl,
+      contentRating: rating,
+    }));
   }
 
   private getGenres(): Promise<OptionItem[]> {

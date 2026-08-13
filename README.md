@@ -33,8 +33,8 @@ PoppingMango is an independent source list for [Paperback](https://paperback.moe
 
 ### Manga, Manhwa & Manhua
 
-| Source                                                                                                                                                                            | Site                                               |
-| :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------- |
+| Source                                                                                                                                                                        | Site                                               |
+| :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------- |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Ftest/media/sources/bunmanga.png" width="22" align="top"/> **BunManga**             | [bunmanga.com](https://bunmanga.com)               |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Ftest/media/sources/chikari.png" width="22" align="top"/> **Chikari**               | [chikari.moe](https://chikari.moe)                 |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Ftest/media/sources/cocomic.png" width="22" align="top"/> **Cocomic**               | [cocomic.co](https://cocomic.co)                   |
@@ -62,8 +62,8 @@ PoppingMango is an independent source list for [Paperback](https://paperback.moe
 
 ### Novels
 
-| Source                                                                                                                                                                        | Site                                       |
-| :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------- |
+| Source                                                                                                                                                                    | Site                                       |
+| :------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :----------------------------------------- |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Ftest/media/sources/mvlempyr.png" width="22" align="top"/> **MVLEMPYR**         | [mvlempyr.io](https://www.mvlempyr.io)     |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Ftest/media/sources/novelarchive.png" width="22" align="top"/> **NovelArchive** | [novelarchive.cc](https://novelarchive.cc) |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Ftest/media/sources/novelcool.png" width="22" align="top"/> **NovelCool**       | [novelcool.com](https://www.novelcool.com) |

@@ -241,19 +241,17 @@ class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
 
   private getPopularPeriodSection(contentType: ContentType): PagedResults<DiscoverSectionItem> {
     return {
-      items: PERIOD_OPTIONS.map(
-        (period): DiscoverSectionItem => ({
-          type: "genresCarouselItem",
-          name: period.title,
-          searchQuery: {
-            title: "",
-            metadata: {
-              contentType: { [contentTypeFilterId(contentType)]: "included" },
-              popularPeriod: period.id,
-            } satisfies SearchMetadata,
-          },
-        }),
-      ),
+      items: PERIOD_OPTIONS.map((period): DiscoverSectionItem => ({
+        type: "genresCarouselItem",
+        name: period.title,
+        searchQuery: {
+          title: "",
+          metadata: {
+            contentType: { [contentTypeFilterId(contentType)]: "included" },
+            popularPeriod: period.id,
+          } satisfies SearchMetadata,
+        },
+      })),
     };
   }
 
@@ -290,17 +288,15 @@ class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
   private async getGenresSection(): Promise<PagedResults<DiscoverSectionItem>> {
     const genres = await this.getGenres();
     return {
-      items: genres.map(
-        (genre): DiscoverSectionItem => ({
-          type: "genresCarouselItem",
-          name: genre.title,
-          searchQuery: {
-            title: "",
-            metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
-          },
-          contentRating: contentRatingForGenres([genre.title]),
-        }),
-      ),
+      items: genres.map((genre): DiscoverSectionItem => ({
+        type: "genresCarouselItem",
+        name: genre.title,
+        searchQuery: {
+          title: "",
+          metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
+        },
+        contentRating: contentRatingForGenres([genre.title]),
+      })),
     };
   }
 

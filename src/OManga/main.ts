@@ -268,18 +268,16 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
     return items
       .filter((item) => item.poster.length > 0)
       .slice(0, FEATURED_HERO_LIMIT)
-      .map(
-        (item): DiscoverSectionItem => ({
-          type: "featuredCarouselItem",
-          mangaId: item.slug,
-          title: item.title,
-          imageUrl: item.poster,
-          supertitle: item.type ?? "",
-          infoItems: item.year ? [{ symbol: "calendar", text: String(item.year) }] : undefined,
-          contentRating: getContentRatingForGenres(item.genres),
-          metadata: undefined,
-        }),
-      );
+      .map((item): DiscoverSectionItem => ({
+        type: "featuredCarouselItem",
+        mangaId: item.slug,
+        title: item.title,
+        imageUrl: item.poster,
+        supertitle: item.type ?? "",
+        infoItems: item.year ? [{ symbol: "calendar", text: String(item.year) }] : undefined,
+        contentRating: getContentRatingForGenres(item.genres),
+        metadata: undefined,
+      }));
   }
 
   private getHomepage(refresh = false): Promise<string> {

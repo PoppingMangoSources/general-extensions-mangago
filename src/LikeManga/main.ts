@@ -170,16 +170,14 @@ class LikeMangaExtension implements ExtensionImpl<typeof LikeMangaConfig> {
         };
       case SECTIONS.TOP_SERIES:
         return {
-          items: TOP_SERIES_OPTIONS.map(
-            (option): DiscoverSectionItem => ({
-              type: "genresCarouselItem",
-              name: option.title,
-              searchQuery: {
-                title: "",
-                metadata: { topSeriesSort: option.id } satisfies SearchMetadata,
-              },
-            }),
-          ),
+          items: TOP_SERIES_OPTIONS.map((option): DiscoverSectionItem => ({
+            type: "genresCarouselItem",
+            name: option.title,
+            searchQuery: {
+              title: "",
+              metadata: { topSeriesSort: option.id } satisfies SearchMetadata,
+            },
+          })),
         };
       case SECTIONS.HOT:
         return this.getHotSection(metadata);
@@ -227,17 +225,15 @@ class LikeMangaExtension implements ExtensionImpl<typeof LikeMangaConfig> {
 
   private async getGenreSection(): Promise<PagedResults<DiscoverSectionItem>> {
     return {
-      items: (await this.getGenres()).map(
-        (genre): DiscoverSectionItem => ({
-          type: "genresCarouselItem",
-          name: genre.title,
-          searchQuery: {
-            title: "",
-            metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
-          },
-          contentRating: contentRatingForGenres([genre.title]),
-        }),
-      ),
+      items: (await this.getGenres()).map((genre): DiscoverSectionItem => ({
+        type: "genresCarouselItem",
+        name: genre.title,
+        searchQuery: {
+          title: "",
+          metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
+        },
+        contentRating: contentRatingForGenres([genre.title]),
+      })),
     };
   }
 
