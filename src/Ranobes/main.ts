@@ -3,7 +3,6 @@
 
 import {
   BasicRateLimiter,
-  CloudflareError,
   type AdvancedSearchForm,
   type Chapter,
   type ChapterDetails,
@@ -63,8 +62,8 @@ import type RanobesConfig from "./pbconfig";
 
 class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   mainRateLimiter = new BasicRateLimiter("ranobes-rate-limiter", {
-    numberOfRequests: 1,
-    bufferInterval: 2,
+    numberOfRequests: 3,
+    bufferInterval: 1,
     ignoreImages: true,
   });
 
@@ -198,7 +197,10 @@ class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
       return parseChapters(cached.pages, sourceManga);
     }
 
-    const firstPage = await this.getChapterPage(novelId);
+    const firstPage = parseChapterPage(cheerio.load(await fetchChapterListPage(novelId)));
+    if (firstPage.cstart !== undefined && firstPage.cstart !== 1) {
+      throw new Error(`Ranobes returned chapter page ${firstPage.cstart} instead of 1`);
+    }
     const pageCount = Math.max(
       1,
       firstPage.pages_count ??
@@ -206,17 +208,23 @@ class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
           ? Math.ceil(firstPage.count_all / firstPage.limit)
           : 1),
     );
-    const pages = [firstPage];
-    for (let page = 2; page <= pageCount; page += 4) {
-      const pageNumbers = Array.from(
-        { length: Math.min(4, pageCount - page + 1) },
-        (_, index) => page + index,
-      );
-      const chapterPages = await Promise.all(
-        pageNumbers.map((pageNumber) => this.getChapterPage(novelId, pageNumber)),
-      );
-      pages.push(...chapterPages);
-    }
+    const pages = [
+      firstPage,
+      ...(await Promise.all(
+        Array.from({ length: pageCount - 1 }, async (_, index) => {
+          const page = index + 2;
+          const chapterPage = parseChapterPage(
+            cheerio.load(await fetchChapterListPage(novelId, page)),
+          );
+          if (chapterPage.cstart !== undefined && chapterPage.cstart !== page) {
+            throw new Error(
+              `Ranobes returned chapter page ${chapterPage.cstart} instead of ${page}`,
+            );
+          }
+          return chapterPage;
+        }),
+      )),
+    ];
     const chapters = parseChapters(pages, sourceManga);
     if (firstPage.count_all && chapters.length < firstPage.count_all) {
       throw new Error(
@@ -247,29 +255,6 @@ class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
 
   private async getFilterTaxonomy(): Promise<FilterTaxonomy> {
     return parseFilterTaxonomy(cheerio.load(await fetchListingPage("/novels/")));
-  }
-
-  private async getChapterPage(
-    novelId: string,
-    page = 1,
-  ): Promise<ReturnType<typeof parseChapterPage>> {
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        const chapterPage = parseChapterPage(
-          cheerio.load(await fetchChapterListPage(novelId, page)),
-        );
-        if (chapterPage.cstart !== undefined && chapterPage.cstart !== page) {
-          throw new Error(`Ranobes returned chapter page ${chapterPage.cstart} instead of ${page}`);
-        }
-        return chapterPage;
-      } catch (error) {
-        if (error instanceof CloudflareError) throw error;
-        if (attempt === 3) {
-          throw new Error(`Ranobes: failed to load chapter page ${page}`, { cause: error });
-        }
-      }
-    }
-    throw new Error(`Ranobes: failed to load chapter page ${page}`);
   }
 }
 
