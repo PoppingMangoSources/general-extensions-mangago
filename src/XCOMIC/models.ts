@@ -12,7 +12,7 @@ import {
 export const DOMAIN = "https://xcomic.me";
 export const API_URL = `${DOMAIN}/query/`;
 export const PAGE_SIZE = 36;
-export const CHAPTER_PAGE_SIZE = 100;
+export const CHAPTER_PAGE_SIZE = 480;
 
 export const SECTIONS = {
   TOP_RATED: "top-rated",
@@ -300,8 +300,8 @@ export interface ChapterNode {
 }
 
 export interface LatestUploadItem {
-  comic: ComicNode;
-  chapters: ChapterNode[];
+  comic?: ComicNode | null;
+  chapters?: ChapterNode[] | null;
 }
 
 export interface LatestUploadsResult {
@@ -336,6 +336,7 @@ export interface ComicData {
   score_val?: number | null;
   follows?: number | null;
   reviews?: number | null;
+  comments_total?: number | null;
   chaps_normal?: number | null;
   chapterNodes_last?: ChapterNode[] | null;
 }
@@ -350,6 +351,10 @@ interface Pagination {
 
 export interface BrowseResponse {
   get_comic_browse_items?: ComicNode[] | null;
+}
+
+export interface LatestUpdatesResponse {
+  get_comic_latestUploads?: LatestUploadsResult | null;
 }
 
 export interface ComicNodeResponse {

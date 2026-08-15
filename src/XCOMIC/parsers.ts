@@ -179,27 +179,24 @@ export const parseLatestUploads = (
   }
 
   return {
-    items: result.items
-      .filter(({ comic, chapters }) => {
-        const cover = comic.data.urlCover;
-        const chapterPath = chapters[0]?.data.urlPath;
-        return hasTextUrl(cover) && hasTextUrl(chapterPath);
-      })
-      .map(({ comic, chapters }) =>
-        toDiscoverItem(
-          {
-            data: {
-              ...comic.data,
-              type:
-                comic.data.type ??
-                TYPE_OPTIONS.find((option) => comic.data.genres?.includes(option.id))?.id,
-              chapterNodes_last: chapters,
-            },
+    items: result.items.flatMap(({ comic, chapters }) => {
+      const data = comic?.data;
+      const chapterNodes = chapters ?? [];
+      if (!data || !hasTextUrl(data.urlCover) || !hasTextUrl(chapterNodes[0]?.data.urlPath)) {
+        return [];
+      }
+      const item = toDiscoverItem(
+        {
+          data: {
+            ...data,
+            type: data.type ?? TYPE_OPTIONS.find((option) => data.genres?.includes(option.id))?.id,
+            chapterNodes_last: chapterNodes,
           },
-          "chapterUpdatesCarouselItem",
-        ),
-      )
-      .filter((item): item is DiscoverSectionItem => item !== undefined),
+        },
+        "chapterUpdatesCarouselItem",
+      );
+      return item ? [item] : [];
+    }),
     before:
       typeof result.before === "number" && Number.isFinite(result.before)
         ? result.before
@@ -306,6 +303,9 @@ export const toSourceManga = (node: ComicNode): SourceManga => {
         ...(typeof comic.chaps_normal === "number" ? { Chapters: String(comic.chaps_normal) } : {}),
         ...(typeof comic.follows === "number" ? { Follows: String(comic.follows) } : {}),
         ...(typeof comic.reviews === "number" ? { Reviews: String(comic.reviews) } : {}),
+        ...(typeof comic.comments_total === "number"
+          ? { Comments: String(comic.comments_total) }
+          : {}),
         ...(publishers.length > 0 ? { Publishers: publishers.join(", ") } : {}),
       },
       shareUrl: toAbsoluteUrl(comic.urlPath || `/comic/${comic.id}`),

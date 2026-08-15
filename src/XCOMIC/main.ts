@@ -36,6 +36,7 @@ import {
   SORTING_OPTIONS,
   STATE_KEYS,
   type BrowseSelect,
+  type ComicNode,
   type PageMetadata,
   type SearchMetadata,
 } from "./models";
@@ -45,6 +46,7 @@ import {
   fetchChapters,
   fetchComic,
   fetchLatestUploads,
+  fetchLatestUpdates,
   fetchSearchPage,
   XComicInterceptor,
 } from "./network";
@@ -59,6 +61,11 @@ import {
   type CarouselItemType,
 } from "./parsers";
 import type XComicConfig from "./pbconfig";
+
+const MAX_EMPTY_BROWSE_PAGES = 10;
+
+const sameValues = (left: string[], right: string[]): boolean =>
+  left.length === right.length && left.every((value) => right.includes(value));
 
 class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   private genresPromise?: Promise<Tag[]>;
@@ -141,13 +148,12 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     itemType: CarouselItemType,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const page = metadata?.page ?? 1;
-    const response = await fetchBrowse(this.buildSelect(page, sortby, "", undefined));
-    const nodes = response.get_comic_browse_items ?? [];
+    const result = await this.getUsableBrowsePage(page, sortby, "", undefined);
     return {
-      items: nodes
+      items: result.nodes
         .map((node) => toDiscoverItem(node, itemType))
         .filter((item): item is DiscoverSectionItem => item !== undefined),
-      metadata: nodes.length === PAGE_SIZE ? { page: page + 1 } : undefined,
+      metadata: result.nextPage != null ? { page: result.nextPage } : undefined,
     };
   }
 
@@ -188,18 +194,97 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     const pasted = await this.resolveUrlQuery(query.title ?? "");
     if (pasted) return pasted;
 
+    if (sortingOption?.id === "field_update" && this.canUseLatestFeed(query)) {
+      return this.getLatestSearchResults(metadata);
+    }
+
     const page = metadata?.page ?? 1;
-    const select = this.buildSelect(
+    const result = await this.getUsableBrowsePage(
       page,
       sortingOption?.id ?? "field_score",
       (query.title ?? "").trim(),
       query.metadata,
     );
-    const response = await fetchBrowse(select);
-    const nodes = response.get_comic_browse_items ?? [];
+    return {
+      items: result.nodes.map(toSearchResultItem),
+      metadata: result.nextPage != null ? { page: result.nextPage } : undefined,
+    };
+  }
+
+  private async getUsableBrowsePage(
+    page: number,
+    sortby: string,
+    word: string,
+    metadata: SearchMetadata | undefined,
+  ): Promise<{ nodes: ComicNode[]; nextPage?: number }> {
+    let apiPage = page;
+    for (let attempt = 0; attempt < MAX_EMPTY_BROWSE_PAGES; attempt++, apiPage++) {
+      const response = await fetchBrowse(this.buildSelect(apiPage, sortby, word, metadata));
+      const nodes = response.get_comic_browse_items ?? [];
+      const usable = nodes.filter((node) => Boolean(node.data.urlCover?.trim()));
+      const hasNextPage = nodes.length === PAGE_SIZE;
+      if (usable.length || !hasNextPage) {
+        return { nodes: usable, nextPage: hasNextPage ? apiPage + 1 : undefined };
+      }
+    }
+    return { nodes: [], nextPage: apiPage };
+  }
+
+  private canUseLatestFeed(query: SearchQuery<SearchMetadata>): boolean {
+    if ((query.title ?? "").trim()) return false;
+    const metadata = query.metadata;
+    const preferences = getPreferences();
+    return (
+      sameValues(metadata?.types ?? preferences.types, preferences.types) &&
+      sameValues(
+        metadata?.contentRatings ?? preferences.contentRatings,
+        preferences.contentRatings,
+      ) &&
+      sameValues(metadata?.translatedLanguages ?? ["en"], ["en"]) &&
+      !(metadata?.demographics?.length ?? 0) &&
+      !Object.keys(metadata?.genres ?? {}).length &&
+      !Object.keys(metadata?.tags ?? {}).length &&
+      !(metadata?.originalLanguages?.length ?? 0) &&
+      !(metadata?.originalStatus?.length ?? 0) &&
+      !(metadata?.uploadStatus?.length ?? 0) &&
+      !metadata?.chapCount?.trim() &&
+      !metadata?.year?.trim() &&
+      (metadata?.incGenresMode ?? "and") === "and" &&
+      (metadata?.excGenresMode ?? "or") === "or"
+    );
+  }
+
+  private async getLatestSearchResults(
+    metadata: PageMetadata | undefined,
+  ): Promise<PagedResults<SearchResultItem>> {
+    const result = (await fetchLatestUpdates(metadata?.before)).get_comic_latestUploads;
+    if (!result) return { items: [] };
+
+    const preferences = getPreferences();
+    const excluded = new Set([...preferences.excludedGenres, ...preferences.excludedTags]);
+    const seen = new Set<string>();
+    const nodes: ComicNode[] = [];
+    for (const item of result.items ?? []) {
+      const comic = item.comic?.data;
+      if (
+        !comic ||
+        comic.translatedLanguage !== "en" ||
+        !comic.urlCover?.trim() ||
+        (comic.type && !preferences.types.some((type) => type === comic.type)) ||
+        (comic.contentRating &&
+          !preferences.contentRatings.some((rating) => rating === comic.contentRating)) ||
+        comic.genres?.some((genre) => excluded.has(genre)) ||
+        seen.has(comic.id)
+      ) {
+        continue;
+      }
+      seen.add(comic.id);
+      nodes.push({ data: { ...comic, chapterNodes_last: item.chapters ?? [] } });
+    }
+
     return {
       items: nodes.map(toSearchResultItem),
-      metadata: nodes.length === PAGE_SIZE ? { page: page + 1 } : undefined,
+      metadata: result.before != null ? { before: result.before } : undefined,
     };
   }
 

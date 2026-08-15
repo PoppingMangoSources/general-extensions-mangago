@@ -12,12 +12,14 @@ import {
   API_URL,
   CHAPTER_PAGE_SIZE,
   DOMAIN,
+  PAGE_SIZE,
   type BrowseResponse,
   type BrowseSelect,
   type ChapterListResponse,
   type ChapterPagesResponse,
   type ComicNodeResponse,
   type GraphQLResponse,
+  type LatestUpdatesResponse,
 } from "./models";
 
 const LATEST_UPLOADS_URL = `${DOMAIN}/latest/q-loader-JrIz3zZm8Ms.dev.json`;
@@ -41,6 +43,29 @@ query get_comic_browse_items($select: Comic_Browse_Select) {
 }
 `;
 
+const LATEST_UPDATES_QUERY = `
+query get_comic_latestUploads($select: Comic_LatestUploads_Select) {
+  get_comic_latestUploads(select: $select) {
+    before
+    items {
+      comic {
+        data {
+          id name urlPath urlCover
+          translatedLanguage
+          type contentRating genres sfw_result
+        }
+      }
+      chapters(amount: 1) {
+        data {
+          id serial chaNum urlPath
+          dateCreate dateModify datePublic
+        }
+      }
+    }
+  }
+}
+`;
+
 const COMIC_QUERY = `
 query get_comicNode($id: ID!) {
   get_comicNode(id: $id) {
@@ -57,7 +82,7 @@ query get_comicNode($id: ID!) {
       publisherNodes { data { name } }
       summary { html }
       urlPath urlCover
-      sfw_result score_val follows reviews chaps_normal
+      sfw_result score_val follows reviews comments_total chaps_normal
     }
   }
 }
@@ -159,6 +184,11 @@ query get_chapterNode($id: ID!) {
 
 export const fetchBrowse = (select: BrowseSelect): Promise<BrowseResponse> =>
   fetchGraphQL<BrowseResponse>(BROWSE_QUERY, { select });
+
+export const fetchLatestUpdates = (before?: number): Promise<LatestUpdatesResponse> =>
+  fetchGraphQL<LatestUpdatesResponse>(LATEST_UPDATES_QUERY, {
+    select: { size: PAGE_SIZE, ...(before != null ? { before } : {}) },
+  });
 
 export const fetchLatestUploads = async (before?: number): Promise<string> => {
   const url = `${LATEST_UPLOADS_URL}${before != null ? `?before=${before}` : ""}`;

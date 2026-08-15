@@ -99,20 +99,30 @@ export async function runTests(logger: TestLogger) {
     }
   });
 
-  suite.test("recently added discovery and browse sorting return items", async () => {
+  suite.test("latest and recently added feeds return distinct valid cards", async () => {
     const recentlyAdded = await XCOMIC.getDiscoverSectionItems(
       DISCOVER_SECTIONS[SECTIONS.RECENTLY_ADDED],
       undefined,
     );
     expect(recentlyAdded.items.length).to.be.greaterThan(0);
+    expect(
+      recentlyAdded.items.every((item) => item.imageUrl.startsWith("https://xcomic.me/")),
+    ).to.equal(true);
 
+    const sortedResults: string[][] = [];
     for (const sortingOption of [
       { id: "field_update", label: "Latest Update" },
       { id: "field_create", label: "Recently Added" },
     ]) {
       const results = await XCOMIC.getSearchResults({ title: "" }, undefined, sortingOption);
       expect(results.items.length, sortingOption.label).to.be.greaterThan(0);
+      expect(
+        results.items.every((item) => item.imageUrl.startsWith("https://xcomic.me/")),
+        sortingOption.label,
+      ).to.equal(true);
+      sortedResults.push(results.items.map((item) => item.mangaId));
     }
+    expect(sortedResults[0]).to.not.deep.equal(sortedResults[1]);
   });
 
   suite.test("globally numbered chapters are not regrouped by volume", async () => {
