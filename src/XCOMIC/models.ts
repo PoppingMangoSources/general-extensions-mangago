@@ -3,6 +3,7 @@
 
 import {
   DiscoverSectionType,
+  type ContentRating,
   type DiscoverSection,
   type JSONObject,
   type SortingOption,
@@ -307,6 +308,13 @@ export interface LatestUploadItem {
 export interface LatestUploadsResult {
   before?: number | null;
   items?: LatestUploadItem[] | null;
+}
+
+export interface RecentlyAddedItem {
+  mangaId: string;
+  title: string;
+  imageUrl: string;
+  contentRating: ContentRating;
 }
 
 export interface ComicData {

@@ -10,6 +10,8 @@ import {
   SECTIONS,
   STATE_KEYS,
 } from "../XCOMIC/models.js";
+import { fetchRecentlyAdded } from "../XCOMIC/network.js";
+import { parseRecentlyAdded } from "../XCOMIC/parsers.js";
 import sourceInfo from "../XCOMIC/pbconfig.js";
 import { TestSuite, registerDefaultTests } from "./suite.js";
 
@@ -99,30 +101,44 @@ export async function runTests(logger: TestLogger) {
     }
   });
 
-  suite.test("latest and recently added feeds return distinct valid cards", async () => {
+  suite.test("recently added matches the site's canonical feed", async () => {
+    const siteFeed = parseRecentlyAdded(await fetchRecentlyAdded(), 1);
     const recentlyAdded = await XCOMIC.getDiscoverSectionItems(
       DISCOVER_SECTIONS[SECTIONS.RECENTLY_ADDED],
       undefined,
     );
-    expect(recentlyAdded.items.length).to.be.greaterThan(0);
+    expect(recentlyAdded.items.map((item) => item.mangaId)).to.deep.equal(
+      siteFeed.items.map((item) => item.mangaId),
+    );
     expect(
       recentlyAdded.items.every((item) => item.imageUrl.startsWith("https://xcomic.me/")),
     ).to.equal(true);
 
-    const sortedResults: string[][] = [];
-    for (const sortingOption of [
-      { id: "field_update", label: "Latest Update" },
-      { id: "field_create", label: "Recently Added" },
-    ]) {
-      const results = await XCOMIC.getSearchResults({ title: "" }, undefined, sortingOption);
-      expect(results.items.length, sortingOption.label).to.be.greaterThan(0);
-      expect(
-        results.items.every((item) => item.imageUrl.startsWith("https://xcomic.me/")),
-        sortingOption.label,
-      ).to.equal(true);
-      sortedResults.push(results.items.map((item) => item.mangaId));
+    const searchResults = await XCOMIC.getSearchResults({ title: "" }, undefined, {
+      id: "field_create",
+      label: "Recently Added",
+    });
+    expect(searchResults.items.map((item) => item.mangaId)).to.deep.equal(
+      siteFeed.items.map((item) => item.mangaId),
+    );
+
+    if (siteFeed.nextPage && recentlyAdded.metadata && searchResults.metadata) {
+      const expectedNextPage = parseRecentlyAdded(await fetchRecentlyAdded(), siteFeed.nextPage);
+      const discoverNextPage = await XCOMIC.getDiscoverSectionItems(
+        DISCOVER_SECTIONS[SECTIONS.RECENTLY_ADDED],
+        recentlyAdded.metadata,
+      );
+      const searchNextPage = await XCOMIC.getSearchResults({ title: "" }, searchResults.metadata, {
+        id: "field_create",
+        label: "Recently Added",
+      });
+      expect(discoverNextPage.items.map((item) => item.mangaId)).to.deep.equal(
+        expectedNextPage.items.map((item) => item.mangaId),
+      );
+      expect(searchNextPage.items.map((item) => item.mangaId)).to.deep.equal(
+        expectedNextPage.items.map((item) => item.mangaId),
+      );
     }
-    expect(sortedResults[0]).to.not.deep.equal(sortedResults[1]);
   });
 
   suite.test("globally numbered chapters are not regrouped by volume", async () => {

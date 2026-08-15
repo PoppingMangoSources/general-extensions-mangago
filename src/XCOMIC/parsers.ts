@@ -17,12 +17,14 @@ import {
   DEMOGRAPHIC_OPTIONS,
   DOMAIN,
   FORMAT_OPTIONS,
+  PAGE_SIZE,
   TYPE_OPTIONS,
   type ChapterData,
   type ChapterPagesResponse,
   type ComicData,
   type ComicNode,
   type LatestUploadsResult,
+  type RecentlyAddedItem,
 } from "./models";
 import { decodeQwikLoader } from "./utils";
 
@@ -201,6 +203,47 @@ export const parseLatestUploads = (
       typeof result.before === "number" && Number.isFinite(result.before)
         ? result.before
         : undefined,
+  };
+};
+
+export const parseRecentlyAdded = (
+  input: string,
+  page: number,
+): { items: RecentlyAddedItem[]; nextPage?: number } => {
+  const $ = cheerio.load(input, { xmlMode: true });
+  const items = $("channel > item")
+    .map((_, element): RecentlyAddedItem | undefined => {
+      const item = $(element);
+      const title = item
+        .find("title")
+        .first()
+        .text()
+        .replace(/^(?:\uD83C[\uDDE6-\uDDFF]){2}\s*/, "")
+        .trim();
+      const link = item.find("link").first().text().trim();
+      if (!/\/comic\/[a-zA-Z0-9]+-en-/i.test(link)) return undefined;
+      const mangaId =
+        item.find("guid").first().text().trim() ||
+        /^https?:\/\/[^/]+\/comic\/([a-zA-Z0-9]+)/i.exec(link)?.[1] ||
+        "";
+      const imageUrl = toAbsoluteUrl(item.find("enclosure").first().attr("url"));
+      if (!title || !mangaId || !imageUrl) return undefined;
+      return {
+        mangaId: mangaId.replace(SAFE_ID_REGEX, "-"),
+        title: Application.decodeHTMLEntities(title),
+        imageUrl,
+        contentRating: ContentRating.MATURE,
+      } satisfies RecentlyAddedItem;
+    })
+    .get()
+    .filter((item): item is RecentlyAddedItem => item !== undefined);
+
+  if (!items.length) throw new Error("XCOMIC recently-added results were missing");
+  const start = (page - 1) * PAGE_SIZE;
+  const end = start + PAGE_SIZE;
+  return {
+    items: items.slice(start, end),
+    ...(end < items.length ? { nextPage: page + 1 } : {}),
   };
 };
 

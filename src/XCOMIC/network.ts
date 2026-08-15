@@ -23,6 +23,7 @@ import {
 } from "./models";
 
 const LATEST_UPLOADS_URL = `${DOMAIN}/latest/q-loader-JrIz3zZm8Ms.dev.json`;
+const RECENTLY_ADDED_URL = `${DOMAIN}/rss/added.xml`;
 
 const BROWSE_QUERY = `
 query get_comic_browse_items($select: Comic_Browse_Select) {
@@ -199,6 +200,18 @@ export const fetchLatestUploads = async (before?: number): Promise<string> => {
   });
   if (response.status < 200 || response.status >= 300) {
     throw new Error(`Request failed with status ${response.status}: ${url}`);
+  }
+  return Application.arrayBufferToUTF8String(buffer);
+};
+
+export const fetchRecentlyAdded = async (): Promise<string> => {
+  const [response, buffer] = await Application.scheduleRequest({
+    url: RECENTLY_ADDED_URL,
+    method: "GET",
+    headers: { accept: "application/rss+xml,application/xml,text/xml" },
+  });
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error(`Request failed with status ${response.status}: ${RECENTLY_ADDED_URL}`);
   }
   return Application.arrayBufferToUTF8String(buffer);
 };
