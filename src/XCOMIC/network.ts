@@ -23,13 +23,13 @@ import {
 const LATEST_UPLOADS_URL = `${DOMAIN}/latest/q-loader-JrIz3zZm8Ms.dev.json`;
 
 const BROWSE_QUERY = `
-query get_comic_browse_items($select: Comic_Browse_Select, $includeSummary: Boolean!) {
+query get_comic_browse_items($select: Comic_Browse_Select) {
   get_comic_browse_items(select: $select) {
     data {
       id name
       urlCover
       type contentRating genres
-      summary @include(if: $includeSummary) { html }
+      summary { html }
       sfw_result
       chapterNodes_last(amount: 1) {
         data {
@@ -157,11 +157,8 @@ query get_chapterNode($id: ID!) {
 }
 `;
 
-export const fetchBrowse = (
-  select: BrowseSelect,
-  includeSummary = false,
-): Promise<BrowseResponse> =>
-  fetchGraphQL<BrowseResponse>(BROWSE_QUERY, { select, includeSummary });
+export const fetchBrowse = (select: BrowseSelect): Promise<BrowseResponse> =>
+  fetchGraphQL<BrowseResponse>(BROWSE_QUERY, { select });
 
 export const fetchLatestUploads = async (before?: number): Promise<string> => {
   const url = `${LATEST_UPLOADS_URL}${before != null ? `?before=${before}` : ""}`;

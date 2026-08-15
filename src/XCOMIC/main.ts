@@ -141,14 +141,10 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     itemType: CarouselItemType,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const page = metadata?.page ?? 1;
-    const response = await fetchBrowse(
-      this.buildSelect(page, sortby, "", undefined),
-      itemType === "featuredCarouselItem",
-    );
+    const response = await fetchBrowse(this.buildSelect(page, sortby, "", undefined));
     const nodes = response.get_comic_browse_items ?? [];
     return {
       items: nodes
-        .filter((node) => Boolean(node.data.urlCover?.trim()))
         .map((node) => toDiscoverItem(node, itemType))
         .filter((item): item is DiscoverSectionItem => item !== undefined),
       metadata: nodes.length === PAGE_SIZE ? { page: page + 1 } : undefined,
@@ -202,7 +198,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     const response = await fetchBrowse(select);
     const nodes = response.get_comic_browse_items ?? [];
     return {
-      items: nodes.filter((node) => Boolean(node.data.urlCover?.trim())).map(toSearchResultItem),
+      items: nodes.map(toSearchResultItem),
       metadata: nodes.length === PAGE_SIZE ? { page: page + 1 } : undefined,
     };
   }

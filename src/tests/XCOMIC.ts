@@ -99,6 +99,22 @@ export async function runTests(logger: TestLogger) {
     }
   });
 
+  suite.test("recently added discovery and browse sorting return items", async () => {
+    const recentlyAdded = await XCOMIC.getDiscoverSectionItems(
+      DISCOVER_SECTIONS[SECTIONS.RECENTLY_ADDED],
+      undefined,
+    );
+    expect(recentlyAdded.items.length).to.be.greaterThan(0);
+
+    for (const sortingOption of [
+      { id: "field_update", label: "Latest Update" },
+      { id: "field_create", label: "Recently Added" },
+    ]) {
+      const results = await XCOMIC.getSearchResults({ title: "" }, undefined, sortingOption);
+      expect(results.items.length, sortingOption.label).to.be.greaterThan(0);
+    }
+  });
+
   suite.test("globally numbered chapters are not regrouped by volume", async () => {
     const manga = await XCOMIC.getMangaDetails("x6bbg6");
     const chapters = await XCOMIC.getChapters(manga);
