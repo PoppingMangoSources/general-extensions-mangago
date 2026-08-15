@@ -3,7 +3,7 @@
 
 import type { JSONObject, SortingOption, Tag } from "@paperback/types";
 
-export const DOMAIN = "https://reimanga.com";
+export const DOMAIN = "https://reimanga.net";
 export const API = `${DOMAIN}/api`;
 
 export const SECTIONS = {

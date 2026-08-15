@@ -15,9 +15,12 @@ import {
 import { DOMAIN, GENRES, STATUS_OPTIONS, type SearchMetadata } from "./models";
 
 const BASE_URL_KEY = "reimanga.baseUrl";
+const PREVIOUS_DOMAIN = "https://reimanga.com";
 
-export const getBaseUrl = (): string =>
-  (Application.getState(BASE_URL_KEY) as string | undefined) ?? DOMAIN;
+export const getBaseUrl = (): string => {
+  const stored = Application.getState(BASE_URL_KEY) as string | undefined;
+  return !stored || stored === PREVIOUS_DOMAIN ? DOMAIN : stored;
+};
 
 export const setBaseUrl = (value: string): void => {
   const trimmed = value.trim().replace(/\/+$/, "");
