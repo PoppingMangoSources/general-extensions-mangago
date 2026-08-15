@@ -5,7 +5,7 @@ import { type JSONObject, type Tag } from "@paperback/types";
 
 export const DEFAULT_DOMAIN = "https://mangavyvy.net";
 export const SEARCH_PATH = "search";
-export const GENRES_KEY = "vymanga_genres";
+export const GENRES_KEY = "vymanga_search_genres_v2";
 export const FEATURED_LIMIT = 8;
 
 export const SECTIONS = {
@@ -42,7 +42,7 @@ export const CHAPTER_FALLBACK_SELECTOR = 'a[id^="chapter-"]';
 export const CHAPTER_DATE_SELECTOR = "p.small";
 export const PAGE_SELECTOR = "div.carousel-item[data-page] img, img.lozad, img.d-block";
 
-export const GENRE_LINK_SELECTOR = 'a[href*="/genre/"]';
+export const GENRE_OPTION_SELECTOR = ".checkbox-genre[data-value]";
 
 export interface PageMetadata extends JSONObject {
   page?: number;

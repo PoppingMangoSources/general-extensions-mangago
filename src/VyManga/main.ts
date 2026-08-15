@@ -348,7 +348,7 @@ class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
   private async loadGenres(): Promise<OptionItem[]> {
     const stored = getStoredGenres();
     if (stored.length > 0) return stored;
-    const $ = await fetchCheerio({ url: this.baseUrl, method: "GET" });
+    const $ = await fetchCheerio({ url: `${this.baseUrl}/${SEARCH_PATH}`, method: "GET" });
     const genres = parseGenres($);
     if (genres.length > 0) Application.setState(JSON.stringify(genres), GENRES_KEY);
     return genres;

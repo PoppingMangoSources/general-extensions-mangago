@@ -24,7 +24,7 @@ import {
   CHAPTER_SELECTOR,
   DESC_SELECTOR,
   GENRES_KEY,
-  GENRE_LINK_SELECTOR,
+  GENRE_OPTION_SELECTOR,
   GENRE_SELECTOR,
   PAGE_SELECTOR,
   STATUS_SELECTOR,
@@ -153,11 +153,13 @@ export const parseCards = ($: CheerioAPI, base: string): MangaCard[] => {
 export const parseGenres = ($: CheerioAPI): OptionItem[] => {
   const genres: OptionItem[] = [];
   const seen = new Set<string>();
-  for (const element of $(GENRE_LINK_SELECTOR).toArray()) {
-    const anchor = $(element);
-    const id = (anchor.attr("href") || "").match(/\/genre\/([a-z0-9-]+)/i)?.[1]?.toLowerCase();
-    const name = Application.decodeHTMLEntities(anchor.text().replace(/\s+/g, " ").trim());
-    if (!id || id === "all" || !name || seen.has(id)) continue;
+  for (const element of $(GENRE_OPTION_SELECTOR).toArray()) {
+    const checkbox = $(element);
+    const id = checkbox.attr("data-value")?.trim();
+    const name = Application.decodeHTMLEntities(
+      checkbox.parent().find("label").first().text().replace(/\s+/g, " ").trim(),
+    );
+    if (!id || !name || seen.has(id)) continue;
     seen.add(id);
     genres.push({ id, value: name });
   }
