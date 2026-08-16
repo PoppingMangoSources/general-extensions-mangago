@@ -102,6 +102,7 @@ export interface MangaSectionItem {
   avg_rating: number | null;
   rating_count: number;
   last_chapter_date: string;
+  latest_chapter_number: string;
   is_blurworthy: number;
 }
 

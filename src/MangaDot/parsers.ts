@@ -205,8 +205,8 @@ export const parseSection = (
           type,
           subtitle: isMangaData
             ? getArrayAuthor(item as MangaData)
-            : `Ch. ${item.chapter_count} | ★ ${item.avg_rating}`,
-          chapterId: item.chapter_count.toString(),
+            : `Ch. ${item.latest_chapter_number} | ★ ${item.avg_rating}`,
+          chapterId: item.latest_chapter_number,
           publishDate: getDate(item.last_chapter_date),
         };
       case "featuredCarouselItem":
@@ -215,7 +215,7 @@ export const parseSection = (
           type,
           supertitle: isMangaData
             ? getArrayAuthor(item as MangaData)
-            : `Ch. ${item.chapter_count} | ★ ${item.avg_rating}`,
+            : `Ch. ${item.latest_chapter_number} | ★ ${item.avg_rating}`,
           summary: isMangaData ? (item as MangaData).description : "",
           infoItems: itemInfoElements,
         };
@@ -225,7 +225,7 @@ export const parseSection = (
           type,
           subtitle: isMangaData
             ? getArrayAuthor(item as MangaData)
-            : `Ch. ${item.chapter_count} | ★ ${item.avg_rating}`,
+            : `Ch. ${item.latest_chapter_number} | ★ ${item.avg_rating}`,
         };
       default:
         return {
@@ -233,7 +233,7 @@ export const parseSection = (
           type: "simpleCarouselItem",
           subtitle: isMangaData
             ? getArrayAuthor(item as MangaData)
-            : `Ch. ${item.chapter_count} | ★ ${item.avg_rating}`,
+            : `Ch. ${item.latest_chapter_number} | ★ ${item.avg_rating}`,
         };
     }
   });
