@@ -20,6 +20,7 @@ export const SECTIONS = {
   LATEST_UPLOADS: "latest-uploads",
   RECENTLY_ADDED: "recently-added",
   MOST_CHAPTERS: "most-chapters",
+  MOST_VIEWS: "most-views",
   GENRES: "genres",
 } as const;
 
@@ -45,6 +46,11 @@ export const DISCOVER_SECTIONS: Record<SectionId, DiscoverSection> = {
     id: SECTIONS.MOST_CHAPTERS,
     title: "Most Chapters",
     type: DiscoverSectionType.simpleCarousel,
+  },
+  [SECTIONS.MOST_VIEWS]: {
+    id: SECTIONS.MOST_VIEWS,
+    title: "Most Views",
+    type: DiscoverSectionType.genres,
   },
   [SECTIONS.GENRES]: {
     id: SECTIONS.GENRES,
@@ -211,6 +217,21 @@ export const LANGUAGE_OPTIONS: Tag[] = [
   { id: "_t", title: "Other" },
 ];
 
+export const MOST_VIEWS_OPTIONS = [
+  { id: "views_d000", label: "Most Views (Total)", chipLabel: "Total" },
+  { id: "views_d360", label: "Most Views (360 days)", chipLabel: "360 Days" },
+  { id: "views_d180", label: "Most Views (180 days)", chipLabel: "180 Days" },
+  { id: "views_d090", label: "Most Views (90 days)", chipLabel: "90 Days" },
+  { id: "views_d030", label: "Most Views (30 days)", chipLabel: "30 Days" },
+  { id: "views_d007", label: "Most Views (7 days)", chipLabel: "7 Days" },
+  { id: "views_h024", label: "Most Views (24 hours)", chipLabel: "24 Hours" },
+  { id: "views_h012", label: "Most Views (12 hours)", chipLabel: "12 Hours" },
+  { id: "views_h006", label: "Most Views (6 hours)", chipLabel: "6 Hours" },
+  { id: "views_h001", label: "Most Views (1 hour)", chipLabel: "1 Hour" },
+] as const satisfies Array<SortingOption & { chipLabel: string }>;
+
+export type MostViewsSort = (typeof MOST_VIEWS_OPTIONS)[number]["id"];
+
 export const SORTING_OPTIONS: SortingOption[] = [
   { id: "field_score", label: "Rating Score" },
   { id: "field_update", label: "Latest Update" },
@@ -218,6 +239,10 @@ export const SORTING_OPTIONS: SortingOption[] = [
   { id: "field_name_asc", label: "Name A-Z" },
   { id: "field_name_desc", label: "Name Z-A" },
   { id: "field_chapter", label: "Most Chapters" },
+  { id: "field_follow", label: "Most Follows" },
+  { id: "field_review", label: "Most Reviews" },
+  { id: "field_comment", label: "Most Comments" },
+  ...MOST_VIEWS_OPTIONS,
 ];
 
 export interface PageMetadata extends JSONObject {
@@ -234,6 +259,7 @@ export interface SearchMetadata extends JSONObject {
   incGenresMode?: GenreMode;
   originalLanguages?: string[];
   originalStatus?: WorkStatus[];
+  sort?: MostViewsSort;
   tags?: TriState;
   translatedLanguages?: string[];
   types?: SeriesType[];

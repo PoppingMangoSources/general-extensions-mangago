@@ -7,6 +7,7 @@ import {
   CHAPTER_COUNT_OPTIONS,
   DEFAULT_CONTENT_RATINGS,
   DISCOVER_SECTIONS,
+  MOST_VIEWS_OPTIONS,
   SECTIONS,
   STATE_KEYS,
 } from "../XCOMIC/models.js";
@@ -59,6 +60,46 @@ export async function runTests(logger: TestLogger) {
     expect(sourceInfo.contentRating).to.equal(ContentRating.MATURE);
     expect(DEFAULT_CONTENT_RATINGS).to.deep.equal(["safe", "suggestive", "erotica"]);
     expect(getPreferences().contentRatings).to.deep.equal(DEFAULT_CONTENT_RATINGS);
+  });
+
+  suite.test("catalog sorts and most-view chips follow the live API", async () => {
+    const sortingOptions = await XCOMIC.getSortingOptions();
+    const addedSortIds = [
+      "field_follow",
+      "field_review",
+      "field_comment",
+      ...MOST_VIEWS_OPTIONS.map((option) => option.id),
+    ];
+    expect(sortingOptions.map((option) => option.id)).to.include.members(addedSortIds);
+    expect(sortingOptions.some((option) => option.id.startsWith("status_"))).to.equal(false);
+
+    const sections = await XCOMIC.getDiscoverSections();
+    const mostViews = sections.find((section) => section.id === SECTIONS.MOST_VIEWS);
+    if (!mostViews) throw new Error("Most Views section is missing");
+    const sectionItems = await XCOMIC.getDiscoverSectionItems(mostViews, undefined);
+    const chips = sectionItems.items.filter((item) => item.type === "genresCarouselItem");
+    expect(chips.map((chip) => chip.name)).to.deep.equal(
+      MOST_VIEWS_OPTIONS.map((option) => option.chipLabel),
+    );
+    expect(chips.map((chip) => chip.searchQuery.metadata?.sort)).to.deep.equal(
+      MOST_VIEWS_OPTIONS.map((option) => option.id),
+    );
+
+    for (const chip of chips) {
+      const results = await XCOMIC.getSearchResults(chip.searchQuery, undefined);
+      expect(results.items.length, chip.name).to.be.greaterThan(0);
+      expect(
+        results.items.every((item) => item.imageUrl.startsWith("https://xcomic.me/")),
+        chip.name,
+      ).to.equal(true);
+    }
+
+    for (const id of ["field_follow", "field_review", "field_comment"]) {
+      const sortingOption = sortingOptions.find((option) => option.id === id);
+      if (!sortingOption) throw new Error(`Missing sorting option: ${id}`);
+      const results = await XCOMIC.getSearchResults({ title: "" }, undefined, sortingOption);
+      expect(results.items.length, sortingOption.label).to.be.greaterThan(0);
+    }
   });
 
   suite.test("latest uploads contain valid chapter cards", async () => {

@@ -31,6 +31,7 @@ import {
 } from "./forms/settings";
 import {
   DISCOVER_SECTIONS,
+  MOST_VIEWS_OPTIONS,
   PAGE_SIZE,
   SECTIONS,
   SORTING_OPTIONS,
@@ -127,6 +128,8 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
         return this.getRecentlyAddedSection(metadata);
       case SECTIONS.MOST_CHAPTERS:
         return this.getBrowseSection(metadata, "field_chapter", "simpleCarouselItem");
+      case SECTIONS.MOST_VIEWS:
+        return this.getMostViewsSection();
       case SECTIONS.GENRES:
         return this.getGenreSection();
       default:
@@ -182,6 +185,19 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     };
   }
 
+  private getMostViewsSection(): PagedResults<DiscoverSectionItem> {
+    return {
+      items: MOST_VIEWS_OPTIONS.map((option) => ({
+        type: "genresCarouselItem",
+        name: option.chipLabel,
+        searchQuery: {
+          title: "",
+          metadata: { sort: option.id } satisfies SearchMetadata,
+        },
+      })),
+    };
+  }
+
   private async getGenres(): Promise<Tag[]> {
     const stored = Application.getState(STATE_KEYS.GENRES) as Tag[] | undefined;
     if (stored?.length) return stored;
@@ -217,7 +233,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     const page = metadata?.page ?? 1;
     const result = await this.getUsableBrowsePage(
       page,
-      sortingOption?.id ?? "field_score",
+      sortingOption?.id ?? query.metadata?.sort ?? "field_score",
       (query.title ?? "").trim(),
       query.metadata,
     );
