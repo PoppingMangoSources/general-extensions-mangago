@@ -13,7 +13,7 @@ import {
 export const DOMAIN = "https://xcomic.me";
 export const API_URL = `${DOMAIN}/query/`;
 export const PAGE_SIZE = 36;
-export const CHAPTER_PAGE_SIZE = 480;
+export const CHAPTER_PAGE_SIZE = 1000;
 
 export const SECTIONS = {
   TOP_RATED: "top-rated",
@@ -278,8 +278,8 @@ export interface BrowseSelect {
   incTLangs: string[];
   incGenres: string[];
   excGenres: string[];
-  incGenresMode: GenreMode;
-  excGenresMode: GenreMode;
+  incGenresMode: GenreMode | null;
+  excGenresMode: GenreMode | null;
   incTypes: SeriesType[];
   incDemographics: Demographic[];
   incContentRatings: ContentPreferenceRating[];
@@ -287,7 +287,7 @@ export interface BrowseSelect {
   releaseYearMax: number | null;
   origStatus: string | null;
   siteStatus: string | null;
-  chapCount: string;
+  chapCount: string | null;
   ignoreGlobalULangs: boolean;
   ignoreGlobalGenres: boolean;
   ignoreGlobalBlocks: boolean;

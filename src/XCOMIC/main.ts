@@ -70,6 +70,9 @@ const MAX_EMPTY_BROWSE_PAGES = 10;
 const sameValues = (left: string[], right: string[]): boolean =>
   left.length === right.length && left.every((value) => right.includes(value));
 
+const isMostViewsSort = (id: string): boolean =>
+  MOST_VIEWS_OPTIONS.some((option) => option.id === id);
+
 class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   private genresPromise?: Promise<Tag[]>;
   private rateLimiter = new BasicRateLimiter("xcomic-rate-limiter", {
@@ -230,12 +233,14 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       return this.getRecentlyAddedSearchResults(metadata);
     }
 
+    const sortby = sortingOption?.id ?? query.metadata?.sort ?? "field_score";
     const page = metadata?.page ?? 1;
     const result = await this.getUsableBrowsePage(
       page,
-      sortingOption?.id ?? query.metadata?.sort ?? "field_score",
+      sortby,
       (query.title ?? "").trim(),
       query.metadata,
+      isMostViewsSort(sortby) && this.canUseUnfilteredFeed(query),
     );
     return {
       items: result.nodes.map(toSearchResultItem),
@@ -248,10 +253,13 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     sortby: string,
     word: string,
     metadata: SearchMetadata | undefined,
+    useAllCatalog = false,
   ): Promise<{ nodes: ComicNode[]; nextPage?: number }> {
     let apiPage = page;
     for (let attempt = 0; attempt < MAX_EMPTY_BROWSE_PAGES; attempt++, apiPage++) {
-      const response = await fetchBrowse(this.buildSelect(apiPage, sortby, word, metadata));
+      const response = await fetchBrowse(
+        this.buildSelect(apiPage, sortby, word, metadata, useAllCatalog),
+      );
       const nodes = response.get_comic_browse_items ?? [];
       const usable = nodes.filter((node) => Boolean(node.data.urlCover?.trim()));
       const hasNextPage = nodes.length === PAGE_SIZE;
@@ -335,7 +343,36 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     sortby: string,
     word: string,
     metadata: SearchMetadata | undefined,
+    useAllCatalog = false,
   ): BrowseSelect {
+    if (useAllCatalog) {
+      return {
+        where: "browse",
+        page,
+        size: PAGE_SIZE,
+        init: (page - 1) * PAGE_SIZE,
+        sortby,
+        word,
+        incOLangs: [],
+        incTLangs: [],
+        incGenres: [],
+        excGenres: [],
+        incGenresMode: null,
+        excGenresMode: null,
+        incTypes: [],
+        incDemographics: [],
+        incContentRatings: [],
+        releaseYearMin: null,
+        releaseYearMax: null,
+        origStatus: null,
+        siteStatus: null,
+        chapCount: null,
+        ignoreGlobalULangs: false,
+        ignoreGlobalGenres: false,
+        ignoreGlobalBlocks: false,
+      };
+    }
+
     const preferences = getPreferences();
     const includedGenres: string[] = [];
     const excludedGenres = [...preferences.excludedGenres, ...preferences.excludedTags];

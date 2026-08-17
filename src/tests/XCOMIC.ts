@@ -8,10 +8,12 @@ import {
   DEFAULT_CONTENT_RATINGS,
   DISCOVER_SECTIONS,
   MOST_VIEWS_OPTIONS,
+  PAGE_SIZE,
   SECTIONS,
   STATE_KEYS,
+  type BrowseSelect,
 } from "../XCOMIC/models.js";
-import { fetchRecentlyAdded } from "../XCOMIC/network.js";
+import { fetchBrowse, fetchRecentlyAdded } from "../XCOMIC/network.js";
 import { parseRecentlyAdded } from "../XCOMIC/parsers.js";
 import sourceInfo from "../XCOMIC/pbconfig.js";
 import { TestSuite, registerDefaultTests } from "./suite.js";
@@ -87,7 +89,46 @@ export async function runTests(logger: TestLogger) {
 
     for (const chip of chips) {
       const results = await XCOMIC.getSearchResults(chip.searchQuery, undefined);
+      const sortby = chip.searchQuery.metadata?.sort;
+      if (!sortby) throw new Error(`Most Views chip has no sort: ${chip.name}`);
+      const androidAllSelect: BrowseSelect = {
+        where: "browse",
+        page: 1,
+        size: PAGE_SIZE,
+        init: 0,
+        sortby,
+        word: "",
+        incOLangs: [],
+        incTLangs: [],
+        incGenres: [],
+        excGenres: [],
+        incGenresMode: null,
+        excGenresMode: null,
+        incTypes: [],
+        incDemographics: [],
+        incContentRatings: [],
+        releaseYearMin: null,
+        releaseYearMax: null,
+        origStatus: null,
+        siteStatus: null,
+        chapCount: null,
+        ignoreGlobalULangs: false,
+        ignoreGlobalGenres: false,
+        ignoreGlobalBlocks: false,
+      };
+      const expected = (await fetchBrowse(androidAllSelect)).get_comic_browse_items ?? [];
       expect(results.items.length, chip.name).to.be.greaterThan(0);
+      expect(
+        results.items.map((item) => item.mangaId),
+        `${chip.name} did not match XCOMIC (ALL)`,
+      ).to.deep.equal(expected.map((item) => item.data.id));
+      const sortingOption = sortingOptions.find((option) => option.id === sortby);
+      if (!sortingOption) throw new Error(`Missing sorting option: ${sortby}`);
+      const sortedResults = await XCOMIC.getSearchResults({ title: "" }, undefined, sortingOption);
+      expect(
+        sortedResults.items.map((item) => item.mangaId),
+        `${sortingOption.label} did not match XCOMIC (ALL)`,
+      ).to.deep.equal(expected.map((item) => item.data.id));
       expect(
         results.items.every((item) => item.imageUrl.startsWith("https://xcomic.me/")),
         chip.name,
