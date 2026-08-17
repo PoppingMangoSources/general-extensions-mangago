@@ -76,6 +76,10 @@ export async function runTests(logger: TestLogger) {
     expect(sortingOptions.some((option) => option.id.startsWith("status_"))).to.equal(false);
 
     const sections = await XCOMIC.getDiscoverSections();
+    expect(sections.slice(0, 2).map((section) => section.id)).to.deep.equal([
+      SECTIONS.TOP_RATED,
+      SECTIONS.MOST_VIEWS,
+    ]);
     const mostViews = sections.find((section) => section.id === SECTIONS.MOST_VIEWS);
     if (!mostViews) throw new Error("Most Views section is missing");
     const sectionItems = await XCOMIC.getDiscoverSectionItems(mostViews, undefined);
@@ -83,13 +87,16 @@ export async function runTests(logger: TestLogger) {
     expect(chips.map((chip) => chip.name)).to.deep.equal(
       MOST_VIEWS_OPTIONS.map((option) => option.chipLabel),
     );
-    expect(chips.map((chip) => chip.searchQuery.metadata?.sort)).to.deep.equal(
+    expect(chips.map((chip) => chip.searchQuery.metadata?.discoverSort)).to.deep.equal(
       MOST_VIEWS_OPTIONS.map((option) => option.id),
     );
 
     for (const chip of chips) {
-      const results = await XCOMIC.getSearchResults(chip.searchQuery, undefined);
-      const sortby = chip.searchQuery.metadata?.sort;
+      const results = await XCOMIC.getSearchResults(chip.searchQuery, undefined, {
+        id: "field_score",
+        label: "Rating Score",
+      });
+      const sortby = chip.searchQuery.metadata?.discoverSort;
       if (!sortby) throw new Error(`Most Views chip has no sort: ${chip.name}`);
       const androidAllSelect: BrowseSelect = {
         where: "browse",

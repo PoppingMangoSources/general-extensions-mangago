@@ -17,10 +17,10 @@ export const CHAPTER_PAGE_SIZE = 1000;
 
 export const SECTIONS = {
   TOP_RATED: "top-rated",
+  MOST_VIEWS: "most-views",
   LATEST_UPLOADS: "latest-uploads",
   RECENTLY_ADDED: "recently-added",
   MOST_CHAPTERS: "most-chapters",
-  MOST_VIEWS: "most-views",
   GENRES: "genres",
 } as const;
 
@@ -31,6 +31,11 @@ export const DISCOVER_SECTIONS: Record<SectionId, DiscoverSection> = {
     id: SECTIONS.TOP_RATED,
     title: "Top Rated",
     type: DiscoverSectionType.featured,
+  },
+  [SECTIONS.MOST_VIEWS]: {
+    id: SECTIONS.MOST_VIEWS,
+    title: "Most Views",
+    type: DiscoverSectionType.genres,
   },
   [SECTIONS.LATEST_UPLOADS]: {
     id: SECTIONS.LATEST_UPLOADS,
@@ -46,11 +51,6 @@ export const DISCOVER_SECTIONS: Record<SectionId, DiscoverSection> = {
     id: SECTIONS.MOST_CHAPTERS,
     title: "Most Chapters",
     type: DiscoverSectionType.simpleCarousel,
-  },
-  [SECTIONS.MOST_VIEWS]: {
-    id: SECTIONS.MOST_VIEWS,
-    title: "Most Views",
-    type: DiscoverSectionType.genres,
   },
   [SECTIONS.GENRES]: {
     id: SECTIONS.GENRES,
@@ -71,7 +71,7 @@ export const STATE_KEYS = {
   EXCLUDED_GENRES: "xcomic_excluded_genres",
   EXCLUDED_TAGS: "xcomic_excluded_tags",
   GENRES: "xcomic_genres_v1",
-  SECTION_ORDER: "xcomic_section_order",
+  SECTION_ORDER: "xcomic_section_order_v2",
   VISIBLE_SECTIONS: "xcomic_visible_sections",
 } as const;
 
@@ -259,7 +259,7 @@ export interface SearchMetadata extends JSONObject {
   incGenresMode?: GenreMode;
   originalLanguages?: string[];
   originalStatus?: WorkStatus[];
-  sort?: MostViewsSort;
+  discoverSort?: MostViewsSort;
   tags?: TriState;
   translatedLanguages?: string[];
   types?: SeriesType[];

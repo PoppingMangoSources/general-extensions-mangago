@@ -195,7 +195,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
         name: option.chipLabel,
         searchQuery: {
           title: "",
-          metadata: { sort: option.id } satisfies SearchMetadata,
+          metadata: { discoverSort: option.id } satisfies SearchMetadata,
         },
       })),
     };
@@ -225,15 +225,16 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     const pasted = await this.resolveUrlQuery(query.title ?? "");
     if (pasted) return pasted;
 
-    if (sortingOption?.id === "field_update" && this.canUseUnfilteredFeed(query)) {
+    const sortby = query.metadata?.discoverSort ?? sortingOption?.id ?? "field_score";
+
+    if (sortby === "field_update" && this.canUseUnfilteredFeed(query)) {
       return this.getLatestSearchResults(metadata);
     }
 
-    if (sortingOption?.id === "field_create" && this.canUseUnfilteredFeed(query)) {
+    if (sortby === "field_create" && this.canUseUnfilteredFeed(query)) {
       return this.getRecentlyAddedSearchResults(metadata);
     }
 
-    const sortby = sortingOption?.id ?? query.metadata?.sort ?? "field_score";
     const page = metadata?.page ?? 1;
     const result = await this.getUsableBrowsePage(
       page,
