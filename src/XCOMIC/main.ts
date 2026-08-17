@@ -70,8 +70,14 @@ const MAX_EMPTY_BROWSE_PAGES = 10;
 const sameValues = (left: string[], right: string[]): boolean =>
   left.length === right.length && left.every((value) => right.includes(value));
 
-const isMostViewsSort = (id: string): boolean =>
-  MOST_VIEWS_OPTIONS.some((option) => option.id === id);
+const isAllowedCardRating = (rating: ContentRating): boolean => {
+  const allowed = getPreferences().contentRatings;
+  if (rating === ContentRating.ADULT) return allowed.includes("pornographic");
+  if (rating === ContentRating.MATURE) {
+    return allowed.includes("suggestive") || allowed.includes("erotica");
+  }
+  return allowed.includes("safe");
+};
 
 class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   private genresPromise?: Promise<Tag[]>;
@@ -145,7 +151,9 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const result = parseLatestUploads(await fetchLatestUploads(metadata?.before));
     return {
-      items: result.items,
+      items: result.items.filter(
+        (item) => !item.contentRating || isAllowedCardRating(item.contentRating),
+      ),
       metadata: result.before != null ? { before: result.before } : undefined,
     };
   }
@@ -241,7 +249,6 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       sortby,
       (query.title ?? "").trim(),
       query.metadata,
-      isMostViewsSort(sortby) && this.canUseUnfilteredFeed(query),
     );
     return {
       items: result.nodes.map(toSearchResultItem),
@@ -254,15 +261,15 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     sortby: string,
     word: string,
     metadata: SearchMetadata | undefined,
-    useAllCatalog = false,
   ): Promise<{ nodes: ComicNode[]; nextPage?: number }> {
     let apiPage = page;
     for (let attempt = 0; attempt < MAX_EMPTY_BROWSE_PAGES; attempt++, apiPage++) {
-      const response = await fetchBrowse(
-        this.buildSelect(apiPage, sortby, word, metadata, useAllCatalog),
-      );
+      const response = await fetchBrowse(this.buildSelect(apiPage, sortby, word, metadata));
       const nodes = response.get_comic_browse_items ?? [];
-      const usable = nodes.filter((node) => Boolean(node.data.urlCover?.trim()));
+      const usable = nodes.filter((node) => {
+        const rating = toSearchResultItem(node).contentRating;
+        return Boolean(node.data.urlCover?.trim()) && (!rating || isAllowedCardRating(rating));
+      });
       const hasNextPage = nodes.length === PAGE_SIZE;
       if (usable.length || !hasNextPage) {
         return { nodes: usable, nextPage: hasNextPage ? apiPage + 1 : undefined };
@@ -344,36 +351,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     sortby: string,
     word: string,
     metadata: SearchMetadata | undefined,
-    useAllCatalog = false,
   ): BrowseSelect {
-    if (useAllCatalog) {
-      return {
-        where: "browse",
-        page,
-        size: PAGE_SIZE,
-        init: (page - 1) * PAGE_SIZE,
-        sortby,
-        word,
-        incOLangs: [],
-        incTLangs: [],
-        incGenres: [],
-        excGenres: [],
-        incGenresMode: null,
-        excGenresMode: null,
-        incTypes: [],
-        incDemographics: [],
-        incContentRatings: [],
-        releaseYearMin: null,
-        releaseYearMax: null,
-        origStatus: null,
-        siteStatus: null,
-        chapCount: null,
-        ignoreGlobalULangs: false,
-        ignoreGlobalGenres: false,
-        ignoreGlobalBlocks: false,
-      };
-    }
-
     const preferences = getPreferences();
     const includedGenres: string[] = [];
     const excludedGenres = [...preferences.excludedGenres, ...preferences.excludedTags];

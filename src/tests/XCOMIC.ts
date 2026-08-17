@@ -14,7 +14,7 @@ import {
   type BrowseSelect,
 } from "../XCOMIC/models.js";
 import { fetchBrowse, fetchRecentlyAdded } from "../XCOMIC/network.js";
-import { parseRecentlyAdded } from "../XCOMIC/parsers.js";
+import { parseRecentlyAdded, toSearchResultItem } from "../XCOMIC/parsers.js";
 import sourceInfo from "../XCOMIC/pbconfig.js";
 import { TestSuite, registerDefaultTests } from "./suite.js";
 
@@ -98,7 +98,8 @@ export async function runTests(logger: TestLogger) {
       });
       const sortby = chip.searchQuery.metadata?.discoverSort;
       if (!sortby) throw new Error(`Most Views chip has no sort: ${chip.name}`);
-      const androidAllSelect: BrowseSelect = {
+      const preferences = getPreferences();
+      const expectedSelect: BrowseSelect = {
         where: "browse",
         page: 1,
         size: PAGE_SIZE,
@@ -106,36 +107,55 @@ export async function runTests(logger: TestLogger) {
         sortby,
         word: "",
         incOLangs: [],
-        incTLangs: [],
+        incTLangs: ["en"],
         incGenres: [],
         excGenres: [],
-        incGenresMode: null,
-        excGenresMode: null,
-        incTypes: [],
+        incGenresMode: "and",
+        excGenresMode: "or",
+        incTypes: preferences.types,
         incDemographics: [],
-        incContentRatings: [],
+        incContentRatings: preferences.contentRatings,
         releaseYearMin: null,
         releaseYearMax: null,
         origStatus: null,
         siteStatus: null,
-        chapCount: null,
-        ignoreGlobalULangs: false,
-        ignoreGlobalGenres: false,
-        ignoreGlobalBlocks: false,
+        chapCount: "",
+        ignoreGlobalULangs: true,
+        ignoreGlobalGenres: true,
+        ignoreGlobalBlocks: true,
       };
-      const expected = (await fetchBrowse(androidAllSelect)).get_comic_browse_items ?? [];
+      const expected = (await fetchBrowse(expectedSelect)).get_comic_browse_items ?? [];
       expect(results.items.length, chip.name).to.be.greaterThan(0);
       expect(
         results.items.map((item) => item.mangaId),
-        `${chip.name} did not match XCOMIC (ALL)`,
-      ).to.deep.equal(expected.map((item) => item.data.id));
+        `${chip.name} did not match the selected content ratings`,
+      ).to.deep.equal(
+        expected
+          .filter(
+            (item) =>
+              item.data.urlCover?.trim() &&
+              toSearchResultItem(item).contentRating !== ContentRating.ADULT,
+          )
+          .map((item) => item.data.id),
+      );
+      expect(results.items.every((item) => item.contentRating !== ContentRating.ADULT)).to.equal(
+        true,
+      );
       const sortingOption = sortingOptions.find((option) => option.id === sortby);
       if (!sortingOption) throw new Error(`Missing sorting option: ${sortby}`);
       const sortedResults = await XCOMIC.getSearchResults({ title: "" }, undefined, sortingOption);
       expect(
         sortedResults.items.map((item) => item.mangaId),
-        `${sortingOption.label} did not match XCOMIC (ALL)`,
-      ).to.deep.equal(expected.map((item) => item.data.id));
+        `${sortingOption.label} did not match the selected content ratings`,
+      ).to.deep.equal(
+        expected
+          .filter(
+            (item) =>
+              item.data.urlCover?.trim() &&
+              toSearchResultItem(item).contentRating !== ContentRating.ADULT,
+          )
+          .map((item) => item.data.id),
+      );
       expect(
         results.items.every((item) => item.imageUrl.startsWith("https://xcomic.me/")),
         chip.name,
@@ -170,6 +190,7 @@ export async function runTests(logger: TestLogger) {
     ).to.equal(true);
     const publishTimes = result.items.map((item) => item.publishDate?.getTime() ?? 0);
     expect(publishTimes).to.deep.equal([...publishTimes].sort((a, b) => b - a));
+    expect(result.items.every((item) => item.contentRating !== ContentRating.ADULT)).to.equal(true);
 
     if (result.metadata) {
       const nextPage = await XCOMIC.getDiscoverSectionItems(
