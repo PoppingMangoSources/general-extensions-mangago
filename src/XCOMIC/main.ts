@@ -65,7 +65,7 @@ import {
 } from "./parsers";
 import type XComicConfig from "./pbconfig";
 
-const MAX_EMPTY_BROWSE_PAGES = 10;
+const MAX_BROWSE_PAGES = 10;
 
 const sameValues = (left: string[], right: string[]): boolean =>
   left.length === right.length && left.every((value) => right.includes(value));
@@ -263,19 +263,29 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     metadata: SearchMetadata | undefined,
   ): Promise<{ nodes: ComicNode[]; nextPage?: number }> {
     let apiPage = page;
-    for (let attempt = 0; attempt < MAX_EMPTY_BROWSE_PAGES; attempt++, apiPage++) {
+    const usable: ComicNode[] = [];
+    const seen = new Set<string>();
+    for (let attempt = 0; attempt < MAX_BROWSE_PAGES; attempt++, apiPage++) {
       const response = await fetchBrowse(this.buildSelect(apiPage, sortby, word, metadata));
       const nodes = response.get_comic_browse_items ?? [];
-      const usable = nodes.filter((node) => {
+      for (const node of nodes) {
         const rating = toSearchResultItem(node).contentRating;
-        return Boolean(node.data.urlCover?.trim()) && (!rating || isAllowedCardRating(rating));
-      });
+        if (
+          !node.data.urlCover?.trim() ||
+          (rating && !isAllowedCardRating(rating)) ||
+          seen.has(node.data.id)
+        ) {
+          continue;
+        }
+        seen.add(node.data.id);
+        usable.push(node);
+      }
       const hasNextPage = nodes.length === PAGE_SIZE;
-      if (usable.length || !hasNextPage) {
+      if (usable.length >= PAGE_SIZE || !hasNextPage) {
         return { nodes: usable, nextPage: hasNextPage ? apiPage + 1 : undefined };
       }
     }
-    return { nodes: [], nextPage: apiPage };
+    return { nodes: usable, nextPage: apiPage };
   }
 
   private canUseUnfilteredFeed(query: SearchQuery<SearchMetadata>): boolean {

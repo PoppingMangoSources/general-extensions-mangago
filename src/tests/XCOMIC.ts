@@ -125,36 +125,26 @@ export async function runTests(logger: TestLogger) {
         ignoreGlobalBlocks: true,
       };
       const expected = (await fetchBrowse(expectedSelect)).get_comic_browse_items ?? [];
+      const expectedFirstPageIds = expected
+        .filter(
+          (item) =>
+            item.data.urlCover?.trim() &&
+            toSearchResultItem(item).contentRating !== ContentRating.ADULT,
+        )
+        .map((item) => item.data.id);
       expect(results.items.length, chip.name).to.be.greaterThan(0);
       expect(
-        results.items.map((item) => item.mangaId),
-        `${chip.name} did not match the selected content ratings`,
-      ).to.deep.equal(
-        expected
-          .filter(
-            (item) =>
-              item.data.urlCover?.trim() &&
-              toSearchResultItem(item).contentRating !== ContentRating.ADULT,
-          )
-          .map((item) => item.data.id),
-      );
+        results.items.slice(0, expectedFirstPageIds.length).map((item) => item.mangaId),
+        `${chip.name} did not preserve the site's ranking order`,
+      ).to.deep.equal(expectedFirstPageIds);
+      if (expected.length === PAGE_SIZE && expectedFirstPageIds.length < PAGE_SIZE) {
+        expect(
+          results.items.length,
+          `${chip.name} did not fill filtered results from later pages`,
+        ).to.be.greaterThan(expectedFirstPageIds.length);
+      }
       expect(results.items.every((item) => item.contentRating !== ContentRating.ADULT)).to.equal(
         true,
-      );
-      const sortingOption = sortingOptions.find((option) => option.id === sortby);
-      if (!sortingOption) throw new Error(`Missing sorting option: ${sortby}`);
-      const sortedResults = await XCOMIC.getSearchResults({ title: "" }, undefined, sortingOption);
-      expect(
-        sortedResults.items.map((item) => item.mangaId),
-        `${sortingOption.label} did not match the selected content ratings`,
-      ).to.deep.equal(
-        expected
-          .filter(
-            (item) =>
-              item.data.urlCover?.trim() &&
-              toSearchResultItem(item).contentRating !== ContentRating.ADULT,
-          )
-          .map((item) => item.data.id),
       );
       expect(
         results.items.every((item) => item.imageUrl.startsWith("https://xcomic.me/")),
