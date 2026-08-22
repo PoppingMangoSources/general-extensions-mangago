@@ -77,6 +77,12 @@ PoppingMango is an independent source list for [Paperback](https://paperback.moe
   </a>
 </p>
 
-Source problems are handled in the [**OTHER-REPOS**](https://discord.com/channels/965890377896845352/1367512880228077648/1524169221251272866) channel of the linked Discord, where the PoppingMango support chat lives. Include the affected source, the page or title that failed, and screenshots or request details when possible, it makes fixes much faster.
+<p align="center">
+  <a href="https://discord.com/channels/965890377896845352/1367512880228077648">
+    <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/button-other-repos.svg?v=2" alt="Open the OTHER-REPOS Discord channel" height="36"/>
+  </a>
+</p>
+
+Source problems are handled in the [**OTHER-REPOS**](https://discord.com/channels/965890377896845352/1367512880228077648) channel of the linked Discord, where the PoppingMango support chat lives. Include the affected source, the page or title that failed, and screenshots or request details when possible, it makes fixes much faster.
 
 These extensions are not affiliated with Paperback or any supported website. All site names and logos belong to their respective owners.
