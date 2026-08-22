@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="72" viewBox="0 0 560 72" role="img" aria-label="Open the OTHER-REPOS Discord channel">
+  <defs>
+    <radialGradient id="dbubble" cx="0.34" cy="0.3" r="0.75">
+      <stop offset="0" stop-color="#ffddb8"/>
+      <stop offset="1" stop-color="#ffb068"/>
+    </radialGradient>
+  </defs>
+  <rect x="1.5" y="1.5" width="557" height="69" rx="34.5" fill="#ffeaf3" stroke="#ffbbd5" stroke-width="3"/>
+  <g transform="translate(42,36)">
+    <path d="M-14,-12 h28 a8 8 0 0 1 8 8 v10 a8 8 0 0 1 -8 8 h-12 l-9 8 v-8 h-7 a8 8 0 0 1 -8 -8 v-10 a8 8 0 0 1 8 -8 Z" fill="url(#dbubble)"/>
+    <circle cx="-7" cy="1" r="2.6" fill="#33162a"/>
+    <circle cx="0" cy="1" r="2.6" fill="#33162a"/>
+    <circle cx="7" cy="1" r="2.6" fill="#33162a"/>
+  </g>
+  <text x="310" y="45" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="25" font-weight="700" fill="#33162a">Open the OTHER-REPOS Channel</text>
+</svg>
