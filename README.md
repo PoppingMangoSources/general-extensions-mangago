@@ -25,7 +25,7 @@
 
 ---
 
-PoppingMango is an independent source list for [Paperback](https://paperback.moe) 0.9 covering novels, manga, manhwa, and manhua, maintained by Popmango. Every extension here is written and maintained in this repository — it is not a mirror of any other catalog. After adding the repository, refresh it in Paperback whenever you want to pick up source updates.
+PoppingMango is an independent source list for [Paperback](https://paperback.moe) 0.9 covering novels, manga, manhwa, and manhua, maintained by Popmango. Every extension here is written and maintained in this repository, it is not a mirror of any other catalog. After adding the repository, refresh it in Paperback whenever you want to pick up source updates.
 
 ## Sources
 
@@ -77,6 +77,6 @@ PoppingMango is an independent source list for [Paperback](https://paperback.moe
   </a>
 </p>
 
-Source problems are handled in the **OTHER-REPOS** channel of the linked Discord, where the PoppingMango support chat lives. Include the affected source, the page or title that failed, and screenshots or request details when possible — it makes fixes much faster.
+Source problems are handled in the **OTHER-REPOS** channel of the linked Discord, where the PoppingMango support chat lives. Include the affected source, the page or title that failed, and screenshots or request details when possible, it makes fixes much faster.
 
 These extensions are not affiliated with Paperback or any supported website. All site names and logos belong to their respective owners.
