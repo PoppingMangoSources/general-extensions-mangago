@@ -25,11 +25,11 @@
 
 ---
 
-PoppingMango is an independent source list for [Paperback](https://paperback.moe) 0.9 covering novels, manga, manhwa, and manhua, maintained by Popmango. Every extension here is written and maintained in this repository, it is not a mirror of any other catalog. After adding the repository, refresh it in Paperback whenever you want to pick up source updates.
+**PoppingMango** is an independent source list for [Paperback](https://paperback.moe) 0.9 covering novels, manga, manhwa, and manhua, maintained by Popmango. Every extension here is written and maintained in this repository, it is not a mirror of any other catalog.
 
 ## Sources
 
-**28 sources** — 24 manga, manhwa & manhua, and 4 novels, all available from `0.9/test`.
+**28 sources:** 24 manga, manhwa & manhua, and 4 novels, all available from `0.9/test`.
 
 ### Manga, Manhwa & Manhua
 
@@ -77,12 +77,13 @@ PoppingMango is an independent source list for [Paperback](https://paperback.moe
   </a>
 </p>
 
+
+Source problems are handled in the [**OTHER-REPOS**](https://discord.com/channels/965890377896845352/1367512880228077648) channel of the linked Discord, where the PoppingMango support chat lives. Include the affected source, the page or title that failed, and screenshots or request details when possible, it makes fixes much faster.
+
 <p align="center">
   <a href="https://discord.com/channels/965890377896845352/1367512880228077648">
     <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/button-other-repos.svg?v=2" alt="Open the OTHER-REPOS Discord channel" height="36"/>
   </a>
 </p>
 
-Source problems are handled in the [**OTHER-REPOS**](https://discord.com/channels/965890377896845352/1367512880228077648) channel of the linked Discord, where the PoppingMango support chat lives. Include the affected source, the page or title that failed, and screenshots or request details when possible, it makes fixes much faster.
-
-These extensions are not affiliated with Paperback or any supported website. All site names and logos belong to their respective owners.
+These extensions are **not** affiliated with Paperback or any supported website. All site names and logos belong to their respective owners.
