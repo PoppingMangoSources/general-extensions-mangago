@@ -78,13 +78,14 @@
 </p>
 
 
-Source problems are handled in the [**OTHER-REPOS**](https://discord.com/channels/965890377896845352/1367512880228077648) channel of the linked Discord, where the PoppingMango support chat lives. Include the affected source, the page or title that failed, and screenshots or request details when possible, it makes fixes much faster.
-
+Source problems are handled in the [**OTHER-REPOS**](https://discord.com/channels/965890377896845352/1367512880228077648) channel of the linked Discord, where the PoppingMango support chat lives. 
 <p align="center">
   <a href="https://discord.com/channels/965890377896845352/1367512880228077648">
     <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/button-other-repos.svg?v=2" alt="Open the OTHER-REPOS Discord channel" height="36"/>
   </a>
 </p>
+
+Include the affected source, the page or title that failed, and screenshots or request details when possible, it makes fixes much faster.
 
 ## Disclaimer
 
