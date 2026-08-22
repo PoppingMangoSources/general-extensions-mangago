@@ -86,4 +86,6 @@ Source problems are handled in the [**OTHER-REPOS**](https://discord.com/channel
   </a>
 </p>
 
+## Disclaimer
+
 These extensions are **not** affiliated with Paperback or any supported website. All site names and logos belong to their respective owners.
