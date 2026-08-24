@@ -69,7 +69,6 @@ export const STATE_KEYS = {
   CONTENT_TYPES: "xcomic_content_types",
   EXCLUDED_GENRES: "xcomic_excluded_genres",
   EXCLUDED_FORMATS: "xcomic_excluded_tags",
-  FILTER_OPTIONS: "xcomic_filter_options_v2",
   SECTION_ORDER: "xcomic_section_order_v2",
   VISIBLE_SECTIONS: "xcomic_visible_sections",
 } as const;
@@ -337,7 +336,7 @@ export interface ChapterNode {
   data: ChapterData;
 }
 
-export interface LatestUploadItem {
+interface LatestUploadItem {
   comic?: ComicNode | null;
   chapters?: ChapterNode[] | null;
 }
@@ -345,12 +344,6 @@ export interface LatestUploadItem {
 export interface LatestUploadsResult {
   before?: number | null;
   items?: LatestUploadItem[] | null;
-}
-
-export interface RecentlyAddedItem {
-  mangaId: string;
-  title: string;
-  imageUrl: string;
 }
 
 export interface ComicData {
@@ -389,18 +382,8 @@ export interface ComicNode {
   data: ComicData;
 }
 
-interface Pagination {
-  next?: number | null;
-  pages?: number | null;
-  total?: number | null;
-}
-
 export interface BrowseResponse {
   get_comic_browse_items?: ComicNode[] | null;
-}
-
-export interface BrowsePagerResponse {
-  get_comic_browse_pager?: Pagination | null;
 }
 
 export interface LatestUploadsResponse {
@@ -419,7 +402,7 @@ export interface ComicNodeResponse {
 }
 
 interface ChapterListResult {
-  paging?: Pagination | null;
+  paging?: { pages?: number | null } | null;
   items?: ChapterNode[] | null;
 }
 

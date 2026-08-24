@@ -26,7 +26,6 @@ import {
   type ContentPreferenceRating,
   type FilterOptions,
   type LatestUploadsResult,
-  type RecentlyAddedItem,
   type XComicPreferences,
 } from "./models";
 
@@ -36,7 +35,7 @@ const SUGGESTIVE_GENRES = new Set<string>(CONTENT_RATING_GENRES.suggestive);
 // Paperback rejects ids containing characters outside this set.
 const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
 
-export const toAbsoluteUrl = (url: string | null | undefined): string => {
+const toAbsoluteUrl = (url: string | null | undefined): string => {
   if (typeof url !== "string" || !url.trim()) return "";
   const normalized = url.trim();
   if (/^https?:\/\//i.test(normalized)) return normalized;
@@ -87,7 +86,7 @@ export const parseFilterOptions = (html: string): FilterOptions => {
   return options;
 };
 
-export const contentPreferenceRatingForComic = (
+const contentPreferenceRatingForComic = (
   rating?: string | null,
   sfw?: boolean | null,
   taxonomy: string[] = [],
@@ -109,7 +108,7 @@ export const contentPreferenceRatingForComic = (
   return "safe";
 };
 
-export const contentRatingForComic = (comic: ComicData): ContentRating => {
+const contentRatingForComic = (comic: ComicData): ContentRating => {
   const rating = contentPreferenceRatingForComic(comic.contentRating, comic.sfw_result, [
     ...(comic.genres ?? []),
     ...(comic.tags ?? []),
@@ -199,13 +198,23 @@ export const toDiscoverItem = (
 ): DiscoverSectionItem | undefined => {
   const chapter = node.data.chapterNodes_last?.[0]?.data;
   if (type === "featuredCarouselItem") {
-    const number = chapterNumber(chapter);
+    const infoItems: { symbol: string; text: string }[] = [];
+    const chapters = node.data.chaps_normal ?? chapterNumber(chapter);
+    if (chapters != null) infoItems.push({ symbol: "book.fill", text: `${chapters} Chapters` });
+    if (node.data.score_val != null) {
+      infoItems.push({ symbol: "star.fill", text: node.data.score_val.toFixed(2) });
+    }
     return {
       type,
       ...baseCard(node),
       supertitle: formatType(node.data.type),
       summary: stripHtml(node.data.summary?.html) || undefined,
-      infoItems: number != null ? [{ symbol: "book.fill", text: String(number) }] : undefined,
+      infoItems:
+        infoItems.length === 0
+          ? undefined
+          : infoItems.length === 1
+            ? [infoItems[0]]
+            : [infoItems[0], infoItems[1]],
     };
   }
   if (type === "chapterUpdatesCarouselItem") {
@@ -242,38 +251,6 @@ export const toLatestUploadNodes = (result?: LatestUploadsResult | null): ComicN
       },
     ];
   });
-};
-
-export const parseRecentlyAdded = (input: string): RecentlyAddedItem[] => {
-  const $ = cheerio.load(input, { xmlMode: true });
-  const items = $("channel > item")
-    .map((_, element): RecentlyAddedItem | undefined => {
-      const item = $(element);
-      const title = item
-        .find("title")
-        .first()
-        .text()
-        .replace(/^(?:\uD83C[\uDDE6-\uDDFF]){2}\s*/, "")
-        .trim();
-      const link = item.find("link").first().text().trim();
-      if (!/\/comic\/[a-zA-Z0-9]+-en-/i.test(link)) return undefined;
-      const mangaId =
-        item.find("guid").first().text().trim() ||
-        /^https?:\/\/[^/]+\/comic\/([a-zA-Z0-9]+)/i.exec(link)?.[1] ||
-        "";
-      const imageUrl = toAbsoluteUrl(item.find("enclosure").first().attr("url"));
-      if (!title || !mangaId || !imageUrl) return undefined;
-      return {
-        mangaId: mangaId.replace(SAFE_ID_REGEX, "-"),
-        title: Application.decodeHTMLEntities(title),
-        imageUrl,
-      } satisfies RecentlyAddedItem;
-    })
-    .get()
-    .filter((item): item is RecentlyAddedItem => item !== undefined);
-
-  if (!items.length) throw new Error("XCOMIC recently-added results were missing");
-  return items;
 };
 
 const nodeNames = (nodes?: Array<{ data?: { name?: string } | null } | null> | null): string[] =>

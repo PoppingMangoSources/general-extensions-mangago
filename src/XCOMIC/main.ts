@@ -34,7 +34,6 @@ import {
   PAGE_SIZE,
   SECTIONS,
   SORTING_OPTIONS,
-  STATE_KEYS,
   type BrowseSelect,
   type ComicNode,
   type FilterOptions,
@@ -44,22 +43,18 @@ import {
 } from "./models";
 import {
   fetchBrowse,
-  fetchBrowsePager,
   fetchChapterPages,
   fetchChapters,
   fetchComic,
   fetchLatestUploads,
   fetchRecentlyAdded,
-  fetchRecentlyAddedMetadata,
   fetchSearchPage,
   XComicInterceptor,
 } from "./network";
 import {
-  contentRatingForComic,
   isComicAllowed,
   parseChapterDetails,
   parseFilterOptions,
-  parseRecentlyAdded,
   toChapter,
   toDiscoverItem,
   toLatestUploadNodes,
@@ -68,9 +63,6 @@ import {
   type CarouselItemType,
 } from "./parsers";
 import type XComicConfig from "./pbconfig";
-
-const sameValues = (left: string[], right: string[]): boolean =>
-  left.length === right.length && left.every((value) => right.includes(value));
 
 class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   private filterOptionsPromise?: Promise<FilterOptions>;
@@ -98,7 +90,6 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       this.cookieStorageInterceptor.setCookie(cookie);
     }
     this.filterOptionsPromise = undefined;
-    Application.setState(undefined, STATE_KEYS.FILTER_OPTIONS);
     Application.invalidateDiscoverSections();
   }
 
@@ -128,7 +119,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       case SECTIONS.LATEST_UPLOADS:
         return this.getLatestUploadsSection(metadata);
       case SECTIONS.RECENTLY_ADDED:
-        return this.getRecentlyAddedSection(metadata);
+        return this.getRecentlyAddedSection();
       case SECTIONS.MOST_CHAPTERS:
         return this.getBrowseSection(metadata, "field_chapter", "simpleCarouselItem");
       case SECTIONS.MOST_VIEWS:
@@ -152,19 +143,14 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     };
   }
 
-  private async getRecentlyAddedSection(
-    metadata: PageMetadata | undefined,
-  ): Promise<PagedResults<DiscoverSectionItem>> {
-    const result = await this.getRecentlyAddedItems(metadata?.page ?? 1);
+  private async getRecentlyAddedSection(): Promise<PagedResults<DiscoverSectionItem>> {
+    const preferences = getPreferences();
+    const nodes = (await fetchRecentlyAdded()).get_comic_recentlyAdded?.items ?? [];
     return {
-      items: result.items.map((item) => ({
-        type: "simpleCarouselItem",
-        mangaId: item.mangaId,
-        title: item.title,
-        imageUrl: item.imageUrl,
-        contentRating: item.contentRating,
-      })),
-      metadata: result.nextPage != null ? { page: result.nextPage } : undefined,
+      items: nodes
+        .filter((node) => isComicAllowed(node.data, preferences, true))
+        .map((node) => toDiscoverItem(node, "simpleCarouselItem"))
+        .filter((item): item is DiscoverSectionItem => item !== undefined),
     };
   }
 
@@ -210,12 +196,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   }
 
   private async getFilterOptions(): Promise<FilterOptions> {
-    const stored = Application.getState(STATE_KEYS.FILTER_OPTIONS) as FilterOptions | undefined;
-    if (stored && Object.values(stored).every((group) => group.length)) return stored;
-    const options = await (this.filterOptionsPromise ??=
-      fetchSearchPage().then(parseFilterOptions));
-    Application.setState(options, STATE_KEYS.FILTER_OPTIONS);
-    return options;
+    return await (this.filterOptionsPromise ??= fetchSearchPage().then(parseFilterOptions));
   }
 
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
@@ -277,30 +258,6 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     return { nodes, before: cursor };
   }
 
-  private async getRecentlyAddedItems(
-    page: number,
-  ): Promise<{ items: SearchResultItem[]; nextPage?: number }> {
-    const [feed, metadata] = await Promise.all([
-      fetchRecentlyAdded().then(parseRecentlyAdded),
-      fetchRecentlyAddedMetadata(),
-    ]);
-    const preferences = getPreferences();
-    const nodes = new Map(
-      (metadata.get_comic_recentlyAdded?.items ?? []).map((node) => [node.data.id, node]),
-    );
-    const items = feed.flatMap((item) => {
-      const node = nodes.get(item.mangaId);
-      if (!node || !isComicAllowed(node.data, preferences, true)) return [];
-      return [{ ...item, contentRating: contentRatingForComic(node.data) }];
-    });
-    const start = (page - 1) * PAGE_SIZE;
-    const end = start + PAGE_SIZE;
-    return {
-      items: items.slice(start, end),
-      nextPage: end < items.length ? page + 1 : undefined,
-    };
-  }
-
   async getSearchResults(
     query: SearchQuery<SearchMetadata>,
     metadata: PageMetadata | undefined,
@@ -310,15 +267,6 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     if (pasted) return pasted;
 
     const sortby = query.metadata?.discoverSort ?? sortingOption?.id ?? "field_score";
-
-    if (sortby === "field_update" && this.canUseUnfilteredFeed(query)) {
-      return this.getLatestSearchResults(metadata);
-    }
-
-    if (sortby === "field_create" && this.canUseUnfilteredFeed(query)) {
-      return this.getRecentlyAddedSearchResults(metadata);
-    }
-
     const page = metadata?.page ?? 1;
     const result = await this.getUsableBrowsePage(
       page,
@@ -353,64 +301,12 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
         added++;
         if (isComicAllowed(node.data, preferences)) usable.push(node);
       }
-      const pagerNext =
-        nodes.length === PAGE_SIZE
-          ? apiPage + 1
-          : (await fetchBrowsePager(select)).get_comic_browse_pager?.next;
-      const nextPage =
-        typeof pagerNext === "number" && Number.isFinite(pagerNext) && pagerNext > 0
-          ? pagerNext
-          : undefined;
-      if (usable.length >= PAGE_SIZE || nextPage == null || !added || nextPage === apiPage) {
+      const nextPage = nodes.length === PAGE_SIZE ? apiPage + 1 : undefined;
+      if (usable.length >= PAGE_SIZE || nextPage == null || !added) {
         return { nodes: usable, nextPage };
       }
       apiPage = nextPage;
     }
-  }
-
-  private canUseUnfilteredFeed(query: SearchQuery<SearchMetadata>): boolean {
-    if ((query.title ?? "").trim()) return false;
-    const metadata = query.metadata;
-    const preferences = getPreferences();
-    return (
-      sameValues(metadata?.types ?? preferences.types, preferences.types) &&
-      sameValues(
-        metadata?.contentRatings ?? preferences.contentRatings,
-        preferences.contentRatings,
-      ) &&
-      sameValues(metadata?.translatedLanguages ?? ["en"], ["en"]) &&
-      !(metadata?.demographics?.length ?? 0) &&
-      !Object.keys(metadata?.genres ?? {}).length &&
-      !Object.keys(metadata?.formats ?? {}).length &&
-      !(metadata?.originalLanguages?.length ?? 0) &&
-      !(metadata?.originalStatus?.length ?? 0) &&
-      !(metadata?.uploadStatus?.length ?? 0) &&
-      !metadata?.chapCount?.trim() &&
-      !metadata?.year?.trim() &&
-      (metadata?.incGenresMode ?? "and") === "and" &&
-      (metadata?.excGenresMode ?? "or") === "or"
-    );
-  }
-
-  private async getLatestSearchResults(
-    metadata: PageMetadata | undefined,
-  ): Promise<PagedResults<SearchResultItem>> {
-    const result = await this.getLatestUploadNodes(metadata?.before);
-
-    return {
-      items: result.nodes.map(toSearchResultItem),
-      metadata: result.before != null ? { before: result.before } : undefined,
-    };
-  }
-
-  private async getRecentlyAddedSearchResults(
-    metadata: PageMetadata | undefined,
-  ): Promise<PagedResults<SearchResultItem>> {
-    const result = await this.getRecentlyAddedItems(metadata?.page ?? 1);
-    return {
-      items: result.items,
-      metadata: result.nextPage != null ? { page: result.nextPage } : undefined,
-    };
   }
 
   private buildSelect(
