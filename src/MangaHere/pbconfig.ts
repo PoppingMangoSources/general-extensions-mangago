@@ -6,15 +6,16 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "MangaHere",
   description: "Extension that pulls content from mangahere.cc.",
-  version: "1.0.0-alpha.2",
-  icon: "icon.png",
+  version: "1.0.0-alpha.3",
+  icon: "icons.png",
   language: "en",
-  contentRating: ContentRating.MATURE,
+  contentRating: ContentRating.ADULT,
   capabilities: [
     SourceIntents.CHAPTER_PROVIDING,
     SourceIntents.CLOUDFLARE_BYPASS_PROVIDING,
     SourceIntents.DISCOVER_SECTION_PROVIDING,
     SourceIntents.SEARCH_RESULT_PROVIDING,
+    SourceIntents.SETTINGS_FORM_PROVIDING,
   ],
   badges: [],
   developers: [

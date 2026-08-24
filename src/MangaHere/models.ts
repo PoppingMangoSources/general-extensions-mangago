@@ -5,6 +5,10 @@ import type { JSONObject, SortingOption, Tag } from "@paperback/types";
 
 export const DOMAIN = "https://www.mangahere.cc";
 
+export const STATE_KEYS = {
+  SHOW_ADULT: "mangahere_show_adult",
+} as const;
+
 export const SECTIONS = {
   POPULAR: "popular",
   RECOMMENDED: "recommended",

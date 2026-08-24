@@ -473,9 +473,15 @@ export const toChapterUpdateItem = (
   };
 };
 
+export const filterAdultItems = <T extends { contentRating?: ContentRating }>(
+  items: T[],
+  showAdult: boolean,
+): T[] => (showAdult ? items : items.filter((item) => item.contentRating !== ContentRating.ADULT));
+
+// A listing card that carries no genres says nothing about its rating, so it stays unrated.
 export const toSearchResultItem = (
   item: MangaListItem,
-  fallbackRating = ContentRating.MATURE,
+  fallbackRating = ContentRating.EVERYONE,
 ): SearchResultItem => ({
   mangaId: item.mangaId,
   title: item.title,

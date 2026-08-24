@@ -4,7 +4,6 @@
 import {
   BasicRateLimiter,
   CloudflareError,
-  ContentRating,
   CookieStorageInterceptor,
   DiscoverSectionType,
   type AdvancedSearchForm,
@@ -14,6 +13,7 @@ import {
   type DiscoverSection,
   type DiscoverSectionItem,
   type ExtensionImpl,
+  type Form,
   type PagedResults,
   type Request,
   type SearchQuery,
@@ -23,7 +23,7 @@ import {
 } from "@paperback/types";
 import type * as cheerio from "cheerio";
 
-import { MangaHereAdvancedSearchForm } from "./forms";
+import { MangaHereAdvancedSearchForm, MangaHereSettingsForm, getShowAdultTitles } from "./forms";
 import {
   DOMAIN,
   GENRES,
@@ -49,6 +49,7 @@ import {
 } from "./network";
 import {
   contentRatingForGenres,
+  filterAdultItems,
   parseChapters,
   parseHasNextPage,
   parseHomeSection,
@@ -103,6 +104,10 @@ export class MangaHereExtension implements ExtensionImpl<typeof MangaHereConfig>
     }
   }
 
+  async getSettingsForm(): Promise<Form> {
+    return new MangaHereSettingsForm();
+  }
+
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
       { id: SECTIONS.POPULAR, title: "Most Popular", type: DiscoverSectionType.featured },
@@ -142,6 +147,14 @@ export class MangaHereExtension implements ExtensionImpl<typeof MangaHereConfig>
   }
 
   async getDiscoverSectionItems(
+    section: DiscoverSection,
+    metadata: PageMetadata | undefined,
+  ): Promise<PagedResults<DiscoverSectionItem>> {
+    const results = await this.loadDiscoverSection(section, metadata);
+    return { ...results, items: filterAdultItems(results.items, getShowAdultTitles()) };
+  }
+
+  private async loadDiscoverSection(
     section: DiscoverSection,
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
@@ -250,6 +263,15 @@ export class MangaHereExtension implements ExtensionImpl<typeof MangaHereConfig>
     metadata: PageMetadata | undefined,
     sortingOption?: SortingOption,
   ): Promise<PagedResults<SearchResultItem>> {
+    const results = await this.loadSearchResults(query, metadata, sortingOption);
+    return { ...results, items: filterAdultItems(results.items, getShowAdultTitles()) };
+  }
+
+  private async loadSearchResults(
+    query: SearchQuery<SearchMetadata>,
+    metadata: PageMetadata | undefined,
+    sortingOption?: SortingOption,
+  ): Promise<PagedResults<SearchResultItem>> {
     const pasted = await this.resolveUrlQuery(query.title);
     if (pasted) return pasted;
 
@@ -334,10 +356,8 @@ export class MangaHereExtension implements ExtensionImpl<typeof MangaHereConfig>
       const option = GENRES.find((candidate) => candidate.id === id);
       return option ? [option.title] : [];
     });
-    const fallbackRating =
-      selectedGenreNames.length > 0
-        ? contentRatingForGenres(selectedGenreNames)
-        : ContentRating.MATURE;
+    // With no genre selected there is nothing to infer from, so cards fall back to unrated.
+    const fallbackRating = contentRatingForGenres(selectedGenreNames);
     return {
       items: items.map((item) => toSearchResultItem(item, fallbackRating)),
       metadata: parseHasNextPage($) ? { page: page + 1 } : undefined,

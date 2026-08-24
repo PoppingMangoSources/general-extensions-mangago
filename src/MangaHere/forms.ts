@@ -3,9 +3,11 @@
 
 import {
   AdvancedSearchForm,
+  Form,
   InputRow,
   Section,
   SelectRow,
+  ToggleRow,
   TriStateSelectRow,
   type SearchQuery,
 } from "@paperback/types";
@@ -16,11 +18,45 @@ import {
   MATCH_OPTIONS,
   RATING_MATCH_OPTIONS,
   RATING_OPTIONS,
+  STATE_KEYS,
   TYPE_OPTIONS,
   YEAR_OPTIONS,
   type SearchMetadata,
   type TriState,
 } from "./models";
+
+// MangaHere serves its adult catalog to everyone, so the toggle starts on.
+export const getShowAdultTitles = (): boolean =>
+  (Application.getState(STATE_KEYS.SHOW_ADULT) as boolean | undefined) ?? true;
+
+export class MangaHereSettingsForm extends Form {
+  private showAdultTitles = getShowAdultTitles();
+
+  override getSections() {
+    return [
+      Section(
+        { id: "content", footer: "Turn this off to hide titles rated adult across the source." },
+        [
+          ToggleRow("show_adult", {
+            title: "Show adult titles",
+            value: this.showAdultTitles,
+            onValueChange: Application.Selector(
+              this as MangaHereSettingsForm,
+              "handleShowAdultTitlesChange",
+            ),
+          }),
+        ],
+      ),
+    ];
+  }
+
+  async handleShowAdultTitlesChange(value: boolean): Promise<void> {
+    this.showAdultTitles = value;
+    Application.setState(value, STATE_KEYS.SHOW_ADULT);
+    Application.invalidateDiscoverSections();
+    this.reloadForm();
+  }
+}
 
 export class MangaHereAdvancedSearchForm extends AdvancedSearchForm {
   private type: string[];
