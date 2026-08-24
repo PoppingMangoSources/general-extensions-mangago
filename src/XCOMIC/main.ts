@@ -19,7 +19,6 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
-  type Tag,
 } from "@paperback/types";
 
 import { XComicAdvancedSearchForm } from "./forms/search";
@@ -30,6 +29,7 @@ import {
   getVisibleSections,
 } from "./forms/settings";
 import {
+  CONTENT_RATING_GENRES,
   DISCOVER_SECTIONS,
   MOST_VIEWS_OPTIONS,
   PAGE_SIZE,
@@ -38,49 +38,42 @@ import {
   STATE_KEYS,
   type BrowseSelect,
   type ComicNode,
+  type FilterOptions,
   type PageMetadata,
   type SearchMetadata,
 } from "./models";
 import {
   fetchBrowse,
+  fetchBrowsePager,
   fetchChapterPages,
   fetchChapters,
   fetchComic,
-  fetchLatestUploads,
   fetchLatestUpdates,
   fetchRecentlyAdded,
+  fetchRecentlyAddedMetadata,
   fetchSearchPage,
   XComicInterceptor,
 } from "./network";
 import {
+  contentPreferenceRatingForComic,
+  contentRatingForComic,
   parseChapterDetails,
-  parseGenreOptions,
-  parseLatestUploads,
+  parseFilterOptions,
   parseRecentlyAdded,
   toChapter,
   toDiscoverItem,
+  toLatestUploadNodes,
   toSearchResultItem,
   toSourceManga,
   type CarouselItemType,
 } from "./parsers";
 import type XComicConfig from "./pbconfig";
 
-const MAX_BROWSE_PAGES = 10;
-
 const sameValues = (left: string[], right: string[]): boolean =>
   left.length === right.length && left.every((value) => right.includes(value));
 
-const isAllowedCardRating = (rating: ContentRating): boolean => {
-  const allowed = getPreferences().contentRatings;
-  if (rating === ContentRating.ADULT) return allowed.includes("pornographic");
-  if (rating === ContentRating.MATURE) {
-    return allowed.includes("suggestive") || allowed.includes("erotica");
-  }
-  return allowed.includes("safe");
-};
-
 class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
-  private genresPromise?: Promise<Tag[]>;
+  private filterOptionsPromise?: Promise<FilterOptions>;
   private rateLimiter = new BasicRateLimiter("xcomic-rate-limiter", {
     numberOfRequests: 3,
     bufferInterval: 1,
@@ -104,7 +97,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       if (cookie.expires && cookie.expires.getTime() <= Date.now()) continue;
       this.cookieStorageInterceptor.setCookie(cookie);
     }
-    this.genresPromise = undefined;
+    this.filterOptionsPromise = undefined;
     Application.invalidateDiscoverSections();
   }
 
@@ -113,7 +106,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       getPreferences(),
       getSectionOrder(),
       getVisibleSections(),
-      await this.getGenres(),
+      await this.getFilterOptions(),
     );
   }
 
@@ -149,11 +142,11 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   private async getLatestUploadsSection(
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    const result = parseLatestUploads(await fetchLatestUploads(metadata?.before));
+    const result = await this.getLatestUploadNodes(metadata?.before);
     return {
-      items: result.items.filter(
-        (item) => !item.contentRating || isAllowedCardRating(item.contentRating),
-      ),
+      items: result.nodes
+        .map((node) => toDiscoverItem(node, "chapterUpdatesCarouselItem"))
+        .filter((item): item is DiscoverSectionItem => item !== undefined),
       metadata: result.before != null ? { before: result.before } : undefined,
     };
   }
@@ -161,9 +154,15 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   private async getRecentlyAddedSection(
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    const result = parseRecentlyAdded(await fetchRecentlyAdded(), metadata?.page ?? 1);
+    const result = await this.getRecentlyAddedItems(metadata?.page ?? 1);
     return {
-      items: result.items.map((item) => ({ type: "simpleCarouselItem", ...item })),
+      items: result.items.map((item) => ({
+        type: "simpleCarouselItem",
+        mangaId: item.mangaId,
+        title: item.title,
+        imageUrl: item.imageUrl,
+        contentRating: item.contentRating,
+      })),
       metadata: result.nextPage != null ? { page: result.nextPage } : undefined,
     };
   }
@@ -185,7 +184,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
 
   private async getGenreSection(): Promise<PagedResults<DiscoverSectionItem>> {
     return {
-      items: (await this.getGenres()).map((genre) => ({
+      items: (await this.getFilterOptions()).genres.map((genre) => ({
         type: "genresCarouselItem",
         name: genre.title,
         searchQuery: {
@@ -209,20 +208,88 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     };
   }
 
-  private async getGenres(): Promise<Tag[]> {
-    const stored = Application.getState(STATE_KEYS.GENRES) as Tag[] | undefined;
-    if (stored?.length) return stored;
-    const genres = await (this.genresPromise ??= fetchSearchPage().then(parseGenreOptions));
-    Application.setState(genres, STATE_KEYS.GENRES);
-    return genres;
+  private async getFilterOptions(): Promise<FilterOptions> {
+    const stored = Application.getState(STATE_KEYS.FILTER_OPTIONS) as FilterOptions | undefined;
+    if (stored?.genres.length && stored.formats.length) return stored;
+    const options = await (this.filterOptionsPromise ??=
+      fetchSearchPage().then(parseFilterOptions));
+    Application.setState(options, STATE_KEYS.FILTER_OPTIONS);
+    return options;
   }
 
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
-    return new XComicAdvancedSearchForm(query, getPreferences(), await this.getGenres());
+    return new XComicAdvancedSearchForm(query, getPreferences(), await this.getFilterOptions());
   }
 
   async getSortingOptions(): Promise<SortingOption[]> {
     return SORTING_OPTIONS;
+  }
+
+  private isAllowedNode(
+    node: ComicNode,
+    requireEnglish = false,
+    contentRatings = getPreferences().contentRatings,
+    types = getPreferences().types,
+  ): boolean {
+    const preferences = getPreferences();
+    const comic = node.data;
+    if (!contentRatings.length || !types.length) return false;
+    if (!comic.urlCover?.trim()) return false;
+    if (requireEnglish && comic.translatedLanguage && comic.translatedLanguage !== "en")
+      return false;
+    if (comic.type && !types.some((type) => type === comic.type)) return false;
+    if (
+      !contentRatings.includes(
+        contentPreferenceRatingForComic(comic.contentRating, comic.sfw_result, [
+          ...(comic.genres ?? []),
+          ...(comic.tags ?? []),
+        ]),
+      )
+    ) {
+      return false;
+    }
+    const excluded = new Set([...preferences.excludedGenres, ...preferences.excludedTags]);
+    return ![...(comic.genres ?? []), ...(comic.tags ?? [])].some((id) => excluded.has(id));
+  }
+
+  private async getLatestUploadNodes(
+    before?: number,
+  ): Promise<{ nodes: ComicNode[]; before?: number }> {
+    let cursor = before;
+    const seenCursors = new Set<number>();
+    while (true) {
+      const result = (await fetchLatestUpdates(cursor)).get_comic_latestUploads;
+      const next =
+        typeof result?.before === "number" && Number.isFinite(result.before)
+          ? result.before
+          : undefined;
+      const nodes = toLatestUploadNodes(result).filter((node) => this.isAllowedNode(node, true));
+      if (nodes.length || next == null || seenCursors.has(next)) {
+        return { nodes, before: next };
+      }
+      seenCursors.add(next);
+      cursor = next;
+    }
+  }
+
+  private async getRecentlyAddedItems(
+    page: number,
+  ): Promise<{ items: SearchResultItem[]; nextPage?: number }> {
+    const [feed, metadata] = await Promise.all([
+      fetchRecentlyAdded().then((input) => parseRecentlyAdded(input, page)),
+      fetchRecentlyAddedMetadata(),
+    ]);
+    const nodes = new Map(
+      (metadata.get_comic_recentlyAdded?.items ?? []).map((node) => [node.data.id, node]),
+    );
+    return {
+      items: feed.items.flatMap((item) => {
+        const node = nodes.get(item.mangaId);
+        if (!node || !this.isAllowedNode(node, true)) return [];
+        return [{ ...item, contentRating: contentRatingForComic(node.data) }];
+      }),
+      nextPage: feed.nextPage,
+    };
   }
 
   async getSearchResults(
@@ -262,30 +329,40 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     word: string,
     metadata: SearchMetadata | undefined,
   ): Promise<{ nodes: ComicNode[]; nextPage?: number }> {
+    const preferences = getPreferences();
+    const contentRatings = metadata?.contentRatings?.length
+      ? metadata.contentRatings.filter((rating) => preferences.contentRatings.includes(rating))
+      : preferences.contentRatings;
+    const types = metadata?.types?.length
+      ? metadata.types.filter((type) => preferences.types.includes(type))
+      : preferences.types;
     let apiPage = page;
     const usable: ComicNode[] = [];
     const seen = new Set<string>();
-    for (let attempt = 0; attempt < MAX_BROWSE_PAGES; attempt++, apiPage++) {
-      const response = await fetchBrowse(this.buildSelect(apiPage, sortby, word, metadata));
+    while (true) {
+      const select = this.buildSelect(apiPage, sortby, word, metadata, contentRatings, types);
+      const response = await fetchBrowse(select);
       const nodes = response.get_comic_browse_items ?? [];
+      let added = 0;
       for (const node of nodes) {
-        const rating = toSearchResultItem(node).contentRating;
-        if (
-          !node.data.urlCover?.trim() ||
-          (rating && !isAllowedCardRating(rating)) ||
-          seen.has(node.data.id)
-        ) {
-          continue;
-        }
+        if (seen.has(node.data.id)) continue;
         seen.add(node.data.id);
-        usable.push(node);
+        added++;
+        if (this.isAllowedNode(node, false, contentRatings, types)) usable.push(node);
       }
-      const hasNextPage = nodes.length === PAGE_SIZE;
-      if (usable.length >= PAGE_SIZE || !hasNextPage) {
-        return { nodes: usable, nextPage: hasNextPage ? apiPage + 1 : undefined };
+      const pagerNext =
+        nodes.length === PAGE_SIZE
+          ? apiPage + 1
+          : (await fetchBrowsePager(select)).get_comic_browse_pager?.next;
+      const nextPage =
+        typeof pagerNext === "number" && Number.isFinite(pagerNext) && pagerNext > 0
+          ? pagerNext
+          : undefined;
+      if (usable.length >= PAGE_SIZE || nextPage == null || !added || nextPage === apiPage) {
+        return { nodes: usable, nextPage };
       }
+      apiPage = nextPage;
     }
-    return { nodes: usable, nextPage: apiPage };
   }
 
   private canUseUnfilteredFeed(query: SearchQuery<SearchMetadata>): boolean {
@@ -315,33 +392,10 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   private async getLatestSearchResults(
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<SearchResultItem>> {
-    const result = (await fetchLatestUpdates(metadata?.before)).get_comic_latestUploads;
-    if (!result) return { items: [] };
-
-    const preferences = getPreferences();
-    const excluded = new Set([...preferences.excludedGenres, ...preferences.excludedTags]);
-    const seen = new Set<string>();
-    const nodes: ComicNode[] = [];
-    for (const item of result.items ?? []) {
-      const comic = item.comic?.data;
-      if (
-        !comic ||
-        comic.translatedLanguage !== "en" ||
-        !comic.urlCover?.trim() ||
-        (comic.type && !preferences.types.some((type) => type === comic.type)) ||
-        (comic.contentRating &&
-          !preferences.contentRatings.some((rating) => rating === comic.contentRating)) ||
-        comic.genres?.some((genre) => excluded.has(genre)) ||
-        seen.has(comic.id)
-      ) {
-        continue;
-      }
-      seen.add(comic.id);
-      nodes.push({ data: { ...comic, chapterNodes_last: item.chapters ?? [] } });
-    }
+    const result = await this.getLatestUploadNodes(metadata?.before);
 
     return {
-      items: nodes.map(toSearchResultItem),
+      items: result.nodes.map(toSearchResultItem),
       metadata: result.before != null ? { before: result.before } : undefined,
     };
   }
@@ -349,7 +403,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   private async getRecentlyAddedSearchResults(
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<SearchResultItem>> {
-    const result = parseRecentlyAdded(await fetchRecentlyAdded(), metadata?.page ?? 1);
+    const result = await this.getRecentlyAddedItems(metadata?.page ?? 1);
     return {
       items: result.items,
       metadata: result.nextPage != null ? { page: result.nextPage } : undefined,
@@ -361,10 +415,21 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     sortby: string,
     word: string,
     metadata: SearchMetadata | undefined,
+    contentRatings = getPreferences().contentRatings,
+    types = getPreferences().types,
   ): BrowseSelect {
     const preferences = getPreferences();
     const includedGenres: string[] = [];
     const excludedGenres = [...preferences.excludedGenres, ...preferences.excludedTags];
+    if (!contentRatings.includes("suggestive")) {
+      excludedGenres.push(...CONTENT_RATING_GENRES.suggestive);
+    }
+    if (!contentRatings.includes("erotica")) {
+      excludedGenres.push(...CONTENT_RATING_GENRES.erotica);
+    }
+    if (!contentRatings.includes("pornographic")) {
+      excludedGenres.push(...CONTENT_RATING_GENRES.pornographic);
+    }
 
     for (const [id, state] of Object.entries(metadata?.genres ?? {})) {
       (state === "excluded" ? excludedGenres : includedGenres).push(id);
@@ -397,11 +462,9 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       excGenres: [...new Set(excludedGenres)],
       incGenresMode: metadata?.incGenresMode ?? "and",
       excGenresMode: metadata?.excGenresMode ?? "or",
-      incTypes: metadata?.types?.length ? metadata.types : preferences.types,
+      incTypes: types,
       incDemographics: metadata?.demographics ?? [],
-      incContentRatings: metadata?.contentRatings?.length
-        ? metadata.contentRatings
-        : preferences.contentRatings,
+      incContentRatings: contentRatings,
       releaseYearMin,
       releaseYearMax,
       origStatus: metadata?.originalStatus?.[0] ?? null,

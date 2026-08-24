@@ -3,7 +3,6 @@
 
 import {
   DiscoverSectionType,
-  type ContentRating,
   type DiscoverSection,
   type JSONObject,
   type SortingOption,
@@ -70,12 +69,17 @@ export const STATE_KEYS = {
   CONTENT_TYPES: "xcomic_content_types",
   EXCLUDED_GENRES: "xcomic_excluded_genres",
   EXCLUDED_TAGS: "xcomic_excluded_tags",
-  GENRES: "xcomic_genres_v1",
+  FILTER_OPTIONS: "xcomic_filter_options_v1",
   SECTION_ORDER: "xcomic_section_order_v2",
   VISIBLE_SECTIONS: "xcomic_visible_sections",
 } as const;
 
 export type ContentPreferenceRating = "safe" | "suggestive" | "erotica" | "pornographic";
+export const CONTENT_RATING_GENRES = {
+  suggestive: ["ecchi", "mature", "yaoi", "yuri"],
+  erotica: ["adult", "erotica", "smut"],
+  pornographic: ["hentai", "pornographic"],
+} as const satisfies Record<Exclude<ContentPreferenceRating, "safe">, readonly string[]>;
 export type SeriesType =
   | "artbook"
   | "cartoon"
@@ -176,20 +180,25 @@ export const CHAPTER_COUNT_OPTIONS: Tag[] = [
   { id: "200-299", title: "200–299" },
 ];
 
-export const FORMAT_OPTIONS: Tag[] = [
-  { id: "4_koma", title: "4 Koma" },
-  { id: "adaptation", title: "Adaptation" },
-  { id: "anthology", title: "Anthology" },
-  { id: "award_winning", title: "Award Winning" },
-  { id: "doujinshi", title: "Doujinshi" },
-  { id: "fan_colored", title: "Fan Colored" },
-  { id: "full_color", title: "Full Color" },
-  { id: "long_strip", title: "Long Strip" },
-  { id: "official_colored", title: "Official Colored" },
-  { id: "oneshot", title: "Oneshot" },
-  { id: "web_comic", title: "Web Comic" },
-  { id: "webtoon", title: "Webtoon" },
-];
+export const FORMAT_IDS = [
+  "4_koma",
+  "adaptation",
+  "anthology",
+  "award_winning",
+  "doujinshi",
+  "fan_colored",
+  "full_color",
+  "long_strip",
+  "official_colored",
+  "oneshot",
+  "web_comic",
+  "webtoon",
+] as const;
+
+export interface FilterOptions {
+  genres: Tag[];
+  formats: Tag[];
+}
 
 export const LANGUAGE_OPTIONS: Tag[] = [
   { id: "en", title: "English" },
@@ -340,7 +349,6 @@ export interface RecentlyAddedItem {
   mangaId: string;
   title: string;
   imageUrl: string;
-  contentRating: ContentRating;
 }
 
 export interface ComicData {
@@ -380,15 +388,28 @@ export interface ComicNode {
 }
 
 interface Pagination {
+  next?: number | null;
   pages?: number | null;
+  total?: number | null;
 }
 
 export interface BrowseResponse {
   get_comic_browse_items?: ComicNode[] | null;
 }
 
+export interface BrowsePagerResponse {
+  get_comic_browse_pager?: Pagination | null;
+}
+
 export interface LatestUpdatesResponse {
   get_comic_latestUploads?: LatestUploadsResult | null;
+}
+
+export interface RecentlyAddedResponse {
+  get_comic_recentlyAdded?: {
+    before?: string | null;
+    items?: ComicNode[] | null;
+  } | null;
 }
 
 export interface ComicNodeResponse {

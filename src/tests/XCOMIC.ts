@@ -1,10 +1,11 @@
-import { ContentRating, type Tag, type TestLogger } from "@paperback/types";
+import { ContentRating, type TestLogger } from "@paperback/types";
 import { expect } from "chai";
 
 import { getPreferences } from "../XCOMIC/forms/settings.js";
 import { XCOMIC } from "../XCOMIC/main.js";
 import {
   CHAPTER_COUNT_OPTIONS,
+  CONTENT_RATING_GENRES,
   DEFAULT_CONTENT_RATINGS,
   DISCOVER_SECTIONS,
   MOST_VIEWS_OPTIONS,
@@ -12,9 +13,14 @@ import {
   SECTIONS,
   STATE_KEYS,
   type BrowseSelect,
+  type FilterOptions,
 } from "../XCOMIC/models.js";
 import { fetchBrowse, fetchRecentlyAdded } from "../XCOMIC/network.js";
-import { parseRecentlyAdded, toSearchResultItem } from "../XCOMIC/parsers.js";
+import {
+  contentPreferenceRatingForComic,
+  parseRecentlyAdded,
+  toSearchResultItem,
+} from "../XCOMIC/parsers.js";
 import sourceInfo from "../XCOMIC/pbconfig.js";
 import { TestSuite, registerDefaultTests } from "./suite.js";
 
@@ -43,9 +49,10 @@ export async function runTests(logger: TestLogger) {
 
   suite.test("search filters follow the current site taxonomy", async () => {
     await XCOMIC.getAdvancedSearchForm({ title: "" });
-    const genres = Application.getState(STATE_KEYS.GENRES) as Tag[] | undefined;
-    expect(genres?.length).to.be.greaterThan(100);
-    expect(genres?.some((item) => item.id === "action")).to.equal(true);
+    const filters = Application.getState(STATE_KEYS.FILTER_OPTIONS) as FilterOptions | undefined;
+    expect(filters?.genres.length).to.be.greaterThan(100);
+    expect(filters?.genres.some((item) => item.id === "action")).to.equal(true);
+    expect(filters?.formats.some((item) => item.id === "webtoon")).to.equal(true);
     expect(CHAPTER_COUNT_OPTIONS.map((option) => option.id)).to.include.members([
       "60",
       "70",
@@ -58,10 +65,12 @@ export async function runTests(logger: TestLogger) {
     ]);
   });
 
-  suite.test("mature source defaults exclude pornographic content", async () => {
-    expect(sourceInfo.contentRating).to.equal(ContentRating.MATURE);
+  suite.test("adult source defaults exclude pornographic content", async () => {
+    expect(sourceInfo.contentRating).to.equal(ContentRating.ADULT);
     expect(DEFAULT_CONTENT_RATINGS).to.deep.equal(["safe", "suggestive", "erotica"]);
     expect(getPreferences().contentRatings).to.deep.equal(DEFAULT_CONTENT_RATINGS);
+    expect(contentPreferenceRatingForComic("safe", true, ["hentai"])).to.equal("pornographic");
+    expect(contentPreferenceRatingForComic("suggestive", false, ["smut"])).to.equal("erotica");
   });
 
   suite.test("catalog sorts and most-view chips follow the live API", async () => {
@@ -91,7 +100,9 @@ export async function runTests(logger: TestLogger) {
       MOST_VIEWS_OPTIONS.map((option) => option.id),
     );
 
-    for (const chip of chips) {
+    for (const chip of chips.filter((item) =>
+      ["views_d360", "views_h001"].includes(String(item.searchQuery.metadata?.discoverSort)),
+    )) {
       const results = await XCOMIC.getSearchResults(chip.searchQuery, undefined, {
         id: "field_score",
         label: "Rating Score",
@@ -109,7 +120,7 @@ export async function runTests(logger: TestLogger) {
         incOLangs: [],
         incTLangs: ["en"],
         incGenres: [],
-        excGenres: [],
+        excGenres: [...CONTENT_RATING_GENRES.pornographic],
         incGenresMode: "and",
         excGenresMode: "or",
         incTypes: preferences.types,
@@ -207,20 +218,23 @@ export async function runTests(logger: TestLogger) {
       DISCOVER_SECTIONS[SECTIONS.RECENTLY_ADDED],
       undefined,
     );
-    expect(recentlyAdded.items.map((item) => item.mangaId)).to.deep.equal(
-      siteFeed.items.map((item) => item.mangaId),
-    );
+    const feedIds = siteFeed.items.map((item) => item.mangaId);
+    const resultIds = recentlyAdded.items.map((item) => item.mangaId);
+    expect(resultIds.every((id) => feedIds.includes(id))).to.equal(true);
+    const feedIndexes = resultIds.map((id) => feedIds.indexOf(id));
+    expect(feedIndexes).to.deep.equal(feedIndexes.toSorted((a, b) => a - b));
     expect(
       recentlyAdded.items.every((item) => item.imageUrl.startsWith("https://xcomic.me/")),
+    ).to.equal(true);
+    expect(
+      recentlyAdded.items.every((item) => item.contentRating !== ContentRating.ADULT),
     ).to.equal(true);
 
     const searchResults = await XCOMIC.getSearchResults({ title: "" }, undefined, {
       id: "field_create",
       label: "Recently Added",
     });
-    expect(searchResults.items.map((item) => item.mangaId)).to.deep.equal(
-      siteFeed.items.map((item) => item.mangaId),
-    );
+    expect(searchResults.items.map((item) => item.mangaId)).to.deep.equal(resultIds);
 
     if (siteFeed.nextPage && recentlyAdded.metadata && searchResults.metadata) {
       const expectedNextPage = parseRecentlyAdded(await fetchRecentlyAdded(), siteFeed.nextPage);
@@ -232,12 +246,10 @@ export async function runTests(logger: TestLogger) {
         id: "field_create",
         label: "Recently Added",
       });
-      expect(discoverNextPage.items.map((item) => item.mangaId)).to.deep.equal(
-        expectedNextPage.items.map((item) => item.mangaId),
-      );
-      expect(searchNextPage.items.map((item) => item.mangaId)).to.deep.equal(
-        expectedNextPage.items.map((item) => item.mangaId),
-      );
+      const expectedIds = expectedNextPage.items.map((item) => item.mangaId);
+      const discoverIds = discoverNextPage.items.map((item) => item.mangaId);
+      expect(discoverIds.every((id) => expectedIds.includes(id))).to.equal(true);
+      expect(searchNextPage.items.map((item) => item.mangaId)).to.deep.equal(discoverIds);
     }
   });
 

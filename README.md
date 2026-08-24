@@ -33,8 +33,8 @@
 
 ### Manga, Manhwa & Manhua
 
-| Source                                                                                                                                                                              | Site                                               |
-| :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------- |
+| Source                                                                                                                                                                          | Site                                               |
+| :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :------------------------------------------------- |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/bunmanga.png" width="22" align="top"/> **BunManga**             | [bunmanga.com](https://bunmanga.com)               |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/chikari.png" width="22" align="top"/> **Chikari**               | [chikari.moe](https://chikari.moe)                 |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/cocomic.png" width="22" align="top"/> **Cocomic**               | [cocomic.co](https://cocomic.co)                   |
@@ -62,8 +62,8 @@
 
 ### Novels
 
-| Source                                                                                                                                                                          | Site                                       |
-| :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :----------------------------------------- |
+| Source                                                                                                                                                                      | Site                                       |
+| :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------- |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/mvlempyr.png" width="22" align="top"/> **MVLEMPYR**         | [mvlempyr.io](https://www.mvlempyr.io)     |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/novelarchive.png" width="22" align="top"/> **NovelArchive** | [novelarchive.cc](https://novelarchive.cc) |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/novelcool.png" width="22" align="top"/> **NovelCool**       | [novelcool.com](https://www.novelcool.com) |
@@ -77,8 +77,7 @@
   </a>
 </p>
 
-
-Source problems are handled in the [**OTHER-REPOS**](https://discord.com/channels/965890377896845352/1367512880228077648) channel of the linked Discord, where the PoppingMango support chat lives. 
+Source problems are handled in the [**OTHER-REPOS**](https://discord.com/channels/965890377896845352/1367512880228077648) channel of the linked Discord, where the PoppingMango support chat lives.
 <p align="center">
   <a href="https://discord.com/channels/965890377896845352/1367512880228077648">
     <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/button-other-repos.svg?v=2" alt="Open the OTHER-REPOS Discord channel" height="36"/>

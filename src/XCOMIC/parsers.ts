@@ -14,22 +14,25 @@ import {
 import * as cheerio from "cheerio";
 
 import {
+  CONTENT_RATING_GENRES,
   DEMOGRAPHIC_OPTIONS,
   DOMAIN,
-  FORMAT_OPTIONS,
+  FORMAT_IDS,
   PAGE_SIZE,
   TYPE_OPTIONS,
   type ChapterData,
   type ChapterPagesResponse,
   type ComicData,
   type ComicNode,
+  type ContentPreferenceRating,
+  type FilterOptions,
   type LatestUploadsResult,
   type RecentlyAddedItem,
 } from "./models";
-import { decodeQwikLoader } from "./utils";
 
-const ADULT_GENRES = new Set(["adult", "hentai", "pornographic", "smut"]);
-const MATURE_GENRES = new Set(["ecchi", "erotica", "mature", "yaoi", "yuri"]);
+const PORNOGRAPHIC_GENRES = new Set<string>(CONTENT_RATING_GENRES.pornographic);
+const EROTICA_GENRES = new Set<string>(CONTENT_RATING_GENRES.erotica);
+const SUGGESTIVE_GENRES = new Set<string>(CONTENT_RATING_GENRES.suggestive);
 // Paperback rejects ids containing characters outside this set.
 const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
 
@@ -48,14 +51,13 @@ const titleCase = (value: string): string =>
   value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 const optionTitle = (id: string): string =>
-  DEMOGRAPHIC_OPTIONS.find((option) => option.id === id)?.title ??
-  FORMAT_OPTIONS.find((option) => option.id === id)?.title ??
-  titleCase(id);
+  DEMOGRAPHIC_OPTIONS.find((option) => option.id === id)?.title ?? titleCase(id);
 
-export const parseGenreOptions = (html: string): Tag[] => {
+export const parseFilterOptions = (html: string): FilterOptions => {
   const $ = cheerio.load(html);
-  const formatIds = new Set(FORMAT_OPTIONS.map((option) => option.id));
+  const formatIds = new Set<string>(FORMAT_IDS);
   const genres: Tag[] = [];
+  const formats: Tag[] = [];
   const seen = new Set<string>();
   const genrePicker = $("details.group")
     .filter((_, element) => $(element).find("summary").first().text().trim().startsWith("Genres"))
@@ -64,32 +66,49 @@ export const parseGenreOptions = (html: string): Tag[] => {
   genrePicker.find("div").each((_, element) => {
     const id = $(element).attr(":")?.trim();
     const title = $(element).find("span").first().text().trim();
-    if (!id || !title || formatIds.has(id) || seen.has(id)) return;
+    if (!id || !title || seen.has(id)) return;
     seen.add(id);
-    genres.push({ id, title: Application.decodeHTMLEntities(title) });
+    (formatIds.has(id) ? formats : genres).push({
+      id,
+      title: Application.decodeHTMLEntities(title),
+    });
   });
 
-  if (!genres.length) throw new Error("XCOMIC returned no genre filters");
-  return genres;
+  if (!genres.length || formats.length !== FORMAT_IDS.length) {
+    throw new Error("XCOMIC returned incomplete genre filters");
+  }
+  return { genres, formats };
 };
 
-const contentRatingForComic = (
+export const contentPreferenceRatingForComic = (
   rating?: string | null,
   sfw?: boolean | null,
-  genres: string[] = [],
-): ContentRating => {
-  const normalized = genres.map((genre) => genre.trim().toLowerCase());
-  if (rating === "pornographic" || normalized.some((genre) => ADULT_GENRES.has(genre))) {
-    return ContentRating.ADULT;
+  taxonomy: string[] = [],
+): ContentPreferenceRating => {
+  const normalized = taxonomy.map((value) => value.trim().toLowerCase());
+  if (rating === "pornographic" || normalized.some((value) => PORNOGRAPHIC_GENRES.has(value))) {
+    return "pornographic";
+  }
+  if (rating === "erotica" || normalized.some((value) => EROTICA_GENRES.has(value))) {
+    return "erotica";
   }
   if (
     rating === "suggestive" ||
-    rating === "erotica" ||
     sfw === false ||
-    normalized.some((genre) => MATURE_GENRES.has(genre))
+    normalized.some((value) => SUGGESTIVE_GENRES.has(value))
   ) {
-    return ContentRating.MATURE;
+    return "suggestive";
   }
+  return "safe";
+};
+
+export const contentRatingForComic = (comic: ComicData): ContentRating => {
+  const rating = contentPreferenceRatingForComic(comic.contentRating, comic.sfw_result, [
+    ...(comic.genres ?? []),
+    ...(comic.tags ?? []),
+  ]);
+  if (rating === "pornographic") return ContentRating.ADULT;
+  if (rating === "suggestive" || rating === "erotica") return ContentRating.MATURE;
   return ContentRating.EVERYONE;
 };
 
@@ -119,11 +138,7 @@ const baseCard = (node: ComicNode) => ({
   mangaId: node.data.id.replace(SAFE_ID_REGEX, "-"),
   title: Application.decodeHTMLEntities(node.data.name),
   imageUrl: toAbsoluteUrl(node.data.urlCover),
-  contentRating: contentRatingForComic(
-    node.data.contentRating,
-    node.data.sfw_result,
-    node.data.genres ?? [],
-  ),
+  contentRating: contentRatingForComic(node.data),
 });
 
 const cardSubtitle = (comic: ComicData): string | undefined =>
@@ -164,46 +179,35 @@ export const toDiscoverItem = (
       chapterId: chapter.urlPath ?? chapter.id,
       subtitle: cardSubtitle(node.data),
       publishDate: dateFromTimestamp(
-        chapter.dateModify ?? chapter.dateCreate ?? chapter.datePublic,
+        chapter.datePublic ?? chapter.dateModify ?? chapter.dateCreate,
       ),
     };
   }
   return { type, ...baseCard(node), subtitle: cardSubtitle(node.data) };
 };
 
-export const parseLatestUploads = (
-  input: string,
-): { items: DiscoverSectionItem[]; before?: number } => {
-  const root = decodeQwikLoader(input);
-  const result = (root as { d?: { result?: LatestUploadsResult } })?.d?.result;
+export const toLatestUploadNodes = (result?: LatestUploadsResult | null): ComicNode[] => {
   if (!result || !Array.isArray(result.items)) {
     throw new Error("XCOMIC latest-upload results were missing");
   }
-
-  return {
-    items: result.items.flatMap(({ comic, chapters }) => {
-      const data = comic?.data;
-      const chapterNodes = chapters ?? [];
-      if (!data || !hasTextUrl(data.urlCover) || !hasTextUrl(chapterNodes[0]?.data.urlPath)) {
-        return [];
-      }
-      const item = toDiscoverItem(
-        {
-          data: {
-            ...data,
-            type: data.type ?? TYPE_OPTIONS.find((option) => data.genres?.includes(option.id))?.id,
-            chapterNodes_last: chapterNodes,
-          },
+  const seen = new Set<string>();
+  return result.items.flatMap(({ comic, chapters }) => {
+    const data = comic?.data;
+    const chapterNodes = chapters ?? [];
+    if (!data || !hasTextUrl(data.urlCover) || !chapterNodes[0]?.data.id || seen.has(data.id)) {
+      return [];
+    }
+    seen.add(data.id);
+    return [
+      {
+        data: {
+          ...data,
+          type: data.type ?? TYPE_OPTIONS.find((option) => data.genres?.includes(option.id))?.id,
+          chapterNodes_last: chapterNodes,
         },
-        "chapterUpdatesCarouselItem",
-      );
-      return item ? [item] : [];
-    }),
-    before:
-      typeof result.before === "number" && Number.isFinite(result.before)
-        ? result.before
-        : undefined,
-  };
+      },
+    ];
+  });
 };
 
 export const parseRecentlyAdded = (
@@ -232,7 +236,6 @@ export const parseRecentlyAdded = (
         mangaId: mangaId.replace(SAFE_ID_REGEX, "-"),
         title: Application.decodeHTMLEntities(title),
         imageUrl,
-        contentRating: ContentRating.MATURE,
       } satisfies RecentlyAddedItem;
     })
     .get()
@@ -319,10 +322,7 @@ export const toSourceManga = (node: ComicNode): SourceManga => {
       synopsis: stripHtml(comic.summary?.html),
       author: authors.join(", ") || undefined,
       artist: distinctArtists.join(", ") || undefined,
-      contentRating: contentRatingForComic(comic.contentRating, comic.sfw_result, [
-        ...(comic.genres ?? []),
-        ...(comic.tags ?? []),
-      ]),
+      contentRating: contentRatingForComic(comic),
       rating,
       status: comic.originalStatus
         ? titleCase(comic.originalStatus)

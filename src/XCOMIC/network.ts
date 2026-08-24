@@ -13,6 +13,7 @@ import {
   CHAPTER_PAGE_SIZE,
   DOMAIN,
   PAGE_SIZE,
+  type BrowsePagerResponse,
   type BrowseResponse,
   type BrowseSelect,
   type ChapterListResponse,
@@ -20,9 +21,9 @@ import {
   type ComicNodeResponse,
   type GraphQLResponse,
   type LatestUpdatesResponse,
+  type RecentlyAddedResponse,
 } from "./models";
 
-const LATEST_UPLOADS_URL = `${DOMAIN}/latest/q-loader-JrIz3zZm8Ms.dev.json`;
 const RECENTLY_ADDED_URL = `${DOMAIN}/rss/added.xml`;
 
 const BROWSE_QUERY = `
@@ -31,7 +32,8 @@ query get_comic_browse_items($select: Comic_Browse_Select) {
     data {
       id name
       urlCover
-      type contentRating genres
+      translatedLanguage
+      type contentRating genres tags
       summary { html }
       sfw_result
       chapterNodes_last(amount: 1) {
@@ -40,6 +42,14 @@ query get_comic_browse_items($select: Comic_Browse_Select) {
         }
       }
     }
+  }
+}
+`;
+
+const BROWSE_PAGER_QUERY = `
+query get_comic_browse_pager($select: Comic_Browse_Select) {
+  get_comic_browse_pager(select: $select) {
+    next pages total
   }
 }
 `;
@@ -53,7 +63,7 @@ query get_comic_latestUploads($select: Comic_LatestUploads_Select) {
         data {
           id name urlPath urlCover
           translatedLanguage
-          type contentRating genres sfw_result
+          type contentRating genres tags sfw_result
         }
       }
       chapters(amount: 1) {
@@ -61,6 +71,21 @@ query get_comic_latestUploads($select: Comic_LatestUploads_Select) {
           id serial chaNum urlPath
           dateCreate dateModify datePublic
         }
+      }
+    }
+  }
+}
+`;
+
+const RECENTLY_ADDED_QUERY = `
+query get_comic_recentlyAdded($select: Comic_RecentlyAdded_Select) {
+  get_comic_recentlyAdded(select: $select) {
+    before
+    items {
+      data {
+        id name urlPath urlCover
+        translatedLanguage
+        type contentRating genres tags sfw_result
       }
     }
   }
@@ -127,10 +152,9 @@ export class XComicInterceptor extends PaperbackInterceptor {
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
     if (response.headers?.["cf-mitigated"] === "challenge") {
-      const isDataEndpoint = request.url.startsWith(API_URL) || request.url.includes("/q-loader-");
       throw new CloudflareError({
         // Data endpoints cannot render the challenge interstitial.
-        url: isDataEndpoint ? `${DOMAIN}/` : request.url,
+        url: request.url.startsWith(API_URL) ? `${DOMAIN}/` : request.url,
         method: request.method ?? "GET",
         headers: { "user-agent": await Application.getDefaultUserAgent() },
       });
@@ -186,17 +210,22 @@ query get_chapterNode($id: ID!) {
 export const fetchBrowse = (select: BrowseSelect): Promise<BrowseResponse> =>
   fetchGraphQL<BrowseResponse>(BROWSE_QUERY, { select });
 
+export const fetchBrowsePager = (select: BrowseSelect): Promise<BrowsePagerResponse> =>
+  fetchGraphQL<BrowsePagerResponse>(BROWSE_PAGER_QUERY, { select });
+
 export const fetchLatestUpdates = (before?: number): Promise<LatestUpdatesResponse> =>
   fetchGraphQL<LatestUpdatesResponse>(LATEST_UPDATES_QUERY, {
     select: { size: PAGE_SIZE, ...(before != null ? { before } : {}) },
   });
 
-export const fetchLatestUploads = async (before?: number): Promise<string> => {
-  const url = `${LATEST_UPLOADS_URL}${before != null ? `?before=${before}` : ""}`;
+export const fetchRecentlyAddedMetadata = (): Promise<RecentlyAddedResponse> =>
+  fetchGraphQL<RecentlyAddedResponse>(RECENTLY_ADDED_QUERY, { select: { size: 50 } });
+
+const fetchText = async (url: string, accept: string): Promise<string> => {
   const [response, buffer] = await Application.scheduleRequest({
     url,
     method: "GET",
-    headers: { accept: "application/json" },
+    headers: { accept },
   });
   if (response.status < 200 || response.status >= 300) {
     throw new Error(`Request failed with status ${response.status}: ${url}`);
@@ -204,17 +233,8 @@ export const fetchLatestUploads = async (before?: number): Promise<string> => {
   return Application.arrayBufferToUTF8String(buffer);
 };
 
-export const fetchRecentlyAdded = async (): Promise<string> => {
-  const [response, buffer] = await Application.scheduleRequest({
-    url: RECENTLY_ADDED_URL,
-    method: "GET",
-    headers: { accept: "application/rss+xml,application/xml,text/xml" },
-  });
-  if (response.status < 200 || response.status >= 300) {
-    throw new Error(`Request failed with status ${response.status}: ${RECENTLY_ADDED_URL}`);
-  }
-  return Application.arrayBufferToUTF8String(buffer);
-};
+export const fetchRecentlyAdded = (): Promise<string> =>
+  fetchText(RECENTLY_ADDED_URL, "application/rss+xml,application/xml,text/xml");
 
 export const fetchComic = (id: string): Promise<ComicNodeResponse> =>
   fetchGraphQL<ComicNodeResponse>(COMIC_QUERY, { id });
@@ -224,18 +244,8 @@ export const fetchChapters = (comicId: string, page: number): Promise<ChapterLis
     select: { comic_id: comicId, page, size: CHAPTER_PAGE_SIZE, sortby: "chapter_desc" },
   });
 
-export const fetchSearchPage = async (): Promise<string> => {
-  const url = `${DOMAIN}/search`;
-  const [response, buffer] = await Application.scheduleRequest({
-    url,
-    method: "GET",
-    headers: { accept: "text/html,application/xhtml+xml" },
-  });
-  if (response.status < 200 || response.status >= 300) {
-    throw new Error(`Request failed with status ${response.status}: ${url}`);
-  }
-  return Application.arrayBufferToUTF8String(buffer);
-};
+export const fetchSearchPage = (): Promise<string> =>
+  fetchText(`${DOMAIN}/search`, "text/html,application/xhtml+xml");
 
 export const fetchChapterPages = (id: string): Promise<ChapterPagesResponse> =>
   fetchGraphQL<ChapterPagesResponse>(CHAPTER_PAGES_QUERY, { id });

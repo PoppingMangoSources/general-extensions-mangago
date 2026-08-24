@@ -9,20 +9,19 @@ import {
   SelectSection,
   TriStateSelectRow,
   type SearchQuery,
-  type Tag,
 } from "@paperback/types";
 
 import {
   CHAPTER_COUNT_OPTIONS,
   CONTENT_RATING_OPTIONS,
   DEMOGRAPHIC_OPTIONS,
-  FORMAT_OPTIONS,
   LANGUAGE_OPTIONS,
   MODE_OPTIONS,
   STATUS_OPTIONS,
   TYPE_OPTIONS,
   type ContentPreferenceRating,
   type Demographic,
+  type FilterOptions,
   type GenreMode,
   type SearchMetadata,
   type SeriesType,
@@ -49,7 +48,7 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
   constructor(
     searchQuery: SearchQuery<SearchMetadata>,
     preferences: XComicPreferences,
-    private readonly genreOptions: Tag[],
+    private readonly filterOptions: FilterOptions,
   ) {
     super();
     const metadata = {
@@ -125,7 +124,7 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           title: "Genres",
           layout: "flow",
           value: this.genres,
-          items: this.genreOptions,
+          items: this.filterOptions.genres,
           allowExclusion: true,
           allowEmptySelection: true,
           onValueChange: Application.Selector(this as XComicAdvancedSearchForm, "handleGenres"),
@@ -134,7 +133,7 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           title: "Formats",
           layout: "flow",
           value: this.tags,
-          items: FORMAT_OPTIONS,
+          items: this.filterOptions.formats,
           allowExclusion: true,
           allowEmptySelection: true,
           onValueChange: Application.Selector(this as XComicAdvancedSearchForm, "handleTags"),
