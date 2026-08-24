@@ -13,12 +13,10 @@ import {
 
 import {
   CHAPTER_COUNT_OPTIONS,
-  CONTENT_RATING_OPTIONS,
-  DEMOGRAPHIC_OPTIONS,
+  FORMAT_OPTIONS,
   LANGUAGE_OPTIONS,
   MODE_OPTIONS,
   STATUS_OPTIONS,
-  TYPE_OPTIONS,
   type ContentPreferenceRating,
   type Demographic,
   type FilterOptions,
@@ -35,11 +33,11 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
   private contentRatings: ContentPreferenceRating[];
   private demographics: Demographic[];
   private excGenresMode: GenreMode[];
+  private formats: TriState;
   private genres: TriState;
   private incGenresMode: GenreMode[];
   private originalLanguages: string[];
   private originalStatus: WorkStatus[];
-  private tags: TriState;
   private translatedLanguages: string[];
   private types: SeriesType[];
   private uploadStatus: WorkStatus[];
@@ -56,11 +54,11 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
       contentRatings: preferences.contentRatings,
       demographics: [],
       excGenresMode: "or" as GenreMode,
+      formats: {},
       genres: {},
       incGenresMode: "and" as GenreMode,
       originalLanguages: [],
       originalStatus: [],
-      tags: {},
       translatedLanguages: ["en"],
       types: preferences.types,
       uploadStatus: [],
@@ -71,11 +69,11 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
     this.contentRatings = metadata.contentRatings;
     this.demographics = metadata.demographics;
     this.excGenresMode = [metadata.excGenresMode];
+    this.formats = metadata.formats;
     this.genres = metadata.genres;
     this.incGenresMode = [metadata.incGenresMode];
     this.originalLanguages = metadata.originalLanguages;
     this.originalStatus = metadata.originalStatus;
-    this.tags = metadata.tags;
     this.translatedLanguages = metadata.translatedLanguages;
     this.types = metadata.types;
     this.uploadStatus = metadata.uploadStatus;
@@ -89,18 +87,18 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           title: "Types",
           layout: "flow",
           value: this.types,
-          items: TYPE_OPTIONS,
+          items: this.filterOptions.types,
           minItemCount: 1,
-          maxItemCount: TYPE_OPTIONS.length,
+          maxItemCount: this.filterOptions.types.length,
           onValueChange: Application.Selector(this as XComicAdvancedSearchForm, "handleTypes"),
         }),
         SelectRow("content_ratings", {
           title: "Content ratings",
           layout: "flow",
           value: this.contentRatings,
-          items: CONTENT_RATING_OPTIONS,
+          items: this.filterOptions.contentRatings,
           minItemCount: 1,
-          maxItemCount: CONTENT_RATING_OPTIONS.length,
+          maxItemCount: this.filterOptions.contentRatings.length,
           onValueChange: Application.Selector(
             this as XComicAdvancedSearchForm,
             "handleContentRatings",
@@ -110,9 +108,9 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           title: "Demographics",
           layout: "flow",
           value: this.demographics,
-          items: DEMOGRAPHIC_OPTIONS,
+          items: this.filterOptions.demographics,
           minItemCount: 0,
-          maxItemCount: DEMOGRAPHIC_OPTIONS.length,
+          maxItemCount: this.filterOptions.demographics.length,
           onValueChange: Application.Selector(
             this as XComicAdvancedSearchForm,
             "handleDemographics",
@@ -132,11 +130,11 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
         TriStateSelectRow("formats", {
           title: "Formats",
           layout: "flow",
-          value: this.tags,
-          items: this.filterOptions.formats,
+          value: this.formats,
+          items: FORMAT_OPTIONS,
           allowExclusion: true,
           allowEmptySelection: true,
-          onValueChange: Application.Selector(this as XComicAdvancedSearchForm, "handleTags"),
+          onValueChange: Application.Selector(this as XComicAdvancedSearchForm, "handleFormats"),
         }),
       ]),
       SelectSection(this, {
@@ -245,8 +243,8 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
     this.genres = value;
   }
 
-  async handleTags(value: TriState): Promise<void> {
-    this.tags = value;
+  async handleFormats(value: TriState): Promise<void> {
+    this.formats = value;
   }
 
   async handleOriginalStatus(value: string[]): Promise<void> {
@@ -280,7 +278,7 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
     if (this.contentRatings.length) metadata.contentRatings = this.contentRatings;
     if (this.demographics.length) metadata.demographics = this.demographics;
     if (Object.keys(this.genres).length) metadata.genres = this.genres;
-    if (Object.keys(this.tags).length) metadata.tags = this.tags;
+    if (Object.keys(this.formats).length) metadata.formats = this.formats;
     if (this.incGenresMode[0] !== "and") metadata.incGenresMode = this.incGenresMode[0];
     if (this.excGenresMode[0] !== "or") metadata.excGenresMode = this.excGenresMode[0];
     if (this.originalStatus.length) metadata.originalStatus = this.originalStatus;

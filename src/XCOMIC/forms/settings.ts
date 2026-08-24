@@ -7,6 +7,7 @@ import {
   CONTENT_RATING_OPTIONS,
   DEFAULT_CONTENT_RATINGS,
   DEFAULT_CONTENT_TYPES,
+  FORMAT_OPTIONS,
   SECTION_IDS,
   SECTION_OPTIONS,
   STATE_KEYS,
@@ -33,9 +34,10 @@ export const getPreferences = (): XComicPreferences => {
   return {
     contentRatings: ratings.length ? ratings : DEFAULT_CONTENT_RATINGS,
     types: types.length ? types : DEFAULT_CONTENT_TYPES,
+    excludedFormats:
+      (Application.getState(STATE_KEYS.EXCLUDED_FORMATS) as string[] | undefined) ?? [],
     excludedGenres:
       (Application.getState(STATE_KEYS.EXCLUDED_GENRES) as string[] | undefined) ?? [],
-    excludedTags: (Application.getState(STATE_KEYS.EXCLUDED_TAGS) as string[] | undefined) ?? [],
   };
 };
 
@@ -98,8 +100,8 @@ export class XComicSectionOrderForm extends Form {
 export class XComicSettingsForm extends Form {
   private contentRatings: ContentPreferenceRating[];
   private contentTypes: SeriesType[];
+  private excludedFormats: string[];
   private excludedGenres: string[];
-  private excludedTags: string[];
   private visibleSections: SectionId[];
 
   constructor(
@@ -111,8 +113,8 @@ export class XComicSettingsForm extends Form {
     super();
     this.contentRatings = preferences.contentRatings;
     this.contentTypes = preferences.types;
+    this.excludedFormats = preferences.excludedFormats;
     this.excludedGenres = preferences.excludedGenres;
-    this.excludedTags = preferences.excludedTags;
     this.visibleSections = visibleSections;
   }
 
@@ -123,18 +125,18 @@ export class XComicSettingsForm extends Form {
           title: "Content types",
           layout: "flow",
           value: this.contentTypes,
-          items: TYPE_OPTIONS,
+          items: this.filterOptions.types,
           minItemCount: 1,
-          maxItemCount: TYPE_OPTIONS.length,
+          maxItemCount: this.filterOptions.types.length,
           onValueChange: Application.Selector(this as XComicSettingsForm, "handleContentTypes"),
         }),
         SelectRow("content_ratings", {
           title: "Content ratings",
           layout: "flow",
           value: this.contentRatings,
-          items: CONTENT_RATING_OPTIONS,
+          items: this.filterOptions.contentRatings,
           minItemCount: 1,
-          maxItemCount: CONTENT_RATING_OPTIONS.length,
+          maxItemCount: this.filterOptions.contentRatings.length,
           onValueChange: Application.Selector(this as XComicSettingsForm, "handleContentRatings"),
         }),
       ]),
@@ -148,14 +150,14 @@ export class XComicSettingsForm extends Form {
           maxItemCount: this.filterOptions.genres.length,
           onValueChange: Application.Selector(this as XComicSettingsForm, "handleExcludedGenres"),
         }),
-        SelectRow("excluded_tags", {
-          title: "Excluded tags",
+        SelectRow("excluded_formats", {
+          title: "Excluded formats",
           layout: "flow",
-          value: this.excludedTags,
-          items: this.filterOptions.formats,
+          value: this.excludedFormats,
+          items: FORMAT_OPTIONS,
           minItemCount: 0,
-          maxItemCount: this.filterOptions.formats.length,
-          onValueChange: Application.Selector(this as XComicSettingsForm, "handleExcludedTags"),
+          maxItemCount: FORMAT_OPTIONS.length,
+          onValueChange: Application.Selector(this as XComicSettingsForm, "handleExcludedFormats"),
         }),
       ]),
       Section("discover", [
@@ -197,9 +199,9 @@ export class XComicSettingsForm extends Form {
     this.reloadForm();
   }
 
-  async handleExcludedTags(value: string[]): Promise<void> {
-    this.excludedTags = value;
-    Application.setState(value, STATE_KEYS.EXCLUDED_TAGS);
+  async handleExcludedFormats(value: string[]): Promise<void> {
+    this.excludedFormats = value;
+    Application.setState(value, STATE_KEYS.EXCLUDED_FORMATS);
     Application.invalidateDiscoverSections();
     this.reloadForm();
   }

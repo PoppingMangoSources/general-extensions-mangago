@@ -68,8 +68,8 @@ export const STATE_KEYS = {
   CONTENT_RATINGS: "xcomic_content_ratings",
   CONTENT_TYPES: "xcomic_content_types",
   EXCLUDED_GENRES: "xcomic_excluded_genres",
-  EXCLUDED_TAGS: "xcomic_excluded_tags",
-  FILTER_OPTIONS: "xcomic_filter_options_v1",
+  EXCLUDED_FORMATS: "xcomic_excluded_tags",
+  FILTER_OPTIONS: "xcomic_filter_options_v2",
   SECTION_ORDER: "xcomic_section_order_v2",
   VISIBLE_SECTIONS: "xcomic_visible_sections",
 } as const;
@@ -102,8 +102,8 @@ export type TriState = Record<string, "included" | "excluded">;
 
 export interface XComicPreferences {
   contentRatings: ContentPreferenceRating[];
+  excludedFormats: string[];
   excludedGenres: string[];
-  excludedTags: string[];
   types: SeriesType[];
 }
 
@@ -180,24 +180,26 @@ export const CHAPTER_COUNT_OPTIONS: Tag[] = [
   { id: "200-299", title: "200–299" },
 ];
 
-export const FORMAT_IDS = [
-  "4_koma",
-  "adaptation",
-  "anthology",
-  "award_winning",
-  "doujinshi",
-  "fan_colored",
-  "full_color",
-  "long_strip",
-  "official_colored",
-  "oneshot",
-  "web_comic",
-  "webtoon",
-] as const;
+export const FORMAT_OPTIONS: Tag[] = [
+  { id: "4_koma", title: "4 Koma" },
+  { id: "adaptation", title: "Adaptation" },
+  { id: "anthology", title: "Anthology" },
+  { id: "award_winning", title: "Award Winning" },
+  { id: "doujinshi", title: "Doujinshi" },
+  { id: "fan_colored", title: "Fan Colored" },
+  { id: "full_color", title: "Full Color" },
+  { id: "long_strip", title: "Long Strip" },
+  { id: "official_colored", title: "Official Colored" },
+  { id: "oneshot", title: "Oneshot" },
+  { id: "web_comic", title: "Web Comic" },
+  { id: "webtoon", title: "Webtoon" },
+];
 
 export interface FilterOptions {
+  contentRatings: Tag[];
+  demographics: Tag[];
   genres: Tag[];
-  formats: Tag[];
+  types: Tag[];
 }
 
 export const LANGUAGE_OPTIONS: Tag[] = [
@@ -264,12 +266,12 @@ export interface SearchMetadata extends JSONObject {
   contentRatings?: ContentPreferenceRating[];
   demographics?: Demographic[];
   excGenresMode?: GenreMode;
+  formats?: TriState;
   genres?: TriState;
   incGenresMode?: GenreMode;
   originalLanguages?: string[];
   originalStatus?: WorkStatus[];
   discoverSort?: MostViewsSort;
-  tags?: TriState;
   translatedLanguages?: string[];
   types?: SeriesType[];
   uploadStatus?: WorkStatus[];
@@ -362,7 +364,7 @@ export interface ComicData {
   originalPubTill?: DateYmd | null;
   originalPubZone?: string | null;
   uploadStatus?: string | null;
-  type?: string | null;
+  type?: SeriesType | null;
   demographics?: string[] | null;
   contentRating?: string | null;
   genres?: string[] | null;
@@ -401,7 +403,7 @@ export interface BrowsePagerResponse {
   get_comic_browse_pager?: Pagination | null;
 }
 
-export interface LatestUpdatesResponse {
+export interface LatestUploadsResponse {
   get_comic_latestUploads?: LatestUploadsResult | null;
 }
 

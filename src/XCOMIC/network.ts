@@ -20,7 +20,7 @@ import {
   type ChapterPagesResponse,
   type ComicNodeResponse,
   type GraphQLResponse,
-  type LatestUpdatesResponse,
+  type LatestUploadsResponse,
   type RecentlyAddedResponse,
 } from "./models";
 
@@ -54,7 +54,7 @@ query get_comic_browse_pager($select: Comic_Browse_Select) {
 }
 `;
 
-const LATEST_UPDATES_QUERY = `
+const LATEST_UPLOADS_QUERY = `
 query get_comic_latestUploads($select: Comic_LatestUploads_Select) {
   get_comic_latestUploads(select: $select) {
     before
@@ -213,8 +213,8 @@ export const fetchBrowse = (select: BrowseSelect): Promise<BrowseResponse> =>
 export const fetchBrowsePager = (select: BrowseSelect): Promise<BrowsePagerResponse> =>
   fetchGraphQL<BrowsePagerResponse>(BROWSE_PAGER_QUERY, { select });
 
-export const fetchLatestUpdates = (before?: number): Promise<LatestUpdatesResponse> =>
-  fetchGraphQL<LatestUpdatesResponse>(LATEST_UPDATES_QUERY, {
+export const fetchLatestUploads = (before?: number): Promise<LatestUploadsResponse> =>
+  fetchGraphQL<LatestUploadsResponse>(LATEST_UPLOADS_QUERY, {
     select: { size: PAGE_SIZE, ...(before != null ? { before } : {}) },
   });
 
