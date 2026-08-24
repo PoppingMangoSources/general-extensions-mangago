@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-08-22T15:22:55.411Z",
+  "buildTime": "2026-08-24T04:59:43.469Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -655,10 +655,10 @@
     {
       "name": "XCOMIC",
       "description": "Extension that pulls content from xcomic.me.",
-      "version": "1.0.0-alpha.31",
+      "version": "1.0.0-alpha.32",
       "icon": "icon.png",
       "language": "en",
-      "contentRating": "MATURE",
+      "contentRating": "ADULT",
       "capabilities": [
         1,
         16,
