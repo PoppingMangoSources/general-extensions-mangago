@@ -415,8 +415,10 @@ const chapterLabel = (chapter?: ListingChapter): string | undefined => {
 
 export const toFeaturedItem = (item: MangaListItem): FeaturedCarouselItem => {
   const infoItems: { symbol: string; text: string }[] = [];
+  const chapter = chapterLabel(item.chapter);
+  if (chapter) infoItems.push({ symbol: "book.fill", text: chapter });
   if (item.rating != null) infoItems.push({ symbol: "star.fill", text: item.rating.toFixed(2) });
-  if (item.views != null) infoItems.push({ symbol: "eye.fill", text: formatCount(item.views) });
+
   return {
     type: "featuredCarouselItem",
     mangaId: item.mangaId,
@@ -424,7 +426,10 @@ export const toFeaturedItem = (item: MangaListItem): FeaturedCarouselItem => {
     title: item.title,
     supertitle: item.author,
     summary:
-      [chapterLabel(item.chapter), item.rank != null ? `Rank ${item.rank}` : undefined]
+      [
+        item.rank != null ? `Rank ${item.rank}` : undefined,
+        item.views != null ? `${formatCount(item.views)} views` : undefined,
+      ]
         .filter((value): value is string => Boolean(value))
         .join(" • ") || undefined,
     infoItems:
