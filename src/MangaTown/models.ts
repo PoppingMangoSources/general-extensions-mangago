@@ -10,7 +10,6 @@ import {
 } from "@paperback/types";
 
 export const DOMAIN = "https://www.mangatown.com";
-export const FEATURED_LIMIT = 10;
 // Page images are fetched one request per page; cap how many run at once.
 export const READER_CONCURRENCY = 4;
 

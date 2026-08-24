@@ -35,7 +35,6 @@ import {
   SECTIONS,
   SERIES_PAGE_SIZE,
   TAG_OPTIONS,
-  TOP_MANGA_SIZE,
   type ChapterDto,
   type Metadata,
   type PageListDto,
@@ -156,7 +155,7 @@ class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
       // Monthly-popular listing only; ratings still come from each series' tags, so adult filtering is unaffected.
       const monthly = await this.fetchPopularSeries("monthly", undefined, contentFilters);
       return {
-        items: monthly.slice(0, TOP_MANGA_SIZE).map(toFeaturedItem).filter(hasImage),
+        items: monthly.map(toFeaturedItem).filter(hasImage),
         metadata: undefined,
       };
     }

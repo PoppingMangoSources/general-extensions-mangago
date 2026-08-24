@@ -6,7 +6,6 @@ import { type JSONObject, type Tag } from "@paperback/types";
 export const DEFAULT_DOMAIN = "https://mangavyvy.net";
 export const SEARCH_PATH = "search";
 export const GENRES_KEY = "vymanga_search_genres_v2";
-export const FEATURED_LIMIT = 8;
 
 export const SECTIONS = {
   POPULAR: "popular",

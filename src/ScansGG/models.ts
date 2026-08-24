@@ -10,7 +10,6 @@ export const SERIES_PAGE_SIZE = 21;
 export const LATEST_PAGE_SIZE = 14;
 export const POPULAR_FETCH_SIZE = 50;
 export const CHAPTER_PAGE_SIZE = 100;
-export const TOP_MANGA_SIZE = 7;
 export const MAX_CHAPTER_PAGES = 200;
 export const MAX_FILTER_BATCHES = 10;
 

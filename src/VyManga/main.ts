@@ -29,7 +29,6 @@ import { getBaseUrlOverride, VyMangaSettingsForm } from "./forms/settings";
 import {
   BROWSE_SORT,
   DEFAULT_DOMAIN,
-  FEATURED_LIMIT,
   GENRES_KEY,
   NEXT_PAGE_SELECTOR,
   SEARCH_PATH,
@@ -324,7 +323,7 @@ class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
   private async loadFeaturedItems(): Promise<DiscoverSectionItem[]> {
     const rating = this.contentRating;
     const $ = await fetchCheerio({ url: this.browseUrl("viewed", 1), method: "GET" });
-    const cards = parseCards($, this.baseUrl).slice(0, FEATURED_LIMIT);
+    const cards = parseCards($, this.baseUrl);
 
     // "Most viewed" listing only; cards carry no author or synopsis.
     return cards.map((card): DiscoverSectionItem => ({

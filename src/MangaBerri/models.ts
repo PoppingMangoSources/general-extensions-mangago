@@ -3,10 +3,6 @@
 
 export const DOMAIN = "https://mangaberri.com";
 
-// Ranked genre carousels are "top" lists; keep them short so a long genre
-// listing doesn't stuff hundreds of cards into one carousel.
-export const RANKED_LIMIT = 30;
-
 export const SECTIONS = {
   MOST_VIEWED: "most-viewed",
   WEEKLY: "weekly",

@@ -15,7 +15,7 @@ import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
 import { getBaseUrl } from "./forms";
-import { HOME_TITLES, MATURE_GENRES, RANKED_LIMIT, type MangaCard } from "./models";
+import { HOME_TITLES, MATURE_GENRES, type MangaCard } from "./models";
 
 // Paperback rejects ids containing characters outside this set.
 const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
@@ -226,10 +226,9 @@ export const toRatedChapterItems = (cards: MangaCard[]): DiscoverSectionItem[] =
     };
   });
 
-// Weekly and the genre carousels: rank number + chapter number, capped so a
-// long genre listing stays a short "top" carousel.
+// Weekly and the genre carousels lead with the site's own rank number.
 export const toRankedItems = (cards: MangaCard[]): DiscoverSectionItem[] =>
-  cards.slice(0, RANKED_LIMIT).map((card, index) => {
+  cards.map((card, index) => {
     const chapNum = card.chapterLabel ? chapterNumberFrom(card.chapterLabel) : undefined;
     return {
       type: "simpleCarouselItem",

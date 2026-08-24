@@ -30,7 +30,6 @@ import {
 } from "./forms";
 import {
   DEMOGRAPHICS,
-  FEATURED_LIMIT,
   READER_CONCURRENCY,
   GENRES,
   HOT_PERIODS,
@@ -217,9 +216,7 @@ class MangaTownExtension implements ExtensionImpl<typeof MangaTownConfig> {
   // The listing already has everything needed for a useful card, so avoid
   // opening one detail page per title just to decorate the carousel.
   private async buildFeaturedItems(): Promise<DiscoverSectionItem[]> {
-    return parseMangaList(await fetchFeaturedPage())
-      .slice(0, FEATURED_LIMIT)
-      .map((card) => buildFeaturedItem(card));
+    return parseMangaList(await fetchFeaturedPage()).map((card) => buildFeaturedItem(card));
   }
 
   private async getHotSection(): Promise<PagedResults<DiscoverSectionItem>> {

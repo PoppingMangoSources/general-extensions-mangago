@@ -4,7 +4,6 @@
 import type { JSONObject } from "@paperback/types";
 
 export const DEFAULT_DOMAIN = "https://omanga.to";
-export const FEATURED_HERO_LIMIT = 17;
 
 export const SECTIONS = {
   POPULAR: "popular",

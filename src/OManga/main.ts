@@ -28,7 +28,6 @@ import {
   AGE_RATING_OPTIONS,
   type CatalogItem,
   type CatalogQuery,
-  FEATURED_HERO_LIMIT,
   GENRE_OPTIONS,
   type PageMetadata,
   resolveOptionValues,
@@ -267,7 +266,6 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
   private buildFeaturedItems(items: CatalogItem[]): DiscoverSectionItem[] {
     return items
       .filter((item) => item.poster.length > 0)
-      .slice(0, FEATURED_HERO_LIMIT)
       .map((item): DiscoverSectionItem => ({
         type: "featuredCarouselItem",
         mangaId: item.slug,
