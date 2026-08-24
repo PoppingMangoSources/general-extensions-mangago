@@ -15,6 +15,7 @@ import * as cheerio from "cheerio";
 
 import {
   CONTENT_RATING_GENRES,
+  CONTENT_RATING_OPTIONS,
   DEMOGRAPHIC_OPTIONS,
   DOMAIN,
   FORMAT_OPTIONS,
@@ -91,7 +92,11 @@ const contentPreferenceRating = (comic: ComicData): ContentPreferenceRating => {
   const taxonomy = [...(comic.genres ?? []), ...(comic.tags ?? [])].map((value) =>
     value.trim().toLowerCase(),
   );
-  const rating = comic.contentRating;
+  const rating = comic.contentRating?.trim().toLowerCase();
+  // A rating the API adds later stays gated at the top instead of passing through as safe.
+  if (rating && !CONTENT_RATING_OPTIONS.some((option) => option.id === rating)) {
+    return "pornographic";
+  }
   if (rating === "pornographic" || taxonomy.some((value) => PORNOGRAPHIC_GENRES.has(value))) {
     return "pornographic";
   }
@@ -110,8 +115,8 @@ const contentPreferenceRating = (comic: ComicData): ContentPreferenceRating => {
 
 const contentRatingForComic = (comic: ComicData): ContentRating => {
   const rating = contentPreferenceRating(comic);
-  if (rating === "pornographic") return ContentRating.ADULT;
-  if (rating === "suggestive" || rating === "erotica") return ContentRating.MATURE;
+  if (rating === "erotica" || rating === "pornographic") return ContentRating.ADULT;
+  if (rating === "suggestive") return ContentRating.MATURE;
   return ContentRating.EVERYONE;
 };
 
