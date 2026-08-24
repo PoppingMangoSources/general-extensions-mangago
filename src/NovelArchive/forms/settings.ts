@@ -5,10 +5,12 @@ import { Form, Section, ToggleRow, TriStateSelectRow, type Tag } from "@paperbac
 
 import { STATE_KEYS, type TriState } from "../models";
 
+// Adult titles remain visible unless the user opts to hide them.
+export const getHideAdultContent = (): boolean =>
+  (Application.getState(STATE_KEYS.HIDE_ADULT) as boolean | undefined) ?? false;
+
 export class NovelArchiveSettingsForm extends Form {
-  // Adult titles remain visible unless the user opts to hide them.
-  private hideAdultContent =
-    (Application.getState(STATE_KEYS.HIDE_ADULT) as boolean | undefined) ?? false;
+  private hideAdultContent = getHideAdultContent();
   private genres = (Application.getState(STATE_KEYS.DEFAULT_GENRES) as TriState | undefined) ?? {};
 
   private readonly genreOptions: Tag[];

@@ -152,7 +152,10 @@ export const parseNovelList = (novels: Novel[]): NovelListItem[] =>
     };
   });
 
-export const filterAdultItems = (items: NovelListItem[], hideAdult: boolean): NovelListItem[] =>
+export const filterAdultItems = <T extends { contentRating?: ContentRating }>(
+  items: T[],
+  hideAdult: boolean,
+): T[] =>
   hideAdult ? items.filter((item) => item.contentRating === ContentRating.EVERYONE) : items;
 
 export const toFeaturedItem = (
@@ -233,22 +236,16 @@ export const toChapterUpdateItem = (item: NovelListItem): DiscoverSectionItem | 
   };
 };
 
-export const toGenreCarouselItems = (genres: Tag[], hideAdult: boolean): DiscoverSectionItem[] =>
-  genres.flatMap((genre) => {
-    const contentRating = contentRatingForGenres([decodeId(genre.id)]);
-    if (hideAdult && contentRating !== ContentRating.EVERYONE) return [];
-    return [
-      {
-        type: "genresCarouselItem",
-        name: genre.title,
-        searchQuery: {
-          title: "",
-          metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
-        },
-        contentRating,
-      },
-    ];
-  });
+export const toGenreCarouselItems = (genres: Tag[]): DiscoverSectionItem[] =>
+  genres.map((genre) => ({
+    type: "genresCarouselItem",
+    name: genre.title,
+    searchQuery: {
+      title: "",
+      metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
+    },
+    contentRating: contentRatingForGenres([decodeId(genre.id)]),
+  }));
 
 export const toSearchResultItem = (item: NovelListItem): SearchResultItem => ({
   mangaId: item.mangaId,

@@ -24,7 +24,7 @@ import {
 } from "@paperback/types";
 
 import { NovelArchiveAdvancedSearchForm } from "./forms/search";
-import { NovelArchiveSettingsForm } from "./forms/settings";
+import { NovelArchiveSettingsForm, getHideAdultContent } from "./forms/settings";
 import {
   PAGE_SIZE,
   SECTIONS,
@@ -129,6 +129,14 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
     section: DiscoverSection,
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
+    const results = await this.loadDiscoverSection(section, metadata);
+    return { ...results, items: filterAdultItems(results.items, getHideAdultContent()) };
+  }
+
+  private async loadDiscoverSection(
+    section: DiscoverSection,
+    metadata: PageMetadata | undefined,
+  ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
       case SECTIONS.POPULAR:
         return this.getPopularSection(metadata);
@@ -159,19 +167,15 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
   }
 
   private async getGenresSection(): Promise<PagedResults<DiscoverSectionItem>> {
-    const hideAdult = (Application.getState(STATE_KEYS.HIDE_ADULT) as boolean | undefined) ?? false;
-    return {
-      items: toGenreCarouselItems(await this.getGenres(), hideAdult),
-    };
+    return { items: toGenreCarouselItems(await this.getGenres()) };
   }
 
   private async getLatestSection(): Promise<PagedResults<DiscoverSectionItem>> {
     const { novels } = await fetchApi<NovelListResponse>(
       novelsFeedUrl("recently-updated", PAGE_SIZE),
     );
-    const hideAdult = (Application.getState(STATE_KEYS.HIDE_ADULT) as boolean | undefined) ?? false;
     return {
-      items: filterAdultItems(parseNovelList(novels), hideAdult).flatMap((item) => {
+      items: parseNovelList(novels).flatMap((item) => {
         const card = toChapterUpdateItem(item);
         return card ? [card] : [];
       }),
@@ -183,22 +187,16 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const page = metadata?.page ?? 1;
     const data = await fetchApi<NovelListResponse>(buildNovelsUrl({ page, sort: "popular" }));
-    const hideAdult = (Application.getState(STATE_KEYS.HIDE_ADULT) as boolean | undefined) ?? false;
     return {
-      items: filterAdultItems(parseNovelList(data.novels), hideAdult).map((item) =>
-        toFeaturedItem(item, "popular"),
-      ),
+      items: parseNovelList(data.novels).map((item) => toFeaturedItem(item, "popular")),
       metadata: data.pagination?.has_next ? { page: page + 1 } : undefined,
     };
   }
 
   private async getEditorsSection(): Promise<PagedResults<DiscoverSectionItem>> {
     const { novels } = await fetchApi<NovelListResponse>(novelsFeedUrl("editors-choice"));
-    const hideAdult = (Application.getState(STATE_KEYS.HIDE_ADULT) as boolean | undefined) ?? false;
     return {
-      items: filterAdultItems(parseNovelList(novels), hideAdult).map((item) =>
-        toFeaturedItem(item, "editors"),
-      ),
+      items: parseNovelList(novels).map((item) => toFeaturedItem(item, "editors")),
     };
   }
 
@@ -220,6 +218,15 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
   }
 
   async getSearchResults(
+    query: SearchQuery<SearchMetadata>,
+    metadata: PageMetadata | undefined,
+    sortingOption?: SortingOption,
+  ): Promise<PagedResults<SearchResultItem>> {
+    const results = await this.loadSearchResults(query, metadata, sortingOption);
+    return { ...results, items: filterAdultItems(results.items, getHideAdultContent()) };
+  }
+
+  private async loadSearchResults(
     query: SearchQuery<SearchMetadata>,
     metadata: PageMetadata | undefined,
     sortingOption?: SortingOption,
