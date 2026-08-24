@@ -12,6 +12,8 @@ import {
 export const DOMAIN = "https://xcomic.me";
 export const API_URL = `${DOMAIN}/query/`;
 export const PAGE_SIZE = 36;
+// Upper bound on latest-upload pages walked when filtering empties a page.
+export const MAX_LATEST_REQUESTS = 10;
 export const CHAPTER_PAGE_SIZE = 1000;
 
 export const SECTIONS = {

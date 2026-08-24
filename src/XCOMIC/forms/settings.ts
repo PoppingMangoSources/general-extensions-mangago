@@ -128,7 +128,10 @@ export class XComicSettingsForm extends Form {
           items: this.filterOptions.types,
           minItemCount: 1,
           maxItemCount: this.filterOptions.types.length,
-          onValueChange: Application.Selector(this as XComicSettingsForm, "handleContentTypes"),
+          onValueChange: Application.Selector(
+            this as XComicSettingsForm,
+            "handleContentTypesChange",
+          ),
         }),
         SelectRow("content_ratings", {
           title: "Content ratings",
@@ -137,7 +140,10 @@ export class XComicSettingsForm extends Form {
           items: this.filterOptions.contentRatings,
           minItemCount: 1,
           maxItemCount: this.filterOptions.contentRatings.length,
-          onValueChange: Application.Selector(this as XComicSettingsForm, "handleContentRatings"),
+          onValueChange: Application.Selector(
+            this as XComicSettingsForm,
+            "handleContentRatingsChange",
+          ),
         }),
       ]),
       Section("exclusions", [
@@ -148,7 +154,10 @@ export class XComicSettingsForm extends Form {
           items: this.filterOptions.genres,
           minItemCount: 0,
           maxItemCount: this.filterOptions.genres.length,
-          onValueChange: Application.Selector(this as XComicSettingsForm, "handleExcludedGenres"),
+          onValueChange: Application.Selector(
+            this as XComicSettingsForm,
+            "handleExcludedGenresChange",
+          ),
         }),
         SelectRow("excluded_formats", {
           title: "Excluded formats",
@@ -157,7 +166,10 @@ export class XComicSettingsForm extends Form {
           items: FORMAT_OPTIONS,
           minItemCount: 0,
           maxItemCount: FORMAT_OPTIONS.length,
-          onValueChange: Application.Selector(this as XComicSettingsForm, "handleExcludedFormats"),
+          onValueChange: Application.Selector(
+            this as XComicSettingsForm,
+            "handleExcludedFormatsChange",
+          ),
         }),
       ]),
       Section("discover", [
@@ -168,7 +180,10 @@ export class XComicSettingsForm extends Form {
           items: SECTION_OPTIONS,
           minItemCount: 1,
           maxItemCount: SECTION_OPTIONS.length,
-          onValueChange: Application.Selector(this as XComicSettingsForm, "handleVisibleSections"),
+          onValueChange: Application.Selector(
+            this as XComicSettingsForm,
+            "handleVisibleSectionsChange",
+          ),
         }),
         NavigationRow("section_order", {
           title: "Section order",
@@ -178,35 +193,35 @@ export class XComicSettingsForm extends Form {
     ];
   }
 
-  async handleContentTypes(value: string[]): Promise<void> {
+  async handleContentTypesChange(value: string[]): Promise<void> {
     this.contentTypes = value as SeriesType[];
     Application.setState(this.contentTypes, STATE_KEYS.CONTENT_TYPES);
     Application.invalidateDiscoverSections();
     this.reloadForm();
   }
 
-  async handleContentRatings(value: string[]): Promise<void> {
+  async handleContentRatingsChange(value: string[]): Promise<void> {
     this.contentRatings = value as ContentPreferenceRating[];
     Application.setState(this.contentRatings, STATE_KEYS.CONTENT_RATINGS);
     Application.invalidateDiscoverSections();
     this.reloadForm();
   }
 
-  async handleExcludedGenres(value: string[]): Promise<void> {
+  async handleExcludedGenresChange(value: string[]): Promise<void> {
     this.excludedGenres = value;
     Application.setState(value, STATE_KEYS.EXCLUDED_GENRES);
     Application.invalidateDiscoverSections();
     this.reloadForm();
   }
 
-  async handleExcludedFormats(value: string[]): Promise<void> {
+  async handleExcludedFormatsChange(value: string[]): Promise<void> {
     this.excludedFormats = value;
     Application.setState(value, STATE_KEYS.EXCLUDED_FORMATS);
     Application.invalidateDiscoverSections();
     this.reloadForm();
   }
 
-  async handleVisibleSections(value: string[]): Promise<void> {
+  async handleVisibleSectionsChange(value: string[]): Promise<void> {
     this.visibleSections = value as SectionId[];
     Application.setState(this.visibleSections, STATE_KEYS.VISIBLE_SECTIONS);
     Application.invalidateDiscoverSections();

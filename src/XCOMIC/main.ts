@@ -30,6 +30,7 @@ import {
 } from "./forms/settings";
 import {
   DISCOVER_SECTIONS,
+  MAX_LATEST_REQUESTS,
   MOST_VIEWS_OPTIONS,
   PAGE_SIZE,
   SECTIONS,
@@ -125,7 +126,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       case SECTIONS.MOST_VIEWS:
         return this.getMostViewsSection();
       case SECTIONS.GENRES:
-        return this.getGenreSection();
+        return this.getGenresSection();
       default:
         return { items: [] };
     }
@@ -160,7 +161,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     itemType: CarouselItemType,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const page = metadata?.page ?? 1;
-    const result = await this.getUsableBrowsePage(page, sortby, "", undefined);
+    const result = await this.getBrowsePage(page, sortby, "", undefined);
     return {
       items: result.nodes
         .map((node) => toDiscoverItem(node, itemType))
@@ -169,7 +170,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     };
   }
 
-  private async getGenreSection(): Promise<PagedResults<DiscoverSectionItem>> {
+  private async getGenresSection(): Promise<PagedResults<DiscoverSectionItem>> {
     return {
       items: (await this.getFilterOptions()).genres.map((genre) => ({
         type: "genresCarouselItem",
@@ -239,21 +240,19 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     const nodes: ComicNode[] = [];
     const seenIds = new Set<string>();
     let cursor = before;
-    const seenCursors = new Set<number>();
-    while (nodes.length < PAGE_SIZE) {
+    // The feed carries every language and type, so keep walking it until a page survives filtering.
+    for (let request = 0; request < MAX_LATEST_REQUESTS && !nodes.length; request++) {
       const result = (await fetchLatestUploads(cursor)).get_comic_latestUploads;
-      const next =
-        typeof result?.before === "number" && Number.isFinite(result.before)
-          ? result.before
-          : undefined;
       for (const node of toLatestUploadNodes(result)) {
         if (seenIds.has(node.data.id) || !isComicAllowed(node.data, preferences, true)) continue;
         seenIds.add(node.data.id);
         nodes.push(node);
       }
-      if (next == null || seenCursors.has(next)) return { nodes };
-      seenCursors.add(next);
-      cursor = next;
+      cursor =
+        typeof result?.before === "number" && Number.isFinite(result.before)
+          ? result.before
+          : undefined;
+      if (cursor == null) break;
     }
     return { nodes, before: cursor };
   }
@@ -268,7 +267,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
 
     const sortby = query.metadata?.discoverSort ?? sortingOption?.id ?? "field_score";
     const page = metadata?.page ?? 1;
-    const result = await this.getUsableBrowsePage(
+    const result = await this.getBrowsePage(
       page,
       sortby,
       (query.title ?? "").trim(),
@@ -280,36 +279,22 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     };
   }
 
-  private async getUsableBrowsePage(
+  private async getBrowsePage(
     page: number,
     sortby: string,
     word: string,
     metadata: SearchMetadata | undefined,
   ): Promise<{ nodes: ComicNode[]; nextPage?: number }> {
     const preferences = this.getEffectivePreferences(metadata);
-    let apiPage = page;
-    const usable: ComicNode[] = [];
-    const seen = new Set<string>();
-    while (true) {
-      const select = this.buildSelect(apiPage, sortby, word, metadata, preferences);
-      const response = await fetchBrowse(select);
-      const nodes = response.get_comic_browse_items ?? [];
-      let added = 0;
-      for (const node of nodes) {
-        if (seen.has(node.data.id)) continue;
-        seen.add(node.data.id);
-        added++;
-        if (isComicAllowed(node.data, preferences)) usable.push(node);
-      }
-      const nextPage = nodes.length === PAGE_SIZE ? apiPage + 1 : undefined;
-      if (usable.length >= PAGE_SIZE || nextPage == null || !added) {
-        return { nodes: usable, nextPage };
-      }
-      apiPage = nextPage;
-    }
+    const select = this.buildBrowseSelect(page, sortby, word, metadata, preferences);
+    const nodes = (await fetchBrowse(select)).get_comic_browse_items ?? [];
+    return {
+      nodes: nodes.filter((node) => isComicAllowed(node.data, preferences)),
+      nextPage: nodes.length === PAGE_SIZE ? page + 1 : undefined,
+    };
   }
 
-  private buildSelect(
+  private buildBrowseSelect(
     page: number,
     sortby: string,
     word: string,

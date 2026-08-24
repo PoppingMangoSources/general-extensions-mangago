@@ -43,7 +43,7 @@ const toAbsoluteUrl = (url: string | null | undefined): string => {
   return `${DOMAIN}${normalized.startsWith("/") ? "" : "/"}${normalized}`;
 };
 
-const hasTextUrl = (url: string | null | undefined): url is string =>
+const hasCoverUrl = (url: string | null | undefined): url is string =>
   typeof url === "string" && url.trim().length > 0;
 
 const titleCase = (value: string): string =>
@@ -86,22 +86,22 @@ export const parseFilterOptions = (html: string): FilterOptions => {
   return options;
 };
 
-const contentPreferenceRatingForComic = (
-  rating?: string | null,
-  sfw?: boolean | null,
-  taxonomy: string[] = [],
-): ContentPreferenceRating => {
-  const normalized = taxonomy.map((value) => value.trim().toLowerCase());
-  if (rating === "pornographic" || normalized.some((value) => PORNOGRAPHIC_GENRES.has(value))) {
+// The API filters on the declared rating alone, so genres and tags are escalated here as well.
+const contentPreferenceRating = (comic: ComicData): ContentPreferenceRating => {
+  const taxonomy = [...(comic.genres ?? []), ...(comic.tags ?? [])].map((value) =>
+    value.trim().toLowerCase(),
+  );
+  const rating = comic.contentRating;
+  if (rating === "pornographic" || taxonomy.some((value) => PORNOGRAPHIC_GENRES.has(value))) {
     return "pornographic";
   }
-  if (rating === "erotica" || normalized.some((value) => EROTICA_GENRES.has(value))) {
+  if (rating === "erotica" || taxonomy.some((value) => EROTICA_GENRES.has(value))) {
     return "erotica";
   }
   if (
     rating === "suggestive" ||
-    sfw === false ||
-    normalized.some((value) => SUGGESTIVE_GENRES.has(value))
+    comic.sfw_result === false ||
+    taxonomy.some((value) => SUGGESTIVE_GENRES.has(value))
   ) {
     return "suggestive";
   }
@@ -109,10 +109,7 @@ const contentPreferenceRatingForComic = (
 };
 
 const contentRatingForComic = (comic: ComicData): ContentRating => {
-  const rating = contentPreferenceRatingForComic(comic.contentRating, comic.sfw_result, [
-    ...(comic.genres ?? []),
-    ...(comic.tags ?? []),
-  ]);
+  const rating = contentPreferenceRating(comic);
   if (rating === "pornographic") return ContentRating.ADULT;
   if (rating === "suggestive" || rating === "erotica") return ContentRating.MATURE;
   return ContentRating.EVERYONE;
@@ -126,7 +123,7 @@ export const isComicAllowed = (
   if (
     !preferences.contentRatings.length ||
     !preferences.types.length ||
-    !hasTextUrl(comic.urlCover)
+    !hasCoverUrl(comic.urlCover)
   ) {
     return false;
   }
@@ -134,16 +131,7 @@ export const isComicAllowed = (
   if (comic.type && !preferences.types.includes(comic.type)) {
     return false;
   }
-  if (
-    !preferences.contentRatings.includes(
-      contentPreferenceRatingForComic(comic.contentRating, comic.sfw_result, [
-        ...(comic.genres ?? []),
-        ...(comic.tags ?? []),
-      ]),
-    )
-  ) {
-    return false;
-  }
+  if (!preferences.contentRatings.includes(contentPreferenceRating(comic))) return false;
   const excluded = new Set([...preferences.excludedGenres, ...preferences.excludedFormats]);
   return ![...(comic.genres ?? []), ...(comic.tags ?? [])].some((id) => excluded.has(id));
 };
@@ -218,7 +206,7 @@ export const toDiscoverItem = (
     };
   }
   if (type === "chapterUpdatesCarouselItem") {
-    if (!chapter?.id || !hasTextUrl(node.data.urlCover)) return undefined;
+    if (!chapter?.id || !hasCoverUrl(node.data.urlCover)) return undefined;
     return {
       type,
       ...baseCard(node),
@@ -239,7 +227,7 @@ export const toLatestUploadNodes = (result?: LatestUploadsResult | null): ComicN
   return result.items.flatMap(({ comic, chapters }) => {
     const data = comic?.data;
     const chapterNodes = chapters ?? [];
-    if (!data || !hasTextUrl(data.urlCover) || !chapterNodes[0]?.data.id) {
+    if (!data || !hasCoverUrl(data.urlCover) || !chapterNodes[0]?.data.id) {
       return [];
     }
     return [

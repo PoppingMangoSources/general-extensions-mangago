@@ -90,7 +90,10 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           items: this.filterOptions.types,
           minItemCount: 1,
           maxItemCount: this.filterOptions.types.length,
-          onValueChange: Application.Selector(this as XComicAdvancedSearchForm, "handleTypes"),
+          onValueChange: Application.Selector(
+            this as XComicAdvancedSearchForm,
+            "handleTypesChange",
+          ),
         }),
         SelectRow("content_ratings", {
           title: "Content ratings",
@@ -101,7 +104,7 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           maxItemCount: this.filterOptions.contentRatings.length,
           onValueChange: Application.Selector(
             this as XComicAdvancedSearchForm,
-            "handleContentRatings",
+            "handleContentRatingsChange",
           ),
         }),
         SelectRow("demographics", {
@@ -113,7 +116,7 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           maxItemCount: this.filterOptions.demographics.length,
           onValueChange: Application.Selector(
             this as XComicAdvancedSearchForm,
-            "handleDemographics",
+            "handleDemographicsChange",
           ),
         }),
       ]),
@@ -125,7 +128,10 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           items: this.filterOptions.genres,
           allowExclusion: true,
           allowEmptySelection: true,
-          onValueChange: Application.Selector(this as XComicAdvancedSearchForm, "handleGenres"),
+          onValueChange: Application.Selector(
+            this as XComicAdvancedSearchForm,
+            "handleGenresChange",
+          ),
         }),
         TriStateSelectRow("formats", {
           title: "Formats",
@@ -134,7 +140,10 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           items: FORMAT_OPTIONS,
           allowExclusion: true,
           allowEmptySelection: true,
-          onValueChange: Application.Selector(this as XComicAdvancedSearchForm, "handleFormats"),
+          onValueChange: Application.Selector(
+            this as XComicAdvancedSearchForm,
+            "handleFormatsChange",
+          ),
         }),
       ]),
       SelectSection(this, {
@@ -165,7 +174,7 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           maxItemCount: 1,
           onValueChange: Application.Selector(
             this as XComicAdvancedSearchForm,
-            "handleOriginalStatus",
+            "handleOriginalStatusChange",
           ),
         }),
         SelectRow("upload_status", {
@@ -177,7 +186,7 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           maxItemCount: 1,
           onValueChange: Application.Selector(
             this as XComicAdvancedSearchForm,
-            "handleUploadStatus",
+            "handleUploadStatusChange",
           ),
         }),
         SelectRow("chapter_count", {
@@ -189,13 +198,13 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           maxItemCount: 1,
           onValueChange: Application.Selector(
             this as XComicAdvancedSearchForm,
-            "handleChapterCount",
+            "handleChapterCountChange",
           ),
         }),
         InputRow("year", {
           title: "Year or range",
           value: this.year,
-          onValueChange: Application.Selector(this as XComicAdvancedSearchForm, "handleYear"),
+          onValueChange: Application.Selector(this as XComicAdvancedSearchForm, "handleYearChange"),
         }),
       ]),
       Section("languages", [
@@ -208,7 +217,7 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           maxItemCount: LANGUAGE_OPTIONS.length,
           onValueChange: Application.Selector(
             this as XComicAdvancedSearchForm,
-            "handleOriginalLanguages",
+            "handleOriginalLanguagesChange",
           ),
         }),
         SelectRow("translated_languages", {
@@ -220,55 +229,55 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           maxItemCount: LANGUAGE_OPTIONS.length,
           onValueChange: Application.Selector(
             this as XComicAdvancedSearchForm,
-            "handleTranslatedLanguages",
+            "handleTranslatedLanguagesChange",
           ),
         }),
       ]),
     ];
   }
 
-  async handleTypes(value: string[]): Promise<void> {
+  async handleTypesChange(value: string[]): Promise<void> {
     this.types = value as SeriesType[];
   }
 
-  async handleContentRatings(value: string[]): Promise<void> {
+  async handleContentRatingsChange(value: string[]): Promise<void> {
     this.contentRatings = value as ContentPreferenceRating[];
   }
 
-  async handleDemographics(value: string[]): Promise<void> {
+  async handleDemographicsChange(value: string[]): Promise<void> {
     this.demographics = value as Demographic[];
   }
 
-  async handleGenres(value: TriState): Promise<void> {
+  async handleGenresChange(value: TriState): Promise<void> {
     this.genres = value;
   }
 
-  async handleFormats(value: TriState): Promise<void> {
+  async handleFormatsChange(value: TriState): Promise<void> {
     this.formats = value;
   }
 
-  async handleOriginalStatus(value: string[]): Promise<void> {
+  async handleOriginalStatusChange(value: string[]): Promise<void> {
     this.originalStatus = value as WorkStatus[];
   }
 
-  async handleUploadStatus(value: string[]): Promise<void> {
+  async handleUploadStatusChange(value: string[]): Promise<void> {
     this.uploadStatus = value as WorkStatus[];
   }
 
-  async handleChapterCount(value: string[]): Promise<void> {
+  async handleChapterCountChange(value: string[]): Promise<void> {
     this.chapCount = value[0] ?? "";
   }
 
-  async handleYear(value: string): Promise<void> {
+  async handleYearChange(value: string): Promise<void> {
     this.year = value.replace(/[^\d-]/g, "").slice(0, 9);
     this.reloadForm();
   }
 
-  async handleOriginalLanguages(value: string[]): Promise<void> {
+  async handleOriginalLanguagesChange(value: string[]): Promise<void> {
     this.originalLanguages = value;
   }
 
-  async handleTranslatedLanguages(value: string[]): Promise<void> {
+  async handleTranslatedLanguagesChange(value: string[]): Promise<void> {
     this.translatedLanguages = value;
   }
 
