@@ -4,9 +4,10 @@ version: 2
 updates:
   - package-ecosystem: npm
     directory: /
+    target-branch: "0.9/test"
     schedule:
       interval: weekly
-      day: monday
+      day: friday
     groups:
       paperback:
         patterns:
