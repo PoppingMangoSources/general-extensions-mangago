@@ -226,6 +226,10 @@ export const CONTENT_RATING_OPTIONS: Array<{ id: ContentPreferenceRating; title:
   { id: "pornographic", title: "Pornographic" },
 ];
 
+// The SDK gives MangaInfo no language field, so the chapter language rides in additionalInfo.
+// Both the writer and the reader use this constant so the two can never drift apart.
+export const TRANSLATED_LANGUAGE_KEY = "Translated Language";
+
 // Only ids whose display name differs from title-casing the id itself.
 export const TAG_TITLE_OVERRIDES: Record<string, string> = {
   silver_golden: "Silver & Golden",

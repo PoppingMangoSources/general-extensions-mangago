@@ -19,6 +19,7 @@ import {
   DOMAIN,
   FORMAT_OPTIONS,
   TAG_TITLE_OVERRIDES,
+  TRANSLATED_LANGUAGE_KEY,
   type ChapterData,
   type ChapterPagesResponse,
   type ComicData,
@@ -146,6 +147,10 @@ export const isComicAllowed = (
   return ![...(comic.genres ?? []), ...(comic.tags ?? [])].some((id) => excluded.has(id));
 };
 
+// Discover cards and the chapter list must agree, or a card cannot be matched to its chapter.
+const toChapterId = (chapter: { id: string; urlPath?: string | null }): string =>
+  (chapter.urlPath ?? `/comic/chapter/${chapter.id}`).replace(SAFE_ID_REGEX, "-");
+
 const chapterNumber = (chapter?: ChapterData | null): number | undefined => {
   const value = chapter?.chaNum ?? chapter?.serial;
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
@@ -220,7 +225,7 @@ export const toDiscoverItem = (
     return {
       type,
       ...baseCard(node),
-      chapterId: chapter.urlPath ?? chapter.id,
+      chapterId: toChapterId(chapter),
       subtitle: cardSubtitle(node.data),
       publishDate: dateFromTimestamp(
         chapter.datePublic ?? chapter.dateModify ?? chapter.dateCreate,
@@ -335,7 +340,9 @@ export const toSourceManga = (node: ComicNode): SourceManga => {
       additionalInfo: {
         ...(comic.type ? { Type: formatType(comic.type) ?? comic.type } : {}),
         ...(comic.originalLanguage ? { "Original Language": comic.originalLanguage } : {}),
-        ...(comic.translatedLanguage ? { "Translated Language": comic.translatedLanguage } : {}),
+        ...(comic.translatedLanguage
+          ? { [TRANSLATED_LANGUAGE_KEY]: comic.translatedLanguage }
+          : {}),
         ...(publicationFrom
           ? {
               Publication: publicationTill
@@ -373,7 +380,7 @@ export const toChapter = (data: ChapterData, sourceManga: SourceManga): Chapter 
       : nodeNames(data.groupNodes);
   const uploaderName = data.userNode?.data?.name?.trim();
   const uploader = uploaderName ? Application.decodeHTMLEntities(uploaderName) : undefined;
-  const language = sourceManga.mangaInfo.additionalInfo?.["Translated Language"];
+  const language = sourceManga.mangaInfo.additionalInfo?.[TRANSLATED_LANGUAGE_KEY];
   const langCode =
     typeof language === "string" && language
       ? language === "_t"
@@ -382,7 +389,7 @@ export const toChapter = (data: ChapterData, sourceManga: SourceManga): Chapter 
       : "en";
 
   return {
-    chapterId: (data.urlPath ?? `/comic/chapter/${data.id}`).replace(SAFE_ID_REGEX, "-"),
+    chapterId: toChapterId(data),
     sourceManga,
     chapNum: number,
     volume: 0,

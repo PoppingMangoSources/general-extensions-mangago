@@ -70,7 +70,7 @@ const fetchGraphQL = async <T>(query: string, variables: Record<string, unknown>
     body: JSON.stringify({ query: query.trim(), variables }),
   });
 
-  if (response.status < 200 || response.status >= 300) {
+  if (response.status !== 200) {
     throw new Error(`Request failed with status ${response.status}: ${API_URL}`);
   }
 
@@ -80,10 +80,6 @@ const fetchGraphQL = async <T>(query: string, variables: Record<string, unknown>
     parsed = JSON.parse(body) as unknown;
   } catch (error: unknown) {
     throw new Error(`Failed to parse JSON from ${API_URL}`, { cause: error });
-  }
-
-  if (!parsed || typeof parsed !== "object" || (!("data" in parsed) && !("errors" in parsed))) {
-    throw new Error(`XCOMIC returned a malformed response from ${API_URL}`);
   }
 
   const payload = parsed as GraphQLResponse<T>;
@@ -121,7 +117,7 @@ export const fetchSearchPage = async (): Promise<string> => {
     method: "GET",
     headers: { accept: "text/html,application/xhtml+xml" },
   });
-  if (response.status < 200 || response.status >= 300) {
+  if (response.status !== 200) {
     throw new Error(`Request failed with status ${response.status}: ${url}`);
   }
   return Application.arrayBufferToUTF8String(buffer);
