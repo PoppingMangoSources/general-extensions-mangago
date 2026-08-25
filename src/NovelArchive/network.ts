@@ -9,6 +9,7 @@ import {
   type Response,
 } from "@paperback/types";
 
+import { getHideAdultContent } from "./forms/settings";
 import {
   ADULT_EXCLUSIONS,
   API_URL,
@@ -155,8 +156,7 @@ export const buildNovelsUrl = (options: {
   const explicitExcludes = options.genresExclude ?? [];
   const defaultIncludes = pickGenreValues(defaults, "included");
   const defaultExcludes = pickGenreValues(defaults, "excluded");
-  const hideAdult = (Application.getState(STATE_KEYS.HIDE_ADULT) as boolean | undefined) ?? false;
-  const adultExcludes = hideAdult ? ADULT_EXCLUSIONS : [];
+  const adultExcludes = getHideAdultContent() ? ADULT_EXCLUSIONS : [];
 
   const includes = [
     ...new Set([

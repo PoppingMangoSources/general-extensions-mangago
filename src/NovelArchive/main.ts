@@ -32,6 +32,7 @@ import {
   STATE_KEYS,
   type ChapterDetailResponse,
   type NovelDetailResponse,
+  type NovelListItem,
   type NovelListResponse,
   type PageMetadata,
   type SearchMetadata,
@@ -139,17 +140,25 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
       case SECTIONS.POPULAR:
-        return this.getPopularSection(metadata);
+        return this.getBrowseSectionItems(
+          "popular",
+          (item) => toFeaturedItem(item, "popular"),
+          metadata,
+        );
       case SECTIONS.EDITORS:
-        return this.getEditorsSection();
+        return this.getEditorsSectionItems();
       case SECTIONS.LATEST:
-        return this.getLatestSection();
+        return this.getLatestSectionItems();
       case SECTIONS.TOP_RATED:
-        return this.getCardItems("rating", "rating", metadata);
+        return this.getBrowseSectionItems("rating", (item) => toCardItem(item, "rating"), metadata);
       case SECTIONS.MOST_CHAPTERS:
-        return this.getCardItems("chapters", "chapters", metadata);
+        return this.getBrowseSectionItems(
+          "chapters",
+          (item) => toCardItem(item, "chapters"),
+          metadata,
+        );
       case SECTIONS.GENRES:
-        return this.getGenresSection();
+        return this.getGenresSectionItems();
       default:
         return { items: [] };
     }
@@ -166,11 +175,11 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
     })());
   }
 
-  private async getGenresSection(): Promise<PagedResults<DiscoverSectionItem>> {
+  private async getGenresSectionItems(): Promise<PagedResults<DiscoverSectionItem>> {
     return { items: toGenreCarouselItems(await this.getGenres()) };
   }
 
-  private async getLatestSection(): Promise<PagedResults<DiscoverSectionItem>> {
+  private async getLatestSectionItems(): Promise<PagedResults<DiscoverSectionItem>> {
     const { novels } = await fetchApi<NovelListResponse>(
       novelsFeedUrl("recently-updated", PAGE_SIZE),
     );
@@ -182,33 +191,22 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
     };
   }
 
-  private async getPopularSection(
-    metadata: PageMetadata | undefined,
-  ): Promise<PagedResults<DiscoverSectionItem>> {
-    const page = metadata?.page ?? 1;
-    const data = await fetchApi<NovelListResponse>(buildNovelsUrl({ page, sort: "popular" }));
-    return {
-      items: parseNovelList(data.novels).map((item) => toFeaturedItem(item, "popular")),
-      metadata: data.pagination?.has_next ? { page: page + 1 } : undefined,
-    };
-  }
-
-  private async getEditorsSection(): Promise<PagedResults<DiscoverSectionItem>> {
+  private async getEditorsSectionItems(): Promise<PagedResults<DiscoverSectionItem>> {
     const { novels } = await fetchApi<NovelListResponse>(novelsFeedUrl("editors-choice"));
     return {
       items: parseNovelList(novels).map((item) => toFeaturedItem(item, "editors")),
     };
   }
 
-  private async getCardItems(
+  private async getBrowseSectionItems(
     sort: string,
-    variant: "rating" | "chapters",
+    toItem: (item: NovelListItem) => DiscoverSectionItem,
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const page = metadata?.page ?? 1;
     const data = await fetchApi<NovelListResponse>(buildNovelsUrl({ page, sort }));
     return {
-      items: parseNovelList(data.novels).map((item) => toCardItem(item, variant)),
+      items: parseNovelList(data.novels).map(toItem),
       metadata: data.pagination?.has_next ? { page: page + 1 } : undefined,
     };
   }
@@ -266,10 +264,10 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
       trimmed.match(/\/novels?\/([^/?#]+)/i)?.[1];
     if (!urlId) return undefined;
 
-    const mangaId = encodeId(decodeId(urlId));
+    const novelId = decodeId(urlId);
     try {
-      const data = await fetchApi<NovelDetailResponse>(novelsUrl(decodeId(mangaId)));
-      const manga = parseMangaDetails(data.novel, mangaId);
+      const data = await fetchApi<NovelDetailResponse>(novelsUrl(novelId));
+      const manga = parseMangaDetails(data.novel, encodeId(novelId));
       return {
         items: [
           {
