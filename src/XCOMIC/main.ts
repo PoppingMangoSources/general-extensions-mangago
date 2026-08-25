@@ -60,7 +60,6 @@ import {
   toLatestUploadNodes,
   toSearchResultItem,
   toSourceManga,
-  type CarouselItemType,
 } from "./parsers";
 import type XComicConfig from "./pbconfig";
 
@@ -115,13 +114,11 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
       case SECTIONS.TOP_RATED:
-        return this.getBrowseSection(metadata, "field_score", "featuredCarouselItem");
+        return this.getTopRatedSection(metadata);
       case SECTIONS.LATEST_UPLOADS:
         return this.getLatestUploadsSection(metadata);
       case SECTIONS.RECENTLY_ADDED:
         return this.getRecentlyAddedSection();
-      case SECTIONS.MOST_CHAPTERS:
-        return this.getBrowseSection(metadata, "field_chapter", "simpleCarouselItem");
       case SECTIONS.MOST_VIEWS:
         return this.getMostViewsSection();
       case SECTIONS.GENRES:
@@ -154,16 +151,14 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     };
   }
 
-  private async getBrowseSection(
+  private async getTopRatedSection(
     metadata: PageMetadata | undefined,
-    sortby: string,
-    itemType: CarouselItemType,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const page = metadata?.page ?? 1;
-    const result = await this.getBrowsePage(page, sortby, "", undefined);
+    const result = await this.getBrowsePage(page, "field_score", "", undefined);
     return {
       items: result.nodes
-        .map((node) => toDiscoverItem(node, itemType))
+        .map((node) => toDiscoverItem(node, "featuredCarouselItem"))
         .filter((item): item is DiscoverSectionItem => item !== undefined),
       metadata: result.nextPage != null ? { page: result.nextPage } : undefined,
     };
