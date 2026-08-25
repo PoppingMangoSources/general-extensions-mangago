@@ -105,6 +105,15 @@ Site-specific facts only:
   derives a content rating, and if it genuinely cannot, raise it before writing per-card fetches.
   A featured carousel that fetches details per card is the single most-rewritten pattern in the
   merge history.
+- **KingOfShojo — drop the `wsrv.nl` image proxy entirely.** The current source rewrites every
+  reader page through a third-party resizer
+  (`https://wsrv.nl/?w=${width}&q=${quality}&we&default=ssl:…&url=ssl:…`) behind a three-way
+  "Image loading" setting (Data saver / Higher quality / Original). None of it goes to the themed
+  source: it routes readers' traffic through a service the extension does not control, it silently
+  degrades image quality by default, and it duplicates a concern the base already owns. Serve the
+  site's own image URLs, and drop the `image_mode` setting and its `proxyImage` helper with it. If
+  the pages really are too heavy to load directly, that is a conversation with the base
+  maintainers, not a per-site rewrite.
 - Both — carry over `contentRating`, `language`, the icon, and any confirmed non-default
   `directoryPath` or section selectors.
 
@@ -129,3 +138,4 @@ Site-specific facts only:
 - Copy the existing bespoke `network.ts` / `models.ts` / `parsers.ts` / `forms.ts`.
 - Add a per-site rate limiter or interceptor; the base owns both.
 - Port `.slice(0, N)` caps or per-item detail fetches into the new source.
+- Route images through a third-party proxy such as `wsrv.nl`.
