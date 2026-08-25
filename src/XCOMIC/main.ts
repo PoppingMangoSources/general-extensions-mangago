@@ -3,7 +3,6 @@
 
 import {
   BasicRateLimiter,
-  ContentRating,
   CookieStorageInterceptor,
   type AdvancedSearchForm,
   type Chapter,
@@ -361,17 +360,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     if (!isComicAllowed(response.get_comicNode.data, this.getEffectivePreferences(metadata))) {
       return { items: [] };
     }
-    const sourceManga = toSourceManga(response.get_comicNode);
-    return {
-      items: [
-        {
-          mangaId: sourceManga.mangaId,
-          title: sourceManga.mangaInfo.primaryTitle,
-          imageUrl: sourceManga.mangaInfo.thumbnailUrl,
-          contentRating: sourceManga.mangaInfo.contentRating ?? ContentRating.EVERYONE,
-        },
-      ],
-    };
+    return { items: [toSearchResultItem(response.get_comicNode)] };
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {

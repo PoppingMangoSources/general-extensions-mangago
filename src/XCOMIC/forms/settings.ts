@@ -11,7 +11,6 @@ import {
   SECTION_IDS,
   SECTION_OPTIONS,
   STATE_KEYS,
-  TYPE_OPTIONS,
   type ContentPreferenceRating,
   type FilterOptions,
   type SectionId,
@@ -26,10 +25,8 @@ export const getPreferences = (): XComicPreferences => {
     [];
   const ratings = storedRatings.filter((rating) => validRatings.has(rating));
 
-  const validTypes = new Set(TYPE_OPTIONS.map((option) => option.id));
-  const storedTypes =
-    (Application.getState(STATE_KEYS.CONTENT_TYPES) as SeriesType[] | undefined) ?? [];
-  const types = storedTypes.filter((type) => validTypes.has(type));
+  // Types come from the site's own filter list, so any stored id is accepted as-is.
+  const types = (Application.getState(STATE_KEYS.CONTENT_TYPES) as SeriesType[] | undefined) ?? [];
 
   return {
     contentRatings: ratings.length ? ratings : DEFAULT_CONTENT_RATINGS,

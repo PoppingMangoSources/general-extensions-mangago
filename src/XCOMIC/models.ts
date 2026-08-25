@@ -230,25 +230,11 @@ export const CONTENT_RATING_OPTIONS: Array<{ id: ContentPreferenceRating; title:
   { id: "pornographic", title: "Pornographic" },
 ];
 
-export const TYPE_OPTIONS: Array<{ id: SeriesType; title: string }> = [
-  { id: "artbook", title: "Artbook" },
-  { id: "cartoon", title: "Cartoon" },
-  { id: "imageset", title: "Imageset" },
-  { id: "manga", title: "Manga" },
-  { id: "manhua", title: "Manhua" },
-  { id: "manhwa", title: "Manhwa" },
-  { id: "western", title: "Western" },
-];
-
-export const DEMOGRAPHIC_OPTIONS: Array<{ id: Demographic; title: string }> = [
-  { id: "shounen", title: "Shounen" },
-  { id: "shoujo", title: "Shoujo" },
-  { id: "seinen", title: "Seinen" },
-  { id: "josei", title: "Josei" },
-  { id: "kodomo", title: "Kodomo" },
-  { id: "silver_golden", title: "Silver & Golden" },
-  { id: "non_human", title: "Non-human" },
-];
+// Only ids whose display name differs from title-casing the id itself.
+export const TAG_TITLE_OVERRIDES: Record<string, string> = {
+  silver_golden: "Silver & Golden",
+  non_human: "Non-human",
+};
 
 export const STATUS_OPTIONS: Array<{ id: WorkStatus; title: string }> = [
   { id: "pending", title: "Pending" },

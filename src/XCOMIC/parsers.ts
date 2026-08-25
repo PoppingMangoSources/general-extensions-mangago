@@ -16,10 +16,9 @@ import * as cheerio from "cheerio";
 import {
   CONTENT_RATING_GENRES,
   CONTENT_RATING_OPTIONS,
-  DEMOGRAPHIC_OPTIONS,
   DOMAIN,
   FORMAT_OPTIONS,
-  TYPE_OPTIONS,
+  TAG_TITLE_OVERRIDES,
   type ChapterData,
   type ChapterPagesResponse,
   type ComicData,
@@ -50,8 +49,7 @@ const hasCoverUrl = (url: string | null | undefined): url is string =>
 const titleCase = (value: string): string =>
   value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
-const optionTitle = (id: string): string =>
-  DEMOGRAPHIC_OPTIONS.find((option) => option.id === id)?.title ?? titleCase(id);
+const tagTitle = (id: string): string => TAG_TITLE_OVERRIDES[id] ?? titleCase(id);
 
 export const parseFilterOptions = (html: string): FilterOptions => {
   const $ = cheerio.load(html);
@@ -161,7 +159,7 @@ const dateFromTimestamp = (value?: number | null): Date | undefined => {
 };
 
 const formatType = (type?: string | null): string | undefined =>
-  type ? (TYPE_OPTIONS.find((option) => option.id === type)?.title ?? titleCase(type)) : undefined;
+  type ? titleCase(type) : undefined;
 
 const baseCard = (node: ComicNode) => ({
   mangaId: node.data.id.replace(SAFE_ID_REGEX, "-"),
@@ -291,7 +289,7 @@ export const toSourceManga = (node: ComicNode): SourceManga => {
     {
       id: "genres",
       title: "Genres",
-      tags: genres.map((id) => ({ id, title: optionTitle(id) })),
+      tags: genres.map((id) => ({ id, title: tagTitle(id) })),
     },
     {
       id: "tags",
