@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-08-25T10:51:56.336Z",
+  "buildTime": "2026-08-25T11:30:13.506Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -438,29 +438,6 @@
         }
       ],
       "id": "OManga"
-    },
-    {
-      "name": "OniSaga",
-      "description": "Extension that pulls content from onisaga.com.",
-      "version": "1.0.0-alpha.29",
-      "icon": "icon.png",
-      "language": "multi",
-      "contentRating": "MATURE",
-      "capabilities": [
-        1,
-        16,
-        4,
-        64,
-        32
-      ],
-      "badges": [],
-      "developers": [
-        {
-          "name": "Popmango",
-          "github": "https://github.com/PoppingMangoSources"
-        }
-      ],
-      "id": "OniSaga"
     },
     {
       "name": "Ranobes",
