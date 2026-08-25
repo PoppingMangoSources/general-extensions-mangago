@@ -294,11 +294,7 @@ export const toSimpleHomeItem = (card: HomeCard): SimpleCarouselItem => ({
       .join(" • ") || undefined,
 });
 
-export const toFeaturedCatalogueItem = (
-  novel: CatalogueNovel,
-  author?: string,
-  summary?: string,
-): FeaturedCarouselItem => {
+export const toFeaturedCatalogueItem = (novel: CatalogueNovel): FeaturedCarouselItem => {
   const infoItems: { symbol: string; text: string }[] = [];
   const rating = formatRating(novel.rating);
   if (rating) infoItems.push({ symbol: "star.fill", text: rating.replace("★ ", "") });
@@ -309,8 +305,7 @@ export const toFeaturedCatalogueItem = (
     mangaId: novel.slug,
     imageUrl: coverUrl(novel.code),
     title: novel.name,
-    supertitle: author ?? novel.author,
-    summary,
+    supertitle: novel.author,
     infoItems: twoInfoItems(infoItems),
     contentRating: contentRatingForGenres(novel.genres),
   };

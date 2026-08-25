@@ -30,7 +30,6 @@ import {
 } from "./forms";
 import {
   CATALOGUE_PAGE_SIZE,
-  FEATURED_LIMIT,
   GENRES,
   HOME_SECTION_CLASSES,
   NOVEL_CODE_KEY_PREFIX,
@@ -99,8 +98,6 @@ class MvlempyrExtension implements ExtensionImpl<typeof MvlempyrConfig> {
   private interceptor = new MvlempyrInterceptor("main");
   private homePromise?: Promise<CheerioAPI>;
   private cataloguePromise?: Promise<CatalogueNovel[]>;
-  private topRatedPromise?: Promise<DiscoverSectionItem[]>;
-  private mostReviewedPromise?: Promise<DiscoverSectionItem[]>;
 
   async initialise(): Promise<void> {
     this.rateLimiter.registerInterceptor();
@@ -125,8 +122,6 @@ class MvlempyrExtension implements ExtensionImpl<typeof MvlempyrConfig> {
     }
     this.homePromise = undefined;
     this.cataloguePromise = undefined;
-    this.topRatedPromise = undefined;
-    this.mostReviewedPromise = undefined;
   }
 
   async getSettingsForm(): Promise<Form> {
@@ -153,19 +148,15 @@ class MvlempyrExtension implements ExtensionImpl<typeof MvlempyrConfig> {
       case SECTIONS.RECOMMENDED:
         return this.getHomeSection(HOME_SECTION_CLASSES.RECOMMENDED, toSimpleHomeItem);
       case SECTIONS.TOP_RATED:
-        return {
-          items: await (this.topRatedPromise ??= this.buildCatalogueFeatured("rating")),
-        };
+        return this.getCatalogueSection("rating", page, toFeaturedCatalogueItem);
       case SECTIONS.NEW_UPDATES:
         return this.getNewUpdatesSection(page);
       case SECTIONS.COMPLETED:
         return this.getHomeSection(HOME_SECTION_CLASSES.COMPLETED, toSimpleHomeItem);
       case SECTIONS.NEW_ARRIVALS:
-        return this.getCatalogueSection("new", page);
+        return this.getCatalogueSection("new", page, toSimpleCatalogueItem);
       case SECTIONS.MOST_REVIEWED:
-        return {
-          items: await (this.mostReviewedPromise ??= this.buildCatalogueFeatured("reviews")),
-        };
+        return this.getCatalogueSection("reviews", page, toFeaturedCatalogueItem);
       case SECTIONS.ROMANCE:
         return this.getHomeSection(HOME_SECTION_CLASSES.ROMANCE, toSimpleHomeItem);
       case SECTIONS.GENRES:
@@ -195,11 +186,12 @@ class MvlempyrExtension implements ExtensionImpl<typeof MvlempyrConfig> {
   private async getCatalogueSection(
     sort: string,
     page: number,
+    toItem: (novel: CatalogueNovel) => DiscoverSectionItem,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const novels = [...(await this.getCatalogue())].sort(CATALOGUE_SORTERS[sort]);
     const start = (page - 1) * PAGE_SIZE;
     return {
-      items: novels.slice(start, start + PAGE_SIZE).map(toSimpleCatalogueItem),
+      items: novels.slice(start, start + PAGE_SIZE).map(toItem),
       metadata: start + PAGE_SIZE < novels.length ? { page: page + 1 } : undefined,
     };
   }
@@ -219,29 +211,6 @@ class MvlempyrExtension implements ExtensionImpl<typeof MvlempyrConfig> {
       }),
       metadata: page < totalPages ? { page: page + 1 } : undefined,
     };
-  }
-
-  // The catalogue rows carry no author or synopsis, so each featured card is
-  // completed from its novel page, capped at FEATURED_LIMIT titles.
-  private async buildCatalogueFeatured(sort: string): Promise<DiscoverSectionItem[]> {
-    const novels = [...(await this.getCatalogue())]
-      .sort(CATALOGUE_SORTERS[sort])
-      .slice(0, FEATURED_LIMIT);
-    return Promise.all(
-      novels.map(async (novel): Promise<DiscoverSectionItem> => {
-        try {
-          const manga = await this.getMangaDetails(novel.slug);
-          return toFeaturedCatalogueItem(
-            novel,
-            manga.mangaInfo.author,
-            manga.mangaInfo.synopsis || undefined,
-          );
-        } catch (error) {
-          if (error instanceof CloudflareError) throw error;
-          return toFeaturedCatalogueItem(novel);
-        }
-      }),
-    );
   }
 
   private async getHomePage(): Promise<CheerioAPI> {

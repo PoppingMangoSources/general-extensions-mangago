@@ -5,7 +5,6 @@ import { type Tag } from "@paperback/types";
 
 export const DEFAULT_DOMAIN = "https://kingofshojo.com";
 export const MANGA_DIR = "manga";
-export const FEATURED_LIMIT = 10;
 
 export const NEXT_PAGE_SELECTOR = "div.pagination .next, div.hpage .r, a:has(img[alt=Next])";
 

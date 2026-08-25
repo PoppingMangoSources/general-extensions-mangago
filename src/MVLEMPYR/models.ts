@@ -14,7 +14,6 @@ export const CHAPTER_API = "https://chap.heliosarchive.online";
 export const ASSETS_URL = "https://assets.mvlempyr.app";
 
 export const PAGE_SIZE = 20;
-export const FEATURED_LIMIT = 10;
 export const CATALOGUE_PAGE_SIZE = 1000;
 export const CHAPTER_PAGE_SIZE = 500;
 export const LATEST_PAGE_SIZE = 30;

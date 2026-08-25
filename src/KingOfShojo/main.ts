@@ -30,7 +30,6 @@ import { KingOfShojoAdvancedSearchForm } from "./forms/search";
 import { getBaseUrlOverride, getImageMode, KingOfShojoSettingsForm } from "./forms/settings";
 import {
   DEFAULT_DOMAIN,
-  FEATURED_LIMIT,
   MANGA_DIR,
   NEXT_PAGE_SELECTOR,
   POPULAR_RANGE_OPTIONS,
@@ -67,10 +66,6 @@ class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoConfig> {
 
   private homepageCache: { promise: Promise<CheerioAPI>; baseUrl: string } | null = null;
   private genresCache: { promise: Promise<OptionItem[]>; baseUrl: string } | null = null;
-  private featuredCache: {
-    items: DiscoverSectionItem[];
-    baseUrl: string;
-  } | null = null;
 
   get baseUrl(): string {
     return getBaseUrlOverride() ?? DEFAULT_DOMAIN;
@@ -105,7 +100,6 @@ class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoConfig> {
   ): Promise<void> {
     this.homepageCache = null;
     this.genresCache = null;
-    this.featuredCache = null;
     for (const cookie of cookies) {
       if (
         cookie.name.startsWith("cf") ||
@@ -351,47 +345,17 @@ class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoConfig> {
   }
 
   private async buildFeaturedItems(): Promise<DiscoverSectionItem[]> {
-    const baseUrl = this.baseUrl;
-    if (this.featuredCache && this.featuredCache.baseUrl === baseUrl) {
-      return this.featuredCache.items;
-    }
-
     const $ = await this.getHomepage();
-    const cards = parseWidgetCards($, this.baseUrl, "Popular Today").slice(0, FEATURED_LIMIT);
-
-    const built = await Promise.all(
-      cards.map(async (card): Promise<DiscoverSectionItem | null> => {
-        let supertitle: string | undefined;
-        let summary: string | undefined;
-        let status: string | undefined;
-        let itemRating: ContentRating = this.contentRating;
-        try {
-          const manga = await this.getMangaDetails(card.mangaId);
-          supertitle = manga.mangaInfo.author;
-          summary = manga.mangaInfo.synopsis || undefined;
-          status = manga.mangaInfo.status;
-          itemRating = manga.mangaInfo.contentRating;
-        } catch (error) {
-          if (error instanceof CloudflareError) throw error;
-        }
-        return {
-          type: "featuredCarouselItem",
-          mangaId: card.mangaId,
-          title: card.title,
-          imageUrl: card.imageUrl,
-          supertitle,
-          summary,
-          infoItems: buildInfoItems(card.rating, status),
-          contentRating: itemRating,
-        };
-      }),
-    );
-    const items = built.filter((item): item is DiscoverSectionItem => item !== null);
-
-    if (items.length > 0) {
-      this.featuredCache = { items, baseUrl };
-    }
-    return items;
+    // The widget markup carries no author, synopsis or status; the card shows what it has
+    // rather than opening every title's page for them.
+    return parseWidgetCards($, this.baseUrl, "Popular Today").map((card) => ({
+      type: "featuredCarouselItem",
+      mangaId: card.mangaId,
+      title: card.title,
+      imageUrl: card.imageUrl,
+      infoItems: buildInfoItems(card.rating),
+      contentRating: card.isAdult ? ContentRating.ADULT : this.contentRating,
+    }));
   }
 
   private async getGenres(): Promise<OptionItem[]> {

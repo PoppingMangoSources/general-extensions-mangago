@@ -13,7 +13,7 @@ base.
 | Source       | Site               | Current size          | Notes                                                                                                                                                                                                                                                          |
 | ------------ | ------------------ | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | RokariComics | `rokaricomics.com` | 1,760 lines, 11 files | **Already vendors a private copy of the base** at `src/RokariComics/generic/` and extends `MangaStreamSettings` / `MangaStreamGeneric` from it. Also carries a non-canonical top-level `settings.ts`, and its `pbconfig.ts` declares **zero** `SourceIntents`. |
-| KingOfShojo  | `kingofshojo.com`  | 1,497 lines, 7 files  | Bespoke reimplementation. Declared `ADULT` with no show-adult toggle. Still carries a per-card detail fan-out in `buildFeaturedItems` (`.slice(0, FEATURED_LIMIT)` + a details fetch per card), now only for card enrichment — do not port it.                 |
+| KingOfShojo  | `kingofshojo.com`  | 1,497 lines, 7 files  | Bespoke reimplementation. Declared `ADULT` with no show-adult toggle, and the featured per-card detail fan-out has been removed.                                                                                                                               |
 
 RokariComics is the cheaper of the two: the vendored `generic/` is the thing to delete, replaced by
 the upstream base. Do not "upgrade" the vendored copy in place.
@@ -100,11 +100,12 @@ Site-specific facts only:
   diff it against upstream to recover only the genuinely site-specific selectors, then discard it.
   The top-level `settings.ts` and `RokariComicsSettings extends MangaStreamSettings` disappear
   entirely; base settings come from `generic/forms.ts`.
-- **KingOfShojo** — the fan-out in `buildFeaturedItems` **must not be carried over.** It exists
-  because that listing has no adult signal; check whether the base's own discover path already
-  derives a content rating, and if it genuinely cannot, raise it before writing per-card fetches.
-  A featured carousel that fetches details per card is the single most-rewritten pattern in the
-  merge history.
+- **KingOfShojo — the featured fan-out is already gone; don't bring it back.** `buildFeaturedItems`
+  used to take the first 10 "Popular Today" cards and open each title's own page for its author,
+  synopsis and status — 11 requests to draw one carousel. It now builds the cards from the homepage
+  markup alone, at one request, showing cover, title, rating and the adult flag the widget already
+  carries. If a card looks sparse, drop the field; a featured carousel that fetches details per card
+  is the single most-rewritten pattern in the merge history.
 - **KingOfShojo is an adult source — declare it, don't gate it.** Set its `contentRating` to
   `ContentRating.ADULT` and ship **no "show adult content" toggle**. The 0.9/test source has
   already been changed this way: the `show_adult` `ToggleRow`, its `SHOW_ADULT_KEY` state key,
