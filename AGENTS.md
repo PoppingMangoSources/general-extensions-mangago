@@ -35,6 +35,21 @@ Merged review threads and cleanup commits establish the concrete requests summar
 - Use IETF language tags, repository formatting, generated baseline tests, and separate conformance checks.
 - Remove dead code, avoid low-value caching, consolidate meaningful mappers, and keep fetches in network.
 
+**Maintainer cleanup passes are the strongest evidence available** — where a maintainer rewrote a
+contributor's branch before merging, what they deleted is the rule. Recurring deletions:
+
+- A featured carousel that took the top N of a listing and then fetched each card's details
+  (`.slice(0, 8)` + `Promise.all(posts.map(fetchPostDetails))`) — replaced by mapping the listing
+  payload directly, 9 requests down to 1, with real pagination and no cap (HiveToons).
+- Service classes and thin util modules — `FlameApi`/`FlameParser` plus `utils/filter.ts` and
+  `utils/pickers.ts` deleted in favour of free functions in `network.ts`/`parsers.ts`, along with
+  banner dividers and JSDoc narration (FlameComics, −1215/+628).
+- A TTL-cached scrape of a taxonomy that never really changes, replaced by a static constant
+  (Mangago: `updateGenres(force)` + two state keys + `parseGenres` → `GENRE_OPTIONS`).
+- Trivial wrappers and single-use mappers, inlined at their call sites (AllManga).
+- `encodeId(decodeId(x))` round-trips, empty query params, and a lock predicate that required
+  `isAccessible === true`.
+
 The PR template, not an individual maintainer preference, makes source version bumps mandatory.
 
 ---
@@ -43,16 +58,16 @@ The PR template, not an individual maintainer preference, makes source version b
 
 ### Canonical per-extension layout (flat — most sources)
 
-| File                   | Holds                                                                   | Review rule                                              |
-| ---------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------- |
-| `main.ts`              | extension class plus `export const <Name> = new <Name>Extension()`      | orchestration only                                       |
-| `models.ts`            | types, constants, data structures, search-metadata types, option arrays | data only; define each `DOMAIN`/`API_URL` once           |
-| `network.ts`           | request helpers and `PaperbackInterceptor` subclasses                   | all site requests originate here                         |
-| `parsers.ts`           | Cheerio/JSON parsing and `toX` mappers/formatters                       | free functions or one cohesive parser class              |
-| `forms.ts` or `forms/` | `Form`/`AdvancedSearchForm` subclasses and settings state               | use a directory only when separate forms improve clarity |
-| `utils.ts` or `utils/` | substantial isolated machinery                                          | no constants, ordinary fetches, or trivial wrappers      |
-| `pbconfig.ts`          | metadata, default-exported `satisfies ExtensionInfo`                    | `name` matches site branding                             |
-| `static/icon.png`      | source icon                                                             | square site-derived PNG                                  |
+| File                   | Holds                                                                   | Review rule                                                                    |
+| ---------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `main.ts`              | extension class plus `export const <Name> = new <Name>Extension()`      | orchestration only                                                             |
+| `models.ts`            | types, constants, data structures, search-metadata types, option arrays | data only; define each `DOMAIN`/`API_URL` once                                 |
+| `network.ts`           | request helpers and `PaperbackInterceptor` subclasses                   | all site requests originate here                                               |
+| `parsers.ts`           | Cheerio/JSON parsing and `toX` mappers/formatters                       | free functions or one cohesive parser class                                    |
+| `forms.ts` or `forms/` | `Form`/`AdvancedSearchForm` subclasses and settings state               | split into `forms/search.ts` + `forms/settings.ts` once a settings form exists |
+| `utils.ts` or `utils/` | substantial isolated machinery                                          | no constants, ordinary fetches, or trivial wrappers                            |
+| `pbconfig.ts`          | metadata, default-exported `satisfies ExtensionInfo`                    | `name` matches site branding                                                   |
+| `static/icon.png`      | source icon                                                             | square site-derived PNG                                                        |
 
 - **Keep `main.ts` focused on orchestration.** Move `toX` mappers and formatters to `parsers.ts`, fetch functions to `network.ts`, and standalone data to `models.ts`. Cohesive private handler methods are appropriate on the extension class. [review]
 - **Respect file-layer boundaries** [review]:
@@ -84,6 +99,8 @@ Some merged sharded sources compose capabilities through provider classes and mi
 
 - Delete dead/uncalled code aggressively (builders, constants, types, helpers).
 - Inline single-use constants and trivial wrappers (a body that just renames, `?? default`, unwraps, or delegates one call). Collapse wrapper-of-wrapper helpers. Return new objects rather than mutating inputs.
+- **A mapper with exactly one call site belongs at that call site.** `toSearchResultItem(card, rating)` used once was deleted and written as an object literal inside the one handler that built it (AllManga). This is the counterpart to the consolidation rule below: consolidate mappers used from several places, inline the ones used from one.
+- **Magic numbers live in module-level `const`s, not class fields.** A `private readonly CANDIDATES_CACHE_TTL` / `PAGE_SIZE` on the extension class was hoisted to the module (FlameComics). Class fields are for interceptors, limiters, and memo promises.
 - Consolidate structurally identical mappers when the helper has a domain purpose; do not replace them with a generic one-line wrapper.
 - **Inline trivial separator-joins even when reused — don't hoist a generic joiner.** A subtitle/label built by `[a, b].filter((value): value is string => Boolean(value)).join(" • ")` is written inline at each call site, not abstracted into a generic `dotJoin(...parts)`/`joinWithBullet` helper; merged sources (HiveToons) repeat the inline form rather than share a joiner. Reach for a helper only when it bundles real logic (title-casing, clamping, rank/rating assembly), and then give it a **purpose** name (`formatSeriesSubtitle`, `statSubtitle`), never a generic "join" name.
 - Prefer native array methods (`.map`/`.filter`/`.reduce`); `for...of` is also fine. Use `cheerio` for HTML — never hand-rolled parsing.
@@ -94,6 +111,7 @@ Some merged sharded sources compose capabilities through provider classes and mi
 ### Comments & naming
 
 - Terse, non-obvious "why" comments only. **No boilerplate / "standard across all extensions" comments.** Document a shared pattern once at most, never per-file. No commented-out code (use a real `// TODO` or delete), decorative dividers, empty docblocks, memory-aid notes, or stray blank lines. Removing explanatory boilerplate is a recurring new-source review request. [review]
+- **No JSDoc narration on ordinary members.** A `/** Rate-limit ourselves to be polite… */` block above a limiter, or `/** Check if cached data is still valid */` above `isCacheValid()`, restates the code and gets deleted; the FlameComics cleanup stripped every one. Keep a comment only where it records a non-obvious "why", and prefer a single `//` line above the declaration rather than inside its body.
 - Clean, grammatical, typo-free names. Avoid local names visually confused with globals (`data`, not `json` beside `JSON`). PascalCase dirs/classes; ALL_CAPS option constants; kebab-case implementation subdirs.
 - Name API payload records after their domain role (`Novel`, `NovelSource`, `ChapterItem`) and reserve the `Response` suffix for endpoint envelopes. Do not use or mix `Dto` suffixes within a source. Anything passed as search/discover metadata must `extend JSONObject`. [niclimcy]
 - **URL-returning helpers carry a `Url` suffix.** A `parse*`/`format*`/`fix*`/`to*` helper that returns an absolute URL string is named `parseCoverUrl` / `formatImageUrl` / `fixImageUrl` / `toAbsoluteUrl` — not `parseCover` / `imageFromElement` / `getImageSrc`. (Merged: MangaFire `fixImageUrl`, RoyalRoad `formatImageUrl`; our `parseCoverUrl`.)
@@ -125,6 +143,7 @@ Extensions run in a JS runtime that is **not a browser** — several globals are
 ### No per-item detail fan-out
 
 - **Never fan out into one detail request per carousel/listing item** (`Promise.all(cards.map(getDetails))`). Build carousels/listings from the listing payload, which already carries the needed fields. An N+1 section stalls the whole carousel and amplifies rate-limit/Cloudflare failures. See the documented exception in [Project-Specific Deviations](#10-project-specific-deviations). [review]
+- **A missing field on the listing card is not a licence to fan out.** Drop the `infoItem` rather than fetch for it. HiveToons shipped a featured section that sliced to 8 and then fetched all 8 detail pages purely to fill `rating`/`status`; the maintainer deleted the slice and the fan-out and built the same cards from the query payload. If the field genuinely is not in any listing endpoint, either omit it or raise it before writing the fan-out.
 
 ### Search & pagination
 
@@ -226,6 +245,8 @@ const genres = await (this.genresPromise ??= fetchGenres());
 
 - **Reset volatile memos to `undefined` in `cloudflareBypassCompleted`**, and on a base-url change — on base-url change also call `Application.invalidateDiscoverSections()`.
 - **Name the field `…Promise`**, never `…Cache` / `…Request` / `…Items`. Use `undefined`, never `null`.
+- **A taxonomy that does not really change is a constant, not a fetch.** Before adding a genre/tag fetch, ask whether the list is stable. Mangago scraped `/genre/all/` behind a 48h TTL with two state keys, a `force` refresh path, a silent `catch` that kept the stale list, and a hardcoded seed to fall back on — all of it was deleted for a plain `GENRE_OPTIONS` constant in `models.ts`, which also removed a request from `getSettingsForm`, `getAdvancedSearchForm`, and the genres section. Fetch a taxonomy only when the site's own list demonstrably moves (HiveToons/NovelArchive fetch theirs; both use the memo promise, neither uses a TTL).
+- **Derive option arrays once at module level, not per call.** `export const GENRE_OPTIONS = GENRES.map(...)` beats `export function getGenres()` that rebuilds the same array on every row render and every section build.
 - Static scraped lists (genres/taxonomies) may persist in `Application` state; the memo promise remains scoped to the extension instance. A volatile homepage memo may self-clear after use.
 - Store scraped lists in `Application` state without TTL/timestamp machinery, expose plain fetch functions returning `Promise<T>` without a catch unless the caller has a deliberate fallback, and deduplicate concurrent reads with the class-level memo promise. Reset the promise after Cloudflare bypass or a base-url change. [niclimcy]
 - No low-value, context-bound caches: an in-memory `Map` dies with the JS context; drop caches for short-lived data or items already shadowed by an earlier check. No request-specific mutable state on the instance (races under out-of-order calls). Parallelize independent fetches with `Promise.all`.
@@ -247,6 +268,7 @@ const genres = await (this.genresPromise ??= fetchGenres());
 
 - **IDs must be unique and self-sufficient** — carry everything needed to re-fetch (e.g. keep the absolute mirror URL in the id) rather than stashing values in `additionalInfo`. Never derive a `chapterId` from a non-unique bare number.
 - Encode/decode each id exactly once. Normalize URL-derived `chapterId`s — a stray leading slash wipes saved reading progress.
+- **No `encodeId(decodeId(x))` round-trips.** Decode a URL-derived slug once into the value the API wants, encode once into the value you hand back as the id, and pass each to the layer that needs it — don't encode then immediately decode again to build the request (`encodeMangaId(decodeMangaId(slug))` was cut from HiveToons for exactly this).
 - No legacy-migration / self-healing re-resolution loops for old id formats in new sources.
 
 ### Parsing correctness
@@ -341,7 +363,18 @@ Every extension implementation file starts with (generated `src/tests/*` are exe
 
 - **`npm run conformance` must pass** — `tsc` + `oxlint --type-aware --deny-warnings` + `oxfmt`. This is also the pre-push hook. Type-only imports use `import type`; leave imports in oxfmt's sorted order. No `new Array(n)` (use `Array.from({ length: n })`).
 - **Format with `oxfmt` (`npm run format`), never Prettier.** Prettier's output differs from `oxfmt` (import sorting, wrapping) and fails `format:check`; don't reach for it even when it's the muscle-memory default.
-- **`npm test` must pass.** Generate the baseline via `npx paperback-cli test --generate <Name>`. Do not add a custom source fixture when the generated flow already covers the contract (AllManga review); add a focused regression test only for behavior the default flow cannot exercise. Default tests cover `initialise → getSortingOptions → getSearchResults → getMangaDetails → getChapters → getChapterDetails`; manually verify Discover sections and settings forms in-app.
+- **`npm test` must pass, and `src/tests/<Name>.ts` contains nothing but `registerDefaultTests`.** Generate the baseline with `npx paperback-cli test --generate <Name>` and ship it as generated — **no custom `suite.test(...)` cases in a source PR**, no bespoke fixtures, no assertions about ids, section shapes, or parser internals. Every one of the merged sources on `0.9/stable` follows this: each `src/tests/*.ts` is 12–18 lines and its only call is `registerDefaultTests(suite, <Source>, sourceInfo)`. The file should read:
+
+  ```ts
+  export async function runTests(logger: TestLogger) {
+    const suite = new TestSuite("<Name> tests", logger);
+    registerDefaultTests(suite, <Name>, sourceInfo);
+    await suite.run();
+  }
+  ```
+
+  Don't pass capability opt-outs (`{ chapterProviding: false }`) unless the source genuinely lacks the capability — a maintainer removed exactly that opt-out from AllManga once chapters worked. Default tests cover `initialise → getSortingOptions → getSearchResults → getMangaDetails → getChapters → getChapterDetails`; verify Discover sections and settings forms by hand in-app, not with extra test cases. [review]
+
 - **Test on a device with `npm run dev`** (phone + computer on the same network → add the printed `http://<lan-ip>:8080/` as a repo; hit reload to reinstall, no version bump needed). Note Paperback will "update" between any two same-name extensions whose version strings merely differ — even downgrades — so be deliberate with the published `alpha.N`.
 - New source (or removal / branding / domain change) → update the root README "Sources" list. Maintainers block on a missing entry.
 - Don't edit the PR template; explain any test failure under the summary block instead. A green PR still needs ≥1 maintainer approval.
