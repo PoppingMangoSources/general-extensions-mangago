@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-08-25T11:32:35.603Z",
+  "buildTime": "2026-08-25T11:34:50.305Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -311,7 +311,7 @@
     {
       "name": "MangaTown",
       "description": "Extension that pulls content from mangatown.com.",
-      "version": "1.0.0-alpha.9",
+      "version": "1.0.0-alpha.10",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
@@ -334,7 +334,7 @@
     {
       "name": "MyReadingManga",
       "description": "Extension that pulls content from myreadingmanga.info.",
-      "version": "1.0.0-alpha.10",
+      "version": "1.0.0-alpha.11",
       "icon": "icon.png",
       "language": "multi",
       "contentRating": "ADULT",
@@ -419,7 +419,7 @@
     {
       "name": "oManga",
       "description": "Extension that pulls content from omanga.to.",
-      "version": "1.0.0-alpha.21",
+      "version": "1.0.0-alpha.22",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
@@ -471,7 +471,7 @@
     {
       "name": "ReiManga",
       "description": "Extension that pulls content from reimanga.net.",
-      "version": "1.0.0-alpha.2",
+      "version": "1.0.0-alpha.3",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
