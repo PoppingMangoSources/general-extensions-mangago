@@ -270,7 +270,6 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
 
   async handleYearChange(value: string): Promise<void> {
     this.year = value.replace(/[^\d-]/g, "").slice(0, 9);
-    this.reloadForm();
   }
 
   async handleOriginalLanguagesChange(value: string[]): Promise<void> {

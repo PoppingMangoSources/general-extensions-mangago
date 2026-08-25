@@ -200,7 +200,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     return {
       ...preferences,
       contentRatings: metadata?.contentRatings?.length
-        ? metadata.contentRatings.filter((rating) => preferences.contentRatings.includes(rating))
+        ? metadata.contentRatings
         : preferences.contentRatings,
       excludedFormats: [
         ...preferences.excludedFormats,
@@ -214,9 +214,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
           state === "excluded" ? [id] : [],
         ),
       ],
-      types: metadata?.types?.length
-        ? metadata.types.filter((type) => preferences.types.includes(type))
-        : preferences.types,
+      types: metadata?.types?.length ? metadata.types : preferences.types,
     };
   }
 
@@ -241,7 +239,8 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
           : undefined;
       if (cursor == null) break;
     }
-    return { nodes, before: cursor };
+    // Advertising a cursor after an empty walk makes the app page forever, 10 requests at a time.
+    return { nodes, before: nodes.length ? cursor : undefined };
   }
 
   async getSearchResults(
@@ -252,7 +251,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     const pasted = await this.resolveUrlQuery(query.title ?? "", query.metadata);
     if (pasted) return pasted;
 
-    const sortby = query.metadata?.discoverSort ?? sortingOption?.id ?? "field_score";
+    const sortby = sortingOption?.id ?? query.metadata?.discoverSort ?? "field_score";
     const page = metadata?.page ?? 1;
     const result = await this.getBrowsePage(
       page,

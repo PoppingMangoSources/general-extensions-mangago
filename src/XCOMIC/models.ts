@@ -216,7 +216,15 @@ export const DEFAULT_CONTENT_RATINGS: ContentPreferenceRating[] = [
   "erotica",
   "pornographic",
 ];
-export const DEFAULT_CONTENT_TYPES: SeriesType[] = ["manga", "manhwa", "manhua"];
+export const DEFAULT_CONTENT_TYPES: SeriesType[] = [
+  "artbook",
+  "cartoon",
+  "imageset",
+  "manga",
+  "manhua",
+  "manhwa",
+  "western",
+];
 export const DEFAULT_LANGUAGES: string[] = ["en"];
 
 export const CONTENT_RATING_OPTIONS: Array<{ id: ContentPreferenceRating; title: string }> = [
