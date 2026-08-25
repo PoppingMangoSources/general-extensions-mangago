@@ -25,7 +25,7 @@
 
 ---
 
-**PoppingMango** is an independent source repo for [Paperback](https://paperback.moe) 0.9 covering novels, manga, manhwa, and manhua, maintained by Popmango. Every extension here is written and maintained in this repository, it is not a mirror of any other catalog.
+**PoppingMango** is an independent source / extensions repo for [Paperback](https://paperback.moe) 0.9 covering novels, manga, manhwa, and manhua, maintained by Popmango. Every extension here is written and maintained in this repository, it is not a mirror of any other catalog.
 
 ## Sources
 
