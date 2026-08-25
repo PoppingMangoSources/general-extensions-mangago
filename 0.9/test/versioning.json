@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-08-25T12:19:32.154Z",
+  "buildTime": "2026-08-25T12:32:48.271Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -125,7 +125,7 @@
     {
       "name": "KingOfShojo",
       "description": "Extension that pulls content from kingofshojo.com.",
-      "version": "1.0.0-alpha.21",
+      "version": "1.0.0-alpha.22",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
@@ -193,7 +193,7 @@
     {
       "name": "MVLEMPYR",
       "description": "Extension that pulls content from mvlempyr.io.",
-      "version": "1.0.0-alpha.5",
+      "version": "1.0.0-alpha.6",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
