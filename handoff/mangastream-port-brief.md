@@ -13,7 +13,7 @@ base.
 | Source       | Site               | Current size          | Notes                                                                                                                                                                                                                                                          |
 | ------------ | ------------------ | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | RokariComics | `rokaricomics.com` | 1,760 lines, 11 files | **Already vendors a private copy of the base** at `src/RokariComics/generic/` and extends `MangaStreamSettings` / `MangaStreamGeneric` from it. Also carries a non-canonical top-level `settings.ts`, and its `pbconfig.ts` declares **zero** `SourceIntents`. |
-| KingOfShojo  | `kingofshojo.com`  | 1,497 lines, 7 files  | Bespoke reimplementation. Carries an owner-approved per-card detail fan-out in `buildFeaturedItems` (`.slice(0, FEATURED_LIMIT)` + a details fetch per card) because its listing payload has no adult signal.                                                  |
+| KingOfShojo  | `kingofshojo.com`  | 1,497 lines, 7 files  | Bespoke reimplementation. Declared `ADULT` with no show-adult toggle. Still carries a per-card detail fan-out in `buildFeaturedItems` (`.slice(0, FEATURED_LIMIT)` + a details fetch per card), now only for card enrichment — do not port it.                 |
 
 RokariComics is the cheaper of the two: the vendored `generic/` is the thing to delete, replaced by
 the upstream base. Do not "upgrade" the vendored copy in place.
@@ -105,6 +105,14 @@ Site-specific facts only:
   derives a content rating, and if it genuinely cannot, raise it before writing per-card fetches.
   A featured carousel that fetches details per card is the single most-rewritten pattern in the
   merge history.
+- **KingOfShojo is an adult source — declare it, don't gate it.** Set its `contentRating` to
+  `ContentRating.ADULT` and ship **no "show adult content" toggle**. The 0.9/test source has
+  already been changed this way: the `show_adult` `ToggleRow`, its `SHOW_ADULT_KEY` state key,
+  `getShowAdultContent()`, `handleShowAdultChange()`, the `adultGenreSlugs()` helper that injected
+  excluded genres into every browse query, and the `showAdult` parameter on `parsePopularSeries`
+  are all gone. Do not reintroduce any of it. Per-title ratings are still derived from the title's
+  own genres — the source-level `ADULT` is a presence flag, not a floor, so a non-adult title on an
+  adult source still resolves to its own rating.
 - **KingOfShojo — drop the `wsrv.nl` image proxy entirely.** The current source rewrites every
   reader page through a third-party resizer
   (`https://wsrv.nl/?w=${width}&q=${quality}&we&default=ssl:…&url=ssl:…`) behind a three-way
@@ -139,3 +147,4 @@ Site-specific facts only:
 - Add a per-site rate limiter or interceptor; the base owns both.
 - Port `.slice(0, N)` caps or per-item detail fetches into the new source.
 - Route images through a third-party proxy such as `wsrv.nl`.
+- Add a "show adult content" toggle to KingOfShojo, or gate its catalogue behind one.

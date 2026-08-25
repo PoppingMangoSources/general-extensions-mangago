@@ -27,14 +27,8 @@ import {
 import type { CheerioAPI } from "cheerio";
 
 import { KingOfShojoAdvancedSearchForm } from "./forms/search";
+import { getBaseUrlOverride, getImageMode, KingOfShojoSettingsForm } from "./forms/settings";
 import {
-  getBaseUrlOverride,
-  getImageMode,
-  getShowAdultContent,
-  KingOfShojoSettingsForm,
-} from "./forms/settings";
-import {
-  ADULT_GENRE_NAMES,
   DEFAULT_DOMAIN,
   FEATURED_LIMIT,
   MANGA_DIR,
@@ -75,7 +69,6 @@ class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoConfig> {
   private genresCache: { promise: Promise<OptionItem[]>; baseUrl: string } | null = null;
   private featuredCache: {
     items: DiscoverSectionItem[];
-    adult: boolean;
     baseUrl: string;
   } | null = null;
 
@@ -232,18 +225,15 @@ class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoConfig> {
 
     if (meta?.popularRange && !title) {
       const $ = await this.getHomepage();
-      const items: SearchResultItem[] = parsePopularSeries(
-        $,
-        this.baseUrl,
-        meta.popularRange,
-        getShowAdultContent(),
-      ).map((card) => ({
-        mangaId: card.mangaId,
-        title: card.title,
-        imageUrl: card.imageUrl,
-        subtitle: card.subtitle,
-        contentRating: card.isAdult ? ContentRating.ADULT : this.contentRating,
-      }));
+      const items: SearchResultItem[] = parsePopularSeries($, this.baseUrl, meta.popularRange).map(
+        (card) => ({
+          mangaId: card.mangaId,
+          title: card.title,
+          imageUrl: card.imageUrl,
+          subtitle: card.subtitle,
+          contentRating: card.isAdult ? ContentRating.ADULT : this.contentRating,
+        }),
+      );
       return { items, metadata: undefined };
     }
 
@@ -264,11 +254,6 @@ class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoConfig> {
     if (meta?.type?.[0]) builder.setQueryItem("type", meta.type[0]);
 
     const genreStates: Record<string, "included" | "excluded"> = { ...meta?.genres };
-    if (!getShowAdultContent()) {
-      for (const slug of await this.adultGenreSlugs()) {
-        if (!(slug in genreStates)) genreStates[slug] = "excluded";
-      }
-    }
     const genreValues = Object.entries(genreStates).map(([slug, state]) =>
       state === "excluded" ? `-${slug}` : slug,
     );
@@ -366,26 +351,20 @@ class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoConfig> {
   }
 
   private async buildFeaturedItems(): Promise<DiscoverSectionItem[]> {
-    const showAdult = getShowAdultContent();
     const baseUrl = this.baseUrl;
-    if (
-      this.featuredCache &&
-      this.featuredCache.adult === showAdult &&
-      this.featuredCache.baseUrl === baseUrl
-    ) {
+    if (this.featuredCache && this.featuredCache.baseUrl === baseUrl) {
       return this.featuredCache.items;
     }
 
     const $ = await this.getHomepage();
     const cards = parseWidgetCards($, this.baseUrl, "Popular Today").slice(0, FEATURED_LIMIT);
-    const fallbackRating = this.contentRating;
 
     const built = await Promise.all(
       cards.map(async (card): Promise<DiscoverSectionItem | null> => {
         let supertitle: string | undefined;
         let summary: string | undefined;
         let status: string | undefined;
-        let itemRating: ContentRating = fallbackRating;
+        let itemRating: ContentRating = this.contentRating;
         try {
           const manga = await this.getMangaDetails(card.mangaId);
           supertitle = manga.mangaInfo.author;
@@ -395,7 +374,6 @@ class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoConfig> {
         } catch (error) {
           if (error instanceof CloudflareError) throw error;
         }
-        if (!showAdult && itemRating === ContentRating.ADULT) return null;
         return {
           type: "featuredCarouselItem",
           mangaId: card.mangaId,
@@ -411,16 +389,9 @@ class KingOfShojoExtension implements ExtensionImpl<typeof KingOfShojoConfig> {
     const items = built.filter((item): item is DiscoverSectionItem => item !== null);
 
     if (items.length > 0) {
-      this.featuredCache = { items, adult: showAdult, baseUrl };
+      this.featuredCache = { items, baseUrl };
     }
     return items;
-  }
-
-  private async adultGenreSlugs(): Promise<string[]> {
-    const genres = await this.getGenres();
-    return genres
-      .filter((genre) => ADULT_GENRE_NAMES.has(genre.value.trim().toLowerCase()))
-      .map((genre) => genre.id);
   }
 
   private async getGenres(): Promise<OptionItem[]> {

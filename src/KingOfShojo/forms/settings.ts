@@ -1,19 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import {
-  ButtonRow,
-  Form,
-  InputRow,
-  LabelRow,
-  Section,
-  SelectRow,
-  ToggleRow,
-  URL,
-} from "@paperback/types";
+import { ButtonRow, Form, InputRow, LabelRow, Section, SelectRow, URL } from "@paperback/types";
 
 const BASE_URL_KEY = "kingofshojo.baseUrlOverride";
-const SHOW_ADULT_KEY = "kingofshojo.showAdultContent";
 const IMAGE_MODE_KEY = "kingofshojo.imageMode";
 
 const IMAGE_MODE_DEFAULT = "saver";
@@ -23,10 +13,6 @@ export const getImageMode = (): string => {
   const value = Application.getState(IMAGE_MODE_KEY);
   if (typeof value !== "string" || !IMAGE_MODES.has(value)) return IMAGE_MODE_DEFAULT;
   return value === "fast" ? "quality" : value;
-};
-
-export const getShowAdultContent = (): boolean => {
-  return Application.getState(SHOW_ADULT_KEY) === true;
 };
 
 export const getBaseUrlOverride = (): string | undefined => {
@@ -107,24 +93,6 @@ export class KingOfShojoSettingsForm extends Form {
       ),
       Section(
         {
-          id: "content",
-          footer:
-            "When off, adult-tagged titles are hidden from search, browse and " +
-            "popular lists. Turn on to include them.",
-        },
-        [
-          ToggleRow("show_adult", {
-            title: "Show adult content",
-            value: getShowAdultContent(),
-            onValueChange: Application.Selector(
-              this as KingOfShojoSettingsForm,
-              "handleShowAdultChange",
-            ),
-          }),
-        ],
-      ),
-      Section(
-        {
           id: "images",
           footer:
             "Reader pages are served as very large full-size images (~1.3 MB each). " +
@@ -152,12 +120,6 @@ export class KingOfShojoSettingsForm extends Form {
         ],
       ),
     ];
-  }
-
-  async handleShowAdultChange(value: boolean): Promise<void> {
-    Application.setState(value, SHOW_ADULT_KEY);
-    Application.invalidateDiscoverSections();
-    this.reloadForm();
   }
 
   async handleImageModeChange(value: string[]): Promise<void> {

@@ -209,7 +209,6 @@ export const parsePopularSeries = (
   $: CheerioAPI,
   base: string,
   rangeClass = "wpop-weekly",
-  showAdult = true,
 ): MangaCard[] => {
   const scope = widgetByHeading($, "Popular Series");
   const cards: MangaCard[] = [];
@@ -236,8 +235,6 @@ export const parsePopularSeries = (
       .find('a[href*="/genres/"]')
       .toArray()
       .some((genre) => ADULT_GENRE_NAMES.has($(genre).text().trim().toLowerCase()));
-    if (isAdult && !showAdult) continue;
-
     seen.add(mangaId);
     const rating = li.find(".numscore").first().text().trim();
     cards.push({
