@@ -68,10 +68,10 @@ const fetchDocument = async (url: string): Promise<cheerio.CheerioAPI> =>
 
 // The site's listing tabs order results with a bare query key (e.g. ?rating.za),
 // so sort tokens are appended verbatim instead of as key=value pairs.
-const withSortToken = (url: string, token?: string): string => (token ? `${url}?${token}` : url);
+const sortedUrl = (url: string, token?: string): string => (token ? `${url}?${token}` : url);
 
 export const directoryUrl = (page: number, filters: DirectoryFilters = {}): string =>
-  withSortToken(
+  sortedUrl(
     `${DOMAIN}/directory/${filters.demographic ?? "0"}-${filters.genre ?? "0"}-0-${
       filters.status ?? "0"
     }-0-0/${page}.htm`,
@@ -79,7 +79,7 @@ export const directoryUrl = (page: number, filters: DirectoryFilters = {}): stri
   );
 
 export const hotUrl = (page: number, demographic?: string, sortToken?: string): string =>
-  withSortToken(`${DOMAIN}/hot/${demographic ? `${demographic}/` : ""}${page}.htm`, sortToken);
+  sortedUrl(`${DOMAIN}/hot/${demographic ? `${demographic}/` : ""}${page}.htm`, sortToken);
 
 export const searchUrl = (page: number, request: SearchRequest): string => {
   const url = new URL(DOMAIN).addPathComponent("search").setQueryItem("page", String(page));

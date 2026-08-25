@@ -57,7 +57,7 @@ export const contentRatingFor = (manga: ApiManga): ContentRating => {
 };
 
 // Covers are served as webp; only the thumbnail path is ever handed out as png.
-export const coverFor = (manga: ApiManga): string => {
+export const coverUrlFor = (manga: ApiManga): string => {
   const url = manga.cover_url?.trim();
   if (url) return url.replace(/(\/covers\/\d+\/thumbnail)\.png$/, "$1.webp");
   return `${getBaseUrl()}/covers/${manga.id}/thumbnail.webp`;
@@ -103,7 +103,7 @@ export const toFeaturedItem = (manga: ApiManga): DiscoverSectionItem => {
   return {
     type: "featuredCarouselItem",
     mangaId: mangaIdFor(manga),
-    imageUrl: coverFor(manga),
+    imageUrl: coverUrlFor(manga),
     title: cleanText(manga.title ?? manga.name ?? ""),
     supertitle: genres.length > 0 ? genres.join(", ") : undefined,
     summary: manga.description ? cleanText(manga.description) : undefined,
@@ -137,7 +137,7 @@ export const toSimpleItem = (
   return {
     type: "simpleCarouselItem",
     mangaId: mangaIdFor(manga),
-    imageUrl: coverFor(manga),
+    imageUrl: coverUrlFor(manga),
     title: cleanText(manga.title ?? manga.name ?? ""),
     subtitle: subtitle || undefined,
     contentRating: contentRatingFor(manga),
@@ -173,7 +173,7 @@ export const toLatestItem = (manga: ApiManga): DiscoverSectionItem => {
   return {
     type: "simpleCarouselItem",
     mangaId: mangaIdFor(manga),
-    imageUrl: coverFor(manga),
+    imageUrl: coverUrlFor(manga),
     title: cleanText(manga.title ?? manga.name ?? ""),
     subtitle: subtitle || undefined,
     contentRating: contentRatingFor(manga),
@@ -189,7 +189,7 @@ export const toSearchResultItem = (manga: ApiManga): SearchResultItem => {
   return {
     mangaId: mangaIdFor(manga),
     title: cleanText(manga.title ?? manga.name ?? ""),
-    imageUrl: coverFor(manga),
+    imageUrl: coverUrlFor(manga),
     subtitle: subtitle || undefined,
     contentRating: contentRatingFor(manga),
   };
@@ -222,7 +222,7 @@ export const toSourceManga = (manga: ApiManga, mangaId: string): SourceManga => 
             .map((value) => value.trim())
             .filter(Boolean)
         : [],
-      thumbnailUrl: coverFor(manga),
+      thumbnailUrl: coverUrlFor(manga),
       synopsis: manga.description ? cleanText(manga.description) : "",
       author: tagNames(manga.authors).join(", ") || undefined,
       status: manga.completed === 1 ? "Completed" : "Ongoing",
@@ -237,8 +237,6 @@ export const toSourceManga = (manga: ApiManga, mangaId: string): SourceManga => 
     },
   };
 };
-
-// --- server payload ---------------------------------------------------------
 
 // The route ships its data as escaped string fragments that only form valid
 // JSON once concatenated in order.

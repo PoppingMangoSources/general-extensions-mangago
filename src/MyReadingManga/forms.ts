@@ -31,7 +31,7 @@ const HIDDEN_TAGS_KEY = "myreadingmanga.hiddenTags";
 const SECTION_ORDER_KEY = "myreadingmanga.sections";
 const DELETED_SECTIONS_KEY = "myreadingmanga.deletedSections";
 
-const getStringArray = (key: string): string[] | undefined => {
+const readStringArray = (key: string): string[] | undefined => {
   const value = Application.getState(key);
   if (!Array.isArray(value)) return undefined;
   return value.filter((entry): entry is string => typeof entry === "string");
@@ -39,16 +39,16 @@ const getStringArray = (key: string): string[] | undefined => {
 
 // Preferred language classes used to filter listing cards; defaults to
 // English, an explicitly empty selection means every language.
-export const getPreferredLanguages = (): string[] => getStringArray(LANGUAGES_KEY) ?? ["english"];
+export const getPreferredLanguages = (): string[] => readStringArray(LANGUAGES_KEY) ?? ["english"];
 
-export const getHiddenGenres = (): string[] => getStringArray(HIDDEN_GENRES_KEY) ?? [];
+export const getHiddenGenres = (): string[] => readStringArray(HIDDEN_GENRES_KEY) ?? [];
 
-export const getHiddenTags = (): string[] => getStringArray(HIDDEN_TAGS_KEY) ?? [];
+export const getHiddenTags = (): string[] => readStringArray(HIDDEN_TAGS_KEY) ?? [];
 
 const getSectionOrder = (): string[] =>
-  getStringArray(SECTION_ORDER_KEY) ?? DISCOVER_SECTIONS.map((section) => section.id);
+  readStringArray(SECTION_ORDER_KEY) ?? DISCOVER_SECTIONS.map((section) => section.id);
 
-const getDeletedSections = (): string[] => getStringArray(DELETED_SECTIONS_KEY) ?? [];
+const getDeletedSections = (): string[] => readStringArray(DELETED_SECTIONS_KEY) ?? [];
 
 // Visible sections in the user's order.
 export const getOrderedSections = () =>

@@ -27,7 +27,7 @@ export async function runTests(logger: TestLogger) {
     }));
     const payload = `{"title":"Popular This Week","moreHref":"/manga","items":${JSON.stringify(popularItems)}}`;
     const extension = new OMangaExtension();
-    Object.defineProperty(extension, "homepageRequest", {
+    Object.defineProperty(extension, "homepagePromise", {
       value: { domain: getDomain(), page: Promise.resolve(payload) },
       writable: true,
     });
@@ -84,7 +84,7 @@ export async function runTests(logger: TestLogger) {
     ]);
 
     const extension = new OMangaExtension();
-    Object.defineProperty(extension, "homepageRequest", {
+    Object.defineProperty(extension, "homepagePromise", {
       value: { domain: getDomain(), page: Promise.resolve(payload) },
       writable: true,
     });

@@ -74,8 +74,8 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
   private cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
   private interceptor = new OMangaInterceptor("main");
 
-  private homepageRequest: { domain: string; page: Promise<string> } | undefined;
-  private seriesPageRequest: { key: string; page: Promise<string> } | undefined;
+  private homepagePromise: { domain: string; page: Promise<string> } | undefined;
+  private seriesPagePromise: { key: string; page: Promise<string> } | undefined;
 
   async initialise(): Promise<void> {
     this.rateLimiter.registerInterceptor();
@@ -97,8 +97,8 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
         this.cookieStorageInterceptor.setCookie(cookie);
       }
     }
-    this.homepageRequest = undefined;
-    this.seriesPageRequest = undefined;
+    this.homepagePromise = undefined;
+    this.seriesPagePromise = undefined;
   }
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
@@ -280,16 +280,16 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
 
   private getHomepage(refresh = false): Promise<string> {
     const domain = getDomain();
-    if (!refresh && this.homepageRequest?.domain === domain) {
-      return this.homepageRequest.page;
+    if (!refresh && this.homepagePromise?.domain === domain) {
+      return this.homepagePromise.page;
     }
 
     const request = { domain, page: fetchPagePayload(`${domain}/`, '"updates":[') };
     request.page = request.page.catch((error: unknown) => {
-      if (this.homepageRequest === request) this.homepageRequest = undefined;
+      if (this.homepagePromise === request) this.homepagePromise = undefined;
       throw error;
     });
-    this.homepageRequest = request;
+    this.homepagePromise = request;
     return request.page;
   }
 
@@ -377,16 +377,16 @@ export class OMangaExtension implements ExtensionImpl<typeof OMangaConfig> {
 
   private getSeriesPage(slug: string): Promise<string> {
     const key = `${getDomain()}/manga/${slug}`;
-    if (this.seriesPageRequest?.key === key) {
-      return this.seriesPageRequest.page;
+    if (this.seriesPagePromise?.key === key) {
+      return this.seriesPagePromise.page;
     }
 
     const request = { key, page: this.fetchSeriesPage(slug) };
     request.page = request.page.catch((error: unknown) => {
-      if (this.seriesPageRequest === request) this.seriesPageRequest = undefined;
+      if (this.seriesPagePromise === request) this.seriesPagePromise = undefined;
       throw error;
     });
-    this.seriesPageRequest = request;
+    this.seriesPagePromise = request;
     return request.page;
   }
 

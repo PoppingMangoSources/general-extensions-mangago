@@ -71,8 +71,6 @@ export const GENRES: Tag[] = [
 
 export const ADULT_GENRES = ["ecchi", "smut", "adult", "mature", "yaoi", "yuri", "hentai"];
 
-// --- API payloads -----------------------------------------------------------
-
 export interface ApiTag {
   name?: string;
   slug?: string;
