@@ -51,7 +51,7 @@ export const getVisibleSections = (): SectionId[] => {
 
 export class XComicSettingsForm extends Form {
   private contentRatings: ContentPreferenceRating[];
-  private contentTypes: SeriesType[];
+  private types: SeriesType[];
   private excludedFormats: string[];
   private excludedGenres: string[];
   private languages: string[];
@@ -64,7 +64,7 @@ export class XComicSettingsForm extends Form {
   ) {
     super();
     this.contentRatings = preferences.contentRatings;
-    this.contentTypes = preferences.types;
+    this.types = preferences.types;
     this.excludedFormats = preferences.excludedFormats;
     this.excludedGenres = preferences.excludedGenres;
     this.languages = preferences.languages;
@@ -101,7 +101,7 @@ export class XComicSettingsForm extends Form {
         SelectRow("content_types", {
           title: "Content types",
           layout: "flow",
-          value: this.contentTypes,
+          value: this.types,
           items: this.filterOptions.types,
           minItemCount: 1,
           maxItemCount: this.filterOptions.types.length,
@@ -174,8 +174,8 @@ export class XComicSettingsForm extends Form {
   }
 
   async handleContentTypesChange(value: string[]): Promise<void> {
-    this.contentTypes = value as SeriesType[];
-    Application.setState(this.contentTypes, STATE_KEYS.CONTENT_TYPES);
+    this.types = value as SeriesType[];
+    Application.setState(this.types, STATE_KEYS.CONTENT_TYPES);
     Application.invalidateDiscoverSections();
     this.reloadForm();
   }

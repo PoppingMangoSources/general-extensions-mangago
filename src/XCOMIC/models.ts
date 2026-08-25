@@ -15,6 +15,7 @@ export const PAGE_SIZE = 36;
 // Upper bound on latest-upload pages walked when filtering empties a page.
 export const MAX_LATEST_REQUESTS = 10;
 export const CHAPTER_PAGE_SIZE = 1000;
+export const RECENTLY_ADDED_SIZE = 50;
 
 export const BROWSE_QUERY = `
 query get_comic_browse_items($select: Comic_Browse_Select) {
@@ -171,7 +172,7 @@ export const STATE_KEYS = {
   CONTENT_RATINGS: "xcomic_content_ratings",
   CONTENT_TYPES: "xcomic_content_types",
   EXCLUDED_GENRES: "xcomic_excluded_genres",
-  EXCLUDED_FORMATS: "xcomic_excluded_tags",
+  EXCLUDED_FORMATS: "xcomic_excluded_formats",
   LANGUAGES: "xcomic_languages",
   VISIBLE_SECTIONS: "xcomic_visible_sections",
 } as const;

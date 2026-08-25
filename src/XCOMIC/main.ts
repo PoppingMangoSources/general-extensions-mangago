@@ -35,6 +35,7 @@ import {
   type FilterOptions,
   type PageMetadata,
   type SearchMetadata,
+  type TriState,
   type XComicPreferences,
 } from "./models";
 import {
@@ -52,12 +53,15 @@ import {
   parseChapterDetails,
   parseFilterOptions,
   toChapter,
-  toDiscoverItem,
+  toDiscoverItems,
   toLatestUploadNodes,
   toSearchResultItem,
   toSourceManga,
 } from "./parsers";
 import type XComicConfig from "./pbconfig";
+
+const idsWithState = (states: TriState | undefined, state: "included" | "excluded"): string[] =>
+  Object.entries(states ?? {}).flatMap(([id, value]) => (value === state ? [id] : []));
 
 class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   private filterOptionsPromise?: Promise<FilterOptions>;
@@ -126,9 +130,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const result = await this.getLatestUploadNodes(metadata?.before);
     return {
-      items: result.nodes
-        .map((node) => toDiscoverItem(node, "chapterUpdatesCarouselItem"))
-        .filter((item): item is DiscoverSectionItem => item !== undefined),
+      items: toDiscoverItems(result.nodes, "chapterUpdatesCarouselItem"),
       metadata: result.before != null ? { before: result.before } : undefined,
     };
   }
@@ -137,10 +139,10 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     const preferences = getPreferences();
     const nodes = (await fetchRecentlyAdded()).get_comic_recentlyAdded?.items ?? [];
     return {
-      items: nodes
-        .filter((node) => isComicAllowed(node.data, preferences, true))
-        .map((node) => toDiscoverItem(node, "simpleCarouselItem"))
-        .filter((item): item is DiscoverSectionItem => item !== undefined),
+      items: toDiscoverItems(
+        nodes.filter((node) => isComicAllowed(node.data, preferences, true)),
+        "simpleCarouselItem",
+      ),
     };
   }
 
@@ -150,9 +152,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     const page = metadata?.page ?? 1;
     const result = await this.getBrowsePage(page, "field_score", "", undefined);
     return {
-      items: result.nodes
-        .map((node) => toDiscoverItem(node, "featuredCarouselItem"))
-        .filter((item): item is DiscoverSectionItem => item !== undefined),
+      items: toDiscoverItems(result.nodes, "featuredCarouselItem"),
       metadata: result.nextPage != null ? { page: result.nextPage } : undefined,
     };
   }
@@ -204,15 +204,11 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
         : preferences.contentRatings,
       excludedFormats: [
         ...preferences.excludedFormats,
-        ...Object.entries(metadata?.formats ?? {}).flatMap(([id, state]) =>
-          state === "excluded" ? [id] : [],
-        ),
+        ...idsWithState(metadata?.formats, "excluded"),
       ],
       excludedGenres: [
         ...preferences.excludedGenres,
-        ...Object.entries(metadata?.genres ?? {}).flatMap(([id, state]) =>
-          state === "excluded" ? [id] : [],
-        ),
+        ...idsWithState(metadata?.genres, "excluded"),
       ],
       types: metadata?.types?.length ? metadata.types : preferences.types,
     };
@@ -248,17 +244,13 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     metadata: PageMetadata | undefined,
     sortingOption?: SortingOption,
   ): Promise<PagedResults<SearchResultItem>> {
-    const pasted = await this.resolveUrlQuery(query.title ?? "", query.metadata);
+    const title = (query.title ?? "").trim();
+    const pasted = await this.resolveUrlQuery(title, query.metadata);
     if (pasted) return pasted;
 
     const sortby = sortingOption?.id ?? query.metadata?.discoverSort ?? "field_score";
     const page = metadata?.page ?? 1;
-    const result = await this.getBrowsePage(
-      page,
-      sortby,
-      (query.title ?? "").trim(),
-      query.metadata,
-    );
+    const result = await this.getBrowsePage(page, sortby, title, query.metadata);
     return {
       items: result.nodes.map(toSearchResultItem),
       metadata: result.nextPage != null ? { page: result.nextPage } : undefined,
@@ -287,14 +279,11 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     metadata: SearchMetadata | undefined,
     preferences: XComicPreferences,
   ): BrowseSelect {
-    const includedGenres: string[] = [];
+    const includedGenres = [
+      ...idsWithState(metadata?.genres, "included"),
+      ...idsWithState(metadata?.formats, "included"),
+    ];
     const excludedGenres = [...preferences.excludedGenres, ...preferences.excludedFormats];
-    for (const [id, state] of Object.entries(metadata?.genres ?? {})) {
-      if (state === "included") includedGenres.push(id);
-    }
-    for (const [id, state] of Object.entries(metadata?.formats ?? {})) {
-      if (state === "included") includedGenres.push(id);
-    }
 
     const year = metadata?.year?.trim() ?? "";
     let releaseYearMin: number | null = null;
@@ -337,12 +326,10 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   }
 
   private async resolveUrlQuery(
-    query: string,
+    title: string,
     metadata?: SearchMetadata,
   ): Promise<PagedResults<SearchResultItem> | undefined> {
-    const match = /^https?:\/\/(?:www\.)?xcomic\.(?:me|net)\/comic\/([a-zA-Z0-9]+)/i.exec(
-      query.trim(),
-    );
+    const match = /^https?:\/\/(?:www\.)?xcomic\.(?:me|net)\/comic\/([a-zA-Z0-9]+)/i.exec(title);
     if (!match?.[1]) return undefined;
     const response = await fetchComic(match[1]);
     if (!response.get_comicNode) return undefined;
@@ -365,13 +352,11 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     const pageCount = firstResult.paging?.pages ?? 1;
     const responses = [
       first,
-      ...(pageCount > 1
-        ? await Promise.all(
-            Array.from({ length: pageCount - 1 }, (_, index) =>
-              fetchChapters(sourceManga.mangaId, index + 2),
-            ),
-          )
-        : []),
+      ...(await Promise.all(
+        Array.from({ length: pageCount - 1 }, (_, index) =>
+          fetchChapters(sourceManga.mangaId, index + 2),
+        ),
+      )),
     ];
     return responses.flatMap((response) =>
       (response.get_comic_chapterList_uniqList?.items ?? [])

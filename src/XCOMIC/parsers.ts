@@ -50,8 +50,6 @@ const hasCoverUrl = (url: string | null | undefined): url is string =>
 const titleCase = (value: string): string =>
   value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
-const tagTitle = (id: string): string => TAG_TITLE_OVERRIDES[id] ?? titleCase(id);
-
 export const parseFilterOptions = (html: string): FilterOptions => {
   const $ = cheerio.load(html);
   const filterGroup = (name: string): Tag[] => {
@@ -116,7 +114,7 @@ const contentPreferenceRating = (comic: ComicData): ContentPreferenceRating => {
   return "safe";
 };
 
-const contentRatingForComic = (comic: ComicData): ContentRating => {
+const toContentRating = (comic: ComicData): ContentRating => {
   const rating = contentPreferenceRating(comic);
   if (rating === "erotica" || rating === "pornographic") return ContentRating.ADULT;
   if (rating === "suggestive") return ContentRating.MATURE;
@@ -181,7 +179,7 @@ const baseCard = (node: ComicNode) => ({
   mangaId: node.data.id.replace(SAFE_ID_REGEX, "-"),
   title: Application.decodeHTMLEntities(node.data.name),
   imageUrl: toAbsoluteUrl(node.data.urlCover),
-  contentRating: contentRatingForComic(node.data),
+  contentRating: toContentRating(node.data),
 });
 
 const cardSubtitle = (comic: ComicData): string | undefined =>
@@ -194,12 +192,20 @@ export const toSearchResultItem = (node: ComicNode): SearchResultItem => ({
   subtitle: cardSubtitle(node.data),
 });
 
-export type CarouselItemType =
+type CarouselItemType =
   | "featuredCarouselItem"
   | "simpleCarouselItem"
   | "chapterUpdatesCarouselItem";
 
-export const toDiscoverItem = (
+export const toDiscoverItems = (
+  nodes: ComicNode[],
+  type: CarouselItemType,
+): DiscoverSectionItem[] =>
+  nodes
+    .map((node) => toDiscoverItem(node, type))
+    .filter((item): item is DiscoverSectionItem => item !== undefined);
+
+const toDiscoverItem = (
   node: ComicNode,
   type: CarouselItemType,
 ): DiscoverSectionItem | undefined => {
@@ -225,7 +231,7 @@ export const toDiscoverItem = (
     };
   }
   if (type === "chapterUpdatesCarouselItem") {
-    if (!chapter?.id || !hasCoverUrl(node.data.urlCover)) return undefined;
+    if (!chapter?.id) return undefined;
     return {
       type,
       ...baseCard(node),
@@ -302,7 +308,7 @@ export const toSourceManga = (node: ComicNode): SourceManga => {
   const toTags = (values: string[]): Tag[] =>
     [...new Set(values.map((value) => value.replace(SAFE_ID_REGEX, "-")))].map((id) => ({
       id,
-      title: tagTitle(id),
+      title: TAG_TITLE_OVERRIDES[id] ?? titleCase(id),
     }));
   const tagGroups: TagSection[] = [
     { id: "genres", title: "Genres", tags: toTags(comic.genres ?? []) },
@@ -328,17 +334,13 @@ export const toSourceManga = (node: ComicNode): SourceManga => {
       synopsis: stripHtml(comic.summary?.html),
       author: authors.join(", ") || undefined,
       artist: distinctArtists.join(", ") || undefined,
-      contentRating: contentRatingForComic(comic),
+      contentRating: toContentRating(comic),
       rating,
-      status: comic.originalStatus
-        ? titleCase(comic.originalStatus)
-        : comic.uploadStatus
-          ? titleCase(comic.uploadStatus)
-          : "Unknown",
+      status: titleCase(comic.originalStatus || comic.uploadStatus || "unknown"),
       tagGroups,
       artworkUrls: cover ? [cover] : undefined,
       additionalInfo: {
-        ...(comic.type ? { Type: formatType(comic.type) ?? comic.type } : {}),
+        ...(comic.type ? { Type: titleCase(comic.type) } : {}),
         ...(comic.originalLanguage ? { "Original Language": comic.originalLanguage } : {}),
         ...(comic.translatedLanguage
           ? { [TRANSLATED_LANGUAGE_KEY]: comic.translatedLanguage }
@@ -365,7 +367,6 @@ export const toSourceManga = (node: ComicNode): SourceManga => {
 };
 
 export const toChapter = (data: ChapterData, sourceManga: SourceManga): Chapter => {
-  const number = chapterNumber(data) ?? 0;
   const title = [data.dname?.trim(), data.title?.trim()]
     .filter((value): value is string => Boolean(value))
     .filter((value, index, values) => index === 0 || value !== values[0])
@@ -391,7 +392,7 @@ export const toChapter = (data: ChapterData, sourceManga: SourceManga): Chapter 
   return {
     chapterId: toChapterId(data),
     sourceManga,
-    chapNum: number,
+    chapNum: chapterNumber(data) ?? 0,
     volume: 0,
     title: title || undefined,
     langCode,

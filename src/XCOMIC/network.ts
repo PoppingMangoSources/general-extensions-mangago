@@ -19,6 +19,7 @@ import {
   CHAPTER_PAGE_SIZE,
   DOMAIN,
   PAGE_SIZE,
+  RECENTLY_ADDED_SIZE,
   type BrowseResponse,
   type BrowseSelect,
   type ChapterListResponse,
@@ -100,7 +101,9 @@ export const fetchLatestUploads = (before?: number): Promise<LatestUploadsRespon
   });
 
 export const fetchRecentlyAdded = (): Promise<RecentlyAddedResponse> =>
-  fetchGraphQL<RecentlyAddedResponse>(RECENTLY_ADDED_QUERY, { select: { size: 50 } });
+  fetchGraphQL<RecentlyAddedResponse>(RECENTLY_ADDED_QUERY, {
+    select: { size: RECENTLY_ADDED_SIZE },
+  });
 
 export const fetchComic = (id: string): Promise<ComicNodeResponse> =>
   fetchGraphQL<ComicNodeResponse>(COMIC_QUERY, { id });
