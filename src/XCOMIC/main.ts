@@ -318,7 +318,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       sortby,
       word,
       incOLangs: metadata?.originalLanguages ?? [],
-      incTLangs: metadata?.translatedLanguages ?? ["en"],
+      incTLangs: metadata?.translatedLanguages ?? preferences.languages,
       incGenres: [...new Set(includedGenres)],
       excGenres: [...new Set(excludedGenres)],
       incGenresMode: metadata?.incGenresMode ?? "and",

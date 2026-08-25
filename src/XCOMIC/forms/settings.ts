@@ -7,7 +7,9 @@ import {
   CONTENT_RATING_OPTIONS,
   DEFAULT_CONTENT_RATINGS,
   DEFAULT_CONTENT_TYPES,
+  DEFAULT_LANGUAGES,
   FORMAT_OPTIONS,
+  LANGUAGE_OPTIONS,
   SECTION_IDS,
   SECTION_OPTIONS,
   STATE_KEYS,
@@ -28,8 +30,11 @@ export const getPreferences = (): XComicPreferences => {
   // Types come from the site's own filter list, so any stored id is accepted as-is.
   const types = (Application.getState(STATE_KEYS.CONTENT_TYPES) as SeriesType[] | undefined) ?? [];
 
+  const languages = (Application.getState(STATE_KEYS.LANGUAGES) as string[] | undefined) ?? [];
+
   return {
     contentRatings: ratings.length ? ratings : DEFAULT_CONTENT_RATINGS,
+    languages: languages.length ? languages : DEFAULT_LANGUAGES,
     types: types.length ? types : DEFAULT_CONTENT_TYPES,
     excludedFormats:
       (Application.getState(STATE_KEYS.EXCLUDED_FORMATS) as string[] | undefined) ?? [],
@@ -49,6 +54,7 @@ export class XComicSettingsForm extends Form {
   private contentTypes: SeriesType[];
   private excludedFormats: string[];
   private excludedGenres: string[];
+  private languages: string[];
   private visibleSections: SectionId[];
 
   constructor(
@@ -61,11 +67,36 @@ export class XComicSettingsForm extends Form {
     this.contentTypes = preferences.types;
     this.excludedFormats = preferences.excludedFormats;
     this.excludedGenres = preferences.excludedGenres;
+    this.languages = preferences.languages;
     this.visibleSections = visibleSections;
   }
 
   override getSections() {
     return [
+      Section(
+        {
+          id: "languages",
+          footer:
+            "Only titles translated into these languages are shown across discover and search.",
+        },
+        [
+          SelectRow("languages", {
+            title: "Languages",
+            subtitle: this.languages
+              .map((code) => LANGUAGE_OPTIONS.find((option) => option.id === code)?.title ?? code)
+              .join(", "),
+            layout: "list",
+            value: this.languages,
+            items: LANGUAGE_OPTIONS,
+            minItemCount: 1,
+            maxItemCount: LANGUAGE_OPTIONS.length,
+            onValueChange: Application.Selector(
+              this as XComicSettingsForm,
+              "handleLanguagesChange",
+            ),
+          }),
+        ],
+      ),
       Section("content", [
         SelectRow("content_types", {
           title: "Content types",
@@ -133,6 +164,13 @@ export class XComicSettingsForm extends Form {
         }),
       ]),
     ];
+  }
+
+  async handleLanguagesChange(value: string[]): Promise<void> {
+    this.languages = value.length ? value : DEFAULT_LANGUAGES;
+    Application.setState(this.languages, STATE_KEYS.LANGUAGES);
+    Application.invalidateDiscoverSections();
+    this.reloadForm();
   }
 
   async handleContentTypesChange(value: string[]): Promise<void> {

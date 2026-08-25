@@ -121,7 +121,8 @@ const contentRatingForComic = (comic: ComicData): ContentRating => {
 export const isComicAllowed = (
   comic: ComicData,
   preferences: XComicPreferences,
-  requireEnglish = false,
+  // Feeds that carry every language at once cannot be narrowed server-side, so they filter here.
+  restrictToPreferredLanguages = false,
 ): boolean => {
   if (
     !preferences.contentRatings.length ||
@@ -130,7 +131,13 @@ export const isComicAllowed = (
   ) {
     return false;
   }
-  if (requireEnglish && comic.translatedLanguage && comic.translatedLanguage !== "en") return false;
+  if (
+    restrictToPreferredLanguages &&
+    comic.translatedLanguage &&
+    !preferences.languages.includes(comic.translatedLanguage)
+  ) {
+    return false;
+  }
   if (comic.type && !preferences.types.includes(comic.type)) {
     return false;
   }

@@ -59,7 +59,7 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
       incGenresMode: "and" as GenreMode,
       originalLanguages: [],
       originalStatus: [],
-      translatedLanguages: ["en"],
+      translatedLanguages: preferences.languages,
       types: preferences.types,
       uploadStatus: [],
       year: "",
@@ -210,7 +210,7 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
       Section("languages", [
         SelectRow("original_languages", {
           title: "Original languages",
-          layout: "flow",
+          layout: "list",
           value: this.originalLanguages,
           items: LANGUAGE_OPTIONS,
           minItemCount: 0,
@@ -222,7 +222,7 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
         }),
         SelectRow("translated_languages", {
           title: "Translated languages",
-          layout: "flow",
+          layout: "list",
           value: this.translatedLanguages,
           items: LANGUAGE_OPTIONS,
           minItemCount: 0,
