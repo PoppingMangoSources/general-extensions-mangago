@@ -35,6 +35,7 @@ const EROTICA_GENRES = new Set<string>(CONTENT_RATING_GENRES.erotica);
 const SUGGESTIVE_GENRES = new Set<string>(CONTENT_RATING_GENRES.suggestive);
 // Paperback rejects ids containing characters outside this set.
 const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
+const sanitizeId = (value: string): string => value.replace(SAFE_ID_REGEX, "-");
 
 const toAbsoluteUrl = (url: string | null | undefined): string => {
   if (typeof url !== "string" || !url.trim()) return "";
@@ -65,7 +66,7 @@ export const parseFilterOptions = (html: string): FilterOptions => {
         const title = $(element).find("span").first().text().trim();
         if (!raw || !title) return undefined;
         // Sanitized here and in toSourceManga alike, so a tapped tag matches a filter id.
-        const id = raw.replace(SAFE_ID_REGEX, "-");
+        const id = sanitizeId(raw);
         if (seen.has(id)) return undefined;
         seen.add(id);
         return { id, title: Application.decodeHTMLEntities(title) };
@@ -151,7 +152,7 @@ export const isComicAllowed = (
 
 // Discover cards and the chapter list must agree, or a card cannot be matched to its chapter.
 const toChapterId = (chapter: { id: string; urlPath?: string | null }): string =>
-  (chapter.urlPath ?? `/comic/chapter/${chapter.id}`).replace(SAFE_ID_REGEX, "-");
+  sanitizeId(chapter.urlPath ?? `/comic/chapter/${chapter.id}`);
 
 const chapterNumber = (chapter?: ChapterData | null): number | undefined => {
   const value = chapter?.chaNum ?? chapter?.serial;
@@ -176,7 +177,7 @@ const formatType = (type?: string | null): string | undefined =>
   type ? titleCase(type) : undefined;
 
 const baseCard = (node: ComicNode) => ({
-  mangaId: node.data.id.replace(SAFE_ID_REGEX, "-"),
+  mangaId: sanitizeId(node.data.id),
   title: Application.decodeHTMLEntities(node.data.name),
   imageUrl: toAbsoluteUrl(node.data.urlCover),
   contentRating: toContentRating(node.data),
@@ -287,13 +288,7 @@ const stripHtml = (html?: string | null): string => {
   );
 };
 
-const formatDateYmd = (
-  value?: {
-    y?: number | null;
-    m?: number | null;
-    d?: number | null;
-  } | null,
-): string | undefined => {
+const formatDateYmd = (value: ComicData["originalPubFrom"]): string | undefined => {
   if (!value?.y) return undefined;
   return [value.y, value.m?.toString().padStart(2, "0"), value.d?.toString().padStart(2, "0")]
     .filter(Boolean)
@@ -306,7 +301,7 @@ export const toSourceManga = (node: ComicNode): SourceManga => {
   const artists = nodeNames(comic.artistNodes);
   const distinctArtists = artists.filter((artist) => !authors.includes(artist));
   const toTags = (values: string[]): Tag[] =>
-    [...new Set(values.map((value) => value.replace(SAFE_ID_REGEX, "-")))].map((id) => ({
+    [...new Set(values.map(sanitizeId))].map((id) => ({
       id,
       title: TAG_TITLE_OVERRIDES[id] ?? titleCase(id),
     }));
@@ -326,7 +321,7 @@ export const toSourceManga = (node: ComicNode): SourceManga => {
   const publishers = nodeNames(comic.publisherNodes);
 
   return {
-    mangaId: comic.id.replace(SAFE_ID_REGEX, "-"),
+    mangaId: sanitizeId(comic.id),
     mangaInfo: {
       primaryTitle: Application.decodeHTMLEntities(comic.name),
       secondaryTitles: (comic.altNames ?? []).map((title) => Application.decodeHTMLEntities(title)),

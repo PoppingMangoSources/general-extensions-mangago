@@ -576,7 +576,6 @@ export interface LatestUploadsResponse {
 
 export interface RecentlyAddedResponse {
   get_comic_recentlyAdded?: {
-    before?: string | null;
     items?: ComicNode[] | null;
   } | null;
 }

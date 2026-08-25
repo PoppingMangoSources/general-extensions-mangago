@@ -222,7 +222,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     const seenIds = new Set<string>();
     let cursor = before;
     // The feed carries every language and type, so keep walking it until a page survives filtering.
-    for (let request = 0; request < MAX_LATEST_REQUESTS && !nodes.length; request++) {
+    for (let attempt = 0; attempt < MAX_LATEST_REQUESTS && !nodes.length; attempt++) {
       const result = (await fetchLatestUploads(cursor)).get_comic_latestUploads;
       for (const node of toLatestUploadNodes(result)) {
         if (seenIds.has(node.data.id) || !isComicAllowed(node.data, preferences, true)) continue;
@@ -248,9 +248,9 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     const pasted = await this.resolveUrlQuery(title, query.metadata);
     if (pasted) return pasted;
 
-    const sortby = sortingOption?.id ?? query.metadata?.discoverSort ?? "field_score";
+    const sortBy = sortingOption?.id ?? query.metadata?.discoverSort ?? "field_score";
     const page = metadata?.page ?? 1;
-    const result = await this.getBrowsePage(page, sortby, title, query.metadata);
+    const result = await this.getBrowsePage(page, sortBy, title, query.metadata);
     return {
       items: result.nodes.map(toSearchResultItem),
       metadata: result.nextPage != null ? { page: result.nextPage } : undefined,
@@ -259,12 +259,12 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
 
   private async getBrowsePage(
     page: number,
-    sortby: string,
+    sortBy: string,
     word: string,
     metadata: SearchMetadata | undefined,
   ): Promise<{ nodes: ComicNode[]; nextPage?: number }> {
     const preferences = this.getEffectivePreferences(metadata);
-    const select = this.buildBrowseSelect(page, sortby, word, metadata, preferences);
+    const select = this.buildBrowseSelect(page, sortBy, word, metadata, preferences);
     const nodes = (await fetchBrowse(select)).get_comic_browse_items ?? [];
     return {
       nodes: nodes.filter((node) => isComicAllowed(node.data, preferences)),
@@ -274,16 +274,16 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
 
   private buildBrowseSelect(
     page: number,
-    sortby: string,
+    sortBy: string,
     word: string,
     metadata: SearchMetadata | undefined,
     preferences: XComicPreferences,
   ): BrowseSelect {
-    const includedGenres = [
+    const includedTagIds = [
       ...idsWithState(metadata?.genres, "included"),
       ...idsWithState(metadata?.formats, "included"),
     ];
-    const excludedGenres = [...preferences.excludedGenres, ...preferences.excludedFormats];
+    const excludedTagIds = [...preferences.excludedGenres, ...preferences.excludedFormats];
 
     const year = metadata?.year?.trim() ?? "";
     let releaseYearMin: number | null = null;
@@ -303,12 +303,12 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       page,
       size: PAGE_SIZE,
       init: (page - 1) * PAGE_SIZE,
-      sortby,
+      sortby: sortBy,
       word,
       incOLangs: metadata?.originalLanguages ?? [],
       incTLangs: metadata?.translatedLanguages ?? preferences.languages,
-      incGenres: [...new Set(includedGenres)],
-      excGenres: [...new Set(excludedGenres)],
+      incGenres: [...new Set(includedTagIds)],
+      excGenres: [...new Set(excludedTagIds)],
       incGenresMode: metadata?.incGenresMode ?? "and",
       excGenresMode: metadata?.excGenresMode ?? "or",
       incTypes: preferences.types,

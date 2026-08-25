@@ -60,8 +60,16 @@ export class XComicInterceptor extends PaperbackInterceptor {
   }
 }
 
+const fetchText = async (request: Request): Promise<string> => {
+  const [response, buffer] = await Application.scheduleRequest(request);
+  if (response.status !== 200) {
+    throw new Error(`Request failed with status ${response.status}: ${request.url}`);
+  }
+  return Application.arrayBufferToUTF8String(buffer);
+};
+
 const fetchGraphQL = async <T>(query: string, variables: Record<string, unknown>): Promise<T> => {
-  const [response, buffer] = await Application.scheduleRequest({
+  const body = await fetchText({
     url: API_URL,
     method: "POST",
     headers: {
@@ -71,11 +79,6 @@ const fetchGraphQL = async <T>(query: string, variables: Record<string, unknown>
     body: JSON.stringify({ query: query.trim(), variables }),
   });
 
-  if (response.status !== 200) {
-    throw new Error(`Request failed with status ${response.status}: ${API_URL}`);
-  }
-
-  const body = Application.arrayBufferToUTF8String(buffer);
   let parsed: unknown;
   try {
     parsed = JSON.parse(body) as unknown;
@@ -113,18 +116,12 @@ export const fetchChapters = (comicId: string, page: number): Promise<ChapterLis
     select: { comic_id: comicId, page, size: CHAPTER_PAGE_SIZE, sortby: "chapter_desc" },
   });
 
-export const fetchSearchPage = async (): Promise<string> => {
-  const url = `${DOMAIN}/search`;
-  const [response, buffer] = await Application.scheduleRequest({
-    url,
+export const fetchSearchPage = (): Promise<string> =>
+  fetchText({
+    url: `${DOMAIN}/search`,
     method: "GET",
     headers: { accept: "text/html,application/xhtml+xml" },
   });
-  if (response.status !== 200) {
-    throw new Error(`Request failed with status ${response.status}: ${url}`);
-  }
-  return Application.arrayBufferToUTF8String(buffer);
-};
 
 export const fetchChapterPages = (id: string): Promise<ChapterPagesResponse> =>
   fetchGraphQL<ChapterPagesResponse>(CHAPTER_PAGES_QUERY, { id });

@@ -43,6 +43,13 @@ export const getPreferences = (): XComicPreferences => {
   };
 };
 
+// Every settings row persists, invalidates discover and reloads the same way.
+const saveSetting = (form: Form, key: string, value: unknown): void => {
+  Application.setState(value, key);
+  Application.invalidateDiscoverSections();
+  form.reloadForm();
+};
+
 export const getVisibleSections = (): SectionId[] => {
   const stored = Application.getState(STATE_KEYS.VISIBLE_SECTIONS) as SectionId[] | undefined;
   const visible = stored?.filter((id) => SECTION_IDS.includes(id)) ?? [];
@@ -168,43 +175,31 @@ export class XComicSettingsForm extends Form {
 
   async handleLanguagesChange(value: string[]): Promise<void> {
     this.languages = value.length ? value : DEFAULT_LANGUAGES;
-    Application.setState(this.languages, STATE_KEYS.LANGUAGES);
-    Application.invalidateDiscoverSections();
-    this.reloadForm();
+    saveSetting(this, STATE_KEYS.LANGUAGES, this.languages);
   }
 
   async handleContentTypesChange(value: string[]): Promise<void> {
     this.types = value as SeriesType[];
-    Application.setState(this.types, STATE_KEYS.CONTENT_TYPES);
-    Application.invalidateDiscoverSections();
-    this.reloadForm();
+    saveSetting(this, STATE_KEYS.CONTENT_TYPES, this.types);
   }
 
   async handleContentRatingsChange(value: string[]): Promise<void> {
     this.contentRatings = value as ContentPreferenceRating[];
-    Application.setState(this.contentRatings, STATE_KEYS.CONTENT_RATINGS);
-    Application.invalidateDiscoverSections();
-    this.reloadForm();
+    saveSetting(this, STATE_KEYS.CONTENT_RATINGS, this.contentRatings);
   }
 
   async handleExcludedGenresChange(value: string[]): Promise<void> {
     this.excludedGenres = value;
-    Application.setState(value, STATE_KEYS.EXCLUDED_GENRES);
-    Application.invalidateDiscoverSections();
-    this.reloadForm();
+    saveSetting(this, STATE_KEYS.EXCLUDED_GENRES, value);
   }
 
   async handleExcludedFormatsChange(value: string[]): Promise<void> {
     this.excludedFormats = value;
-    Application.setState(value, STATE_KEYS.EXCLUDED_FORMATS);
-    Application.invalidateDiscoverSections();
-    this.reloadForm();
+    saveSetting(this, STATE_KEYS.EXCLUDED_FORMATS, value);
   }
 
   async handleVisibleSectionsChange(value: string[]): Promise<void> {
     this.visibleSections = value as SectionId[];
-    Application.setState(this.visibleSections, STATE_KEYS.VISIBLE_SECTIONS);
-    Application.invalidateDiscoverSections();
-    this.reloadForm();
+    saveSetting(this, STATE_KEYS.VISIBLE_SECTIONS, this.visibleSections);
   }
 }
