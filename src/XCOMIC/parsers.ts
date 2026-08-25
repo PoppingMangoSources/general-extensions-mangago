@@ -58,14 +58,17 @@ export const parseFilterOptions = (html: string): FilterOptions => {
     const seen = new Set<string>();
     return $("details.group")
       .filter((_, element) =>
-        $(element).find("summary").first().text().trim().toLowerCase().startsWith(name),
+        $(element).find("summary").first().text().trim().toLowerCase().includes(name),
       )
       .first()
       .find("div")
       .map((_, element): Tag | undefined => {
-        const id = $(element).attr(":")?.trim();
+        const raw = $(element).attr(":")?.trim();
         const title = $(element).find("span").first().text().trim();
-        if (!id || !title || seen.has(id)) return undefined;
+        if (!raw || !title) return undefined;
+        // Sanitized here and in toSourceManga alike, so a tapped tag matches a filter id.
+        const id = raw.replace(SAFE_ID_REGEX, "-");
+        if (seen.has(id)) return undefined;
         seen.add(id);
         return { id, title: Application.decodeHTMLEntities(title) };
       })
@@ -80,7 +83,8 @@ export const parseFilterOptions = (html: string): FilterOptions => {
     genres: filterGroup("genres").filter(({ id }) => !formatIds.has(id)),
     types: filterGroup("types"),
   };
-  if (Object.values(options).some((group) => !group.length)) {
+  // An empty single group degrades that one picker; losing both of these means the scrape broke.
+  if (!options.genres.length && !options.types.length) {
     throw new Error("XCOMIC returned incomplete search filters");
   }
   return options;
@@ -295,19 +299,15 @@ export const toSourceManga = (node: ComicNode): SourceManga => {
   const authors = nodeNames(comic.authorNodes);
   const artists = nodeNames(comic.artistNodes);
   const distinctArtists = artists.filter((artist) => !authors.includes(artist));
-  const genres = [...new Set([...(comic.genres ?? []), ...(comic.demographics ?? [])])];
-  const tags = comic.tags ?? nodeNames(comic.tagNodes);
+  const toTags = (values: string[]): Tag[] =>
+    [...new Set(values.map((value) => value.replace(SAFE_ID_REGEX, "-")))].map((id) => ({
+      id,
+      title: tagTitle(id),
+    }));
   const tagGroups: TagSection[] = [
-    {
-      id: "genres",
-      title: "Genres",
-      tags: genres.map((id) => ({ id, title: tagTitle(id) })),
-    },
-    {
-      id: "tags",
-      title: "Tags",
-      tags: tags.map((id) => ({ id, title: titleCase(id) })),
-    },
+    { id: "genres", title: "Genres", tags: toTags(comic.genres ?? []) },
+    { id: "demographics", title: "Demographics", tags: toTags(comic.demographics ?? []) },
+    { id: "tags", title: "Tags", tags: toTags(comic.tags ?? nodeNames(comic.tagNodes)) },
   ].filter((group) => group.tags.length > 0);
 
   const publicationFrom = formatDateYmd(comic.originalPubFrom);
