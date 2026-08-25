@@ -202,7 +202,7 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           ),
         }),
         InputRow("year", {
-          title: "Year or range",
+          title: "Year (e.g. 2015 or 2005-2009)",
           value: this.year,
           onValueChange: Application.Selector(this as XComicAdvancedSearchForm, "handleYearChange"),
         }),

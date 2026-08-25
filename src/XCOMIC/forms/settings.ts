@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import { EditSection, Form, LabelRow, NavigationRow, Section, SelectRow } from "@paperback/types";
+import { Form, Section, SelectRow } from "@paperback/types";
 
 import {
   CONTENT_RATING_OPTIONS,
@@ -38,61 +38,11 @@ export const getPreferences = (): XComicPreferences => {
   };
 };
 
-export const getSectionOrder = (): SectionId[] => {
-  const stored = (Application.getState(STATE_KEYS.SECTION_ORDER) as SectionId[] | undefined) ?? [];
-  const order = [...new Set(stored.filter((id) => SECTION_IDS.includes(id)))];
-  return [...order, ...SECTION_IDS.filter((id) => !order.includes(id))];
-};
-
 export const getVisibleSections = (): SectionId[] => {
   const stored = Application.getState(STATE_KEYS.VISIBLE_SECTIONS) as SectionId[] | undefined;
   const visible = stored?.filter((id) => SECTION_IDS.includes(id)) ?? [];
   return visible.length ? visible : SECTION_IDS;
 };
-
-export class XComicSectionOrderForm extends Form {
-  private order: SectionId[];
-
-  constructor(order: SectionId[]) {
-    super();
-    this.order = order;
-  }
-
-  override getSections() {
-    return [
-      EditSection("section_order", {
-        id: "section_order",
-        header: "Section Order",
-        items: this.order.map((id) =>
-          LabelRow(id, {
-            title: SECTION_OPTIONS.find((option) => option.id === id)?.title ?? id,
-          }),
-        ),
-        allowReorder: true,
-        onReorder: Application.Selector(this as XComicSectionOrderForm, "handleReorder"),
-      }),
-    ];
-  }
-
-  async handleReorder(sourceIndex: number, destinationIndex: number): Promise<void> {
-    if (
-      sourceIndex < 0 ||
-      destinationIndex < 0 ||
-      sourceIndex >= this.order.length ||
-      destinationIndex >= this.order.length
-    ) {
-      return;
-    }
-    const order = [...this.order];
-    const [moved] = order.splice(sourceIndex, 1);
-    if (!moved) return;
-    order.splice(destinationIndex, 0, moved);
-    this.order = order;
-    Application.setState(order, STATE_KEYS.SECTION_ORDER);
-    Application.invalidateDiscoverSections();
-    this.reloadForm();
-  }
-}
 
 export class XComicSettingsForm extends Form {
   private contentRatings: ContentPreferenceRating[];
@@ -103,7 +53,6 @@ export class XComicSettingsForm extends Form {
 
   constructor(
     preferences: XComicPreferences,
-    private readonly sectionOrder: SectionId[],
     visibleSections: SectionId[],
     private readonly filterOptions: FilterOptions,
   ) {
@@ -181,10 +130,6 @@ export class XComicSettingsForm extends Form {
             this as XComicSettingsForm,
             "handleVisibleSectionsChange",
           ),
-        }),
-        NavigationRow("section_order", {
-          title: "Section order",
-          form: new XComicSectionOrderForm(this.sectionOrder),
         }),
       ]),
     ];

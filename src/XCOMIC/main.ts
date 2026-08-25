@@ -21,17 +21,13 @@ import {
 } from "@paperback/types";
 
 import { XComicAdvancedSearchForm } from "./forms/search";
-import {
-  XComicSettingsForm,
-  getPreferences,
-  getSectionOrder,
-  getVisibleSections,
-} from "./forms/settings";
+import { XComicSettingsForm, getPreferences, getVisibleSections } from "./forms/settings";
 import {
   DISCOVER_SECTIONS,
   MAX_LATEST_REQUESTS,
   MOST_VIEWS_OPTIONS,
   PAGE_SIZE,
+  SECTION_IDS,
   SECTIONS,
   SORTING_OPTIONS,
   type BrowseSelect,
@@ -95,7 +91,6 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   async getSettingsForm(): Promise<Form> {
     return new XComicSettingsForm(
       getPreferences(),
-      getSectionOrder(),
       getVisibleSections(),
       await this.getFilterOptions(),
     );
@@ -103,9 +98,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     const visible = new Set(getVisibleSections());
-    return getSectionOrder()
-      .filter((id) => visible.has(id))
-      .map((id) => DISCOVER_SECTIONS[id]);
+    return SECTION_IDS.filter((id) => visible.has(id)).map((id) => DISCOVER_SECTIONS[id]);
   }
 
   async getDiscoverSectionItems(
@@ -308,8 +301,10 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     let releaseYearMin: number | null = null;
     let releaseYearMax: number | null = null;
     if (year.includes("-")) {
-      releaseYearMin = Number(year.split("-")[0]) || null;
-      releaseYearMax = Number(year.split("-")[1]) || null;
+      const [from, to] = year.split("-").map((part) => Number(part) || null);
+      // The site labels its ranges newest-first ("2009-2005"), so accept either order.
+      releaseYearMin = from != null && to != null ? Math.min(from, to) : (from ?? to);
+      releaseYearMax = from != null && to != null ? Math.max(from, to) : (from ?? to);
     } else if (year) {
       releaseYearMin = Number(year) || null;
       releaseYearMax = releaseYearMin;

@@ -172,7 +172,6 @@ export const STATE_KEYS = {
   CONTENT_TYPES: "xcomic_content_types",
   EXCLUDED_GENRES: "xcomic_excluded_genres",
   EXCLUDED_FORMATS: "xcomic_excluded_tags",
-  SECTION_ORDER: "xcomic_section_order_v2",
   VISIBLE_SECTIONS: "xcomic_visible_sections",
 } as const;
 
@@ -329,6 +328,9 @@ export const MOST_VIEWS_OPTIONS = [
   { id: "views_d030", label: "Most Views (30 days)", chipLabel: "30 Days" },
   { id: "views_d007", label: "Most Views (7 days)", chipLabel: "7 Days" },
   { id: "views_h024", label: "Most Views (24 hours)", chipLabel: "24 Hours" },
+  { id: "views_h012", label: "Most Views (12 hours)", chipLabel: "12 Hours" },
+  { id: "views_h006", label: "Most Views (6 hours)", chipLabel: "6 Hours" },
+  { id: "views_h001", label: "Most Views (1 hour)", chipLabel: "1 Hour" },
 ] as const satisfies Array<SortingOption & { chipLabel: string }>;
 
 export type MostViewsSort = (typeof MOST_VIEWS_OPTIONS)[number]["id"];
