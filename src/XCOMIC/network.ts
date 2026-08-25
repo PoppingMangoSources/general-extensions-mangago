@@ -10,6 +10,12 @@ import {
 
 import {
   API_URL,
+  BROWSE_QUERY,
+  CHAPTERS_QUERY,
+  CHAPTER_PAGES_QUERY,
+  COMIC_QUERY,
+  LATEST_UPLOADS_QUERY,
+  RECENTLY_ADDED_QUERY,
   CHAPTER_PAGE_SIZE,
   DOMAIN,
   PAGE_SIZE,
@@ -22,113 +28,6 @@ import {
   type LatestUploadsResponse,
   type RecentlyAddedResponse,
 } from "./models";
-
-const BROWSE_QUERY = `
-query get_comic_browse_items($select: Comic_Browse_Select) {
-  get_comic_browse_items(select: $select) {
-    data {
-      id name
-      urlCover
-      translatedLanguage
-      type contentRating genres tags
-      summary { html }
-      sfw_result score_val chaps_normal
-      chapterNodes_last(amount: 1) {
-        data {
-          serial chaNum
-        }
-      }
-    }
-  }
-}
-`;
-
-const LATEST_UPLOADS_QUERY = `
-query get_comic_latestUploads($select: Comic_LatestUploads_Select) {
-  get_comic_latestUploads(select: $select) {
-    before
-    items {
-      comic {
-        data {
-          id name urlPath urlCover
-          translatedLanguage
-          type contentRating genres tags sfw_result
-        }
-      }
-      chapters(amount: 1) {
-        data {
-          id serial chaNum urlPath
-          dateCreate dateModify datePublic
-        }
-      }
-    }
-  }
-}
-`;
-
-const RECENTLY_ADDED_QUERY = `
-query get_comic_recentlyAdded($select: Comic_RecentlyAdded_Select) {
-  get_comic_recentlyAdded(select: $select) {
-    before
-    items {
-      data {
-        id name urlPath urlCover
-        translatedLanguage
-        type contentRating genres tags sfw_result
-      }
-    }
-  }
-}
-`;
-
-const COMIC_QUERY = `
-query get_comicNode($id: ID!) {
-  get_comicNode(id: $id) {
-    data {
-      id name altNames
-      originalLanguage translatedLanguage
-      originalStatus originalPubFrom { y m d }
-      originalPubTill { y m d }
-      originalPubZone uploadStatus
-      type demographics contentRating genres tags
-      authorNodes { data { name } }
-      artistNodes { data { name } }
-      tagNodes { data { name } }
-      publisherNodes { data { name } }
-      summary { html }
-      urlPath urlCover
-      sfw_result score_val follows reviews comments_total chaps_normal
-    }
-  }
-}
-`;
-
-const CHAPTERS_QUERY = `
-query get_comic_chapterList_uniqList($select: Select_Comic_ChapterList_UniqList) {
-  get_comic_chapterList_uniqList(select: $select) {
-    paging { pages }
-    items {
-      data {
-        id dbStatus serial chaNum
-        dname title urlPath
-        dateCreate dateModify datePublic
-        srcName
-        profileNodes { data { name } }
-        userNode { data { name } }
-        groupNodes { data { name } }
-      }
-    }
-  }
-}
-`;
-
-const CHAPTER_PAGES_QUERY = `
-query get_chapterNode($id: ID!) {
-  get_chapterNode(id: $id) {
-    data { imageUrls }
-  }
-}
-`;
 
 export class XComicInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
