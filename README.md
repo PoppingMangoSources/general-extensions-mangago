@@ -89,3 +89,5 @@ Include the affected source, the page or title that failed, and screenshots or r
 ## Disclaimer
 
 These extensions are **not** affiliated with Paperback or any supported website. All site names and logos belong to their respective owners.
+
+Looking for more Paperback repos? Find them at this compilation site (0.8 & 0.9): https://paperbackextensionrepo.xyz
