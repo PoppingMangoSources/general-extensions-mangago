@@ -6,7 +6,7 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "XCOMIC",
   description: "Extension that pulls content from xcomic.me.",
-  version: "1.0.0-alpha.47",
+  version: "1.0.0-alpha.48",
   icon: "icon.png",
   language: "multi",
   contentRating: ContentRating.ADULT,

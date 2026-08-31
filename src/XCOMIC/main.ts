@@ -191,8 +191,13 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     return new XComicAdvancedSearchForm(query, getPreferences(), await this.getFilterOptions());
   }
 
-  async getSortingOptions(): Promise<SortingOption[]> {
-    return SORTING_OPTIONS;
+  async getSortingOptions(query: SearchQuery<SearchMetadata>): Promise<SortingOption[]> {
+    const discoverSort = query.metadata?.discoverSort;
+    const selectedOption = SORTING_OPTIONS.find((option) => option.id === discoverSort);
+    // Paperback selects the first option when a Discover chip opens Search.
+    return selectedOption
+      ? [selectedOption, ...SORTING_OPTIONS.filter((option) => option.id !== discoverSort)]
+      : SORTING_OPTIONS;
   }
 
   private getEffectivePreferences(metadata?: SearchMetadata): XComicPreferences {
