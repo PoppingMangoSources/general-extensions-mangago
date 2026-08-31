@@ -29,7 +29,7 @@
 
 ## Sources
 
-**28 sources:** 24 manga, manhwa & manhua, and 4 novels, all available from `0.9/test`.
+**29 sources:** 25 manga, manhwa & manhua, and 4 novels, all available from `0.9/test`.
 
 ### Manga, Manhwa & Manhua
 
@@ -57,6 +57,7 @@
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/stonescape.png" width="22" align="top"/> **StoneScape**         | [stonescape.xyz](https://stonescape.xyz)           |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/templescan.png" width="22" align="top"/> **Temple Scan**        | [templetoons.com](https://templetoons.com)         |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/valirscans.png" width="22" align="top"/> **ValirScans**         | [valirscans.org](https://valirscans.org)           |
+| <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Ftest/media/sources/violetscans.png" width="22" align="top"/> **VioletScans**         | [violetscans.org](https://violetscans.org)         |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/vymanga.png" width="22" align="top"/> **VyManga**               | [vymanga.com](https://vymanga.com)                 |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/xcomic.png" width="22" align="top"/> **XCOMIC**                 | [xcomic.me](https://xcomic.me)                     |
 
