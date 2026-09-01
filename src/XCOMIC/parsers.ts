@@ -242,11 +242,10 @@ const toDiscoverItem = (
 ): DiscoverSectionItem | undefined => {
   const chapter = node.data.chapterNodes_last?.[0]?.data;
   if (type === "featuredCarouselItem") {
-    const chapters = node.data.chaps_normal ?? chapterNumber(chapter);
+    const latestChapter = formatChapter(chapter);
     const comicType = formatType(node.data.type);
-    const chapterInfo =
-      chapters != null ? { symbol: "book.fill", text: `${chapters} Chapters` } : undefined;
-    const typeInfo = comicType ? { symbol: "books.vertical.fill", text: comicType } : undefined;
+    const chapterInfo = latestChapter ? { symbol: "book.fill", text: latestChapter } : undefined;
+    const typeInfo = comicType ? { symbol: "heart.fill", text: comicType } : undefined;
     const infoItems: Extract<DiscoverSectionItem, { type: "featuredCarouselItem" }>["infoItems"] =
       chapterInfo && typeInfo
         ? [chapterInfo, typeInfo]

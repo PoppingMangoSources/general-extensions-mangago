@@ -26,7 +26,7 @@ query get_comic_browse_items($select: Comic_Browse_Select) {
       translatedLanguage
       type contentRating genres tags
       summary { html }
-      sfw_result chaps_normal
+      sfw_result
       chapterNodes_last(amount: 1) {
         data {
           serial chaNum
