@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-09-01T14:33:48.307Z",
+  "buildTime": "2026-09-01T14:53:15.810Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -170,7 +170,7 @@
     {
       "name": "Lua Comic",
       "description": "Extension that pulls comics from luacomic.org.",
-      "version": "1.0.0-alpha.15",
+      "version": "1.0.0-alpha.16",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
@@ -494,7 +494,7 @@
     {
       "name": "RinkoComics",
       "description": "Extension that pulls content from rinkocomics.com.",
-      "version": "1.0.0-alpha.18",
+      "version": "1.0.0-alpha.19",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "SAFE",
@@ -563,7 +563,7 @@
     {
       "name": "StoneScape",
       "description": "Extension that pulls content from stonescape.xyz.",
-      "version": "1.0.0-alpha.8",
+      "version": "1.0.0-alpha.9",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
@@ -586,7 +586,7 @@
     {
       "name": "Temple Scan",
       "description": "Extension that pulls content from templetoons.com.",
-      "version": "1.0.0-alpha.22",
+      "version": "1.0.0-alpha.23",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
@@ -609,7 +609,7 @@
     {
       "name": "ValirScans",
       "description": "Extension that pulls comics and novels from valirscans.org.",
-      "version": "1.0.0-alpha.18",
+      "version": "1.0.0-alpha.19",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
@@ -632,7 +632,7 @@
     {
       "name": "VioletScans",
       "description": "Extension that pulls content from violetscans.org.",
-      "version": "1.0.0-alpha.1",
+      "version": "1.0.0-alpha.2",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
