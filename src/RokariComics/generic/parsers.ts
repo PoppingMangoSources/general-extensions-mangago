@@ -17,6 +17,7 @@ import {
   type MangaStreamDiscoverSection,
   type MangaStreamParserContext,
   type MangaStreamSearchResultItem,
+  LOCKED_CHAPTER_SUFFIX,
   type Months,
 } from "./models";
 
@@ -175,10 +176,8 @@ export class MangaStreamParser {
         chapterNumber = Number(chapterNumberRegex[1]);
       }
 
-      const isLocked = $(".text-gold", chapter).length;
-      if (isLocked) {
-        continue;
-      }
+      const isLocked = $(".text-gold", chapter).length > 0;
+      if (isLocked && !source.showLockedChapters) continue;
 
       if (!id || typeof id === "undefined") {
         throw new Error(
@@ -187,10 +186,10 @@ export class MangaStreamParser {
       }
 
       chapters.push({
-        chapterId: id, // Store chapterNumber as id
+        chapterId: isLocked ? `${id}${LOCKED_CHAPTER_SUFFIX}` : id,
         langCode: language,
         chapNum: chapterNumber,
-        title,
+        title: isLocked ? (title ? `${title} (LOCKED)` : "(LOCKED)") : title,
         publishDate: date,
         sortingIndex,
         volume: 0,

@@ -5,6 +5,10 @@ import type { SortingOption } from "@paperback/types";
 
 export const DOMAIN = "https://rokaricomics.com";
 
+export const STATE_KEYS = {
+  SHOW_LOCKED_CHAPTERS: "rokaricomics_show_locked_chapters",
+} as const;
+
 export const SECTIONS = {
   FEATURED: "featured",
   POPULAR: "popular",

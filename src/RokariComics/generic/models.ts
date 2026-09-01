@@ -11,6 +11,7 @@ import type { BasicAcceptedElems, Cheerio, CheerioAPI } from "cheerio";
 import type { AnyNode } from "domhandler";
 
 export const SEARCH_TAGS_KEY = "rokaricomics_search_tags";
+export const LOCKED_CHAPTER_SUFFIX = "#locked";
 
 export interface Months {
   january: string;
@@ -36,6 +37,7 @@ export interface MangaStreamParserContext {
   contentRating: ContentRating;
   dateMonths: Months;
   language: string;
+  showLockedChapters: boolean;
   mangaSelectorAlternativeTitles: string;
   mangaSelectorArtist: string;
   mangaSelectorAuthor: string;

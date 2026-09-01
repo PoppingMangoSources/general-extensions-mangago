@@ -29,11 +29,15 @@ import { getFilterTagsBySection, getIncludedTagBySection } from "./generic/parse
 import { DOMAIN, RANKING_RANGES, SECTIONS, SORT_OPTIONS } from "./models";
 import { parseRelativeDate } from "./parsers";
 import pbconfig from "./pbconfig";
-import { getBaseUrlOverride, RokariComicsSettings } from "./settings";
+import { getBaseUrlOverride, getShowLockedChapters, RokariComicsSettings } from "./settings";
 
 class RokariComicsExtension extends MangaStreamGeneric {
   name = pbconfig.name;
   contentRating: ContentRating = pbconfig.contentRating;
+
+  get showLockedChapters(): boolean {
+    return getShowLockedChapters();
+  }
 
   get domain(): string {
     return getBaseUrlOverride() ?? DOMAIN;

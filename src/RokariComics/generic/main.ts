@@ -32,6 +32,7 @@ import {
   type MangaStreamDiscoverSection,
   type MangaStreamSearchMetadata,
   type MangaStreamSlug,
+  LOCKED_CHAPTER_SUFFIX,
   type Months,
   SEARCH_TAGS_KEY,
   type StatusTypes,
@@ -43,6 +44,7 @@ export abstract class MangaStreamGeneric implements ExtensionImpl<typeof basePbC
   abstract domain: string;
   abstract name: string;
   abstract contentRating: ContentRating;
+  abstract get showLockedChapters(): boolean;
   directoryPath: string = "manga";
 
   parser: MangaStreamParser = new MangaStreamParser();
@@ -195,6 +197,9 @@ export abstract class MangaStreamGeneric implements ExtensionImpl<typeof basePbC
     return this.parser.parseChapterList($, sourceManga, this);
   }
   async getChapterDetails(chap: Chapter): Promise<ChapterDetails> {
+    if (chap.chapterId.endsWith(LOCKED_CHAPTER_SUFFIX)) {
+      throw new Error("This chapter is locked. Unlock it on the website before reading.");
+    }
     const request = {
       url: getUsePostIds()
         ? `${this.domain}/?p=${chap.sourceManga.mangaId}/`

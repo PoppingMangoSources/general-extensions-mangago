@@ -1,11 +1,15 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import { ButtonRow, InputRow, LabelRow, Section, URL } from "@paperback/types";
+import { ButtonRow, InputRow, LabelRow, Section, ToggleRow, URL } from "@paperback/types";
 
 import { MangaStreamSettings } from "./generic/forms";
+import { STATE_KEYS } from "./models";
 
 const BASE_URL_KEY = "rokaricomics.baseUrlOverride";
+
+export const getShowLockedChapters = (): boolean =>
+  (Application.getState(STATE_KEYS.SHOW_LOCKED_CHAPTERS) as boolean | undefined) ?? false;
 
 export const getBaseUrlOverride = (): string | undefined => {
   const value = Application.getState(BASE_URL_KEY);
@@ -35,6 +39,7 @@ const setBaseUrlOverride = (value: string): string | undefined => {
 export class RokariComicsSettings extends MangaStreamSettings {
   private readonly defaultBaseUrl: string;
   private baseUrlOverride: string;
+  private showLockedChapters = getShowLockedChapters();
 
   constructor(name: string, defaultBaseUrl: string) {
     super(name);
@@ -49,6 +54,23 @@ export class RokariComicsSettings extends MangaStreamSettings {
         : this.defaultBaseUrl;
 
     return [
+      Section(
+        {
+          id: "chapters",
+          header: "Chapter Settings",
+          footer: "Locked chapters must be unlocked on the website before reading.",
+        },
+        [
+          ToggleRow("show_locked", {
+            title: "Show locked chapters",
+            value: this.showLockedChapters,
+            onValueChange: Application.Selector(
+              this as RokariComicsSettings,
+              "handleShowLockedChange",
+            ),
+          }),
+        ],
+      ),
       Section(
         {
           id: "base_url",
@@ -80,6 +102,11 @@ export class RokariComicsSettings extends MangaStreamSettings {
       Application.invalidateDiscoverSections();
     }
     this.reloadForm();
+  }
+
+  async handleShowLockedChange(value: boolean): Promise<void> {
+    this.showLockedChapters = value;
+    Application.setState(value, STATE_KEYS.SHOW_LOCKED_CHAPTERS);
   }
 
   async resetOverride(): Promise<void> {
