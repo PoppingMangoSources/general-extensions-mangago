@@ -16,6 +16,7 @@ import type { AnyNode } from "domhandler";
 
 import { DOMAIN, type ListingChapter, type MangaListItem, type ReaderMetadata } from "./models";
 import { mangaUrl } from "./network";
+import { parseEmbeddedPages, parseReaderSecretKey } from "./utils";
 
 // Paperback rejects ids containing characters outside this set.
 const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
@@ -372,7 +373,7 @@ export const parseChapters = ($: cheerio.CheerioAPI, sourceManga: SourceManga): 
         title: chapNum == null ? label || undefined : undefined,
         volume: 0,
         publishDate: parseSiteDate(row.find("p.title2").first().text()),
-        sortingIndex: rows.length - index,
+        sortingIndex: chapNum ?? rows.length - index,
       },
     ];
   });
@@ -386,15 +387,26 @@ export const parseReaderMetadata = ($: cheerio.CheerioAPI): ReaderMetadata | und
   const scripts = $("script:not([src])")
     .toArray()
     .map((element) => $(element).text())
-    .join("\n");
-  const chapterId = /(?:var\s+)?chapterid\s*=\s*(\d+)/i.exec(scripts)?.[1];
+    .filter(Boolean);
+  const scriptText = scripts.join("\n");
+  const chapterId = /(?:var\s+)?chapterid\s*=\s*(\d+)/i.exec(scriptText)?.[1];
   const imageCount = Number.parseInt(
-    /(?:var\s+)?imagecount\s*=\s*(\d+)/i.exec(scripts)?.[1] ?? "",
+    /(?:var\s+)?imagecount\s*=\s*(\d+)/i.exec(scriptText)?.[1] ?? "",
     10,
   );
-  return chapterId && Number.isFinite(imageCount) && imageCount > 0
-    ? { chapterId, imageCount }
-    : undefined;
+  if (!chapterId || !Number.isFinite(imageCount) || imageCount <= 0) return undefined;
+
+  if ($("script[src*='chapter_bar']").length > 0) {
+    const packed = scripts.find((script) => script.includes("newImgs"));
+    if (!packed) throw new Error("No embedded reader script was found.");
+    return { chapterId, imageCount, embeddedPages: parseEmbeddedPages(packed) };
+  }
+
+  const packed = scripts.find(
+    (script) => script.includes("function(p,a,c,k,e,d)") && script.includes("dm5_key"),
+  );
+  if (!packed) throw new Error("No reader key script was found.");
+  return { chapterId, imageCount, secretKey: parseReaderSecretKey(packed) };
 };
 
 const formatCount = (count: number): string => {

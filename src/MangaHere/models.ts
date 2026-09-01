@@ -192,4 +192,6 @@ export interface MangaListItem {
 export interface ReaderMetadata {
   chapterId: string;
   imageCount: number;
+  embeddedPages?: string[];
+  secretKey?: string;
 }

@@ -2,6 +2,7 @@
 /* Copyright © 2026 Inkdex */
 
 import {
+  BasicRateLimiter,
   CloudflareError,
   PaperbackInterceptor,
   URL,
@@ -13,6 +14,20 @@ import * as cheerio from "cheerio";
 import { DOMAIN, type SearchRequest } from "./models";
 
 const IMAGE_EXTENSION_REGEX = /\.(avif|gif|jpe?g|jxl|png|svg|webp)(\/|\?|#|$)/i;
+
+export class MangaHereRateLimiter extends BasicRateLimiter {
+  private readerRateLimiter = new BasicRateLimiter("mangahereReaderRateLimiter", {
+    numberOfRequests: 10,
+    bufferInterval: 1,
+    ignoreImages: true,
+  });
+
+  override async interceptRequest(request: Request): Promise<Request> {
+    return request.url.includes("/chapterfun.ashx")
+      ? this.readerRateLimiter.interceptRequest(request)
+      : super.interceptRequest(request);
+  }
+}
 
 export class MangaHereInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
@@ -127,3 +142,30 @@ export const mangaUrl = (mangaId: string): string => `${DOMAIN}/manga/${mangaId}
 
 export const chapterUrl = (mangaId: string, chapterId: string): string =>
   `${DOMAIN}/manga/${mangaId}/${chapterId}/1.html`;
+
+export const fetchChapterScript = async (
+  readerUrl: string,
+  chapterId: string,
+  page: number,
+  key: string,
+): Promise<string> => {
+  const base = readerUrl.slice(0, readerUrl.lastIndexOf("/") + 1);
+  const url = new URL(`${base}chapterfun.ashx`)
+    .setQueryItem("cid", chapterId)
+    .setQueryItem("page", String(page))
+    .setQueryItem("key", key)
+    .toString();
+  const [response, buffer] = await Application.scheduleRequest({
+    url,
+    method: "GET",
+    headers: {
+      referer: readerUrl,
+      accept: "*/*",
+      "x-requested-with": "XMLHttpRequest",
+    },
+  });
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error(`Request failed with status ${response.status}: ${url}`);
+  }
+  return Application.arrayBufferToUTF8String(buffer);
+};

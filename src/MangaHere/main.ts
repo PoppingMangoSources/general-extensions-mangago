@@ -2,7 +2,6 @@
 /* Copyright © 2026 Inkdex */
 
 import {
-  BasicRateLimiter,
   CloudflareError,
   CookieStorageInterceptor,
   DiscoverSectionType,
@@ -25,7 +24,6 @@ import type * as cheerio from "cheerio";
 
 import { MangaHereAdvancedSearchForm, MangaHereSettingsForm, getShowAdultTitles } from "./forms";
 import {
-  DOMAIN,
   GENRES,
   HOME_TITLES,
   RANKING_PERIODS,
@@ -37,11 +35,13 @@ import {
 } from "./models";
 import {
   chapterUrl,
+  fetchChapterScript,
   fetchDocument,
   homeUrl,
   latestUrl,
   listingUrl,
   MangaHereInterceptor,
+  MangaHereRateLimiter,
   mangaUrl,
   mobileHomeUrl,
   rankingUrl,
@@ -66,10 +66,12 @@ import {
   toSimpleItem,
 } from "./parsers";
 import type MangaHereConfig from "./pbconfig";
-import { loadChapterPages } from "./utils";
+import { parseChapterImageUrl, validateChapterPages } from "./utils";
+
+const READER_ATTEMPTS = 3;
 
 export class MangaHereExtension implements ExtensionImpl<typeof MangaHereConfig> {
-  private rateLimiter = new BasicRateLimiter("rateLimiter", {
+  private rateLimiter = new MangaHereRateLimiter("rateLimiter", {
     numberOfRequests: 3,
     bufferInterval: 1,
     ignoreImages: true,
@@ -431,13 +433,24 @@ export class MangaHereExtension implements ExtensionImpl<typeof MangaHereConfig>
     const $ = await fetchDocument(readerUrl);
     const metadata = parseReaderMetadata($);
     if (!metadata) throw new Error(`No reader data found for chapter ${chapter.chapterId}`);
-    const pages = await loadChapterPages(
-      $,
-      readerUrl,
-      metadata,
-      this.cookieStorageInterceptor.cookiesForUrl(`${DOMAIN}/`),
-    );
-    if (pages.length === 0) throw new Error(`No pages found for chapter ${chapter.chapterId}`);
+    const pages = metadata.embeddedPages
+      ? validateChapterPages(metadata.embeddedPages, metadata.imageCount)
+      : validateChapterPages(
+          await Promise.all(
+            Array.from({ length: metadata.imageCount }, async (_, index) => {
+              const page = index + 1;
+              let script = "";
+              let key = metadata.secretKey ?? "";
+              for (let attempt = 0; attempt < READER_ATTEMPTS && !script; attempt++) {
+                script = await fetchChapterScript(readerUrl, metadata.chapterId, page, key);
+                if (!script) key = "";
+              }
+              if (!script) throw new Error(`No reader response was returned for page ${page}.`);
+              return parseChapterImageUrl(script);
+            }),
+          ),
+          metadata.imageCount,
+        );
     return { id: chapter.chapterId, mangaId, pages };
   }
 
