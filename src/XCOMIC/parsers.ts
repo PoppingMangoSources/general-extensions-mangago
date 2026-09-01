@@ -176,6 +176,36 @@ const dateFromTimestamp = (value?: number | null): Date | undefined => {
 const formatType = (type?: string | null): string | undefined =>
   type ? titleCase(type) : undefined;
 
+const originalTitleForCard = (comic: ComicData): string | undefined => {
+  const nativeTitlePattern =
+    comic.type === "manhwa"
+      ? /[\uAC00-\uD7A3]/
+      : comic.type === "manga"
+        ? /[\u3040-\u30FF\u31F0-\u31FF]/
+        : comic.type === "manhua"
+          ? /[\u3400-\u4DBF\u4E00-\u9FFF]/
+          : undefined;
+  const nativeTitle = nativeTitlePattern
+    ? comic.altNames?.find((title) => nativeTitlePattern.test(title))
+    : undefined;
+  if (nativeTitle) return Application.decodeHTMLEntities(nativeTitle);
+
+  // Alternative titles have no language labels, so reject obvious English titles as fallbacks.
+  const primaryTitle = comic.name.trim().toLowerCase();
+  const romanizedTitle = comic.altNames?.find((title) => {
+    const normalized = title.trim();
+    return (
+      normalized.toLowerCase() !== primaryTitle &&
+      /[A-Za-z\u00C0-\u024F\u1E00-\u1EFF]/.test(normalized) &&
+      /^[\u0020-\u007E\u00C0-\u024F\u1E00-\u1EFF]+$/.test(normalized) &&
+      !/\b(?:the|of|and|my|with|for|from|this|that|your|our|into|after|before|under|over|when|where|who|how)\b/i.test(
+        normalized,
+      )
+    );
+  });
+  return romanizedTitle ? Application.decodeHTMLEntities(romanizedTitle) : undefined;
+};
+
 const baseCard = (node: ComicNode) => ({
   mangaId: sanitizeId(node.data.id),
   title: Application.decodeHTMLEntities(node.data.name),
@@ -212,23 +242,25 @@ const toDiscoverItem = (
 ): DiscoverSectionItem | undefined => {
   const chapter = node.data.chapterNodes_last?.[0]?.data;
   if (type === "featuredCarouselItem") {
-    const infoItems: { symbol: string; text: string }[] = [];
     const chapters = node.data.chaps_normal ?? chapterNumber(chapter);
-    if (chapters != null) infoItems.push({ symbol: "book.fill", text: `${chapters} Chapters` });
-    if (node.data.score_val != null) {
-      infoItems.push({ symbol: "star.fill", text: node.data.score_val.toFixed(2) });
-    }
+    const comicType = formatType(node.data.type);
+    const chapterInfo =
+      chapters != null ? { symbol: "book.fill", text: `${chapters} Chapters` } : undefined;
+    const typeInfo = comicType ? { symbol: "books.vertical.fill", text: comicType } : undefined;
+    const infoItems: Extract<DiscoverSectionItem, { type: "featuredCarouselItem" }>["infoItems"] =
+      chapterInfo && typeInfo
+        ? [chapterInfo, typeInfo]
+        : chapterInfo
+          ? [chapterInfo]
+          : typeInfo
+            ? [typeInfo]
+            : undefined;
     return {
       type,
       ...baseCard(node),
-      supertitle: formatType(node.data.type),
+      supertitle: originalTitleForCard(node.data),
       summary: stripHtml(node.data.summary?.html) || undefined,
-      infoItems:
-        infoItems.length === 0
-          ? undefined
-          : infoItems.length === 1
-            ? [infoItems[0]]
-            : [infoItems[0], infoItems[1]],
+      infoItems,
     };
   }
   if (type === "chapterUpdatesCarouselItem") {

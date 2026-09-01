@@ -21,12 +21,12 @@ export const BROWSE_QUERY = `
 query get_comic_browse_items($select: Comic_Browse_Select) {
   get_comic_browse_items(select: $select) {
     data {
-      id name
+      id name altNames
       urlCover
       translatedLanguage
       type contentRating genres tags
       summary { html }
-      sfw_result score_val chaps_normal
+      sfw_result chaps_normal
       chapterNodes_last(amount: 1) {
         data {
           serial chaNum
