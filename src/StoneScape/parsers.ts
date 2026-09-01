@@ -304,7 +304,7 @@ export const parseChapterList = (
         sourceManga,
         langCode: "en",
         chapNum: Number.isFinite(number) ? number : index + 1,
-        title: locked ? (rawTitle ? `${rawTitle} 🔒` : "🔒") : rawTitle || undefined,
+        title: locked ? (rawTitle ? `${rawTitle} (LOCKED)` : "(LOCKED)") : rawTitle || undefined,
         version: contentType === "novel" ? "Novel" : undefined,
         volume: 0,
         sortingIndex: index,

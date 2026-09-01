@@ -338,9 +338,7 @@ export const parseChapters = (
       : parseChapterId(link.attr("href") ?? "");
     if (!id) return [];
 
-    const title = locked
-      ? `Locked${price != null && price > 0 ? ` — ${price} coins` : ""} 🔒`
-      : undefined;
+    const title = locked ? "(LOCKED)" : undefined;
     const publishDate = parsePublishDate(row.find(".chapterdate").text());
 
     return [

@@ -250,7 +250,7 @@ const chapterTitle = (chapter: SeasonChapter): string => {
   const title = (chapter.chapter_title?.trim() || chapter.chapter_name?.trim() || "")
     .replace(/^chapter\s+\d+(?:\.\d+)?(?:\s*[-:]\s*)?/i, "")
     .trim();
-  return chapterIsPaid(chapter) ? (title ? `${title} 🔒` : "🔒") : title;
+  return chapterIsPaid(chapter) ? (title ? `${title} (LOCKED)` : "(LOCKED)") : title;
 };
 
 const updateCardSubtitle = (chapter: SeasonChapter): string => {

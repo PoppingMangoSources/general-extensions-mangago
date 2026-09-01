@@ -179,6 +179,7 @@ Extensions run in a JS runtime that is **not a browser** — several globals are
 
 - **Functional information is text first.** Do not place emoji, flag emoji, triangles, or other decorative Unicode icons in functional titles, settings, sorting labels, version labels, or errors. Write `Paid`, `Locked`, `18K views`, and `English` explicitly. A star immediately paired with a numeric rating (`★ 8.9`) is an accepted compact rating label. [review]
 - SDK-native SF Symbols are appropriate in fields designed for them (for example `featuredCarouselItem.infoItems`) and must accompany meaningful text. Use `star.fill` with the numeric rating in featured cards. Typographic punctuation used as a separator is not an icon.
+- **Never use a lock emoji.** In fields that accept an SF Symbol, use `lock.fill` with the text `Locked`. `Chapter.title` and chapter-update subtitles do not accept symbols, so append `(LOCKED)` immediately after the chapter title; use `(LOCKED)` by itself when there is no title. The app renders the chapter number before the title: `Ch. 12 • Chapter Title (LOCKED)` or `Ch. 12 • (LOCKED)`. If an update subtitle also carries unrelated metadata such as a rating, keep the marker attached to the chapter text before that metadata.
 - Do not copy HiveToons' historical lock-emoji title marker. Its merged price fallback is useful evidence for authoritative lock detection, but the emoji is a legacy presentation detail and HiveToons itself is outside this branch's cleanup scope.
 
 #### Text / novel chapters

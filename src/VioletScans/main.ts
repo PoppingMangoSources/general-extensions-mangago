@@ -272,7 +272,7 @@ class VioletScansExtension implements ExtensionImpl<typeof VioletScansConfig> {
               imageUrl: card.imageUrl,
               subtitle:
                 [
-                  card.isLocked ? `${card.chapterName} 🔒` : card.chapterName,
+                  card.isLocked ? `${card.chapterName} (LOCKED)` : card.chapterName,
                   card.rating != null ? `★ ${card.rating.toFixed(1)}` : undefined,
                 ]
                   .filter((value): value is string => Boolean(value))

@@ -237,7 +237,7 @@ const chapterTitle = (chapter: ValirChapterItem): string => {
   const title = cleanText(chapter.title)
     .replace(/^chapter\s+\d+(?:\.\d+)?(?:\s*[-:]\s*)?/i, "")
     .trim();
-  return chapterIsLocked(chapter) ? (title ? `${title} 🔒` : "🔒") : title;
+  return chapterIsLocked(chapter) ? (title ? `${title} (LOCKED)` : "(LOCKED)") : title;
 };
 
 const chapterIsLocked = (chapter: ValirChapterItem): boolean => chapter.isLocked === true;
