@@ -32,9 +32,9 @@ import {
   SORTING_OPTIONS,
   type BrowseSelect,
   type ComicNode,
-  type FeaturedMetric,
   type FilterOptions,
   type PageMetadata,
+  type RankedMetric,
   type SearchMetadata,
   type TriState,
   type XComicPreferences,
@@ -59,6 +59,7 @@ import {
   toChapter,
   toDiscoverItems,
   toLatestUploadNodes,
+  toRankedDiscoverItems,
   toSearchResultItem,
   toSourceManga,
   titleMangaId,
@@ -119,18 +120,18 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
         return this.getRankedSection(metadata, "field_score", "top");
       case SECTIONS.MOST_FOLLOWS:
         return this.getRankedSection(metadata, "field_follow", "follows");
-      case SECTIONS.MOST_CHAPTERS:
-        return this.getRankedSection(metadata, "field_chapter", "chapters");
-      case SECTIONS.MOST_REVIEWS:
-        return this.getRankedSection(metadata, "field_review", "reviews");
-      case SECTIONS.MOST_COMMENTS:
-        return this.getRankedSection(metadata, "field_comment", "comments");
-      case SECTIONS.LATEST_UPLOADS:
-        return this.getLatestUploadsSection(metadata);
-      case SECTIONS.RECENTLY_ADDED:
-        return this.getRecentlyAddedSection();
       case SECTIONS.MOST_VIEWS:
         return this.getMostViewsSection();
+      case SECTIONS.MOST_REVIEWS:
+        return this.getRankedSection(metadata, "field_review", "reviews");
+      case SECTIONS.RECENTLY_ADDED:
+        return this.getRecentlyAddedSection();
+      case SECTIONS.LATEST_UPLOADS:
+        return this.getLatestUploadsSection(metadata);
+      case SECTIONS.MOST_COMMENTS:
+        return this.getRankedSection(metadata, "field_comment", "comments");
+      case SECTIONS.MOST_CHAPTERS:
+        return this.getRankedSection(metadata, "field_chapter", "chapters");
       case SECTIONS.GENRES:
         return this.getGenresSection();
       default:
@@ -162,17 +163,12 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   private async getRankedSection(
     metadata: PageMetadata | undefined,
     sortBy: string,
-    metric: FeaturedMetric,
+    metric: RankedMetric,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const page = metadata?.page ?? 1;
     const result = await this.getBrowsePage(page, sortBy, "", undefined);
     return {
-      items: toDiscoverItems(
-        result.nodes,
-        "featuredCarouselItem",
-        metric,
-        result.translatedLanguages,
-      ),
+      items: toRankedDiscoverItems(result.nodes, metric, result.translatedLanguages),
       metadata: result.nextPage != null ? { page: result.nextPage } : undefined,
     };
   }

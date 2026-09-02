@@ -28,9 +28,9 @@ import {
   type ComicData,
   type ComicNode,
   type ContentPreferenceRating,
-  type FeaturedMetric,
   type FilterOptions,
   type LatestUploadsResult,
+  type RankedMetric,
   type XComicPreferences,
 } from "./models";
 
@@ -276,60 +276,23 @@ export const toSearchResultItem = (
   subtitle: cardSubtitle(node.data),
 });
 
-type CarouselItemType =
-  | "featuredCarouselItem"
-  | "simpleCarouselItem"
-  | "chapterUpdatesCarouselItem";
+type CarouselItemType = "simpleCarouselItem" | "chapterUpdatesCarouselItem";
 
 export const toDiscoverItems = (
   nodes: ComicNode[],
   type: CarouselItemType,
-  featuredMetric: FeaturedMetric = "top",
   preferredLanguages: string[] = [],
 ): DiscoverSectionItem[] =>
   nodes
-    .map((node) => toDiscoverItem(node, type, featuredMetric, preferredLanguages))
+    .map((node) => toDiscoverItem(node, type, preferredLanguages))
     .filter((item): item is DiscoverSectionItem => item !== undefined);
 
 const toDiscoverItem = (
   node: ComicNode,
   type: CarouselItemType,
-  featuredMetric: FeaturedMetric,
   preferredLanguages: string[],
 ): DiscoverSectionItem | undefined => {
   const chapter = node.data.chapterNodes_last?.[0]?.data;
-  if (type === "featuredCarouselItem") {
-    const latestChapter = latestChapterLabel(node.data);
-    const comicType = formatType(normalizedType(node.data.type));
-    const metricInfo =
-      featuredMetric === "follows" && typeof node.data.follows === "number"
-        ? { symbol: "person.2.fill", text: `${node.data.follows} follows` }
-        : featuredMetric === "chapters" && typeof node.data.totalChapters === "number"
-          ? { symbol: "book.fill", text: `${node.data.totalChapters} chapters` }
-          : featuredMetric === "reviews" && typeof node.data.reviews === "number"
-            ? { symbol: "star.fill", text: `${node.data.reviews} reviews` }
-            : featuredMetric === "comments" && typeof node.data.comments_total === "number"
-              ? { symbol: "text.bubble.fill", text: `${node.data.comments_total} comments` }
-              : latestChapter
-                ? { symbol: "book.fill", text: latestChapter }
-                : undefined;
-    const typeInfo = comicType ? { symbol: "heart.fill", text: comicType } : undefined;
-    const infoItems: Extract<DiscoverSectionItem, { type: "featuredCarouselItem" }>["infoItems"] =
-      metricInfo && typeInfo
-        ? [metricInfo, typeInfo]
-        : metricInfo
-          ? [metricInfo]
-          : typeInfo
-            ? [typeInfo]
-            : undefined;
-    return {
-      type,
-      ...baseCard(node, preferredLanguages),
-      supertitle: originalTitleForCard(node.data),
-      summary: stripHtml(node.data.summary?.html ?? node.data.description) || undefined,
-      infoItems,
-    };
-  }
   if (type === "chapterUpdatesCarouselItem") {
     if (!chapter?.id) return undefined;
     return {
@@ -344,6 +307,70 @@ const toDiscoverItem = (
   }
   return { type, ...baseCard(node, preferredLanguages), subtitle: cardSubtitle(node.data) };
 };
+
+const formatMetricCount = (value: number, label: string): string =>
+  `${value.toLocaleString("en-US")} ${label}`;
+
+type CompactRankedMetric = Exclude<RankedMetric, "top" | "reviews">;
+
+const rankedMetricSubtitle = (
+  comic: ComicData,
+  metric: CompactRankedMetric,
+): string | undefined => {
+  const [value, label] = (
+    {
+      follows: [comic.follows, "follows"],
+      comments: [comic.comments_total, "comments"],
+      chapters: [comic.totalChapters, "chapters"],
+    } satisfies Record<CompactRankedMetric, [number | null | undefined, string]>
+  )[metric];
+  return typeof value === "number" ? formatMetricCount(value, label) : undefined;
+};
+
+export const toRankedDiscoverItems = (
+  nodes: ComicNode[],
+  metric: RankedMetric,
+  preferredLanguages: string[] = [],
+): DiscoverSectionItem[] =>
+  nodes.map((node) => {
+    if (metric === "top" || metric === "reviews") {
+      const latestChapter = latestChapterLabel(node.data);
+      const chapterInfo = latestChapter ? { symbol: "book.fill", text: latestChapter } : undefined;
+      const ratingInfo =
+        typeof node.data.score_val === "number" && Number.isFinite(node.data.score_val)
+          ? { symbol: "star.fill", text: node.data.score_val.toFixed(1) }
+          : undefined;
+      const reviewInfo =
+        typeof node.data.reviews === "number"
+          ? { symbol: "star.fill", text: formatMetricCount(node.data.reviews, "reviews") }
+          : undefined;
+      const infoItems: Extract<DiscoverSectionItem, { type: "featuredCarouselItem" }>["infoItems"] =
+        metric === "reviews"
+          ? reviewInfo
+            ? [reviewInfo]
+            : undefined
+          : chapterInfo && ratingInfo
+            ? [chapterInfo, ratingInfo]
+            : chapterInfo
+              ? [chapterInfo]
+              : ratingInfo
+                ? [ratingInfo]
+                : undefined;
+      return {
+        type: "featuredCarouselItem",
+        ...baseCard(node, preferredLanguages),
+        supertitle: originalTitleForCard(node.data),
+        summary: stripHtml(node.data.summary?.html ?? node.data.description) || undefined,
+        infoItems,
+      };
+    }
+
+    return {
+      type: metric === "follows" ? "prominentCarouselItem" : "simpleCarouselItem",
+      ...baseCard(node, preferredLanguages),
+      subtitle: rankedMetricSubtitle(node.data, metric),
+    };
+  });
 
 export const toLatestUploadNodes = (result?: LatestUploadsResult | null): ComicNode[] => {
   if (!result || !Array.isArray(result.items)) {

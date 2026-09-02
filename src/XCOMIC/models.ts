@@ -144,12 +144,12 @@ query get_chapterNode($id: ID!) {
 export const SECTIONS = {
   TOP_RATED: "top-rated",
   MOST_FOLLOWS: "most-follows",
-  MOST_CHAPTERS: "most-chapters",
-  MOST_REVIEWS: "most-reviews",
-  MOST_COMMENTS: "most-comments",
   MOST_VIEWS: "most-views",
-  LATEST_UPLOADS: "latest-uploads",
+  MOST_REVIEWS: "most-reviews",
   RECENTLY_ADDED: "recently-added",
+  LATEST_UPLOADS: "latest-uploads",
+  MOST_COMMENTS: "most-comments",
+  MOST_CHAPTERS: "most-chapters",
   GENRES: "genres",
 } as const;
 
@@ -164,36 +164,36 @@ export const DISCOVER_SECTIONS: Record<SectionId, DiscoverSection> = {
   [SECTIONS.MOST_FOLLOWS]: {
     id: SECTIONS.MOST_FOLLOWS,
     title: "Most Followed",
-    type: DiscoverSectionType.featured,
-  },
-  [SECTIONS.MOST_CHAPTERS]: {
-    id: SECTIONS.MOST_CHAPTERS,
-    title: "Most Chapters",
-    type: DiscoverSectionType.featured,
-  },
-  [SECTIONS.MOST_REVIEWS]: {
-    id: SECTIONS.MOST_REVIEWS,
-    title: "Most Reviewed",
-    type: DiscoverSectionType.featured,
-  },
-  [SECTIONS.MOST_COMMENTS]: {
-    id: SECTIONS.MOST_COMMENTS,
-    title: "Most Commented",
-    type: DiscoverSectionType.featured,
+    type: DiscoverSectionType.prominentCarousel,
   },
   [SECTIONS.MOST_VIEWS]: {
     id: SECTIONS.MOST_VIEWS,
     title: "Most Views",
     type: DiscoverSectionType.genres,
   },
+  [SECTIONS.MOST_REVIEWS]: {
+    id: SECTIONS.MOST_REVIEWS,
+    title: "Most Reviewed",
+    type: DiscoverSectionType.featured,
+  },
+  [SECTIONS.RECENTLY_ADDED]: {
+    id: SECTIONS.RECENTLY_ADDED,
+    title: "Recently Added",
+    type: DiscoverSectionType.simpleCarousel,
+  },
   [SECTIONS.LATEST_UPLOADS]: {
     id: SECTIONS.LATEST_UPLOADS,
     title: "Latest Uploads",
     type: DiscoverSectionType.chapterUpdates,
   },
-  [SECTIONS.RECENTLY_ADDED]: {
-    id: SECTIONS.RECENTLY_ADDED,
-    title: "Recently Added",
+  [SECTIONS.MOST_COMMENTS]: {
+    id: SECTIONS.MOST_COMMENTS,
+    title: "Most Commented",
+    type: DiscoverSectionType.simpleCarousel,
+  },
+  [SECTIONS.MOST_CHAPTERS]: {
+    id: SECTIONS.MOST_CHAPTERS,
+    title: "Most Chapters",
     type: DiscoverSectionType.simpleCarousel,
   },
   [SECTIONS.GENRES]: {
@@ -248,7 +248,7 @@ export interface XComicPreferences {
   types: SeriesType[];
 }
 
-export type FeaturedMetric = "top" | "follows" | "chapters" | "reviews" | "comments";
+export type RankedMetric = "top" | "follows" | "reviews" | "comments" | "chapters";
 
 export const DEFAULT_CONTENT_RATINGS: ContentPreferenceRating[] = [
   "safe",
