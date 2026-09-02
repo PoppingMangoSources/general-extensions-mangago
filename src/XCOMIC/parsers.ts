@@ -258,7 +258,7 @@ const latestChapterLabel = (comic: ComicData): string | undefined => {
   const chapter = formatChapter(comic.chapterNodes_last?.[0]?.data);
   if (chapter) return chapter;
   return typeof comic.totalChapters === "number" && comic.totalChapters > 0
-    ? `Ch. ${comic.totalChapters}`
+    ? `${comic.totalChapters.toLocaleString("en-US")} Chapters`
     : undefined;
 };
 
@@ -275,6 +275,41 @@ export const toSearchResultItem = (
   ...baseCard(node, preferredLanguages, mangaIdOverride),
   subtitle: cardSubtitle(node.data),
 });
+
+export const toPreferredTitleSource = (
+  node: ComicNode,
+  preferredLanguages: string[],
+): ComicNode | undefined => {
+  const sources = (node.comicNodes ?? []).filter(
+    (source) => source.data.id && source.data.name && source.data.translatedLanguage,
+  );
+  if (!sources.length) return node;
+
+  const selected = sources
+    .filter(
+      (source) =>
+        !preferredLanguages.length ||
+        preferredLanguages.includes(source.data.translatedLanguage ?? ""),
+    )
+    .sort((left, right) => {
+      const languageOrder = preferredLanguages.length
+        ? preferredLanguages.indexOf(left.data.translatedLanguage ?? "") -
+          preferredLanguages.indexOf(right.data.translatedLanguage ?? "")
+        : 0;
+      return languageOrder || (right.data.chaps_normal ?? 0) - (left.data.chaps_normal ?? 0);
+    })[0];
+  if (!selected) return undefined;
+
+  return {
+    data: {
+      ...node.data,
+      name: selected.data.name,
+      translatedLanguage: selected.data.translatedLanguage,
+      chaps_normal: selected.data.chaps_normal,
+      totalChapters: selected.data.chaps_normal,
+    },
+  };
+};
 
 type CarouselItemType = "simpleCarouselItem" | "chapterUpdatesCarouselItem";
 

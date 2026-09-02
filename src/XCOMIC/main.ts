@@ -59,6 +59,7 @@ import {
   toChapter,
   toDiscoverItems,
   toLatestUploadNodes,
+  toPreferredTitleSource,
   toRankedDiscoverItems,
   toSearchResultItem,
   toSourceManga,
@@ -293,9 +294,12 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     const preferences = this.getEffectivePreferences(metadata);
     const select = this.buildBrowseSelect(page, sortBy, word, metadata, preferences);
     const response = await fetchBrowse(select);
-    const nodes = response.get_title_browse_items ?? [];
+    const nodes = (response.get_title_browse_items ?? []).flatMap((node) => {
+      const source = toPreferredTitleSource(node, preferences.translatedLanguages);
+      return source && isComicAllowed(source.data, preferences) ? [source] : [];
+    });
     return {
-      nodes: nodes.filter((node) => isComicAllowed(node.data, preferences)),
+      nodes,
       nextPage: response.get_title_browse_pager?.next ?? undefined,
       translatedLanguages: preferences.translatedLanguages,
     };

@@ -50,6 +50,11 @@ query get_title_browse_items($select: Title_Browse_Select) {
       translatedLanguages: translated_languages
       score_val: vote_val
     }
+    comicNodes {
+      data {
+        id name translatedLanguage chaps_normal
+      }
+    }
   }
 }
 `;
@@ -583,6 +588,7 @@ export interface ComicData {
 
 export interface ComicNode {
   data: ComicData;
+  comicNodes?: ComicNode[] | null;
 }
 
 export interface BrowseItemsResponse {
