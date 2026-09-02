@@ -32,6 +32,7 @@ import {
   SORTING_OPTIONS,
   type BrowseSelect,
   type ComicNode,
+  type FeaturedMetric,
   type FilterOptions,
   type PageMetadata,
   type SearchMetadata,
@@ -46,17 +47,21 @@ import {
   fetchLatestUploads,
   fetchRecentlyAdded,
   fetchSearchPage,
+  fetchTitlePage,
   XComicInterceptor,
 } from "./network";
 import {
   isComicAllowed,
   parseChapterDetails,
   parseFilterOptions,
+  parseTitleComicId,
+  parseTitleMangaId,
   toChapter,
   toDiscoverItems,
   toLatestUploadNodes,
   toSearchResultItem,
   toSourceManga,
+  titleMangaId,
 } from "./parsers";
 import type XComicConfig from "./pbconfig";
 
@@ -111,7 +116,15 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
       case SECTIONS.TOP_RATED:
-        return this.getTopRatedSection(metadata);
+        return this.getRankedSection(metadata, "field_score", "top");
+      case SECTIONS.MOST_FOLLOWS:
+        return this.getRankedSection(metadata, "field_follow", "follows");
+      case SECTIONS.MOST_CHAPTERS:
+        return this.getRankedSection(metadata, "field_chapter", "chapters");
+      case SECTIONS.MOST_REVIEWS:
+        return this.getRankedSection(metadata, "field_review", "reviews");
+      case SECTIONS.MOST_COMMENTS:
+        return this.getRankedSection(metadata, "field_comment", "comments");
       case SECTIONS.LATEST_UPLOADS:
         return this.getLatestUploadsSection(metadata);
       case SECTIONS.RECENTLY_ADDED:
@@ -140,19 +153,26 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     const nodes = (await fetchRecentlyAdded()).get_comic_recentlyAdded?.items ?? [];
     return {
       items: toDiscoverItems(
-        nodes.filter((node) => isComicAllowed(node.data, preferences, true)),
+        nodes.filter((node) => isComicAllowed(node.data, preferences)),
         "simpleCarouselItem",
       ),
     };
   }
 
-  private async getTopRatedSection(
+  private async getRankedSection(
     metadata: PageMetadata | undefined,
+    sortBy: string,
+    metric: FeaturedMetric,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const page = metadata?.page ?? 1;
-    const result = await this.getBrowsePage(page, "field_score", "", undefined);
+    const result = await this.getBrowsePage(page, sortBy, "", undefined);
     return {
-      items: toDiscoverItems(result.nodes, "featuredCarouselItem"),
+      items: toDiscoverItems(
+        result.nodes,
+        "featuredCarouselItem",
+        metric,
+        result.translatedLanguages,
+      ),
       metadata: result.nextPage != null ? { page: result.nextPage } : undefined,
     };
   }
@@ -216,6 +236,12 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
         ...idsWithState(metadata?.genres, "excluded"),
       ],
       types: metadata?.types?.length ? metadata.types : preferences.types,
+      originalLanguages: metadata?.originalLanguages?.length
+        ? metadata.originalLanguages
+        : preferences.originalLanguages,
+      translatedLanguages: metadata?.translatedLanguages?.length
+        ? metadata.translatedLanguages
+        : preferences.translatedLanguages,
     };
   }
 
@@ -230,7 +256,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     for (let attempt = 0; attempt < MAX_LATEST_REQUESTS && !nodes.length; attempt++) {
       const result = (await fetchLatestUploads(cursor)).get_comic_latestUploads;
       for (const node of toLatestUploadNodes(result)) {
-        if (seenIds.has(node.data.id) || !isComicAllowed(node.data, preferences, true)) continue;
+        if (seenIds.has(node.data.id) || !isComicAllowed(node.data, preferences)) continue;
         seenIds.add(node.data.id);
         nodes.push(node);
       }
@@ -257,7 +283,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     const page = metadata?.page ?? 1;
     const result = await this.getBrowsePage(page, sortBy, title, query.metadata);
     return {
-      items: result.nodes.map(toSearchResultItem),
+      items: result.nodes.map((node) => toSearchResultItem(node, result.translatedLanguages)),
       metadata: result.nextPage != null ? { page: result.nextPage } : undefined,
     };
   }
@@ -267,13 +293,15 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     sortBy: string,
     word: string,
     metadata: SearchMetadata | undefined,
-  ): Promise<{ nodes: ComicNode[]; nextPage?: number }> {
+  ): Promise<{ nodes: ComicNode[]; nextPage?: number; translatedLanguages: string[] }> {
     const preferences = this.getEffectivePreferences(metadata);
     const select = this.buildBrowseSelect(page, sortBy, word, metadata, preferences);
-    const nodes = (await fetchBrowse(select)).get_comic_browse_items ?? [];
+    const response = await fetchBrowse(select);
+    const nodes = response.get_title_browse_items ?? [];
     return {
       nodes: nodes.filter((node) => isComicAllowed(node.data, preferences)),
-      nextPage: nodes.length === PAGE_SIZE ? page + 1 : undefined,
+      nextPage: response.get_title_browse_pager?.next ?? undefined,
+      translatedLanguages: preferences.translatedLanguages,
     };
   }
 
@@ -307,11 +335,10 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       where: "browse",
       page,
       size: PAGE_SIZE,
-      init: (page - 1) * PAGE_SIZE,
       sortby: sortBy,
       word,
-      incOLangs: metadata?.originalLanguages ?? [],
-      incTLangs: metadata?.translatedLanguages ?? preferences.languages,
+      incOLangs: preferences.originalLanguages,
+      incTLangs: preferences.translatedLanguages,
       incGenres: [...new Set(includedTagIds)],
       excGenres: [...new Set(excludedTagIds)],
       incGenresMode: metadata?.incGenresMode ?? "and",
@@ -322,11 +349,10 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       releaseYearMin,
       releaseYearMax,
       origStatus: metadata?.originalStatus?.[0] ?? null,
-      siteStatus: metadata?.uploadStatus?.[0] ?? null,
       chapCount: metadata?.chapCount ?? "",
-      ignoreGlobalULangs: true,
-      ignoreGlobalGenres: true,
-      ignoreGlobalBlocks: true,
+      ignoreGlobalULangs: false,
+      ignoreGlobalGenres: false,
+      ignoreGlobalBlocks: false,
     };
   }
 
@@ -334,33 +360,57 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     title: string,
     metadata?: SearchMetadata,
   ): Promise<PagedResults<SearchResultItem> | undefined> {
-    const match = /^https?:\/\/(?:www\.)?xcomic\.(?:me|net)\/comic\/([a-zA-Z0-9]+)/i.exec(title);
-    if (!match?.[1]) return undefined;
-    const response = await fetchComic(match[1]);
+    const match = /^https?:\/\/(?:www\.)?xcomic\.(?:me|net)\/(comic|title)\/([a-zA-Z0-9]+)/i.exec(
+      title,
+    );
+    if (!match?.[1] || !match[2]) return undefined;
+    const preferences = this.getEffectivePreferences(metadata);
+    const response =
+      match[1] === "title"
+        ? await this.fetchTitleComic(match[2], preferences.translatedLanguages)
+        : await fetchComic(match[2]);
     if (!response.get_comicNode) return undefined;
-    if (!isComicAllowed(response.get_comicNode.data, this.getEffectivePreferences(metadata))) {
+    if (!isComicAllowed(response.get_comicNode.data, preferences)) {
       return { items: [] };
     }
-    return { items: [toSearchResultItem(response.get_comicNode)] };
+    const mangaId =
+      match[1] === "title" && response.get_comicNode.data.translatedLanguage
+        ? titleMangaId(match[2], response.get_comicNode.data.translatedLanguage)
+        : match[2];
+    return { items: [toSearchResultItem(response.get_comicNode, [], mangaId)] };
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
-    const response = await fetchComic(mangaId);
+    const title = parseTitleMangaId(mangaId);
+    const response = title
+      ? await this.fetchTitleComic(title.titleId, [title.language])
+      : await fetchComic(mangaId);
     if (!response.get_comicNode) throw new Error(`Manga not found: ${mangaId}`);
-    return toSourceManga(response.get_comicNode);
+    return toSourceManga(response.get_comicNode, mangaId);
+  }
+
+  private async fetchTitleComic(titleId: string, languages: string[]) {
+    const comicId = parseTitleComicId(await fetchTitlePage(titleId), languages);
+    if (!comicId) {
+      throw new Error(`XCOMIC has no selected-language source for title ${titleId}`);
+    }
+    return await fetchComic(comicId);
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
-    const first = await fetchChapters(sourceManga.mangaId, 1);
+    const title = parseTitleMangaId(sourceManga.mangaId);
+    const comicId = title
+      ? /\/comic\/([a-zA-Z0-9]+)/i.exec(sourceManga.mangaInfo.shareUrl ?? "")?.[1]
+      : sourceManga.mangaId;
+    if (!comicId) throw new Error(`XCOMIC could not resolve a source for ${sourceManga.mangaId}`);
+    const first = await fetchChapters(comicId, 1);
     const firstResult = first.get_comic_chapterList_uniqList;
     if (!firstResult) return [];
     const pageCount = firstResult.paging?.pages ?? 1;
     const responses = [
       first,
       ...(await Promise.all(
-        Array.from({ length: pageCount - 1 }, (_, index) =>
-          fetchChapters(sourceManga.mangaId, index + 2),
-        ),
+        Array.from({ length: pageCount - 1 }, (_, index) => fetchChapters(comicId, index + 2)),
       )),
     ];
     return responses.flatMap((response) =>

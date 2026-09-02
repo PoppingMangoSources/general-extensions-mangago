@@ -11,27 +11,44 @@ import {
 
 export const DOMAIN = "https://xcomic.me";
 export const API_URL = `${DOMAIN}/query/`;
-export const PAGE_SIZE = 36;
+export const PAGE_SIZE = 48;
 // Upper bound on latest-upload pages walked when filtering empties a page.
 export const MAX_LATEST_REQUESTS = 10;
 export const CHAPTER_PAGE_SIZE = 1000;
 export const RECENTLY_ADDED_SIZE = 50;
 
-export const BROWSE_QUERY = `
-query get_comic_browse_items($select: Comic_Browse_Select) {
-  get_comic_browse_items(select: $select) {
+export const BROWSE_PAGER_QUERY = `
+query get_title_browse_pager($select: Title_Browse_Select) {
+  get_title_browse_pager(select: $select) {
+    next
+  }
+}
+`;
+
+export const BROWSE_ITEMS_QUERY = `
+query get_title_browse_items($select: Title_Browse_Select) {
+  get_title_browse_items(select: $select) {
     data {
-      id name altNames
-      urlCover
-      translatedLanguage
-      type contentRating genres tags
-      summary { html }
-      sfw_result
-      chapterNodes_last(amount: 1) {
-        data {
-          serial chaNum
-        }
-      }
+      id
+      name: title
+      altNames: alt_titles
+      nativeTitle: native_title
+      romanizedTitle: romanized_title
+      originalLanguage: original_language
+      contentRating: content_rating_id
+      type: type_id
+      genres: genre_ids
+      tags: format_ids
+      description
+      urlCover: cover_local_url
+      remoteCoverUrl: cover_url
+      urlPath
+      totalChapters: total_chapters
+      follows: total_follows
+      reviews: total_reviews
+      comments_total: total_comments
+      translatedLanguages: translated_languages
+      score_val: vote_val
     }
   }
 }
@@ -45,7 +62,7 @@ query get_comic_latestUploads($select: Comic_LatestUploads_Select) {
       comic {
         data {
           id name urlPath urlCover
-          translatedLanguage
+          originalLanguage translatedLanguage
           type contentRating genres tags sfw_result
         }
       }
@@ -67,7 +84,7 @@ query get_comic_recentlyAdded($select: Comic_RecentlyAdded_Select) {
     items {
       data {
         id name urlPath urlCover
-        translatedLanguage
+        originalLanguage translatedLanguage
         type contentRating genres tags sfw_result
       }
     }
@@ -126,6 +143,10 @@ query get_chapterNode($id: ID!) {
 
 export const SECTIONS = {
   TOP_RATED: "top-rated",
+  MOST_FOLLOWS: "most-follows",
+  MOST_CHAPTERS: "most-chapters",
+  MOST_REVIEWS: "most-reviews",
+  MOST_COMMENTS: "most-comments",
   MOST_VIEWS: "most-views",
   LATEST_UPLOADS: "latest-uploads",
   RECENTLY_ADDED: "recently-added",
@@ -138,6 +159,26 @@ export const DISCOVER_SECTIONS: Record<SectionId, DiscoverSection> = {
   [SECTIONS.TOP_RATED]: {
     id: SECTIONS.TOP_RATED,
     title: "Top Rated",
+    type: DiscoverSectionType.featured,
+  },
+  [SECTIONS.MOST_FOLLOWS]: {
+    id: SECTIONS.MOST_FOLLOWS,
+    title: "Most Followed",
+    type: DiscoverSectionType.featured,
+  },
+  [SECTIONS.MOST_CHAPTERS]: {
+    id: SECTIONS.MOST_CHAPTERS,
+    title: "Most Chapters",
+    type: DiscoverSectionType.featured,
+  },
+  [SECTIONS.MOST_REVIEWS]: {
+    id: SECTIONS.MOST_REVIEWS,
+    title: "Most Reviewed",
+    type: DiscoverSectionType.featured,
+  },
+  [SECTIONS.MOST_COMMENTS]: {
+    id: SECTIONS.MOST_COMMENTS,
+    title: "Most Commented",
     type: DiscoverSectionType.featured,
   },
   [SECTIONS.MOST_VIEWS]: {
@@ -173,9 +214,13 @@ export const STATE_KEYS = {
   CONTENT_TYPES: "xcomic_content_types",
   EXCLUDED_GENRES: "xcomic_excluded_genres",
   EXCLUDED_FORMATS: "xcomic_excluded_formats",
-  LANGUAGES: "xcomic_languages",
+  ORIGINAL_LANGUAGES: "xcomic_original_languages",
+  TRANSLATED_LANGUAGES: "xcomic_languages",
+  VISIBLE_SECTIONS_VERSION: "xcomic_visible_sections_version",
   VISIBLE_SECTIONS: "xcomic_visible_sections",
 } as const;
+
+export const VISIBLE_SECTIONS_VERSION = 2;
 
 export type ContentPreferenceRating = "safe" | "suggestive" | "erotica" | "pornographic";
 export const CONTENT_RATING_GENRES = {
@@ -183,23 +228,14 @@ export const CONTENT_RATING_GENRES = {
   erotica: ["adult", "erotica", "smut"],
   pornographic: ["hentai", "pornographic"],
 } as const satisfies Record<Exclude<ContentPreferenceRating, "safe">, readonly string[]>;
-export type SeriesType =
-  | "artbook"
-  | "cartoon"
-  | "imageset"
-  | "manga"
-  | "manhua"
-  | "manhwa"
-  | "western";
-export type Demographic =
-  | "shounen"
-  | "shoujo"
-  | "seinen"
-  | "josei"
-  | "kodomo"
-  | "silver_golden"
-  | "non_human";
-export type WorkStatus = "pending" | "ongoing" | "completed" | "hiatus" | "cancelled";
+export type SeriesType = "manga" | "manhua" | "manhwa" | "novel" | "oel" | "other";
+export const LEGACY_TYPE_MAP: Record<string, SeriesType> = {
+  artbook: "other",
+  cartoon: "oel",
+  imageset: "other",
+  western: "oel",
+};
+export const LEGACY_FORMAT_MAP: Record<string, string> = { long_strip: "longstrip" };
 export type GenreMode = "and" | "or";
 export type TriState = Record<string, "included" | "excluded">;
 
@@ -207,9 +243,12 @@ export interface XComicPreferences {
   contentRatings: ContentPreferenceRating[];
   excludedFormats: string[];
   excludedGenres: string[];
-  languages: string[];
+  originalLanguages: string[];
+  translatedLanguages: string[];
   types: SeriesType[];
 }
+
+export type FeaturedMetric = "top" | "follows" | "chapters" | "reviews" | "comments";
 
 export const DEFAULT_CONTENT_RATINGS: ContentPreferenceRating[] = [
   "safe",
@@ -218,13 +257,12 @@ export const DEFAULT_CONTENT_RATINGS: ContentPreferenceRating[] = [
   "pornographic",
 ];
 export const DEFAULT_CONTENT_TYPES: SeriesType[] = [
-  "artbook",
-  "cartoon",
-  "imageset",
+  "manhwa",
   "manga",
   "manhua",
-  "manhwa",
-  "western",
+  "other",
+  "oel",
+  "novel",
 ];
 export const DEFAULT_LANGUAGES: string[] = ["en"];
 
@@ -244,14 +282,6 @@ export const TAG_TITLE_OVERRIDES: Record<string, string> = {
   silver_golden: "Silver & Golden",
   non_human: "Non-human",
 };
-
-export const STATUS_OPTIONS: Array<{ id: WorkStatus; title: string }> = [
-  { id: "pending", title: "Pending" },
-  { id: "ongoing", title: "Ongoing" },
-  { id: "completed", title: "Completed" },
-  { id: "hiatus", title: "Hiatus" },
-  { id: "cancelled", title: "Cancelled" },
-];
 
 export const MODE_OPTIONS: Array<{ id: GenreMode; title: string }> = [
   { id: "and", title: "AND" },
@@ -288,29 +318,16 @@ export const CHAPTER_COUNT_OPTIONS: Tag[] = [
   { id: "200-299", title: "200–299" },
 ];
 
-export const FORMAT_OPTIONS: Tag[] = [
-  { id: "4_koma", title: "4 Koma" },
-  { id: "adaptation", title: "Adaptation" },
-  { id: "anthology", title: "Anthology" },
-  { id: "award_winning", title: "Award Winning" },
-  { id: "doujinshi", title: "Doujinshi" },
-  { id: "fan_colored", title: "Fan Colored" },
-  { id: "full_color", title: "Full Color" },
-  { id: "long_strip", title: "Long Strip" },
-  { id: "official_colored", title: "Official Colored" },
-  { id: "oneshot", title: "Oneshot" },
-  { id: "web_comic", title: "Web Comic" },
-  { id: "webtoon", title: "Webtoon" },
-];
-
 export interface FilterOptions {
   contentRatings: Tag[];
   demographics: Tag[];
+  formats: Tag[];
   genres: Tag[];
+  statuses: Tag[];
   types: Tag[];
 }
 
-// English first, then alphabetical, matching the site's own picker; "Other" (_t) last.
+// Complete current picker; "Other" (_t) remains last.
 export const LANGUAGE_OPTIONS: Tag[] = [
   { id: "en", title: "English" },
   { id: "ab", title: "Abkhazian" },
@@ -329,8 +346,7 @@ export const LANGUAGE_OPTIONS: Tag[] = [
   { id: "ca", title: "Catalan" },
   { id: "ceb", title: "Cebuano" },
   { id: "zh", title: "Chinese" },
-  { id: "zh_hk", title: "Chinese (Cantonese)" },
-  { id: "zh_tw", title: "Chinese (Traditional)" },
+  { id: "zh_hk", title: "Chinese (T)" },
   { id: "cv", title: "Chuvash" },
   { id: "hr", title: "Croatian" },
   { id: "cs", title: "Czech" },
@@ -381,7 +397,7 @@ export const LANGUAGE_OPTIONS: Tag[] = [
   { id: "fa", title: "Persian" },
   { id: "pl", title: "Polish" },
   { id: "pt", title: "Portuguese" },
-  { id: "pt_br", title: "Portuguese (Brazil)" },
+  { id: "pt_br", title: "Portuguese (BR)" },
   { id: "ro", title: "Romanian" },
   { id: "ru", title: "Russian" },
   { id: "sr", title: "Serbian" },
@@ -392,7 +408,7 @@ export const LANGUAGE_OPTIONS: Tag[] = [
   { id: "sl", title: "Slovenian" },
   { id: "so", title: "Somali" },
   { id: "es", title: "Spanish" },
-  { id: "es_419", title: "Spanish (Latin America)" },
+  { id: "es_419", title: "Spanish (LA)" },
   { id: "ss", title: "Swati" },
   { id: "sv", title: "Swedish" },
   { id: "ta", title: "Tamil" },
@@ -447,17 +463,16 @@ export interface PageMetadata extends JSONObject {
 export interface SearchMetadata extends JSONObject {
   chapCount?: string;
   contentRatings?: ContentPreferenceRating[];
-  demographics?: Demographic[];
+  demographics?: string[];
   excGenresMode?: GenreMode;
   formats?: TriState;
   genres?: TriState;
   incGenresMode?: GenreMode;
   originalLanguages?: string[];
-  originalStatus?: WorkStatus[];
+  originalStatus?: string[];
   discoverSort?: MostViewsSort;
   translatedLanguages?: string[];
   types?: SeriesType[];
-  uploadStatus?: WorkStatus[];
   year?: string;
 }
 
@@ -465,7 +480,6 @@ export interface BrowseSelect {
   where: "browse";
   page: number;
   size: number;
-  init: number;
   sortby: string;
   word: string;
   incOLangs: string[];
@@ -475,12 +489,11 @@ export interface BrowseSelect {
   incGenresMode: GenreMode | null;
   excGenresMode: GenreMode | null;
   incTypes: SeriesType[];
-  incDemographics: Demographic[];
+  incDemographics: string[];
   incContentRatings: ContentPreferenceRating[];
   releaseYearMin: number | null;
   releaseYearMax: number | null;
   origStatus: string | null;
-  siteStatus: string | null;
   chapCount: string | null;
   ignoreGlobalULangs: boolean;
   ignoreGlobalGenres: boolean;
@@ -534,14 +547,17 @@ export interface ComicData {
   id: string;
   name: string;
   altNames?: string[] | null;
+  nativeTitle?: string | null;
+  romanizedTitle?: string | null;
   originalLanguage?: string | null;
   translatedLanguage?: string | null;
+  translatedLanguages?: string[] | null;
   originalStatus?: string | null;
   originalPubFrom?: DateYmd | null;
   originalPubTill?: DateYmd | null;
   originalPubZone?: string | null;
   uploadStatus?: string | null;
-  type?: SeriesType | null;
+  type?: string | null;
   demographics?: string[] | null;
   contentRating?: string | null;
   genres?: string[] | null;
@@ -551,14 +567,17 @@ export interface ComicData {
   tagNodes?: NamedNode[] | null;
   publisherNodes?: NamedNode[] | null;
   summary?: { html?: string | null } | null;
+  description?: string | null;
   urlPath?: string | null;
   urlCover?: string | null;
+  remoteCoverUrl?: string | null;
   sfw_result?: boolean | null;
   score_val?: number | null;
   follows?: number | null;
   reviews?: number | null;
   comments_total?: number | null;
   chaps_normal?: number | null;
+  totalChapters?: number | null;
   chapterNodes_last?: ChapterNode[] | null;
 }
 
@@ -566,9 +585,17 @@ export interface ComicNode {
   data: ComicData;
 }
 
-export interface BrowseResponse {
-  get_comic_browse_items?: ComicNode[] | null;
+export interface BrowseItemsResponse {
+  get_title_browse_items?: ComicNode[] | null;
 }
+
+export interface BrowsePagerResponse {
+  get_title_browse_pager?: {
+    next?: number | null;
+  } | null;
+}
+
+export type BrowseResponse = BrowseItemsResponse & BrowsePagerResponse;
 
 export interface LatestUploadsResponse {
   get_comic_latestUploads?: LatestUploadsResult | null;

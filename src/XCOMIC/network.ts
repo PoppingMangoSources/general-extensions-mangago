@@ -10,7 +10,8 @@ import {
 
 import {
   API_URL,
-  BROWSE_QUERY,
+  BROWSE_ITEMS_QUERY,
+  BROWSE_PAGER_QUERY,
   CHAPTERS_QUERY,
   CHAPTER_PAGES_QUERY,
   COMIC_QUERY,
@@ -21,6 +22,8 @@ import {
   PAGE_SIZE,
   RECENTLY_ADDED_SIZE,
   type BrowseResponse,
+  type BrowseItemsResponse,
+  type BrowsePagerResponse,
   type BrowseSelect,
   type ChapterListResponse,
   type ChapterPagesResponse,
@@ -95,8 +98,13 @@ const fetchGraphQL = async <T>(query: string, variables: Record<string, unknown>
   return payload.data;
 };
 
-export const fetchBrowse = (select: BrowseSelect): Promise<BrowseResponse> =>
-  fetchGraphQL<BrowseResponse>(BROWSE_QUERY, { select });
+export const fetchBrowse = async (select: BrowseSelect): Promise<BrowseResponse> => {
+  const [items, pager] = await Promise.all([
+    fetchGraphQL<BrowseItemsResponse>(BROWSE_ITEMS_QUERY, { select }),
+    fetchGraphQL<BrowsePagerResponse>(BROWSE_PAGER_QUERY, { select }),
+  ]);
+  return { ...items, ...pager };
+};
 
 export const fetchLatestUploads = (before?: number): Promise<LatestUploadsResponse> =>
   fetchGraphQL<LatestUploadsResponse>(LATEST_UPLOADS_QUERY, {
@@ -119,6 +127,13 @@ export const fetchChapters = (comicId: string, page: number): Promise<ChapterLis
 export const fetchSearchPage = (): Promise<string> =>
   fetchText({
     url: `${DOMAIN}/search`,
+    method: "GET",
+    headers: { accept: "text/html,application/xhtml+xml" },
+  });
+
+export const fetchTitlePage = (id: string): Promise<string> =>
+  fetchText({
+    url: `${DOMAIN}/title/${id}`,
     method: "GET",
     headers: { accept: "text/html,application/xhtml+xml" },
   });

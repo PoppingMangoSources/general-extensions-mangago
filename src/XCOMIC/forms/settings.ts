@@ -8,11 +8,14 @@ import {
   DEFAULT_CONTENT_RATINGS,
   DEFAULT_CONTENT_TYPES,
   DEFAULT_LANGUAGES,
-  FORMAT_OPTIONS,
   LANGUAGE_OPTIONS,
+  LEGACY_FORMAT_MAP,
+  LEGACY_TYPE_MAP,
   SECTION_IDS,
   SECTION_OPTIONS,
+  SECTIONS,
   STATE_KEYS,
+  VISIBLE_SECTIONS_VERSION,
   type ContentPreferenceRating,
   type FilterOptions,
   type SectionId,
@@ -27,17 +30,39 @@ export const getPreferences = (): XComicPreferences => {
     [];
   const ratings = storedRatings.filter((rating) => validRatings.has(rating));
 
-  // Types come from the site's own filter list, so any stored id is accepted as-is.
-  const types = (Application.getState(STATE_KEYS.CONTENT_TYPES) as SeriesType[] | undefined) ?? [];
+  const validTypes = new Set(DEFAULT_CONTENT_TYPES);
+  const storedTypes =
+    (Application.getState(STATE_KEYS.CONTENT_TYPES) as string[] | undefined) ?? [];
+  const types = [...new Set(storedTypes.map((type) => LEGACY_TYPE_MAP[type] ?? type))].filter(
+    (type): type is SeriesType => validTypes.has(type as SeriesType),
+  );
+  const hadLegacyDefaults = [
+    "artbook",
+    "cartoon",
+    "imageset",
+    "manga",
+    "manhua",
+    "manhwa",
+    "western",
+  ].every((type) => storedTypes.includes(type));
 
-  const languages = (Application.getState(STATE_KEYS.LANGUAGES) as string[] | undefined) ?? [];
+  const validLanguages = new Set(LANGUAGE_OPTIONS.map(({ id }) => id));
+  const originalLanguages = (
+    (Application.getState(STATE_KEYS.ORIGINAL_LANGUAGES) as string[] | undefined) ?? []
+  ).filter((language) => validLanguages.has(language));
+  const translatedLanguages = (
+    (Application.getState(STATE_KEYS.TRANSLATED_LANGUAGES) as string[] | undefined) ?? []
+  ).filter((language) => validLanguages.has(language));
 
   return {
     contentRatings: ratings.length ? ratings : DEFAULT_CONTENT_RATINGS,
-    languages: languages.length ? languages : DEFAULT_LANGUAGES,
-    types: types.length ? types : DEFAULT_CONTENT_TYPES,
+    originalLanguages,
+    translatedLanguages: translatedLanguages.length ? translatedLanguages : DEFAULT_LANGUAGES,
+    types: hadLegacyDefaults || !types.length ? DEFAULT_CONTENT_TYPES : types,
     excludedFormats:
-      (Application.getState(STATE_KEYS.EXCLUDED_FORMATS) as string[] | undefined) ?? [],
+      (Application.getState(STATE_KEYS.EXCLUDED_FORMATS) as string[] | undefined)?.map(
+        (id) => LEGACY_FORMAT_MAP[id] ?? id,
+      ) ?? [],
     excludedGenres:
       (Application.getState(STATE_KEYS.EXCLUDED_GENRES) as string[] | undefined) ?? [],
   };
@@ -53,6 +78,21 @@ const saveSetting = (form: Form, key: string, value: unknown): void => {
 export const getVisibleSections = (): SectionId[] => {
   const stored = Application.getState(STATE_KEYS.VISIBLE_SECTIONS) as SectionId[] | undefined;
   const visible = stored?.filter((id) => SECTION_IDS.includes(id)) ?? [];
+  const version = Application.getState(STATE_KEYS.VISIBLE_SECTIONS_VERSION) as number | undefined;
+  if (visible.length && version !== VISIBLE_SECTIONS_VERSION) {
+    const migrated = [
+      ...new Set([
+        ...visible,
+        SECTIONS.MOST_FOLLOWS,
+        SECTIONS.MOST_CHAPTERS,
+        SECTIONS.MOST_REVIEWS,
+        SECTIONS.MOST_COMMENTS,
+      ]),
+    ] as SectionId[];
+    Application.setState(migrated, STATE_KEYS.VISIBLE_SECTIONS);
+    Application.setState(VISIBLE_SECTIONS_VERSION, STATE_KEYS.VISIBLE_SECTIONS_VERSION);
+    return migrated;
+  }
   return visible.length ? visible : SECTION_IDS;
 };
 
@@ -61,7 +101,8 @@ export class XComicSettingsForm extends Form {
   private types: SeriesType[];
   private excludedFormats: string[];
   private excludedGenres: string[];
-  private languages: string[];
+  private originalLanguages: string[];
+  private translatedLanguages: string[];
   private visibleSections: SectionId[];
 
   constructor(
@@ -74,7 +115,8 @@ export class XComicSettingsForm extends Form {
     this.types = preferences.types;
     this.excludedFormats = preferences.excludedFormats;
     this.excludedGenres = preferences.excludedGenres;
-    this.languages = preferences.languages;
+    this.originalLanguages = preferences.originalLanguages;
+    this.translatedLanguages = preferences.translatedLanguages;
     this.visibleSections = visibleSections;
   }
 
@@ -83,23 +125,41 @@ export class XComicSettingsForm extends Form {
       Section(
         {
           id: "languages",
-          footer:
-            "Only titles translated into these languages are shown across discover and search.",
+          footer: "These defaults apply across Discover and Search.",
         },
         [
-          SelectRow("languages", {
-            title: "Languages",
-            subtitle: this.languages
+          SelectRow("original_languages", {
+            title: "Original languages",
+            subtitle: this.originalLanguages.length
+              ? this.originalLanguages
+                  .map(
+                    (code) => LANGUAGE_OPTIONS.find((option) => option.id === code)?.title ?? code,
+                  )
+                  .join(", ")
+              : "All",
+            layout: "list",
+            value: this.originalLanguages,
+            items: LANGUAGE_OPTIONS,
+            minItemCount: 0,
+            maxItemCount: LANGUAGE_OPTIONS.length,
+            onValueChange: Application.Selector(
+              this as XComicSettingsForm,
+              "handleOriginalLanguagesChange",
+            ),
+          }),
+          SelectRow("translated_languages", {
+            title: "Translated languages",
+            subtitle: this.translatedLanguages
               .map((code) => LANGUAGE_OPTIONS.find((option) => option.id === code)?.title ?? code)
               .join(", "),
             layout: "list",
-            value: this.languages,
+            value: this.translatedLanguages,
             items: LANGUAGE_OPTIONS,
             minItemCount: 1,
             maxItemCount: LANGUAGE_OPTIONS.length,
             onValueChange: Application.Selector(
               this as XComicSettingsForm,
-              "handleLanguagesChange",
+              "handleTranslatedLanguagesChange",
             ),
           }),
         ],
@@ -147,9 +207,9 @@ export class XComicSettingsForm extends Form {
           title: "Excluded formats",
           layout: "flow",
           value: this.excludedFormats,
-          items: FORMAT_OPTIONS,
+          items: this.filterOptions.formats,
           minItemCount: 0,
-          maxItemCount: FORMAT_OPTIONS.length,
+          maxItemCount: this.filterOptions.formats.length,
           onValueChange: Application.Selector(
             this as XComicSettingsForm,
             "handleExcludedFormatsChange",
@@ -173,9 +233,14 @@ export class XComicSettingsForm extends Form {
     ];
   }
 
-  async handleLanguagesChange(value: string[]): Promise<void> {
-    this.languages = value.length ? value : DEFAULT_LANGUAGES;
-    saveSetting(this, STATE_KEYS.LANGUAGES, this.languages);
+  async handleOriginalLanguagesChange(value: string[]): Promise<void> {
+    this.originalLanguages = value;
+    saveSetting(this, STATE_KEYS.ORIGINAL_LANGUAGES, value);
+  }
+
+  async handleTranslatedLanguagesChange(value: string[]): Promise<void> {
+    this.translatedLanguages = value.length ? value : DEFAULT_LANGUAGES;
+    saveSetting(this, STATE_KEYS.TRANSLATED_LANGUAGES, this.translatedLanguages);
   }
 
   async handleContentTypesChange(value: string[]): Promise<void> {
@@ -200,6 +265,7 @@ export class XComicSettingsForm extends Form {
 
   async handleVisibleSectionsChange(value: string[]): Promise<void> {
     this.visibleSections = value as SectionId[];
+    Application.setState(VISIBLE_SECTIONS_VERSION, STATE_KEYS.VISIBLE_SECTIONS_VERSION);
     saveSetting(this, STATE_KEYS.VISIBLE_SECTIONS, this.visibleSections);
   }
 }

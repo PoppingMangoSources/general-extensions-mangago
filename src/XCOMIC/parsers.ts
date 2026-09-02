@@ -12,12 +12,15 @@ import {
   type TagSection,
 } from "@paperback/types";
 import * as cheerio from "cheerio";
+import type { AnyNode } from "domhandler";
 
 import {
   CONTENT_RATING_GENRES,
   CONTENT_RATING_OPTIONS,
   DOMAIN,
-  FORMAT_OPTIONS,
+  LANGUAGE_OPTIONS,
+  LEGACY_FORMAT_MAP,
+  LEGACY_TYPE_MAP,
   TAG_TITLE_OVERRIDES,
   TRANSLATED_LANGUAGE_KEY,
   type ChapterData,
@@ -25,6 +28,7 @@ import {
   type ComicData,
   type ComicNode,
   type ContentPreferenceRating,
+  type FeaturedMetric,
   type FilterOptions,
   type LatestUploadsResult,
   type XComicPreferences,
@@ -53,14 +57,9 @@ const titleCase = (value: string): string =>
 
 export const parseFilterOptions = (html: string): FilterOptions => {
   const $ = cheerio.load(html);
-  const filterGroup = (name: string): Tag[] => {
+  const toOptions = (elements: cheerio.Cheerio<AnyNode>): Tag[] => {
     const seen = new Set<string>();
-    return $("details.group")
-      .filter((_, element) =>
-        $(element).find("summary").first().text().trim().toLowerCase().includes(name),
-      )
-      .first()
-      .find("div")
+    return elements
       .map((_, element): Tag | undefined => {
         const raw = $(element).attr(":")?.trim();
         const title = $(element).find("span").first().text().trim();
@@ -75,11 +74,30 @@ export const parseFilterOptions = (html: string): FilterOptions => {
       .filter((option): option is Tag => option !== undefined);
   };
 
-  const formatIds = new Set(FORMAT_OPTIONS.map(({ id }) => id));
+  const detailsGroup = (name: string) =>
+    $("details.group")
+      .filter((_, element) =>
+        $(element).find("summary").first().text().trim().toLowerCase().includes(name),
+      )
+      .first();
+  const filterGroup = (name: string): Tag[] => toOptions(detailsGroup(name).find("div, label"));
+  const taxonomyGroup = (name: string): Tag[] => {
+    const header = detailsGroup("genres")
+      .find("div")
+      .filter(
+        (_, element) =>
+          $(element).children().length === 0 && $(element).text().trim().toLowerCase() === name,
+      )
+      .first();
+    return toOptions(header.next().children("div"));
+  };
+
   const options = {
     contentRatings: filterGroup("content rating"),
     demographics: filterGroup("demographics"),
-    genres: filterGroup("genres").filter(({ id }) => !formatIds.has(id)),
+    formats: taxonomyGroup("formats"),
+    genres: taxonomyGroup("genres"),
+    statuses: filterGroup("status"),
     types: filterGroup("types"),
   };
   // An empty single group degrades that one picker; losing both of these means the scrape broke.
@@ -115,6 +133,12 @@ const contentPreferenceRating = (comic: ComicData): ContentPreferenceRating => {
   return "safe";
 };
 
+const normalizedType = (type?: string | null): string | undefined => {
+  return type ? (LEGACY_TYPE_MAP[type] ?? type) : undefined;
+};
+
+const normalizedTaxonomyId = (id: string): string => LEGACY_FORMAT_MAP[id] ?? id;
+
 const toContentRating = (comic: ComicData): ContentRating => {
   const rating = contentPreferenceRating(comic);
   if (rating === "erotica" || rating === "pornographic") return ContentRating.ADULT;
@@ -122,32 +146,37 @@ const toContentRating = (comic: ComicData): ContentRating => {
   return ContentRating.EVERYONE;
 };
 
-export const isComicAllowed = (
-  comic: ComicData,
-  preferences: XComicPreferences,
-  // Feeds that carry every language at once cannot be narrowed server-side, so they filter here.
-  restrictToPreferredLanguages = false,
-): boolean => {
+export const isComicAllowed = (comic: ComicData, preferences: XComicPreferences): boolean => {
   if (
     !preferences.contentRatings.length ||
     !preferences.types.length ||
-    !hasCoverUrl(comic.urlCover)
+    !hasCoverUrl(comic.urlCover ?? comic.remoteCoverUrl)
   ) {
     return false;
   }
   if (
-    restrictToPreferredLanguages &&
-    comic.translatedLanguage &&
-    !preferences.languages.includes(comic.translatedLanguage)
+    preferences.originalLanguages.length &&
+    (!comic.originalLanguage || !preferences.originalLanguages.includes(comic.originalLanguage))
   ) {
     return false;
   }
-  if (comic.type && !preferences.types.includes(comic.type)) {
+  const translatedLanguages =
+    comic.translatedLanguages ?? (comic.translatedLanguage ? [comic.translatedLanguage] : []);
+  if (
+    preferences.translatedLanguages.length &&
+    !translatedLanguages.some((language) => preferences.translatedLanguages.includes(language))
+  ) {
+    return false;
+  }
+  const type = normalizedType(comic.type);
+  if (type && !preferences.types.includes(type as XComicPreferences["types"][number])) {
     return false;
   }
   if (!preferences.contentRatings.includes(contentPreferenceRating(comic))) return false;
   const excluded = new Set([...preferences.excludedGenres, ...preferences.excludedFormats]);
-  return ![...(comic.genres ?? []), ...(comic.tags ?? [])].some((id) => excluded.has(id));
+  return ![...(comic.genres ?? []), ...(comic.tags ?? [])]
+    .map(normalizedTaxonomyId)
+    .some((id) => excluded.has(id));
 };
 
 // Discover cards and the chapter list must agree, or a card cannot be matched to its chapter.
@@ -174,9 +203,10 @@ const dateFromTimestamp = (value?: number | null): Date | undefined => {
 };
 
 const formatType = (type?: string | null): string | undefined =>
-  type ? titleCase(type) : undefined;
+  type === "oel" ? "OEL" : type ? titleCase(type) : undefined;
 
 const originalTitleForCard = (comic: ComicData): string | undefined => {
+  if (comic.nativeTitle) return Application.decodeHTMLEntities(comic.nativeTitle);
   const nativeTitlePattern =
     comic.type === "manhwa"
       ? /[\uAC00-\uD7A3]/
@@ -192,34 +222,57 @@ const originalTitleForCard = (comic: ComicData): string | undefined => {
 
   // Alternative titles have no language labels, so reject obvious English titles as fallbacks.
   const primaryTitle = comic.name.trim().toLowerCase();
-  const romanizedTitle = comic.altNames?.find((title) => {
-    const normalized = title.trim();
-    return (
-      normalized.toLowerCase() !== primaryTitle &&
-      /[A-Za-z\u00C0-\u024F\u1E00-\u1EFF]/.test(normalized) &&
-      /^[\u0020-\u007E\u00C0-\u024F\u1E00-\u1EFF]+$/.test(normalized) &&
-      !/\b(?:the|of|and|my|with|for|from|this|that|your|our|into|after|before|under|over|when|where|who|how)\b/i.test(
-        normalized,
-      )
-    );
-  });
+  const romanizedTitle =
+    comic.romanizedTitle ??
+    comic.altNames?.find((title) => {
+      const normalized = title.trim();
+      return (
+        normalized.toLowerCase() !== primaryTitle &&
+        /[A-Za-z\u00C0-\u024F\u1E00-\u1EFF]/.test(normalized) &&
+        /^[\u0020-\u007E\u00C0-\u024F\u1E00-\u1EFF]+$/.test(normalized) &&
+        !/\b(?:the|of|and|my|with|for|from|this|that|your|our|into|after|before|under|over|when|where|who|how)\b/i.test(
+          normalized,
+        )
+      );
+    });
   return romanizedTitle ? Application.decodeHTMLEntities(romanizedTitle) : undefined;
 };
 
-const baseCard = (node: ComicNode) => ({
-  mangaId: sanitizeId(node.data.id),
-  title: Application.decodeHTMLEntities(node.data.name),
-  imageUrl: toAbsoluteUrl(node.data.urlCover),
-  contentRating: toContentRating(node.data),
-});
+const baseCard = (node: ComicNode, preferredLanguages: string[] = [], mangaIdOverride?: string) => {
+  const titleLanguage = preferredLanguages.find((language) =>
+    node.data.translatedLanguages?.includes(language),
+  );
+  return {
+    mangaId:
+      mangaIdOverride ??
+      (node.data.urlPath?.startsWith("/title/") && titleLanguage
+        ? titleMangaId(node.data.id, titleLanguage)
+        : sanitizeId(node.data.id)),
+    title: Application.decodeHTMLEntities(node.data.name),
+    imageUrl: toAbsoluteUrl(node.data.urlCover ?? node.data.remoteCoverUrl),
+    contentRating: toContentRating(node.data),
+  };
+};
+
+const latestChapterLabel = (comic: ComicData): string | undefined => {
+  const chapter = formatChapter(comic.chapterNodes_last?.[0]?.data);
+  if (chapter) return chapter;
+  return typeof comic.totalChapters === "number" && comic.totalChapters > 0
+    ? `Ch. ${comic.totalChapters}`
+    : undefined;
+};
 
 const cardSubtitle = (comic: ComicData): string | undefined =>
-  [formatChapter(comic.chapterNodes_last?.[0]?.data), formatType(comic.type)]
+  [latestChapterLabel(comic), formatType(normalizedType(comic.type))]
     .filter((value): value is string => Boolean(value))
     .join(" • ") || undefined;
 
-export const toSearchResultItem = (node: ComicNode): SearchResultItem => ({
-  ...baseCard(node),
+export const toSearchResultItem = (
+  node: ComicNode,
+  preferredLanguages: string[] = [],
+  mangaIdOverride?: string,
+): SearchResultItem => ({
+  ...baseCard(node, preferredLanguages, mangaIdOverride),
   subtitle: cardSubtitle(node.data),
 });
 
@@ -231,34 +284,49 @@ type CarouselItemType =
 export const toDiscoverItems = (
   nodes: ComicNode[],
   type: CarouselItemType,
+  featuredMetric: FeaturedMetric = "top",
+  preferredLanguages: string[] = [],
 ): DiscoverSectionItem[] =>
   nodes
-    .map((node) => toDiscoverItem(node, type))
+    .map((node) => toDiscoverItem(node, type, featuredMetric, preferredLanguages))
     .filter((item): item is DiscoverSectionItem => item !== undefined);
 
 const toDiscoverItem = (
   node: ComicNode,
   type: CarouselItemType,
+  featuredMetric: FeaturedMetric,
+  preferredLanguages: string[],
 ): DiscoverSectionItem | undefined => {
   const chapter = node.data.chapterNodes_last?.[0]?.data;
   if (type === "featuredCarouselItem") {
-    const latestChapter = formatChapter(chapter);
-    const comicType = formatType(node.data.type);
-    const chapterInfo = latestChapter ? { symbol: "book.fill", text: latestChapter } : undefined;
+    const latestChapter = latestChapterLabel(node.data);
+    const comicType = formatType(normalizedType(node.data.type));
+    const metricInfo =
+      featuredMetric === "follows" && typeof node.data.follows === "number"
+        ? { symbol: "person.2.fill", text: `${node.data.follows} follows` }
+        : featuredMetric === "chapters" && typeof node.data.totalChapters === "number"
+          ? { symbol: "book.fill", text: `${node.data.totalChapters} chapters` }
+          : featuredMetric === "reviews" && typeof node.data.reviews === "number"
+            ? { symbol: "star.fill", text: `${node.data.reviews} reviews` }
+            : featuredMetric === "comments" && typeof node.data.comments_total === "number"
+              ? { symbol: "text.bubble.fill", text: `${node.data.comments_total} comments` }
+              : latestChapter
+                ? { symbol: "book.fill", text: latestChapter }
+                : undefined;
     const typeInfo = comicType ? { symbol: "heart.fill", text: comicType } : undefined;
     const infoItems: Extract<DiscoverSectionItem, { type: "featuredCarouselItem" }>["infoItems"] =
-      chapterInfo && typeInfo
-        ? [chapterInfo, typeInfo]
-        : chapterInfo
-          ? [chapterInfo]
+      metricInfo && typeInfo
+        ? [metricInfo, typeInfo]
+        : metricInfo
+          ? [metricInfo]
           : typeInfo
             ? [typeInfo]
             : undefined;
     return {
       type,
-      ...baseCard(node),
+      ...baseCard(node, preferredLanguages),
       supertitle: originalTitleForCard(node.data),
-      summary: stripHtml(node.data.summary?.html) || undefined,
+      summary: stripHtml(node.data.summary?.html ?? node.data.description) || undefined,
       infoItems,
     };
   }
@@ -266,7 +334,7 @@ const toDiscoverItem = (
     if (!chapter?.id) return undefined;
     return {
       type,
-      ...baseCard(node),
+      ...baseCard(node, preferredLanguages),
       chapterId: toChapterId(chapter),
       subtitle: cardSubtitle(node.data),
       publishDate: dateFromTimestamp(
@@ -274,7 +342,7 @@ const toDiscoverItem = (
       ),
     };
   }
-  return { type, ...baseCard(node), subtitle: cardSubtitle(node.data) };
+  return { type, ...baseCard(node, preferredLanguages), subtitle: cardSubtitle(node.data) };
 };
 
 export const toLatestUploadNodes = (result?: LatestUploadsResult | null): ComicNode[] => {
@@ -284,7 +352,7 @@ export const toLatestUploadNodes = (result?: LatestUploadsResult | null): ComicN
   return result.items.flatMap(({ comic, chapters }) => {
     const data = comic?.data;
     const chapterNodes = chapters ?? [];
-    if (!data || !hasCoverUrl(data.urlCover) || !chapterNodes[0]?.data.id) {
+    if (!data || !hasCoverUrl(data.urlCover ?? data.remoteCoverUrl) || !chapterNodes[0]?.data.id) {
       return [];
     }
     return [
@@ -319,6 +387,33 @@ const stripHtml = (html?: string | null): string => {
   );
 };
 
+export const titleMangaId = (titleId: string, language: string): string =>
+  sanitizeId(`title@${titleId}@${language}`);
+
+export const parseTitleMangaId = (
+  mangaId: string,
+): { titleId: string; language: string } | undefined => {
+  const match = /^title@([a-zA-Z0-9]+)@([a-zA-Z0-9_]+)$/.exec(mangaId);
+  return match?.[1] && match[2] ? { titleId: match[1], language: match[2] } : undefined;
+};
+
+export const parseTitleComicId = (html: string, languages: string[]): string | undefined => {
+  const $ = cheerio.load(html);
+  const candidates = $("a[href^='/comic/']")
+    .map((_, element) => {
+      const href = $(element).attr("href") ?? "";
+      const match = /^\/comic\/([a-zA-Z0-9]+)-([a-zA-Z0-9_]+)-[^/]+$/.exec(href);
+      return match?.[1] && match[2] ? { id: match[1], language: match[2] } : undefined;
+    })
+    .get()
+    .filter((candidate): candidate is { id: string; language: string } => candidate !== undefined);
+  for (const language of languages) {
+    const match = candidates.find((candidate) => candidate.language === language);
+    if (match) return match.id;
+  }
+  return undefined;
+};
+
 const formatDateYmd = (value: ComicData["originalPubFrom"]): string | undefined => {
   if (!value?.y) return undefined;
   return [value.y, value.m?.toString().padStart(2, "0"), value.d?.toString().padStart(2, "0")]
@@ -326,11 +421,11 @@ const formatDateYmd = (value: ComicData["originalPubFrom"]): string | undefined 
     .join("-");
 };
 
-export const toSourceManga = (node: ComicNode): SourceManga => {
+export const toSourceManga = (node: ComicNode, mangaId = sanitizeId(node.data.id)): SourceManga => {
   const comic = node.data;
-  const authors = nodeNames(comic.authorNodes);
-  const artists = nodeNames(comic.artistNodes);
-  const distinctArtists = artists.filter((artist) => !authors.includes(artist));
+  const authorNames = nodeNames(comic.authorNodes);
+  const artistNames = nodeNames(comic.artistNodes);
+  const distinctArtists = artistNames.filter((artist) => !authorNames.includes(artist));
   const toTags = (values: string[]): Tag[] =>
     [...new Set(values.map(sanitizeId))].map((id) => ({
       id,
@@ -348,17 +443,17 @@ export const toSourceManga = (node: ComicNode): SourceManga => {
     typeof comic.score_val === "number" && Number.isFinite(comic.score_val)
       ? Math.min(1, Math.max(0, comic.score_val / 10))
       : undefined;
-  const cover = toAbsoluteUrl(comic.urlCover);
+  const cover = toAbsoluteUrl(comic.urlCover ?? comic.remoteCoverUrl);
   const publishers = nodeNames(comic.publisherNodes);
 
   return {
-    mangaId: sanitizeId(comic.id),
+    mangaId,
     mangaInfo: {
       primaryTitle: Application.decodeHTMLEntities(comic.name),
       secondaryTitles: (comic.altNames ?? []).map((title) => Application.decodeHTMLEntities(title)),
       thumbnailUrl: cover,
-      synopsis: stripHtml(comic.summary?.html),
-      author: authors.join(", ") || undefined,
+      synopsis: stripHtml(comic.summary?.html ?? comic.description),
+      author: authorNames.join(", ") || undefined,
       artist: distinctArtists.join(", ") || undefined,
       contentRating: toContentRating(comic),
       rating,
@@ -367,9 +462,19 @@ export const toSourceManga = (node: ComicNode): SourceManga => {
       artworkUrls: cover ? [cover] : undefined,
       additionalInfo: {
         ...(comic.type ? { Type: titleCase(comic.type) } : {}),
-        ...(comic.originalLanguage ? { "Original Language": comic.originalLanguage } : {}),
+        ...(comic.originalLanguage
+          ? {
+              "Original Language":
+                LANGUAGE_OPTIONS.find(({ id }) => id === comic.originalLanguage)?.title ??
+                comic.originalLanguage,
+            }
+          : {}),
         ...(comic.translatedLanguage
-          ? { [TRANSLATED_LANGUAGE_KEY]: comic.translatedLanguage }
+          ? {
+              [TRANSLATED_LANGUAGE_KEY]:
+                LANGUAGE_OPTIONS.find(({ id }) => id === comic.translatedLanguage)?.title ??
+                comic.translatedLanguage,
+            }
           : {}),
         ...(publicationFrom
           ? {
@@ -408,12 +513,15 @@ export const toChapter = (data: ChapterData, sourceManga: SourceManga): Chapter 
   const uploaderName = data.userNode?.data?.name?.trim();
   const uploader = uploaderName ? Application.decodeHTMLEntities(uploaderName) : undefined;
   const language = sourceManga.mangaInfo.additionalInfo?.[TRANSLATED_LANGUAGE_KEY];
-  const langCode =
-    typeof language === "string" && language
-      ? language === "_t"
-        ? "und"
-        : language.replaceAll("_", "-")
-      : "en";
+  const languageCode =
+    typeof language === "string"
+      ? (LANGUAGE_OPTIONS.find(({ title }) => title === language)?.id ?? language)
+      : undefined;
+  const langCode = languageCode
+    ? languageCode === "_t"
+      ? "und"
+      : languageCode.replaceAll("_", "-")
+    : "en";
 
   return {
     chapterId: toChapterId(data),

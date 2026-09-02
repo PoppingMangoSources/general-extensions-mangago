@@ -13,34 +13,29 @@ import {
 
 import {
   CHAPTER_COUNT_OPTIONS,
-  FORMAT_OPTIONS,
   LANGUAGE_OPTIONS,
   MODE_OPTIONS,
-  STATUS_OPTIONS,
   type ContentPreferenceRating,
-  type Demographic,
   type FilterOptions,
   type GenreMode,
   type SearchMetadata,
   type SeriesType,
   type TriState,
-  type WorkStatus,
   type XComicPreferences,
 } from "../models";
 
 export class XComicAdvancedSearchForm extends AdvancedSearchForm {
   private chapCount: string;
   private contentRatings: ContentPreferenceRating[];
-  private demographics: Demographic[];
+  private demographics: string[];
   private excGenresMode: GenreMode[];
   private formats: TriState;
   private genres: TriState;
   private incGenresMode: GenreMode[];
   private originalLanguages: string[];
-  private originalStatus: WorkStatus[];
+  private originalStatus: string[];
   private translatedLanguages: string[];
   private types: SeriesType[];
-  private uploadStatus: WorkStatus[];
   private year: string;
 
   constructor(
@@ -57,11 +52,10 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
       formats: {},
       genres: {},
       incGenresMode: "and" as GenreMode,
-      originalLanguages: [],
+      originalLanguages: preferences.originalLanguages,
       originalStatus: [],
-      translatedLanguages: preferences.languages,
+      translatedLanguages: preferences.translatedLanguages,
       types: preferences.types,
-      uploadStatus: [],
       year: "",
       ...searchQuery.metadata,
     };
@@ -76,7 +70,6 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
     this.originalStatus = metadata.originalStatus;
     this.translatedLanguages = metadata.translatedLanguages;
     this.types = metadata.types;
-    this.uploadStatus = metadata.uploadStatus;
     this.year = metadata.year;
   }
 
@@ -137,7 +130,7 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           title: "Formats",
           layout: "flow",
           value: this.formats,
-          items: FORMAT_OPTIONS,
+          items: this.filterOptions.formats,
           allowExclusion: true,
           allowEmptySelection: true,
           onValueChange: Application.Selector(
@@ -169,24 +162,12 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           title: "Original work status",
           layout: "flow",
           value: this.originalStatus,
-          items: STATUS_OPTIONS,
+          items: this.filterOptions.statuses,
           minItemCount: 0,
           maxItemCount: 1,
           onValueChange: Application.Selector(
             this as XComicAdvancedSearchForm,
             "handleOriginalStatusChange",
-          ),
-        }),
-        SelectRow("upload_status", {
-          title: "Upload status",
-          layout: "flow",
-          value: this.uploadStatus,
-          items: STATUS_OPTIONS,
-          minItemCount: 0,
-          maxItemCount: 1,
-          onValueChange: Application.Selector(
-            this as XComicAdvancedSearchForm,
-            "handleUploadStatusChange",
           ),
         }),
         SelectRow("chapter_count", {
@@ -225,7 +206,7 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           layout: "list",
           value: this.translatedLanguages,
           items: LANGUAGE_OPTIONS,
-          minItemCount: 0,
+          minItemCount: 1,
           maxItemCount: LANGUAGE_OPTIONS.length,
           onValueChange: Application.Selector(
             this as XComicAdvancedSearchForm,
@@ -245,7 +226,7 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
   }
 
   async handleDemographicsChange(value: string[]): Promise<void> {
-    this.demographics = value as Demographic[];
+    this.demographics = value;
   }
 
   async handleGenresChange(value: TriState): Promise<void> {
@@ -257,11 +238,7 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
   }
 
   async handleOriginalStatusChange(value: string[]): Promise<void> {
-    this.originalStatus = value as WorkStatus[];
-  }
-
-  async handleUploadStatusChange(value: string[]): Promise<void> {
-    this.uploadStatus = value as WorkStatus[];
+    this.originalStatus = value;
   }
 
   async handleChapterCountChange(value: string[]): Promise<void> {
@@ -290,7 +267,6 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
     if (this.incGenresMode[0] !== "and") metadata.incGenresMode = this.incGenresMode[0];
     if (this.excGenresMode[0] !== "or") metadata.excGenresMode = this.excGenresMode[0];
     if (this.originalStatus.length) metadata.originalStatus = this.originalStatus;
-    if (this.uploadStatus.length) metadata.uploadStatus = this.uploadStatus;
     if (this.chapCount) metadata.chapCount = this.chapCount;
     if (this.year) metadata.year = this.year;
     if (this.originalLanguages.length) metadata.originalLanguages = this.originalLanguages;
