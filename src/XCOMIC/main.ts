@@ -118,10 +118,10 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     switch (section.id) {
       case SECTIONS.TOP_RATED:
         return this.getRankedSection(metadata, "field_score", "top");
-      case SECTIONS.MOST_FOLLOWS:
-        return this.getRankedSection(metadata, "field_follow", "follows");
       case SECTIONS.MOST_VIEWS:
         return this.getMostViewsSection();
+      case SECTIONS.MOST_FOLLOWS:
+        return this.getRankedSection(metadata, "field_follow", "follows");
       case SECTIONS.MOST_REVIEWS:
         return this.getRankedSection(metadata, "field_review", "reviews");
       case SECTIONS.RECENTLY_ADDED:

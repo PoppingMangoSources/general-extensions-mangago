@@ -143,8 +143,8 @@ query get_chapterNode($id: ID!) {
 
 export const SECTIONS = {
   TOP_RATED: "top-rated",
-  MOST_FOLLOWS: "most-follows",
   MOST_VIEWS: "most-views",
+  MOST_FOLLOWS: "most-follows",
   MOST_REVIEWS: "most-reviews",
   RECENTLY_ADDED: "recently-added",
   LATEST_UPLOADS: "latest-uploads",
@@ -161,15 +161,15 @@ export const DISCOVER_SECTIONS: Record<SectionId, DiscoverSection> = {
     title: "Top Rated",
     type: DiscoverSectionType.featured,
   },
-  [SECTIONS.MOST_FOLLOWS]: {
-    id: SECTIONS.MOST_FOLLOWS,
-    title: "Most Followed",
-    type: DiscoverSectionType.prominentCarousel,
-  },
   [SECTIONS.MOST_VIEWS]: {
     id: SECTIONS.MOST_VIEWS,
     title: "Most Views",
     type: DiscoverSectionType.genres,
+  },
+  [SECTIONS.MOST_FOLLOWS]: {
+    id: SECTIONS.MOST_FOLLOWS,
+    title: "Most Followed",
+    type: DiscoverSectionType.prominentCarousel,
   },
   [SECTIONS.MOST_REVIEWS]: {
     id: SECTIONS.MOST_REVIEWS,
