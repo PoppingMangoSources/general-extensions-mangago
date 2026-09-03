@@ -17,7 +17,36 @@ export const MAX_LATEST_REQUESTS = 10;
 export const CHAPTER_PAGE_SIZE = 1000;
 export const RECENTLY_ADDED_SIZE = 50;
 
-export const BROWSE_PAGER_QUERY = `
+export const COMIC_BROWSE_PAGER_QUERY = `
+query get_comic_browse_pager($select: Comic_Browse_Select) {
+  get_comic_browse_pager(select: $select) {
+    next
+  }
+}
+`;
+
+export const COMIC_BROWSE_ITEMS_QUERY = `
+query get_comic_browse_items($select: Comic_Browse_Select) {
+  get_comic_browse_items(select: $select) {
+    data {
+      id name altNames
+      originalLanguage translatedLanguage
+      type contentRating genres tags
+      summary { html }
+      urlPath urlCover
+      sfw_result score_val follows reviews comments_total chaps_normal
+      chapterNodes_last(amount: 1) {
+        data {
+          id serial chaNum urlPath
+          dateCreate dateModify datePublic
+        }
+      }
+    }
+  }
+}
+`;
+
+export const TITLE_BROWSE_PAGER_QUERY = `
 query get_title_browse_pager($select: Title_Browse_Select) {
   get_title_browse_pager(select: $select) {
     next
@@ -25,7 +54,7 @@ query get_title_browse_pager($select: Title_Browse_Select) {
 }
 `;
 
-export const BROWSE_ITEMS_QUERY = `
+export const TITLE_BROWSE_ITEMS_QUERY = `
 query get_title_browse_items($select: Title_Browse_Select) {
   get_title_browse_items(select: $select) {
     data {
@@ -151,8 +180,8 @@ export const SECTIONS = {
   MOST_VIEWS: "most-views",
   MOST_FOLLOWS: "most-follows",
   MOST_REVIEWS: "most-reviews",
-  RECENTLY_ADDED: "recently-added",
   LATEST_UPLOADS: "latest-uploads",
+  RECENTLY_ADDED: "recently-added",
   MOST_COMMENTS: "most-comments",
   MOST_CHAPTERS: "most-chapters",
   GENRES: "genres",
@@ -174,27 +203,27 @@ export const DISCOVER_SECTIONS: Record<SectionId, DiscoverSection> = {
   [SECTIONS.MOST_FOLLOWS]: {
     id: SECTIONS.MOST_FOLLOWS,
     title: "Most Followed",
-    type: DiscoverSectionType.prominentCarousel,
+    type: DiscoverSectionType.featured,
   },
   [SECTIONS.MOST_REVIEWS]: {
     id: SECTIONS.MOST_REVIEWS,
     title: "Most Reviewed",
     type: DiscoverSectionType.featured,
   },
-  [SECTIONS.RECENTLY_ADDED]: {
-    id: SECTIONS.RECENTLY_ADDED,
-    title: "Recently Added",
-    type: DiscoverSectionType.simpleCarousel,
-  },
   [SECTIONS.LATEST_UPLOADS]: {
     id: SECTIONS.LATEST_UPLOADS,
     title: "Latest Uploads",
     type: DiscoverSectionType.chapterUpdates,
   },
+  [SECTIONS.RECENTLY_ADDED]: {
+    id: SECTIONS.RECENTLY_ADDED,
+    title: "Recently Added",
+    type: DiscoverSectionType.simpleCarousel,
+  },
   [SECTIONS.MOST_COMMENTS]: {
     id: SECTIONS.MOST_COMMENTS,
     title: "Most Commented",
-    type: DiscoverSectionType.simpleCarousel,
+    type: DiscoverSectionType.featured,
   },
   [SECTIONS.MOST_CHAPTERS]: {
     id: SECTIONS.MOST_CHAPTERS,
@@ -591,17 +620,29 @@ export interface ComicNode {
   comicNodes?: ComicNode[] | null;
 }
 
-export interface BrowseItemsResponse {
+export interface ComicBrowseItemsResponse {
+  get_comic_browse_items?: ComicNode[] | null;
+}
+
+export interface ComicBrowsePagerResponse {
+  get_comic_browse_pager?: {
+    next?: number | null;
+  } | null;
+}
+
+export type ComicBrowseResponse = ComicBrowseItemsResponse & ComicBrowsePagerResponse;
+
+export interface TitleBrowseItemsResponse {
   get_title_browse_items?: ComicNode[] | null;
 }
 
-export interface BrowsePagerResponse {
+export interface TitleBrowsePagerResponse {
   get_title_browse_pager?: {
     next?: number | null;
   } | null;
 }
 
-export type BrowseResponse = BrowseItemsResponse & BrowsePagerResponse;
+export type TitleBrowseResponse = TitleBrowseItemsResponse & TitleBrowsePagerResponse;
 
 export interface LatestUploadsResponse {
   get_comic_latestUploads?: LatestUploadsResult | null;

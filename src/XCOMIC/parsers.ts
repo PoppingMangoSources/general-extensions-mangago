@@ -346,20 +346,21 @@ const toDiscoverItem = (
 const formatMetricCount = (value: number, label: string): string =>
   `${value.toLocaleString("en-US")} ${label}`;
 
-type CompactRankedMetric = Exclude<RankedMetric, "top" | "reviews">;
-
-const rankedMetricSubtitle = (
+const rankedMetricInfo = (
   comic: ComicData,
-  metric: CompactRankedMetric,
-): string | undefined => {
-  const [value, label] = (
+  metric: Exclude<RankedMetric, "top" | "chapters">,
+): { symbol: string; text: string } | undefined => {
+  const [value, symbol, label] = (
     {
-      follows: [comic.follows, "follows"],
-      comments: [comic.comments_total, "comments"],
-      chapters: [comic.totalChapters, "chapters"],
-    } satisfies Record<CompactRankedMetric, [number | null | undefined, string]>
+      follows: [comic.follows, "bookmark.fill", "Follows"],
+      reviews: [comic.reviews, "person.fill", "Reviews"],
+      comments: [comic.comments_total, "bubble.left.fill", "Comments"],
+    } satisfies Record<
+      Exclude<RankedMetric, "top" | "chapters">,
+      [number | null | undefined, string, string]
+    >
   )[metric];
-  return typeof value === "number" ? formatMetricCount(value, label) : undefined;
+  return typeof value === "number" ? { symbol, text: formatMetricCount(value, label) } : undefined;
 };
 
 export const toRankedDiscoverItems = (
@@ -368,29 +369,26 @@ export const toRankedDiscoverItems = (
   preferredLanguages: string[] = [],
 ): DiscoverSectionItem[] =>
   nodes.map((node) => {
-    if (metric === "top" || metric === "reviews") {
+    if (metric !== "chapters") {
       const latestChapter = latestChapterLabel(node.data);
       const chapterInfo = latestChapter ? { symbol: "book.fill", text: latestChapter } : undefined;
       const ratingInfo =
         typeof node.data.score_val === "number" && Number.isFinite(node.data.score_val)
           ? { symbol: "star.fill", text: node.data.score_val.toFixed(1) }
           : undefined;
-      const reviewInfo =
-        typeof node.data.reviews === "number"
-          ? { symbol: "star.fill", text: formatMetricCount(node.data.reviews, "reviews") }
-          : undefined;
+      const metricInfo = metric === "top" ? undefined : rankedMetricInfo(node.data, metric);
       const infoItems: Extract<DiscoverSectionItem, { type: "featuredCarouselItem" }>["infoItems"] =
-        metric === "reviews"
-          ? reviewInfo
-            ? [reviewInfo]
-            : undefined
-          : chapterInfo && ratingInfo
-            ? [chapterInfo, ratingInfo]
-            : chapterInfo
-              ? [chapterInfo]
-              : ratingInfo
-                ? [ratingInfo]
-                : undefined;
+        metricInfo
+          ? [metricInfo]
+          : metric === "top"
+            ? chapterInfo && ratingInfo
+              ? [chapterInfo, ratingInfo]
+              : chapterInfo
+                ? [chapterInfo]
+                : ratingInfo
+                  ? [ratingInfo]
+                  : undefined
+            : undefined;
       return {
         type: "featuredCarouselItem",
         ...baseCard(node, preferredLanguages),
@@ -401,9 +399,12 @@ export const toRankedDiscoverItems = (
     }
 
     return {
-      type: metric === "follows" ? "prominentCarouselItem" : "simpleCarouselItem",
+      type: "simpleCarouselItem",
       ...baseCard(node, preferredLanguages),
-      subtitle: rankedMetricSubtitle(node.data, metric),
+      subtitle:
+        typeof node.data.totalChapters === "number"
+          ? formatMetricCount(node.data.totalChapters, "Chapters")
+          : undefined,
     };
   });
 

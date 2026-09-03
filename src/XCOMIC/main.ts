@@ -40,13 +40,14 @@ import {
   type XComicPreferences,
 } from "./models";
 import {
-  fetchBrowse,
   fetchChapterPages,
   fetchChapters,
+  fetchComicBrowse,
   fetchComic,
   fetchLatestUploads,
   fetchRecentlyAdded,
   fetchSearchPage,
+  fetchTitleBrowse,
   fetchTitlePage,
   XComicInterceptor,
 } from "./network";
@@ -167,7 +168,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     metric: RankedMetric,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const page = metadata?.page ?? 1;
-    const result = await this.getBrowsePage(page, sortBy, "", undefined);
+    const result = await this.getTitleBrowsePage(page, sortBy);
     return {
       items: toRankedDiscoverItems(result.nodes, metric, result.translatedLanguages),
       metadata: result.nextPage != null ? { page: result.nextPage } : undefined,
@@ -278,14 +279,14 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
 
     const sortBy = sortingOption?.id ?? query.metadata?.discoverSort ?? "field_score";
     const page = metadata?.page ?? 1;
-    const result = await this.getBrowsePage(page, sortBy, title, query.metadata);
+    const result = await this.getComicBrowsePage(page, sortBy, title, query.metadata);
     return {
       items: result.nodes.map((node) => toSearchResultItem(node, result.translatedLanguages)),
       metadata: result.nextPage != null ? { page: result.nextPage } : undefined,
     };
   }
 
-  private async getBrowsePage(
+  private async getComicBrowsePage(
     page: number,
     sortBy: string,
     word: string,
@@ -293,14 +294,32 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   ): Promise<{ nodes: ComicNode[]; nextPage?: number; translatedLanguages: string[] }> {
     const preferences = this.getEffectivePreferences(metadata);
     const select = this.buildBrowseSelect(page, sortBy, word, metadata, preferences);
-    const response = await fetchBrowse(select);
+    const response = await fetchComicBrowse(select);
+    const nextPage = response.get_comic_browse_pager?.next;
+    return {
+      nodes: (response.get_comic_browse_items ?? []).filter((node) =>
+        isComicAllowed(node.data, preferences),
+      ),
+      nextPage: typeof nextPage === "number" && nextPage > page ? nextPage : undefined,
+      translatedLanguages: preferences.translatedLanguages,
+    };
+  }
+
+  private async getTitleBrowsePage(
+    page: number,
+    sortBy: string,
+  ): Promise<{ nodes: ComicNode[]; nextPage?: number; translatedLanguages: string[] }> {
+    const preferences = getPreferences();
+    const select = this.buildBrowseSelect(page, sortBy, "", undefined, preferences);
+    const response = await fetchTitleBrowse(select);
+    const nextPage = response.get_title_browse_pager?.next;
     const nodes = (response.get_title_browse_items ?? []).flatMap((node) => {
       const source = toPreferredTitleSource(node, preferences.translatedLanguages);
       return source && isComicAllowed(source.data, preferences) ? [source] : [];
     });
     return {
       nodes,
-      nextPage: response.get_title_browse_pager?.next ?? undefined,
+      nextPage: typeof nextPage === "number" && nextPage > page ? nextPage : undefined,
       translatedLanguages: preferences.translatedLanguages,
     };
   }

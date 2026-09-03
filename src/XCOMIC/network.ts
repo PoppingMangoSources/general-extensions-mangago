@@ -10,10 +10,10 @@ import {
 
 import {
   API_URL,
-  BROWSE_ITEMS_QUERY,
-  BROWSE_PAGER_QUERY,
   CHAPTERS_QUERY,
   CHAPTER_PAGES_QUERY,
+  COMIC_BROWSE_ITEMS_QUERY,
+  COMIC_BROWSE_PAGER_QUERY,
   COMIC_QUERY,
   LATEST_UPLOADS_QUERY,
   RECENTLY_ADDED_QUERY,
@@ -21,16 +21,21 @@ import {
   DOMAIN,
   PAGE_SIZE,
   RECENTLY_ADDED_SIZE,
-  type BrowseResponse,
-  type BrowseItemsResponse,
-  type BrowsePagerResponse,
   type BrowseSelect,
   type ChapterListResponse,
   type ChapterPagesResponse,
+  type ComicBrowseItemsResponse,
+  type ComicBrowsePagerResponse,
+  type ComicBrowseResponse,
   type ComicNodeResponse,
   type GraphQLResponse,
   type LatestUploadsResponse,
   type RecentlyAddedResponse,
+  TITLE_BROWSE_ITEMS_QUERY,
+  TITLE_BROWSE_PAGER_QUERY,
+  type TitleBrowseItemsResponse,
+  type TitleBrowsePagerResponse,
+  type TitleBrowseResponse,
 } from "./models";
 
 export class XComicInterceptor extends PaperbackInterceptor {
@@ -98,10 +103,18 @@ const fetchGraphQL = async <T>(query: string, variables: Record<string, unknown>
   return payload.data;
 };
 
-export const fetchBrowse = async (select: BrowseSelect): Promise<BrowseResponse> => {
+export const fetchComicBrowse = async (select: BrowseSelect): Promise<ComicBrowseResponse> => {
   const [items, pager] = await Promise.all([
-    fetchGraphQL<BrowseItemsResponse>(BROWSE_ITEMS_QUERY, { select }),
-    fetchGraphQL<BrowsePagerResponse>(BROWSE_PAGER_QUERY, { select }),
+    fetchGraphQL<ComicBrowseItemsResponse>(COMIC_BROWSE_ITEMS_QUERY, { select }),
+    fetchGraphQL<ComicBrowsePagerResponse>(COMIC_BROWSE_PAGER_QUERY, { select }),
+  ]);
+  return { ...items, ...pager };
+};
+
+export const fetchTitleBrowse = async (select: BrowseSelect): Promise<TitleBrowseResponse> => {
+  const [items, pager] = await Promise.all([
+    fetchGraphQL<TitleBrowseItemsResponse>(TITLE_BROWSE_ITEMS_QUERY, { select }),
+    fetchGraphQL<TitleBrowsePagerResponse>(TITLE_BROWSE_PAGER_QUERY, { select }),
   ]);
   return { ...items, ...pager };
 };
