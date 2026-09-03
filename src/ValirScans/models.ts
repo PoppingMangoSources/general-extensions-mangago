@@ -27,6 +27,7 @@ export interface ValirChapterItem {
   number: number;
   title?: string | null;
   isLocked?: boolean;
+  hasAccess?: boolean;
   publishedAt?: string | null;
 }
 
@@ -69,6 +70,19 @@ export interface ValirReaderPage {
 export interface ValirChapterData {
   content?: string | null;
   pages?: ValirReaderPage[];
+  isLocked?: boolean;
+}
+
+export interface ValirReaderData {
+  chapter?: ValirChapterData;
+  isUnlocked?: boolean;
+  isLocked?: boolean;
+}
+
+export interface ValirAccountStatus {
+  authenticated: boolean;
+  displayName?: string;
+  email?: string;
 }
 
 export interface HomeSections {

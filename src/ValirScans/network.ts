@@ -10,7 +10,7 @@ import {
 } from "@paperback/types";
 
 import { getBaseUrl } from "./forms/settings";
-import { type SearchMetadata, type TriState } from "./models";
+import { type SearchMetadata, type TriState, type ValirAccountStatus } from "./models";
 
 // Discover loads several sections at once, so a challenge would otherwise
 // raise one bypass prompt per in-flight request. Only the first challenge in
@@ -59,15 +59,46 @@ export class ValirScansInterceptor extends PaperbackInterceptor {
 }
 
 const fetchPage = async (url: string, rsc = false): Promise<string> => {
-  const [, buffer] = await Application.scheduleRequest({
+  const [response, buffer] = await Application.scheduleRequest({
     url,
     method: "GET",
     headers: rsc ? { rsc: "1" } : undefined,
   });
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error(`Request failed with status ${response.status}: ${url}`);
+  }
   return Application.arrayBufferToUTF8String(buffer);
 };
 
 export const fetchHomePage = (): Promise<string> => fetchPage(`${getBaseUrl()}/`);
+
+export const fetchAccountStatus = async (): Promise<ValirAccountStatus> => {
+  const url = `${getBaseUrl()}/api/auth/session`;
+  const body = await fetchPage(url);
+  let value: unknown;
+  try {
+    value = JSON.parse(body) as unknown;
+  } catch (error) {
+    throw new Error("ValirScans returned an invalid account response", { cause: error });
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { authenticated: false };
+  }
+  const user = (value as { user?: unknown }).user;
+  if (!user || typeof user !== "object" || Array.isArray(user)) {
+    return { authenticated: false };
+  }
+  const { id, name, email } = user as Record<string, unknown>;
+  const displayName = typeof name === "string" && name.trim() ? name.trim() : undefined;
+  const accountEmail = typeof email === "string" && email.trim() ? email.trim() : undefined;
+  const authenticated =
+    (typeof id === "string" && id.trim().length > 0) ||
+    (typeof id === "number" && Number.isFinite(id)) ||
+    Boolean(displayName || accountEmail);
+  return authenticated
+    ? { authenticated, displayName, email: accountEmail }
+    : { authenticated: false };
+};
 
 const pickState = (record: TriState | undefined, state: "included" | "excluded"): string[] =>
   Object.keys(record ?? {}).filter((id) => record?.[id] === state);

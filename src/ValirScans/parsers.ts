@@ -20,8 +20,8 @@ import {
   type FilterTaxonomy,
   type HomeSections,
   LOCKED_CHAPTER_PREFIX,
-  type ValirChapterData,
   type ValirChapterItem,
+  type ValirReaderData,
   type ValirSeries,
   type ValirSeriesPage,
 } from "./models";
@@ -237,10 +237,11 @@ const chapterTitle = (chapter: ValirChapterItem): string => {
   const title = cleanText(chapter.title)
     .replace(/^chapter\s+\d+(?:\.\d+)?(?:\s*[-:]\s*)?/i, "")
     .trim();
-  return chapterIsLocked(chapter) ? (title ? `${title} (LOCKED)` : "(LOCKED)") : title;
+  return chapterIsAccessible(chapter) ? title : title ? `${title} (LOCKED)` : "(LOCKED)";
 };
 
-const chapterIsLocked = (chapter: ValirChapterItem): boolean => chapter.isLocked === true;
+const chapterIsAccessible = (chapter: ValirChapterItem): boolean =>
+  chapter.hasAccess === true || (chapter.hasAccess === undefined && chapter.isLocked !== true);
 
 export const parseChapters = (
   seriesPages: ValirSeriesPage[],
@@ -250,7 +251,7 @@ export const parseChapters = (
   const seen = new Set<number>();
   return seriesPages
     .flatMap((page) => page.chapters ?? [])
-    .filter((chapter) => showPaidChapters || !chapterIsLocked(chapter))
+    .filter((chapter) => showPaidChapters || chapterIsAccessible(chapter))
     .filter((chapter) => {
       if (seen.has(chapter.number)) return false;
       seen.add(chapter.number);
@@ -258,7 +259,7 @@ export const parseChapters = (
     })
     .sort((a, b) => a.number - b.number)
     .map((chapter, index) => ({
-      chapterId: chapterIsLocked(chapter)
+      chapterId: !chapterIsAccessible(chapter)
         ? `${LOCKED_CHAPTER_PREFIX}${chapter.number}`
         : String(chapter.number),
       sourceManga,
@@ -295,12 +296,22 @@ const resolveContentRef = (payload: string, ref: string): string | undefined => 
 
 export const parseChapterDetails = (html: string, chapter: Chapter): ChapterDetails => {
   const payload = decodeFlightPayload(html);
-  const data = extractByMarker<ValirChapterData>(payload, '"chapter":').find(
-    (candidate) => Array.isArray(candidate.pages) || typeof candidate.content === "string",
+  const reader = extractByMarker<ValirReaderData>(payload, '{"chapter":', true).find(
+    (candidate) =>
+      Array.isArray(candidate.chapter?.pages) || typeof candidate.chapter?.content === "string",
   );
-  if (!data) {
+  if (!reader?.chapter) {
     throw new Error(`ValirScans: no chapter data found for chapter ${chapter.chapterId}`);
   }
+  if (
+    reader.isUnlocked !== true &&
+    (reader.isUnlocked === false || reader.isLocked === true || reader.chapter.isLocked === true)
+  ) {
+    throw new Error(
+      "This chapter is locked on ValirScans. Unlock it on the website, then sign in from the extension settings.",
+    );
+  }
+  const data = reader.chapter;
 
   // Novels ship prose in `content`, comics ship image `pages`; prefer the text
   // body so a novel with placeholder page entries still reads as a novel.
@@ -375,7 +386,7 @@ export const toChapterUpdateItems = (
     .flatMap((series) => {
       // Prefer the newest unlocked chapter so update cards don't lead
       // straight into a paywalled page.
-      const chapter = series.chapters?.find((entry) => !chapterIsLocked(entry));
+      const chapter = series.chapters?.find(chapterIsAccessible);
       if (!chapter) return [];
       const date = chapter.publishedAt ?? series.lastChapterAt;
       return [

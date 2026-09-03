@@ -34,6 +34,7 @@ import {
   type SearchMetadata,
 } from "./models";
 import {
+  fetchAccountStatus,
   fetchBrowsePage,
   fetchChapterPage,
   fetchHomePage,
@@ -99,7 +100,11 @@ class ValirScansExtension implements ExtensionImpl<typeof ValirScansConfig> {
   }
 
   async getSettingsForm(): Promise<Form> {
-    return new ValirScansSettingsForm();
+    return new ValirScansSettingsForm(
+      this.cookieStorageInterceptor,
+      await fetchAccountStatus(),
+      fetchAccountStatus,
+    );
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
