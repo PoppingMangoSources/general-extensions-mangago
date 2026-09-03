@@ -348,15 +348,14 @@ const formatMetricCount = (value: number, label: string): string =>
 
 const rankedMetricInfo = (
   comic: ComicData,
-  metric: Exclude<RankedMetric, "top" | "chapters">,
+  metric: Exclude<RankedMetric, "top" | "follows" | "chapters">,
 ): { symbol: string; text: string } | undefined => {
   const [value, symbol, label] = (
     {
-      follows: [comic.follows, "bookmark.fill", "Follows"],
       reviews: [comic.reviews, "person.fill", "Reviews"],
       comments: [comic.comments_total, "bubble.left.fill", "Comments"],
     } satisfies Record<
-      Exclude<RankedMetric, "top" | "chapters">,
+      Exclude<RankedMetric, "top" | "follows" | "chapters">,
       [number | null | undefined, string, string]
     >
   )[metric];
@@ -369,6 +368,17 @@ export const toRankedDiscoverItems = (
   preferredLanguages: string[] = [],
 ): DiscoverSectionItem[] =>
   nodes.map((node) => {
+    if (metric === "follows") {
+      return {
+        type: "prominentCarouselItem",
+        ...baseCard(node, preferredLanguages),
+        subtitle:
+          typeof node.data.follows === "number"
+            ? `♥ ${formatMetricCount(node.data.follows, "Follows")}`
+            : undefined,
+      };
+    }
+
     if (metric !== "chapters") {
       const latestChapter = latestChapterLabel(node.data);
       const chapterInfo = latestChapter ? { symbol: "book.fill", text: latestChapter } : undefined;

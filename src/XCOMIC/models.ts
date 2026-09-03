@@ -203,7 +203,7 @@ export const DISCOVER_SECTIONS: Record<SectionId, DiscoverSection> = {
   [SECTIONS.MOST_FOLLOWS]: {
     id: SECTIONS.MOST_FOLLOWS,
     title: "Most Followed",
-    type: DiscoverSectionType.featured,
+    type: DiscoverSectionType.prominentCarousel,
   },
   [SECTIONS.MOST_REVIEWS]: {
     id: SECTIONS.MOST_REVIEWS,
