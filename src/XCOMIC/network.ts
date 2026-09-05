@@ -4,12 +4,13 @@
 import {
   CloudflareError,
   PaperbackInterceptor,
+  URL,
   type Request,
   type Response,
 } from "@paperback/types";
 
+import { getBaseUrl, getSelectedBaseUrl, setActiveBaseUrl } from "./forms/settings";
 import {
-  API_URL,
   CHAPTERS_QUERY,
   CHAPTER_PAGES_QUERY,
   COMIC_BROWSE_ITEMS_QUERY,
@@ -18,7 +19,7 @@ import {
   LATEST_UPLOADS_QUERY,
   RECENTLY_ADDED_QUERY,
   CHAPTER_PAGE_SIZE,
-  DOMAIN,
+  MIRRORS,
   PAGE_SIZE,
   RECENTLY_ADDED_SIZE,
   type BrowseSelect,
@@ -38,14 +39,28 @@ import {
   type TitleBrowseResponse,
 } from "./models";
 
+const MIRROR_IDS = MIRRORS.map((mirror) => mirror.id);
+const RETRYABLE_STATUS = new Set([403, 408, 500, 502, 503, 504, 521, 522, 523, 524]);
+
+const mirrorOrigin = (url: string): string | undefined => {
+  try {
+    const parsed = new URL(url);
+    const origin = `${parsed.protocol}://${parsed.hostname}${parsed.port ? `:${parsed.port}` : ""}`;
+    return MIRROR_IDS.includes(origin) ? origin : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 export class XComicInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
+    const origin = mirrorOrigin(request.url) ?? getBaseUrl();
     return {
       ...request,
       headers: {
         ...request.headers,
-        referer: `${DOMAIN}/`,
-        origin: DOMAIN,
+        referer: `${origin}/`,
+        origin,
         "user-agent": await Application.getDefaultUserAgent(),
       },
     };
@@ -57,9 +72,10 @@ export class XComicInterceptor extends PaperbackInterceptor {
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
     if (response.headers?.["cf-mitigated"] === "challenge") {
+      const origin = mirrorOrigin(request.url) ?? getBaseUrl();
       throw new CloudflareError({
         // Data endpoints cannot render the challenge interstitial.
-        url: request.url.startsWith(API_URL) ? `${DOMAIN}/` : request.url,
+        url: /\/query\/(?:[?#]|$)/.test(request.url) ? `${origin}/` : request.url,
         method: request.method ?? "GET",
         headers: { "user-agent": await Application.getDefaultUserAgent() },
       });
@@ -69,16 +85,49 @@ export class XComicInterceptor extends PaperbackInterceptor {
 }
 
 const fetchText = async (request: Request): Promise<string> => {
-  const [response, buffer] = await Application.scheduleRequest(request);
-  if (response.status !== 200) {
-    throw new Error(`Request failed with status ${response.status}: ${request.url}`);
+  const requestedOrigin = mirrorOrigin(request.url);
+  const origins = [requestedOrigin, getBaseUrl(), getSelectedBaseUrl(), ...MIRROR_IDS].filter(
+    (origin, index, values): origin is string =>
+      Boolean(origin) && values.indexOf(origin) === index,
+  );
+  const candidates = requestedOrigin
+    ? origins.map((origin) => request.url.replace(requestedOrigin, origin))
+    : [request.url];
+  let lastError: unknown;
+
+  for (const [index, candidate] of candidates.entries()) {
+    try {
+      const [response, buffer] = await Application.scheduleRequest({
+        ...request,
+        url: candidate,
+      });
+      if (response.status === 200) {
+        const successfulOrigin = mirrorOrigin(candidate);
+        if (successfulOrigin) setActiveBaseUrl(successfulOrigin);
+        return Application.arrayBufferToUTF8String(buffer);
+      }
+      lastError = new Error(`Request failed with status ${response.status}: ${candidate}`);
+      if (
+        response.status === 404 ||
+        !RETRYABLE_STATUS.has(response.status) ||
+        index === candidates.length - 1
+      ) {
+        break;
+      }
+    } catch (error: unknown) {
+      if (error instanceof CloudflareError) throw error;
+      lastError = error;
+      if (index === candidates.length - 1) break;
+    }
   }
-  return Application.arrayBufferToUTF8String(buffer);
+
+  throw lastError ?? new Error(`Request failed: ${request.url}`);
 };
 
 const fetchGraphQL = async <T>(query: string, variables: Record<string, unknown>): Promise<T> => {
+  const apiUrl = `${getBaseUrl()}/query/`;
   const body = await fetchText({
-    url: API_URL,
+    url: apiUrl,
     method: "POST",
     headers: {
       accept: "application/json",
@@ -91,7 +140,7 @@ const fetchGraphQL = async <T>(query: string, variables: Record<string, unknown>
   try {
     parsed = JSON.parse(body) as unknown;
   } catch (error: unknown) {
-    throw new Error(`Failed to parse JSON from ${API_URL}`, { cause: error });
+    throw new Error(`Failed to parse JSON from ${apiUrl}`, { cause: error });
   }
 
   const payload = parsed as GraphQLResponse<T>;
@@ -139,14 +188,14 @@ export const fetchChapters = (comicId: string, page: number): Promise<ChapterLis
 
 export const fetchSearchPage = (): Promise<string> =>
   fetchText({
-    url: `${DOMAIN}/search`,
+    url: `${getBaseUrl()}/search`,
     method: "GET",
     headers: { accept: "text/html,application/xhtml+xml" },
   });
 
 export const fetchTitlePage = (id: string): Promise<string> =>
   fetchText({
-    url: `${DOMAIN}/title/${id}`,
+    url: `${getBaseUrl()}/title/${id}`,
     method: "GET",
     headers: { accept: "text/html,application/xhtml+xml" },
   });

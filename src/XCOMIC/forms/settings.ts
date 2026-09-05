@@ -8,9 +8,11 @@ import {
   DEFAULT_CONTENT_RATINGS,
   DEFAULT_CONTENT_TYPES,
   DEFAULT_LANGUAGES,
+  DOMAIN,
   LANGUAGE_OPTIONS,
   LEGACY_FORMAT_MAP,
   LEGACY_TYPE_MAP,
+  MIRRORS,
   SECTION_IDS,
   SECTION_OPTIONS,
   SECTIONS,
@@ -22,6 +24,29 @@ import {
   type SeriesType,
   type XComicPreferences,
 } from "../models";
+
+const MIRROR_IDS = new Set(MIRRORS.map((mirror) => mirror.id));
+
+export const getSelectedBaseUrl = (): string => {
+  const value = Application.getState(STATE_KEYS.BASE_URL);
+  return typeof value === "string" && MIRROR_IDS.has(value) ? value : DOMAIN;
+};
+
+export const getBaseUrl = (): string => {
+  const value = Application.getState(STATE_KEYS.ACTIVE_BASE_URL);
+  return typeof value === "string" && MIRROR_IDS.has(value) ? value : getSelectedBaseUrl();
+};
+
+export const setBaseUrl = (value: string): void => {
+  const mirror = MIRROR_IDS.has(value) ? value : DOMAIN;
+  Application.setState(mirror, STATE_KEYS.BASE_URL);
+  Application.setState(mirror, STATE_KEYS.ACTIVE_BASE_URL);
+  Application.invalidateDiscoverSections();
+};
+
+export const setActiveBaseUrl = (value: string): void => {
+  if (MIRROR_IDS.has(value)) Application.setState(value, STATE_KEYS.ACTIVE_BASE_URL);
+};
 
 export const getPreferences = (): XComicPreferences => {
   const validRatings = new Set(CONTENT_RATING_OPTIONS.map((option) => option.id));
@@ -97,6 +122,7 @@ export const getVisibleSections = (): SectionId[] => {
 };
 
 export class XComicSettingsForm extends Form {
+  private baseUrl = getSelectedBaseUrl();
   private contentRatings: ContentPreferenceRating[];
   private types: SeriesType[];
   private excludedFormats: string[];
@@ -109,6 +135,7 @@ export class XComicSettingsForm extends Form {
     preferences: XComicPreferences,
     visibleSections: SectionId[],
     private readonly filterOptions: FilterOptions,
+    private readonly onBaseUrlChange: () => void,
   ) {
     super();
     this.contentRatings = preferences.contentRatings;
@@ -122,6 +149,25 @@ export class XComicSettingsForm extends Form {
 
   override getSections() {
     return [
+      Section(
+        {
+          id: "mirror",
+          footer:
+            "All four domains share the same catalog. Requests automatically try another mirror " +
+            "when the selected site is unavailable.",
+        },
+        [
+          SelectRow("base_url", {
+            title: "Preferred mirror",
+            layout: "list",
+            value: [this.baseUrl],
+            items: MIRRORS,
+            minItemCount: 1,
+            maxItemCount: 1,
+            onValueChange: Application.Selector(this as XComicSettingsForm, "handleBaseUrlChange"),
+          }),
+        ],
+      ),
       Section(
         {
           id: "languages",
@@ -231,6 +277,12 @@ export class XComicSettingsForm extends Form {
         }),
       ]),
     ];
+  }
+
+  async handleBaseUrlChange(value: string[]): Promise<void> {
+    this.baseUrl = value[0] ?? DOMAIN;
+    setBaseUrl(this.baseUrl);
+    this.onBaseUrlChange();
   }
 
   async handleOriginalLanguagesChange(value: string[]): Promise<void> {

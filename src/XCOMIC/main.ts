@@ -105,6 +105,9 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       getPreferences(),
       getVisibleSections(),
       await this.getFilterOptions(),
+      () => {
+        this.filterOptionsPromise = undefined;
+      },
     );
   }
 
@@ -379,9 +382,10 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     title: string,
     metadata?: SearchMetadata,
   ): Promise<PagedResults<SearchResultItem> | undefined> {
-    const match = /^https?:\/\/(?:www\.)?xcomic\.(?:me|net)\/(comic|title)\/([a-zA-Z0-9]+)/i.exec(
-      title,
-    );
+    const match =
+      /^https?:\/\/(?:www\.)?(?:xcomic\.(?:me|net)|yona\.to|comik\.to)\/(comic|title)\/([a-zA-Z0-9]+)/i.exec(
+        title,
+      );
     if (!match?.[1] || !match[2]) return undefined;
     const preferences = this.getEffectivePreferences(metadata);
     const response =

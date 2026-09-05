@@ -9,8 +9,13 @@ import {
   type Tag,
 } from "@paperback/types";
 
-export const DOMAIN = "https://xcomic.me";
-export const API_URL = `${DOMAIN}/query/`;
+export const MIRRORS: Tag[] = [
+  { id: "https://xcomic.me", title: "xcomic.me" },
+  { id: "https://xcomic.net", title: "xcomic.net" },
+  { id: "https://yona.to", title: "yona.to" },
+  { id: "https://comik.to", title: "comik.to" },
+];
+export const DOMAIN = MIRRORS[0].id;
 export const PAGE_SIZE = 48;
 // Upper bound on latest-upload pages walked when filtering empties a page.
 export const MAX_LATEST_REQUESTS = 10;
@@ -244,6 +249,8 @@ export const SECTION_OPTIONS = Object.values(DISCOVER_SECTIONS).map(({ id, title
 }));
 
 export const STATE_KEYS = {
+  ACTIVE_BASE_URL: "xcomic_active_base_url",
+  BASE_URL: "xcomic_base_url",
   CONTENT_RATINGS: "xcomic_content_ratings",
   CONTENT_TYPES: "xcomic_content_types",
   EXCLUDED_GENRES: "xcomic_excluded_genres",

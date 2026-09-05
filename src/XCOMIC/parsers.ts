@@ -14,10 +14,10 @@ import {
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
+import { getBaseUrl } from "./forms/settings";
 import {
   CONTENT_RATING_GENRES,
   CONTENT_RATING_OPTIONS,
-  DOMAIN,
   LANGUAGE_OPTIONS,
   LEGACY_FORMAT_MAP,
   LEGACY_TYPE_MAP,
@@ -46,7 +46,7 @@ const toAbsoluteUrl = (url: string | null | undefined): string => {
   const normalized = url.trim();
   if (/^https?:\/\//i.test(normalized)) return normalized;
   if (normalized.startsWith("//")) return `https:${normalized}`;
-  return `${DOMAIN}${normalized.startsWith("/") ? "" : "/"}${normalized}`;
+  return `${getBaseUrl()}${normalized.startsWith("/") ? "" : "/"}${normalized}`;
 };
 
 const hasCoverUrl = (url: string | null | undefined): url is string =>
