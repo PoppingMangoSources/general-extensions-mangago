@@ -70,8 +70,27 @@ export class MangaHereInterceptor extends PaperbackInterceptor {
   }
 }
 
+// The site drops connections under load, which iOS reports as a TLS handshake failure and
+// which rejects the request rather than answering it with a status. Every row of the home
+// page comes from one of four documents, so one dropped connection empties the whole screen
+// until the reader pulls to refresh — and refreshing is what gets it, so it is worth
+// absorbing here instead. A challenge is re-thrown: only a person can clear one.
+const TRANSPORT_ATTEMPTS = 3;
+const RETRY_BACKOFF_SECONDS = 0.4;
+
+const request = async (options: Request): Promise<[Response, ArrayBuffer]> => {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await Application.scheduleRequest(options);
+    } catch (error) {
+      if (error instanceof CloudflareError || attempt >= TRANSPORT_ATTEMPTS) throw error;
+      await Application.sleep(RETRY_BACKOFF_SECONDS * attempt);
+    }
+  }
+};
+
 const fetchText = async (url: string): Promise<string> => {
-  const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
+  const [response, buffer] = await request({ url, method: "GET" });
   if (response.status === 404) throw new Error(`Content not found: ${url}`);
   if (response.status < 200 || response.status >= 300) {
     throw new Error(`Request failed with status ${response.status}: ${url}`);
@@ -155,7 +174,7 @@ export const fetchChapterScript = async (
     .setQueryItem("page", String(page))
     .setQueryItem("key", key)
     .toString();
-  const [response, buffer] = await Application.scheduleRequest({
+  const [response, buffer] = await request({
     url,
     method: "GET",
     headers: {
