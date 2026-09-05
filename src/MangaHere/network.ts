@@ -76,7 +76,7 @@ export class MangaHereInterceptor extends PaperbackInterceptor {
 // until the reader pulls to refresh — and refreshing is what gets it, so it is worth
 // absorbing here instead. A challenge is re-thrown: only a person can clear one.
 const TRANSPORT_ATTEMPTS = 3;
-const RETRY_BACKOFF_SECONDS = 0.4;
+const RETRY_BACKOFF_MS = 400;
 
 const request = async (options: Request): Promise<[Response, ArrayBuffer]> => {
   for (let attempt = 1; ; attempt++) {
@@ -84,7 +84,7 @@ const request = async (options: Request): Promise<[Response, ArrayBuffer]> => {
       return await Application.scheduleRequest(options);
     } catch (error) {
       if (error instanceof CloudflareError || attempt >= TRANSPORT_ATTEMPTS) throw error;
-      await Application.sleep(RETRY_BACKOFF_SECONDS * attempt);
+      await new Promise((resolve) => setTimeout(resolve, RETRY_BACKOFF_MS * attempt));
     }
   }
 };
