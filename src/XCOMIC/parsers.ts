@@ -422,21 +422,16 @@ export const toLatestUploadNodes = (result?: LatestUploadsResult | null): ComicN
   if (!result || !Array.isArray(result.items)) {
     throw new Error("XCOMIC latest-upload results were missing");
   }
-  return result.items.flatMap(({ comic, chapters }) => {
-    const data = comic?.data;
-    const chapterNodes = chapters ?? [];
-    if (!data || !hasCoverUrl(data.urlCover ?? data.remoteCoverUrl) || !chapterNodes[0]?.data.id) {
-      return [];
-    }
-    return [
-      {
-        data: {
-          ...data,
-          chapterNodes_last: chapterNodes,
-        },
-      },
-    ];
-  });
+  return result.items
+    .flatMap(({ chapters }) => chapters ?? [])
+    .filter(({ data }) => data.dbStatus === "normal")
+    .sort((left, right) => (right.data.datePublic ?? 0) - (left.data.datePublic ?? 0))
+    .flatMap((chapter) => {
+      const data = chapter.data.comicNode?.data;
+      if (!data || !hasCoverUrl(data.urlCover ?? data.remoteCoverUrl) || !chapter.data.id)
+        return [];
+      return [{ data: { ...data, chapterNodes_last: [chapter] } }];
+    });
 };
 
 const nodeNames = (nodes?: Array<{ data?: { name?: string } | null } | null> | null): string[] =>

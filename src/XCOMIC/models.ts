@@ -94,21 +94,22 @@ query get_title_browse_items($select: Title_Browse_Select) {
 `;
 
 export const LATEST_UPLOADS_QUERY = `
-query get_comic_latestUploads($select: Comic_LatestUploads_Select) {
-  get_comic_latestUploads(select: $select) {
+query get_title_latestUploads($select: Title_LatestUploads_Select) {
+  get_title_latestUploads(select: $select) {
     before
     items {
-      comic {
-        data {
-          id name urlPath urlCover
-          originalLanguage translatedLanguage
-          type contentRating genres tags sfw_result
-        }
-      }
-      chapters(amount: 1) {
+      chapters(amount: 3) {
+        id
         data {
           id serial chaNum urlPath
-          dateCreate dateModify datePublic
+          dbStatus dateCreate dateModify datePublic
+          comicNode {
+            data {
+              id name urlPath urlCover
+              originalLanguage translatedLanguage
+              type contentRating genres tags sfw_result
+            }
+          }
         }
       }
     }
@@ -568,6 +569,7 @@ export interface ChapterData {
   profileNodes?: Array<NamedNode | null> | null;
   userNode?: NamedNode | null;
   groupNodes?: Array<NamedNode | null> | null;
+  comicNode?: ComicNode | null;
 }
 
 export interface ChapterNode {
@@ -575,7 +577,6 @@ export interface ChapterNode {
 }
 
 interface LatestUploadItem {
-  comic?: ComicNode | null;
   chapters?: ChapterNode[] | null;
 }
 
@@ -652,7 +653,7 @@ export interface TitleBrowsePagerResponse {
 export type TitleBrowseResponse = TitleBrowseItemsResponse & TitleBrowsePagerResponse;
 
 export interface LatestUploadsResponse {
-  get_comic_latestUploads?: LatestUploadsResult | null;
+  get_title_latestUploads?: LatestUploadsResult | null;
 }
 
 export interface RecentlyAddedResponse {

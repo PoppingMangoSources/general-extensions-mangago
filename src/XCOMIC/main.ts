@@ -255,14 +255,16 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     let cursor = before;
     // The feed carries every language and type, so keep walking it until a page survives filtering.
     for (let attempt = 0; attempt < MAX_LATEST_REQUESTS && !nodes.length; attempt++) {
-      const result = (await fetchLatestUploads(cursor)).get_comic_latestUploads;
+      const result = (await fetchLatestUploads(cursor)).get_title_latestUploads;
       for (const node of toLatestUploadNodes(result)) {
         if (seenIds.has(node.data.id) || !isComicAllowed(node.data, preferences)) continue;
         seenIds.add(node.data.id);
         nodes.push(node);
       }
       cursor =
-        typeof result?.before === "number" && Number.isFinite(result.before)
+        typeof result?.before === "number" &&
+        Number.isFinite(result.before) &&
+        (cursor == null || result.before < cursor)
           ? result.before
           : undefined;
       if (cursor == null) break;

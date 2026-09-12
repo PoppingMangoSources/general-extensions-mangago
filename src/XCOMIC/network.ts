@@ -170,7 +170,7 @@ export const fetchTitleBrowse = async (select: BrowseSelect): Promise<TitleBrows
 
 export const fetchLatestUploads = (before?: number): Promise<LatestUploadsResponse> =>
   fetchGraphQL<LatestUploadsResponse>(LATEST_UPLOADS_QUERY, {
-    select: { size: PAGE_SIZE, ...(before != null ? { before } : {}) },
+    select: { first: 0, limit: PAGE_SIZE, ...(before != null ? { before } : {}) },
   });
 
 export const fetchRecentlyAdded = (): Promise<RecentlyAddedResponse> =>
