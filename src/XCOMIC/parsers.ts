@@ -238,16 +238,9 @@ const originalTitleForCard = (comic: ComicData): string | undefined => {
   return romanizedTitle ? Application.decodeHTMLEntities(romanizedTitle) : undefined;
 };
 
-const baseCard = (node: ComicNode, preferredLanguages: string[] = [], mangaIdOverride?: string) => {
-  const titleLanguage = preferredLanguages.find((language) =>
-    node.data.translatedLanguages?.includes(language),
-  );
+const baseCard = (node: ComicNode) => {
   return {
-    mangaId:
-      mangaIdOverride ??
-      (node.data.urlPath?.startsWith("/title/") && titleLanguage
-        ? titleMangaId(node.data.id, titleLanguage)
-        : sanitizeId(node.data.id)),
+    mangaId: sanitizeId(node.data.id),
     title: Application.decodeHTMLEntities(node.data.name),
     imageUrl: toAbsoluteUrl(node.data.urlCover ?? node.data.remoteCoverUrl),
     contentRating: toContentRating(node.data),
@@ -267,12 +260,8 @@ const cardSubtitle = (comic: ComicData): string | undefined =>
     .filter((value): value is string => Boolean(value))
     .join(" • ") || undefined;
 
-export const toSearchResultItem = (
-  node: ComicNode,
-  preferredLanguages: string[] = [],
-  mangaIdOverride?: string,
-): SearchResultItem => ({
-  ...baseCard(node, preferredLanguages, mangaIdOverride),
+export const toSearchResultItem = (node: ComicNode): SearchResultItem => ({
+  ...baseCard(node),
   subtitle: cardSubtitle(node.data),
 });
 
@@ -280,10 +269,10 @@ export const toPreferredTitleSource = (
   node: ComicNode,
   preferredLanguages: string[],
 ): ComicNode | undefined => {
-  const sources = (node.comicNodes ?? []).filter(
-    (source) => source.data.id && source.data.name && source.data.translatedLanguage,
+  const sources = (node.comicNodes ?? []).filter((source): source is ComicNode =>
+    Boolean(source?.data.id && source.data.name && source.data.translatedLanguage),
   );
-  if (!sources.length) return node;
+  if (!sources.length) return undefined;
 
   const selected = sources
     .filter(
@@ -303,8 +292,13 @@ export const toPreferredTitleSource = (
   return {
     data: {
       ...node.data,
+      id: selected.data.id,
       name: selected.data.name,
+      urlPath: selected.data.urlPath ?? `/source/${selected.data.id}`,
       translatedLanguage: selected.data.translatedLanguage,
+      translatedLanguages: selected.data.translatedLanguage
+        ? [selected.data.translatedLanguage]
+        : [],
       chaps_normal: selected.data.chaps_normal,
       totalChapters: selected.data.chaps_normal,
     },
@@ -316,23 +310,21 @@ type CarouselItemType = "simpleCarouselItem" | "chapterUpdatesCarouselItem";
 export const toDiscoverItems = (
   nodes: ComicNode[],
   type: CarouselItemType,
-  preferredLanguages: string[] = [],
 ): DiscoverSectionItem[] =>
   nodes
-    .map((node) => toDiscoverItem(node, type, preferredLanguages))
+    .map((node) => toDiscoverItem(node, type))
     .filter((item): item is DiscoverSectionItem => item !== undefined);
 
 const toDiscoverItem = (
   node: ComicNode,
   type: CarouselItemType,
-  preferredLanguages: string[],
 ): DiscoverSectionItem | undefined => {
   const chapter = node.data.chapterNodes_last?.[0]?.data;
   if (type === "chapterUpdatesCarouselItem") {
     if (!chapter?.id) return undefined;
     return {
       type,
-      ...baseCard(node, preferredLanguages),
+      ...baseCard(node),
       chapterId: toChapterId(chapter),
       subtitle: cardSubtitle(node.data),
       publishDate: dateFromTimestamp(
@@ -340,7 +332,7 @@ const toDiscoverItem = (
       ),
     };
   }
-  return { type, ...baseCard(node, preferredLanguages), subtitle: cardSubtitle(node.data) };
+  return { type, ...baseCard(node), subtitle: cardSubtitle(node.data) };
 };
 
 const formatMetricCount = (value: number, label: string): string =>
@@ -365,13 +357,12 @@ const rankedMetricInfo = (
 export const toRankedDiscoverItems = (
   nodes: ComicNode[],
   metric: RankedMetric,
-  preferredLanguages: string[] = [],
 ): DiscoverSectionItem[] =>
   nodes.map((node) => {
     if (metric === "follows") {
       return {
         type: "prominentCarouselItem",
-        ...baseCard(node, preferredLanguages),
+        ...baseCard(node),
         subtitle:
           typeof node.data.follows === "number"
             ? `♥ ${formatMetricCount(node.data.follows, "Follows")}`
@@ -401,7 +392,7 @@ export const toRankedDiscoverItems = (
             : undefined;
       return {
         type: "featuredCarouselItem",
-        ...baseCard(node, preferredLanguages),
+        ...baseCard(node),
         supertitle: originalTitleForCard(node.data),
         summary: stripHtml(node.data.summary?.html ?? node.data.description) || undefined,
         infoItems,
@@ -410,7 +401,7 @@ export const toRankedDiscoverItems = (
 
     return {
       type: "simpleCarouselItem",
-      ...baseCard(node, preferredLanguages),
+      ...baseCard(node),
       subtitle:
         typeof node.data.totalChapters === "number"
           ? formatMetricCount(node.data.totalChapters, "Chapters")
@@ -455,9 +446,6 @@ const stripHtml = (html?: string | null): string => {
   );
 };
 
-export const titleMangaId = (titleId: string, language: string): string =>
-  sanitizeId(`title@${titleId}@${language}`);
-
 export const parseTitleMangaId = (
   mangaId: string,
 ): { titleId: string; language: string } | undefined => {
@@ -465,21 +453,14 @@ export const parseTitleMangaId = (
   return match?.[1] && match[2] ? { titleId: match[1], language: match[2] } : undefined;
 };
 
-export const parseTitleComicId = (html: string, languages: string[]): string | undefined => {
+export const parseTitleName = (html: string): string | undefined => {
   const $ = cheerio.load(html);
-  const candidates = $("a[href^='/comic/']")
-    .map((_, element) => {
-      const href = $(element).attr("href") ?? "";
-      const match = /^\/comic\/([a-zA-Z0-9]+)-([a-zA-Z0-9_]+)-[^/]+$/.exec(href);
-      return match?.[1] && match[2] ? { id: match[1], language: match[2] } : undefined;
-    })
-    .get()
-    .filter((candidate): candidate is { id: string; language: string } => candidate !== undefined);
-  for (const language of languages) {
-    const match = candidates.find((candidate) => candidate.language === language);
-    if (match) return match.id;
-  }
-  return undefined;
+  const title = $("title")
+    .first()
+    .text()
+    .replace(/\s*::\s*(?:XCOMIC\.(?:ME|NET)|YONA\.TO|COMIK\.TO)\s*$/i, "")
+    .trim();
+  return title || undefined;
 };
 
 const formatDateYmd = (value: ComicData["originalPubFrom"]): string | undefined => {

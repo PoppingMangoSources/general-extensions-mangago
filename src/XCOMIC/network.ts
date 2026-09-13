@@ -160,9 +160,12 @@ export const fetchComicBrowse = async (select: BrowseSelect): Promise<ComicBrows
   return { ...items, ...pager };
 };
 
+export const fetchTitleBrowseItems = (select: BrowseSelect): Promise<TitleBrowseItemsResponse> =>
+  fetchGraphQL<TitleBrowseItemsResponse>(TITLE_BROWSE_ITEMS_QUERY, { select });
+
 export const fetchTitleBrowse = async (select: BrowseSelect): Promise<TitleBrowseResponse> => {
   const [items, pager] = await Promise.all([
-    fetchGraphQL<TitleBrowseItemsResponse>(TITLE_BROWSE_ITEMS_QUERY, { select }),
+    fetchTitleBrowseItems(select),
     fetchGraphQL<TitleBrowsePagerResponse>(TITLE_BROWSE_PAGER_QUERY, { select }),
   ]);
   return { ...items, ...pager };

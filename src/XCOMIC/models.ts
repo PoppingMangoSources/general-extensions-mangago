@@ -86,7 +86,7 @@ query get_title_browse_items($select: Title_Browse_Select) {
     }
     comicNodes {
       data {
-        id name translatedLanguage chaps_normal
+        id name urlPath translatedLanguage chaps_normal
       }
     }
   }
@@ -625,7 +625,7 @@ export interface ComicData {
 
 export interface ComicNode {
   data: ComicData;
-  comicNodes?: ComicNode[] | null;
+  comicNodes?: Array<ComicNode | null> | null;
 }
 
 export interface ComicBrowseItemsResponse {

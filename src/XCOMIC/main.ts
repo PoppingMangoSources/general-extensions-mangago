@@ -24,6 +24,8 @@ import { XComicAdvancedSearchForm } from "./forms/search";
 import { XComicSettingsForm, getPreferences, getVisibleSections } from "./forms/settings";
 import {
   DISCOVER_SECTIONS,
+  DEFAULT_CONTENT_RATINGS,
+  DEFAULT_CONTENT_TYPES,
   MAX_LATEST_REQUESTS,
   MOST_VIEWS_OPTIONS,
   PAGE_SIZE,
@@ -48,6 +50,7 @@ import {
   fetchRecentlyAdded,
   fetchSearchPage,
   fetchTitleBrowse,
+  fetchTitleBrowseItems,
   fetchTitlePage,
   XComicInterceptor,
 } from "./network";
@@ -55,8 +58,8 @@ import {
   isComicAllowed,
   parseChapterDetails,
   parseFilterOptions,
-  parseTitleComicId,
   parseTitleMangaId,
+  parseTitleName,
   toChapter,
   toDiscoverItems,
   toLatestUploadNodes,
@@ -64,7 +67,6 @@ import {
   toRankedDiscoverItems,
   toSearchResultItem,
   toSourceManga,
-  titleMangaId,
 } from "./parsers";
 import type XComicConfig from "./pbconfig";
 
@@ -173,7 +175,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     const page = metadata?.page ?? 1;
     const result = await this.getTitleBrowsePage(page, sortBy);
     return {
-      items: toRankedDiscoverItems(result.nodes, metric, result.translatedLanguages),
+      items: toRankedDiscoverItems(result.nodes, metric),
       metadata: result.nextPage != null ? { page: result.nextPage } : undefined,
     };
   }
@@ -286,7 +288,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     const page = metadata?.page ?? 1;
     const result = await this.getComicBrowsePage(page, sortBy, title, query.metadata);
     return {
-      items: result.nodes.map((node) => toSearchResultItem(node, result.translatedLanguages)),
+      items: result.nodes.map((node) => toSearchResultItem(node)),
       metadata: result.nextPage != null ? { page: result.nextPage } : undefined,
     };
   }
@@ -296,7 +298,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     sortBy: string,
     word: string,
     metadata: SearchMetadata | undefined,
-  ): Promise<{ nodes: ComicNode[]; nextPage?: number; translatedLanguages: string[] }> {
+  ): Promise<{ nodes: ComicNode[]; nextPage?: number }> {
     const preferences = this.getEffectivePreferences(metadata);
     const select = this.buildBrowseSelect(page, sortBy, word, metadata, preferences);
     const response = await fetchComicBrowse(select);
@@ -306,14 +308,13 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
         isComicAllowed(node.data, preferences),
       ),
       nextPage: typeof nextPage === "number" && nextPage > page ? nextPage : undefined,
-      translatedLanguages: preferences.translatedLanguages,
     };
   }
 
   private async getTitleBrowsePage(
     page: number,
     sortBy: string,
-  ): Promise<{ nodes: ComicNode[]; nextPage?: number; translatedLanguages: string[] }> {
+  ): Promise<{ nodes: ComicNode[]; nextPage?: number }> {
     const preferences = getPreferences();
     const select = this.buildBrowseSelect(page, sortBy, "", undefined, preferences);
     const response = await fetchTitleBrowse(select);
@@ -325,7 +326,6 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     return {
       nodes,
       nextPage: typeof nextPage === "number" && nextPage > page ? nextPage : undefined,
-      translatedLanguages: preferences.translatedLanguages,
     };
   }
 
@@ -394,15 +394,11 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       match[1] === "title"
         ? await this.fetchTitleComic(match[2], preferences.translatedLanguages)
         : await fetchComic(match[2]);
-    if (!response.get_comicNode) return undefined;
+    if (!response?.get_comicNode) return undefined;
     if (!isComicAllowed(response.get_comicNode.data, preferences)) {
       return { items: [] };
     }
-    const mangaId =
-      match[1] === "title" && response.get_comicNode.data.translatedLanguage
-        ? titleMangaId(match[2], response.get_comicNode.data.translatedLanguage)
-        : match[2];
-    return { items: [toSearchResultItem(response.get_comicNode, [], mangaId)] };
+    return { items: [toSearchResultItem(response.get_comicNode)] };
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
@@ -410,22 +406,32 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     const response = title
       ? await this.fetchTitleComic(title.titleId, [title.language])
       : await fetchComic(mangaId);
-    if (!response.get_comicNode) throw new Error(`Manga not found: ${mangaId}`);
+    if (!response?.get_comicNode) throw new Error(`Manga not found: ${mangaId}`);
     return toSourceManga(response.get_comicNode, mangaId);
   }
 
   private async fetchTitleComic(titleId: string, languages: string[]) {
-    const comicId = parseTitleComicId(await fetchTitlePage(titleId), languages);
-    if (!comicId) {
-      throw new Error(`XCOMIC has no selected-language source for title ${titleId}`);
-    }
-    return await fetchComic(comicId);
+    const title = parseTitleName(await fetchTitlePage(titleId));
+    if (!title) return undefined;
+    const select = this.buildBrowseSelect(1, "field_score", title, undefined, {
+      contentRatings: DEFAULT_CONTENT_RATINGS,
+      excludedFormats: [],
+      excludedGenres: [],
+      originalLanguages: [],
+      translatedLanguages: languages,
+      types: DEFAULT_CONTENT_TYPES,
+    });
+    const titleNode = (await fetchTitleBrowseItems(select)).get_title_browse_items?.find(
+      (node) => node.data.id === titleId,
+    );
+    const source = titleNode ? toPreferredTitleSource(titleNode, languages) : undefined;
+    return source ? await fetchComic(source.data.id) : undefined;
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
     const title = parseTitleMangaId(sourceManga.mangaId);
     const comicId = title
-      ? /\/comic\/([a-zA-Z0-9]+)/i.exec(sourceManga.mangaInfo.shareUrl ?? "")?.[1]
+      ? /\/(?:comic|source)\/([a-zA-Z0-9]+)/i.exec(sourceManga.mangaInfo.shareUrl ?? "")?.[1]
       : sourceManga.mangaId;
     if (!comicId) throw new Error(`XCOMIC could not resolve a source for ${sourceManga.mangaId}`);
     const first = await fetchChapters(comicId, 1);
