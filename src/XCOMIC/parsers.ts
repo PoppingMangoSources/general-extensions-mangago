@@ -285,16 +285,28 @@ export const toSearchResultItem = (node: ComicNode): SearchResultItem => ({
   subtitle: cardSubtitle(node.data),
 });
 
-export const toPreferredTitleSource = (
-  node: ComicNode,
-  preferredLanguages: string[],
-): ComicNode | undefined => {
-  const sources = (node.comicNodes ?? []).filter((source): source is ComicNode =>
-    Boolean(source?.data.id && source.data.name && source.data.translatedLanguage),
-  );
-  if (!sources.length) return undefined;
+// A title groups every edition of a work. Each edition is its own comic, so it inherits the
+// title's artwork and taxonomy and overrides only what belongs to that edition.
+const toTitleSource = (node: ComicNode, source: ComicNode): ComicNode => ({
+  data: {
+    ...node.data,
+    id: source.data.id,
+    name: source.data.name,
+    subName: source.data.subName,
+    urlPath: source.data.urlPath ?? `/source/${source.data.id}`,
+    translatedLanguage: source.data.translatedLanguage,
+    translatedLanguages: source.data.translatedLanguage ? [source.data.translatedLanguage] : [],
+    chaps_normal: source.data.chaps_normal,
+    totalChapters: source.data.chaps_normal,
+  },
+});
 
-  const selected = sources
+// Preferred language first, then whichever edition carries the most chapters.
+export const toTitleSources = (node: ComicNode, preferredLanguages: string[]): ComicNode[] =>
+  (node.comicNodes ?? [])
+    .filter((source): source is ComicNode =>
+      Boolean(source?.data.id && source.data.name && source.data.translatedLanguage),
+    )
     .filter(
       (source) =>
         !preferredLanguages.length ||
@@ -306,25 +318,13 @@ export const toPreferredTitleSource = (
           preferredLanguages.indexOf(right.data.translatedLanguage ?? "")
         : 0;
       return languageOrder || (right.data.chaps_normal ?? 0) - (left.data.chaps_normal ?? 0);
-    })[0];
-  if (!selected) return undefined;
+    })
+    .map((source) => toTitleSource(node, source));
 
-  return {
-    data: {
-      ...node.data,
-      id: selected.data.id,
-      name: selected.data.name,
-      subName: selected.data.subName,
-      urlPath: selected.data.urlPath ?? `/source/${selected.data.id}`,
-      translatedLanguage: selected.data.translatedLanguage,
-      translatedLanguages: selected.data.translatedLanguage
-        ? [selected.data.translatedLanguage]
-        : [],
-      chaps_normal: selected.data.chaps_normal,
-      totalChapters: selected.data.chaps_normal,
-    },
-  };
-};
+export const toPreferredTitleSource = (
+  node: ComicNode,
+  preferredLanguages: string[],
+): ComicNode | undefined => toTitleSources(node, preferredLanguages)[0];
 
 type CarouselItemType = "simpleCarouselItem" | "chapterUpdatesCarouselItem";
 

@@ -44,7 +44,6 @@ import {
 import {
   fetchChapterPages,
   fetchChapters,
-  fetchComicBrowse,
   fetchComic,
   fetchLatestUploads,
   fetchRecentlyAdded,
@@ -64,6 +63,7 @@ import {
   toDiscoverItems,
   toLatestUploadNodes,
   toPreferredTitleSource,
+  toTitleSources,
   toRankedDiscoverItems,
   toSearchResultItem,
   toSourceManga,
@@ -286,14 +286,14 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
 
     const sortBy = sortingOption?.id ?? query.metadata?.discoverSort ?? "field_score";
     const page = metadata?.page ?? 1;
-    const result = await this.getComicBrowsePage(page, sortBy, title, query.metadata);
+    const result = await this.getTitleSearchPage(page, sortBy, title, query.metadata);
     return {
       items: result.nodes.map((node) => toSearchResultItem(node)),
       metadata: result.nextPage != null ? { page: result.nextPage } : undefined,
     };
   }
 
-  private async getComicBrowsePage(
+  private async getTitleSearchPage(
     page: number,
     sortBy: string,
     word: string,
@@ -301,12 +301,14 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   ): Promise<{ nodes: ComicNode[]; nextPage?: number }> {
     const preferences = this.getEffectivePreferences(metadata);
     const select = this.buildBrowseSelect(page, sortBy, word, metadata, preferences);
-    const response = await fetchComicBrowse(select);
-    const nextPage = response.get_comic_browse_pager?.next;
+    const response = await fetchTitleBrowse(select);
+    const nextPage = response.get_title_browse_pager?.next;
+    // Search lists every edition of a match, so a reader can pick a team rather than
+    // being handed whichever one Discover would have preferred.
     return {
-      nodes: (response.get_comic_browse_items ?? []).filter((node) =>
-        isComicAllowed(node.data, preferences),
-      ),
+      nodes: (response.get_title_browse_items ?? [])
+        .flatMap((node) => toTitleSources(node, preferences.translatedLanguages))
+        .filter((node) => isComicAllowed(node.data, preferences)),
       nextPage: typeof nextPage === "number" && nextPage > page ? nextPage : undefined,
     };
   }

@@ -22,35 +22,6 @@ export const MAX_LATEST_REQUESTS = 10;
 export const CHAPTER_PAGE_SIZE = 1000;
 export const RECENTLY_ADDED_SIZE = 50;
 
-export const COMIC_BROWSE_PAGER_QUERY = `
-query get_comic_browse_pager($select: Comic_Browse_Select) {
-  get_comic_browse_pager(select: $select) {
-    next
-  }
-}
-`;
-
-export const COMIC_BROWSE_ITEMS_QUERY = `
-query get_comic_browse_items($select: Comic_Browse_Select) {
-  get_comic_browse_items(select: $select) {
-    data {
-      id name subName altNames
-      originalLanguage translatedLanguage
-      type contentRating genres tags
-      summary { html }
-      urlPath urlCover
-      sfw_result score_val follows reviews comments_total chaps_normal
-      chapterNodes_last(amount: 1) {
-        data {
-          id serial chaNum urlPath
-          dateCreate dateModify datePublic
-        }
-      }
-    }
-  }
-}
-`;
-
 export const TITLE_BROWSE_PAGER_QUERY = `
 query get_title_browse_pager($select: Title_Browse_Select) {
   get_title_browse_pager(select: $select) {
@@ -630,18 +601,6 @@ export interface ComicNode {
   data: ComicData;
   comicNodes?: Array<ComicNode | null> | null;
 }
-
-export interface ComicBrowseItemsResponse {
-  get_comic_browse_items?: ComicNode[] | null;
-}
-
-export interface ComicBrowsePagerResponse {
-  get_comic_browse_pager?: {
-    next?: number | null;
-  } | null;
-}
-
-export type ComicBrowseResponse = ComicBrowseItemsResponse & ComicBrowsePagerResponse;
 
 export interface TitleBrowseItemsResponse {
   get_title_browse_items?: ComicNode[] | null;

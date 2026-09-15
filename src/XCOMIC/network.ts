@@ -13,8 +13,6 @@ import { getBaseUrl, getSelectedBaseUrl, setActiveBaseUrl } from "./forms/settin
 import {
   CHAPTERS_QUERY,
   CHAPTER_PAGES_QUERY,
-  COMIC_BROWSE_ITEMS_QUERY,
-  COMIC_BROWSE_PAGER_QUERY,
   COMIC_QUERY,
   LATEST_UPLOADS_QUERY,
   RECENTLY_ADDED_QUERY,
@@ -25,9 +23,6 @@ import {
   type BrowseSelect,
   type ChapterListResponse,
   type ChapterPagesResponse,
-  type ComicBrowseItemsResponse,
-  type ComicBrowsePagerResponse,
-  type ComicBrowseResponse,
   type ComicNodeResponse,
   type GraphQLResponse,
   type LatestUploadsResponse,
@@ -150,14 +145,6 @@ const fetchGraphQL = async <T>(query: string, variables: Record<string, unknown>
   }
   if (!payload.data) throw new Error("XCOMIC returned an empty response");
   return payload.data;
-};
-
-export const fetchComicBrowse = async (select: BrowseSelect): Promise<ComicBrowseResponse> => {
-  const [items, pager] = await Promise.all([
-    fetchGraphQL<ComicBrowseItemsResponse>(COMIC_BROWSE_ITEMS_QUERY, { select }),
-    fetchGraphQL<ComicBrowsePagerResponse>(COMIC_BROWSE_PAGER_QUERY, { select }),
-  ]);
-  return { ...items, ...pager };
 };
 
 export const fetchTitleBrowseItems = (select: BrowseSelect): Promise<TitleBrowseItemsResponse> =>
