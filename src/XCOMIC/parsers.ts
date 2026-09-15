@@ -238,21 +238,19 @@ const originalTitleForCard = (comic: ComicData): string | undefined => {
   return romanizedTitle ? Application.decodeHTMLEntities(romanizedTitle) : undefined;
 };
 
-// subName distinguishes editions of one title, but the site also stores machine tags there
-// ("src-site:mfx"), so the namespace prefix is dropped and only the readable half is shown.
+// subName names the team behind an edition, but the site also parks machine tags there
+// ("src-site:mfx"). Those are not a team name, so they are dropped rather than shown.
 const editionLabel = (subName?: string | null): string | undefined => {
   const raw = subName?.trim();
-  if (!raw) return undefined;
-  const value = (/^[a-z0-9_-]+:(.*)$/i.exec(raw)?.[1] ?? raw).trim();
-  return value ? Application.decodeHTMLEntities(value) : undefined;
+  if (!raw || /^[a-z0-9_-]+:/i.test(raw)) return undefined;
+  return Application.decodeHTMLEntities(raw);
 };
 
 const displayTitle = (comic: ComicData): string => {
   const name = Application.decodeHTMLEntities(comic.name);
   if (!getShowEditionInTitle()) return name;
   const edition = editionLabel(comic.subName);
-  // A label that only repeats the title adds nothing.
-  return edition && edition.toLowerCase() !== name.toLowerCase() ? `${name} (${edition})` : name;
+  return edition && !name.includes(edition) ? `${name} (${edition})` : name;
 };
 
 const baseCard = (node: ComicNode) => {
