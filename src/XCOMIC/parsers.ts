@@ -14,7 +14,7 @@ import {
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
-import { getBaseUrl } from "./forms/settings";
+import { getBaseUrl, getShowEditionInTitle } from "./forms/settings";
 import {
   CONTENT_RATING_GENRES,
   CONTENT_RATING_OPTIONS,
@@ -238,10 +238,19 @@ const originalTitleForCard = (comic: ComicData): string | undefined => {
   return romanizedTitle ? Application.decodeHTMLEntities(romanizedTitle) : undefined;
 };
 
+// A title can carry several editions; subName is the team/edition that distinguishes them.
+const displayTitle = (comic: ComicData): string => {
+  const name = Application.decodeHTMLEntities(comic.name);
+  const edition = comic.subName?.trim();
+  return edition && getShowEditionInTitle()
+    ? `${name} (${Application.decodeHTMLEntities(edition)})`
+    : name;
+};
+
 const baseCard = (node: ComicNode) => {
   return {
     mangaId: sanitizeId(node.data.id),
-    title: Application.decodeHTMLEntities(node.data.name),
+    title: displayTitle(node.data),
     imageUrl: toAbsoluteUrl(node.data.urlCover ?? node.data.remoteCoverUrl),
     contentRating: toContentRating(node.data),
   };
@@ -294,6 +303,7 @@ export const toPreferredTitleSource = (
       ...node.data,
       id: selected.data.id,
       name: selected.data.name,
+      subName: selected.data.subName,
       urlPath: selected.data.urlPath ?? `/source/${selected.data.id}`,
       translatedLanguage: selected.data.translatedLanguage,
       translatedLanguages: selected.data.translatedLanguage
@@ -498,7 +508,7 @@ export const toSourceManga = (node: ComicNode, mangaId = sanitizeId(node.data.id
   return {
     mangaId,
     mangaInfo: {
-      primaryTitle: Application.decodeHTMLEntities(comic.name),
+      primaryTitle: displayTitle(comic),
       secondaryTitles: (comic.altNames ?? []).map((title) => Application.decodeHTMLEntities(title)),
       thumbnailUrl: cover,
       synopsis: stripHtml(comic.summary?.html ?? comic.description),

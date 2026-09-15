@@ -34,7 +34,7 @@ export const COMIC_BROWSE_ITEMS_QUERY = `
 query get_comic_browse_items($select: Comic_Browse_Select) {
   get_comic_browse_items(select: $select) {
     data {
-      id name altNames
+      id name subName altNames
       originalLanguage translatedLanguage
       type contentRating genres tags
       summary { html }
@@ -86,7 +86,7 @@ query get_title_browse_items($select: Title_Browse_Select) {
     }
     comicNodes {
       data {
-        id name urlPath translatedLanguage chaps_normal
+        id name subName urlPath translatedLanguage chaps_normal
       }
     }
   }
@@ -105,7 +105,7 @@ query get_title_latestUploads($select: Title_LatestUploads_Select) {
           dbStatus dateCreate dateModify datePublic
           comicNode {
             data {
-              id name urlPath urlCover
+              id name subName urlPath urlCover
               originalLanguage translatedLanguage
               type contentRating genres tags sfw_result
             }
@@ -123,7 +123,7 @@ query get_comic_recentlyAdded($select: Comic_RecentlyAdded_Select) {
     before
     items {
       data {
-        id name urlPath urlCover
+        id name subName urlPath urlCover
         originalLanguage translatedLanguage
         type contentRating genres tags sfw_result
       }
@@ -136,7 +136,7 @@ export const COMIC_QUERY = `
 query get_comicNode($id: ID!) {
   get_comicNode(id: $id) {
     data {
-      id name altNames
+      id name subName altNames
       originalLanguage translatedLanguage
       originalStatus originalPubFrom { y m d }
       originalPubTill { y m d }
@@ -257,6 +257,7 @@ export const STATE_KEYS = {
   EXCLUDED_GENRES: "xcomic_excluded_genres",
   EXCLUDED_FORMATS: "xcomic_excluded_formats",
   ORIGINAL_LANGUAGES: "xcomic_original_languages",
+  SHOW_EDITION_IN_TITLE: "xcomic_show_edition_in_title",
   TRANSLATED_LANGUAGES: "xcomic_languages",
   VISIBLE_SECTIONS_VERSION: "xcomic_visible_sections_version",
   VISIBLE_SECTIONS: "xcomic_visible_sections",
@@ -588,6 +589,8 @@ export interface LatestUploadsResult {
 export interface ComicData {
   id: string;
   name: string;
+  // The edition/team label the site hangs off a comic when a title has several.
+  subName?: string | null;
   altNames?: string[] | null;
   nativeTitle?: string | null;
   romanizedTitle?: string | null;

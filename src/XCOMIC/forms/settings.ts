@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import { Form, Section, SelectRow } from "@paperback/types";
+import { Form, Section, SelectRow, ToggleRow } from "@paperback/types";
 
 import {
   CONTENT_RATING_OPTIONS,
@@ -47,6 +47,10 @@ export const setBaseUrl = (value: string): void => {
 export const setActiveBaseUrl = (value: string): void => {
   if (MIRROR_IDS.has(value)) Application.setState(value, STATE_KEYS.ACTIVE_BASE_URL);
 };
+
+// Defaults on: a title with several editions is ambiguous without the label.
+export const getShowEditionInTitle = (): boolean =>
+  (Application.getState(STATE_KEYS.SHOW_EDITION_IN_TITLE) as boolean | undefined) ?? true;
 
 export const getPreferences = (): XComicPreferences => {
   const validRatings = new Set(CONTENT_RATING_OPTIONS.map((option) => option.id));
@@ -129,6 +133,7 @@ export class XComicSettingsForm extends Form {
   private excludedGenres: string[];
   private originalLanguages: string[];
   private translatedLanguages: string[];
+  private showEditionInTitle: boolean;
   private visibleSections: SectionId[];
 
   constructor(
@@ -144,6 +149,7 @@ export class XComicSettingsForm extends Form {
     this.excludedGenres = preferences.excludedGenres;
     this.originalLanguages = preferences.originalLanguages;
     this.translatedLanguages = preferences.translatedLanguages;
+    this.showEditionInTitle = getShowEditionInTitle();
     this.visibleSections = visibleSections;
   }
 
@@ -262,6 +268,23 @@ export class XComicSettingsForm extends Form {
           ),
         }),
       ]),
+      Section(
+        {
+          id: "titles",
+          footer:
+            "Some titles are uploaded by several teams. Showing the edition tells them apart.",
+        },
+        [
+          ToggleRow("show_edition_in_title", {
+            title: "Show edition in title",
+            value: this.showEditionInTitle,
+            onValueChange: Application.Selector(
+              this as XComicSettingsForm,
+              "handleShowEditionInTitleChange",
+            ),
+          }),
+        ],
+      ),
       Section("discover", [
         SelectRow("visible_sections", {
           title: "Visible sections",
@@ -313,6 +336,11 @@ export class XComicSettingsForm extends Form {
   async handleExcludedFormatsChange(value: string[]): Promise<void> {
     this.excludedFormats = value;
     saveSetting(this, STATE_KEYS.EXCLUDED_FORMATS, value);
+  }
+
+  async handleShowEditionInTitleChange(value: boolean): Promise<void> {
+    this.showEditionInTitle = value;
+    saveSetting(this, STATE_KEYS.SHOW_EDITION_IN_TITLE, value);
   }
 
   async handleVisibleSectionsChange(value: string[]): Promise<void> {
