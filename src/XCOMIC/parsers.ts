@@ -238,18 +238,23 @@ const originalTitleForCard = (comic: ComicData): string | undefined => {
   return romanizedTitle ? Application.decodeHTMLEntities(romanizedTitle) : undefined;
 };
 
-// subName names the team behind an edition, but the site also parks machine tags there
-// ("src-site:mfx"). Those are not a team name, so they are dropped rather than shown.
-const editionLabel = (subName?: string | null): string | undefined => {
-  const raw = subName?.trim();
-  if (!raw || /^[a-z0-9_-]+:/i.test(raw)) return undefined;
-  return Application.decodeHTMLEntities(raw);
+// The team behind an edition. subName carries it on the title's comic nodes, but get_comicNode
+// leaves it empty, so the detail page falls back to the "[Team]" suffix the site puts on the
+// comic's own name. Machine tags ("src-site:mfx") are not a team name and are dropped.
+const editionLabel = (comic: ComicData): string | undefined => {
+  const subName = comic.subName?.trim();
+  if (subName && !/^[a-z0-9_-]+:/i.test(subName)) return Application.decodeHTMLEntities(subName);
+
+  const name = comic.name.trimEnd();
+  if (!name.endsWith("]")) return undefined;
+  const team = name.slice(0, -1).split("[").pop()?.trim();
+  return team ? Application.decodeHTMLEntities(team) : undefined;
 };
 
 const displayTitle = (comic: ComicData): string => {
   const name = Application.decodeHTMLEntities(comic.name);
   if (!getShowEditionInTitle()) return name;
-  const edition = editionLabel(comic.subName);
+  const edition = editionLabel(comic);
   return edition && !name.includes(edition) ? `${name} (${edition})` : name;
 };
 
