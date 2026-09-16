@@ -125,6 +125,8 @@ query get_comicNode($id: ID!) {
 }
 `;
 
+// paging exposes "total pages page init size skip limit prev next" — verified against the
+// site's own paging fragment. Other clients select next/total instead; pages is not a typo.
 export const CHAPTERS_QUERY = `
 query get_comic_chapterList_uniqList($select: Select_Comic_ChapterList_UniqList) {
   get_comic_chapterList_uniqList(select: $select) {
