@@ -28,7 +28,6 @@ import {
   DEFAULT_CONTENT_TYPES,
   MAX_LATEST_REQUESTS,
   PAGE_SIZE,
-  RELEVANCE_SORT,
   SECTION_IDS,
   SECTIONS,
   SORTING_OPTIONS,
@@ -279,7 +278,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     const pasted = await this.resolveUrlQuery(title, query.metadata);
     if (pasted) return pasted;
 
-    const sortBy = sortingOption?.id ?? RELEVANCE_SORT;
+    const sortBy = sortingOption?.id ?? "field_score";
     const page = metadata?.page ?? 1;
     const result = await this.getTitleSearchPage(page, sortBy, title, query.metadata);
     return {
@@ -290,7 +289,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
 
   private async getTitleSearchPage(
     page: number,
-    sortBy: string | null,
+    sortBy: string,
     word: string,
     metadata: SearchMetadata | undefined,
   ): Promise<{ nodes: ComicNode[]; nextPage?: number }> {
@@ -332,7 +331,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
 
   private buildBrowseSelect(
     page: number,
-    sortBy: string | null,
+    sortBy: string,
     word: string,
     metadata: SearchMetadata | undefined,
     preferences: XComicPreferences,
@@ -360,7 +359,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       where: "browse",
       page,
       size: PAGE_SIZE,
-      sortby: sortBy === RELEVANCE_SORT ? null : sortBy,
+      sortby: sortBy,
       word,
       incOLangs: preferences.originalLanguages,
       incTLangs: preferences.translatedLanguages,

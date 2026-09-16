@@ -475,11 +475,7 @@ export const LANGUAGE_OPTIONS: Tag[] = [
   { id: "_t", title: "Other" },
 ];
 
-// Omitting sortby is how the API asks for text-match relevance, so this id maps to null.
-export const RELEVANCE_SORT = "relevance";
-
 export const SORTING_OPTIONS: SortingOption[] = [
-  { id: RELEVANCE_SORT, label: "Relevance" },
   { id: "field_score", label: "Rating Score" },
   { id: "field_update", label: "Latest Update" },
   { id: "field_create", label: "Recently Added" },
@@ -515,7 +511,7 @@ export interface BrowseSelect {
   where: "browse";
   page: number;
   size: number;
-  sortby: string | null;
+  sortby: string;
   word: string;
   incOLangs: string[];
   incTLangs: string[];
