@@ -303,11 +303,15 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     const select = this.buildBrowseSelect(page, sortBy, word, metadata, preferences);
     const response = await fetchTitleBrowse(select);
     const nextPage = response.get_title_browse_pager?.next;
-    // Search lists every edition of a match, so a reader can pick a team rather than
-    // being handed whichever one Discover would have preferred.
+    // A search names one work, so every edition of it is the choice on offer. Sorting or
+    // filtering with no term is browsing, and the site lists one row per title there.
+    const expandEditions = word.trim().length > 0;
     return {
       nodes: (response.get_title_browse_items ?? [])
-        .flatMap((node) => toTitleSources(node, preferences.translatedLanguages))
+        .flatMap((node) => {
+          const sources = toTitleSources(node, preferences.translatedLanguages);
+          return expandEditions ? sources : sources.slice(0, 1);
+        })
         .filter((node) => isComicAllowed(node.data, preferences)),
       nextPage: typeof nextPage === "number" && nextPage > page ? nextPage : undefined,
     };
