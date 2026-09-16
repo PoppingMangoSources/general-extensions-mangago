@@ -27,7 +27,6 @@ import {
   DEFAULT_CONTENT_RATINGS,
   DEFAULT_CONTENT_TYPES,
   MAX_LATEST_REQUESTS,
-  MOST_VIEWS_OPTIONS,
   PAGE_SIZE,
   SECTION_IDS,
   SECTIONS,
@@ -47,6 +46,7 @@ import {
   fetchComic,
   fetchLatestUploads,
   fetchRecentlyAdded,
+  fetchTitleRandom,
   fetchSearchPage,
   fetchTitleBrowse,
   fetchTitleBrowseItems,
@@ -57,7 +57,6 @@ import {
   isComicAllowed,
   parseChapterDetails,
   parseFilterOptions,
-  parseTitleMangaId,
   parseTitleName,
   toChapter,
   toDiscoverItems,
@@ -125,8 +124,8 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     switch (section.id) {
       case SECTIONS.TOP_RATED:
         return this.getRankedSection(metadata, "field_score", "top");
-      case SECTIONS.MOST_VIEWS:
-        return this.getMostViewsSection();
+      case SECTIONS.RANDOM:
+        return this.getRandomSection();
       case SECTIONS.MOST_FOLLOWS:
         return this.getRankedSection(metadata, "field_follow", "follows");
       case SECTIONS.MOST_REVIEWS:
@@ -193,16 +192,16 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     };
   }
 
-  private getMostViewsSection(): PagedResults<DiscoverSectionItem> {
+  private async getRandomSection(): Promise<PagedResults<DiscoverSectionItem>> {
+    const preferences = getPreferences();
+    const nodes = (await fetchTitleRandom()).get_title_randomList ?? [];
     return {
-      items: MOST_VIEWS_OPTIONS.map((option) => ({
-        type: "genresCarouselItem",
-        name: option.chipLabel,
-        searchQuery: {
-          title: "",
-          metadata: { discoverSort: option.id } satisfies SearchMetadata,
-        },
-      })),
+      items: toDiscoverItems(
+        nodes
+          .flatMap((node) => toTitleSources(node, preferences.translatedLanguages).slice(0, 1))
+          .filter((node) => isComicAllowed(node.data, preferences)),
+        "prominentCarouselItem",
+      ),
     };
   }
 
@@ -214,13 +213,8 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     return new XComicAdvancedSearchForm(query, getPreferences(), await this.getFilterOptions());
   }
 
-  async getSortingOptions(query: SearchQuery<SearchMetadata>): Promise<SortingOption[]> {
-    const discoverSort = query.metadata?.discoverSort;
-    const selectedOption = SORTING_OPTIONS.find((option) => option.id === discoverSort);
-    // Paperback selects the first option when a Discover chip opens Search.
-    return selectedOption
-      ? [selectedOption, ...SORTING_OPTIONS.filter((option) => option.id !== discoverSort)]
-      : SORTING_OPTIONS;
+  async getSortingOptions(): Promise<SortingOption[]> {
+    return SORTING_OPTIONS;
   }
 
   private getEffectivePreferences(metadata?: SearchMetadata): XComicPreferences {
@@ -284,7 +278,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     const pasted = await this.resolveUrlQuery(title, query.metadata);
     if (pasted) return pasted;
 
-    const sortBy = sortingOption?.id ?? query.metadata?.discoverSort ?? "field_score";
+    const sortBy = sortingOption?.id ?? "field_score";
     const page = metadata?.page ?? 1;
     const result = await this.getTitleSearchPage(page, sortBy, title, query.metadata);
     return {
@@ -408,11 +402,8 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
-    const title = parseTitleMangaId(mangaId);
-    const response = title
-      ? await this.fetchTitleComic(title.titleId, [title.language])
-      : await fetchComic(mangaId);
-    if (!response?.get_comicNode) throw new Error(`Manga not found: ${mangaId}`);
+    const response = await fetchComic(mangaId);
+    if (!response.get_comicNode) throw new Error(`Manga not found: ${mangaId}`);
     return toSourceManga(response.get_comicNode, mangaId);
   }
 
@@ -435,19 +426,16 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
-    const title = parseTitleMangaId(sourceManga.mangaId);
-    const comicId = title
-      ? /\/(?:comic|source)\/([a-zA-Z0-9]+)/i.exec(sourceManga.mangaInfo.shareUrl ?? "")?.[1]
-      : sourceManga.mangaId;
-    if (!comicId) throw new Error(`XCOMIC could not resolve a source for ${sourceManga.mangaId}`);
-    const first = await fetchChapters(comicId, 1);
+    const first = await fetchChapters(sourceManga.mangaId, 1);
     const firstResult = first.get_comic_chapterList_uniqList;
     if (!firstResult) return [];
     const pageCount = firstResult.paging?.pages ?? 1;
     const responses = [
       first,
       ...(await Promise.all(
-        Array.from({ length: pageCount - 1 }, (_, index) => fetchChapters(comicId, index + 2)),
+        Array.from({ length: pageCount - 1 }, (_, index) =>
+          fetchChapters(sourceManga.mangaId, index + 2),
+        ),
       )),
     ];
     return responses.flatMap((response) =>

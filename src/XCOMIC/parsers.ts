@@ -326,7 +326,10 @@ export const toPreferredTitleSource = (
   preferredLanguages: string[],
 ): ComicNode | undefined => toTitleSources(node, preferredLanguages)[0];
 
-type CarouselItemType = "simpleCarouselItem" | "chapterUpdatesCarouselItem";
+type CarouselItemType =
+  | "simpleCarouselItem"
+  | "prominentCarouselItem"
+  | "chapterUpdatesCarouselItem";
 
 export const toDiscoverItems = (
   nodes: ComicNode[],
@@ -465,13 +468,6 @@ const stripHtml = (html?: string | null): string => {
       .replace(/\n{3,}/g, "\n\n")
       .trim(),
   );
-};
-
-export const parseTitleMangaId = (
-  mangaId: string,
-): { titleId: string; language: string } | undefined => {
-  const match = /^title@([a-zA-Z0-9]+)@([a-zA-Z0-9_]+)$/.exec(mangaId);
-  return match?.[1] && match[2] ? { titleId: match[1], language: match[2] } : undefined;
 };
 
 export const parseTitleName = (html: string): string | undefined => {

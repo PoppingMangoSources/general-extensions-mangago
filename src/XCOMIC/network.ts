@@ -19,6 +19,7 @@ import {
   CHAPTER_PAGE_SIZE,
   MIRRORS,
   PAGE_SIZE,
+  RANDOM_AMOUNT,
   RECENTLY_ADDED_SIZE,
   type BrowseSelect,
   type ChapterListResponse,
@@ -28,8 +29,10 @@ import {
   type LatestUploadsResponse,
   type RecentlyAddedResponse,
   TITLE_BROWSE_ITEMS_QUERY,
+  TITLE_RANDOM_QUERY,
   TITLE_BROWSE_PAGER_QUERY,
   type TitleBrowseItemsResponse,
+  type TitleRandomResponse,
   type TitleBrowsePagerResponse,
   type TitleBrowseResponse,
 } from "./models";
@@ -146,6 +149,9 @@ const fetchGraphQL = async <T>(query: string, variables: Record<string, unknown>
   if (!payload.data) throw new Error("XCOMIC returned an empty response");
   return payload.data;
 };
+
+export const fetchTitleRandom = (): Promise<TitleRandomResponse> =>
+  fetchGraphQL<TitleRandomResponse>(TITLE_RANDOM_QUERY, { select: { amount: RANDOM_AMOUNT } });
 
 export const fetchTitleBrowseItems = (select: BrowseSelect): Promise<TitleBrowseItemsResponse> =>
   fetchGraphQL<TitleBrowseItemsResponse>(TITLE_BROWSE_ITEMS_QUERY, { select });

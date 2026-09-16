@@ -21,6 +21,7 @@ export const PAGE_SIZE = 48;
 export const MAX_LATEST_REQUESTS = 10;
 export const CHAPTER_PAGE_SIZE = 1000;
 export const RECENTLY_ADDED_SIZE = 50;
+export const RANDOM_AMOUNT = 12;
 
 export const TITLE_BROWSE_PAGER_QUERY = `
 query get_title_browse_pager($select: Title_Browse_Select) {
@@ -52,6 +53,37 @@ query get_title_browse_items($select: Title_Browse_Select) {
       follows: total_follows
       reviews: total_reviews
       comments_total: total_comments
+      translatedLanguages: translated_languages
+      score_val: vote_val
+    }
+    comicNodes {
+      data {
+        id name subName urlPath translatedLanguage chaps_normal
+      }
+    }
+  }
+}
+`;
+
+export const TITLE_RANDOM_QUERY = `
+query get_title_randomList($select: Title_RandomList_Select) {
+  get_title_randomList(select: $select) {
+    data {
+      id
+      name: title
+      altNames: alt_titles
+      nativeTitle: native_title
+      romanizedTitle: romanized_title
+      originalLanguage: original_language
+      contentRating: content_rating_id
+      type: type_id
+      genres: genre_ids
+      tags: format_ids
+      description
+      urlCover: cover_local_url
+      remoteCoverUrl: cover_url
+      urlPath
+      totalChapters: total_chapters
       translatedLanguages: translated_languages
       score_val: vote_val
     }
@@ -156,7 +188,7 @@ query get_chapterNode($id: ID!) {
 
 export const SECTIONS = {
   TOP_RATED: "top-rated",
-  MOST_VIEWS: "most-views",
+  RANDOM: "random",
   MOST_FOLLOWS: "most-follows",
   MOST_REVIEWS: "most-reviews",
   LATEST_UPLOADS: "latest-uploads",
@@ -174,10 +206,10 @@ export const DISCOVER_SECTIONS: Record<SectionId, DiscoverSection> = {
     title: "Top Rated",
     type: DiscoverSectionType.featured,
   },
-  [SECTIONS.MOST_VIEWS]: {
-    id: SECTIONS.MOST_VIEWS,
-    title: "Most Views",
-    type: DiscoverSectionType.genres,
+  [SECTIONS.RANDOM]: {
+    id: SECTIONS.RANDOM,
+    title: "Random Comics",
+    type: DiscoverSectionType.prominentCarousel,
   },
   [SECTIONS.MOST_FOLLOWS]: {
     id: SECTIONS.MOST_FOLLOWS,
@@ -236,7 +268,7 @@ export const STATE_KEYS = {
   VISIBLE_SECTIONS: "xcomic_visible_sections",
 } as const;
 
-export const VISIBLE_SECTIONS_VERSION = 2;
+export const VISIBLE_SECTIONS_VERSION = 3;
 
 export type ContentPreferenceRating = "safe" | "suggestive" | "erotica" | "pornographic";
 export const CONTENT_RATING_GENRES = {
@@ -443,21 +475,6 @@ export const LANGUAGE_OPTIONS: Tag[] = [
   { id: "_t", title: "Other" },
 ];
 
-export const MOST_VIEWS_OPTIONS = [
-  { id: "views_d000", label: "Most Views (Total)", chipLabel: "Total" },
-  { id: "views_d360", label: "Most Views (360 days)", chipLabel: "360 Days" },
-  { id: "views_d180", label: "Most Views (180 days)", chipLabel: "180 Days" },
-  { id: "views_d090", label: "Most Views (90 days)", chipLabel: "90 Days" },
-  { id: "views_d030", label: "Most Views (30 days)", chipLabel: "30 Days" },
-  { id: "views_d007", label: "Most Views (7 days)", chipLabel: "7 Days" },
-  { id: "views_h024", label: "Most Views (24 hours)", chipLabel: "24 Hours" },
-  { id: "views_h012", label: "Most Views (12 hours)", chipLabel: "12 Hours" },
-  { id: "views_h006", label: "Most Views (6 hours)", chipLabel: "6 Hours" },
-  { id: "views_h001", label: "Most Views (1 hour)", chipLabel: "1 Hour" },
-] as const satisfies Array<SortingOption & { chipLabel: string }>;
-
-export type MostViewsSort = (typeof MOST_VIEWS_OPTIONS)[number]["id"];
-
 export const SORTING_OPTIONS: SortingOption[] = [
   { id: "field_score", label: "Rating Score" },
   { id: "field_update", label: "Latest Update" },
@@ -468,7 +485,6 @@ export const SORTING_OPTIONS: SortingOption[] = [
   { id: "field_follow", label: "Most Follows" },
   { id: "field_review", label: "Most Reviews" },
   { id: "field_comment", label: "Most Comments" },
-  ...MOST_VIEWS_OPTIONS,
 ];
 
 export interface PageMetadata extends JSONObject {
@@ -486,7 +502,6 @@ export interface SearchMetadata extends JSONObject {
   incGenresMode?: GenreMode;
   originalLanguages?: string[];
   originalStatus?: string[];
-  discoverSort?: MostViewsSort;
   translatedLanguages?: string[];
   types?: SeriesType[];
   year?: string;
@@ -602,6 +617,10 @@ export interface ComicData {
 export interface ComicNode {
   data: ComicData;
   comicNodes?: Array<ComicNode | null> | null;
+}
+
+export interface TitleRandomResponse {
+  get_title_randomList?: ComicNode[] | null;
 }
 
 export interface TitleBrowseItemsResponse {

@@ -112,6 +112,7 @@ export const getVisibleSections = (): SectionId[] => {
     const migrated = [
       ...new Set([
         ...visible,
+        SECTIONS.RANDOM,
         SECTIONS.MOST_FOLLOWS,
         SECTIONS.MOST_CHAPTERS,
         SECTIONS.MOST_REVIEWS,
