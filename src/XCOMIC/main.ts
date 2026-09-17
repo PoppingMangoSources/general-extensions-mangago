@@ -373,7 +373,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       releaseYearMin,
       releaseYearMax,
       origStatus: metadata?.originalStatus?.[0] ?? null,
-      chapCount: metadata?.chapCount ?? "",
+      chapCount: metadata?.chapCount || null,
       ignoreGlobalULangs: false,
       ignoreGlobalGenres: false,
       ignoreGlobalBlocks: false,
