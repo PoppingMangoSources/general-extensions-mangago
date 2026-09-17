@@ -131,7 +131,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       case SECTIONS.MOST_REVIEWS:
         return this.getRankedSection(metadata, "field_review", "reviews");
       case SECTIONS.RECENTLY_ADDED:
-        return this.getRecentlyAddedSection();
+        return this.getRecentlyAddedSection(metadata);
       case SECTIONS.LATEST_UPLOADS:
         return this.getLatestUploadsSection(metadata);
       case SECTIONS.MOST_COMMENTS:
@@ -155,14 +155,25 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     };
   }
 
-  private async getRecentlyAddedSection(): Promise<PagedResults<DiscoverSectionItem>> {
+  private async getRecentlyAddedSection(
+    metadata: PageMetadata | undefined,
+  ): Promise<PagedResults<DiscoverSectionItem>> {
     const preferences = getPreferences();
-    const nodes = (await fetchRecentlyAdded()).get_comic_recentlyAdded?.items ?? [];
+    const result = (await fetchRecentlyAdded(metadata?.before)).get_title_recentlyAdded;
+    const nodes = (result?.items ?? []).flatMap((node) => {
+      const source = toPreferredTitleSource(node, preferences.translatedLanguages);
+      return source && isComicAllowed(source.data, preferences) ? [source] : [];
+    });
+    const before =
+      typeof result?.before === "number" &&
+      Number.isFinite(result.before) &&
+      (metadata?.before == null || result.before < metadata.before)
+        ? result.before
+        : undefined;
     return {
-      items: toDiscoverItems(
-        nodes.filter((node) => isComicAllowed(node.data, preferences)),
-        "simpleCarouselItem",
-      ),
+      items: toDiscoverItems(nodes, "simpleCarouselItem"),
+      // Advertising a cursor past an empty page makes the app fetch forever.
+      metadata: before != null && nodes.length ? { before } : undefined,
     };
   }
 

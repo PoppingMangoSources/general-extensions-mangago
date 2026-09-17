@@ -120,15 +120,32 @@ query get_title_latestUploads($select: Title_LatestUploads_Select) {
 }
 `;
 
+// The site lists newly added titles here, not newly added editions, so one work appears once.
+// comicNodes is ours: the site only links to a title page, we need an edition to open.
 export const RECENTLY_ADDED_QUERY = `
-query get_comic_recentlyAdded($select: Comic_RecentlyAdded_Select) {
-  get_comic_recentlyAdded(select: $select) {
+query get_title_recentlyAdded($select: Title_RecentlyAdded_Select) {
+  get_title_recentlyAdded(select: $select) {
     before
     items {
       data {
-        id name subName urlPath urlCover
-        originalLanguage translatedLanguage
-        type contentRating genres tags sfw_result
+        id
+        name: title
+        altNames: alt_titles
+        originalLanguage: original_language
+        contentRating: content_rating_id
+        type: type_id
+        genres: genre_ids
+        tags: format_ids
+        urlCover: cover_local_url
+        remoteCoverUrl: cover_url
+        urlPath
+        totalChapters: total_chapters
+        translatedLanguages: translated_languages
+      }
+      comicNodes {
+        data {
+          id name subName urlPath translatedLanguage chaps_normal
+        }
       }
     }
   }
@@ -640,7 +657,8 @@ export interface LatestUploadsResponse {
 }
 
 export interface RecentlyAddedResponse {
-  get_comic_recentlyAdded?: {
+  get_title_recentlyAdded?: {
+    before?: number | null;
     items?: ComicNode[] | null;
   } | null;
 }

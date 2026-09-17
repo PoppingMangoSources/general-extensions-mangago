@@ -169,9 +169,9 @@ export const fetchLatestUploads = (before?: number): Promise<LatestUploadsRespon
     select: { first: 0, limit: PAGE_SIZE, ...(before != null ? { before } : {}) },
   });
 
-export const fetchRecentlyAdded = (): Promise<RecentlyAddedResponse> =>
+export const fetchRecentlyAdded = (before?: number): Promise<RecentlyAddedResponse> =>
   fetchGraphQL<RecentlyAddedResponse>(RECENTLY_ADDED_QUERY, {
-    select: { size: RECENTLY_ADDED_SIZE },
+    select: { size: RECENTLY_ADDED_SIZE, ...(before != null ? { before } : {}) },
   });
 
 export const fetchComic = (id: string): Promise<ComicNodeResponse> =>
