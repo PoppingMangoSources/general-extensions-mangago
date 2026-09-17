@@ -13,6 +13,8 @@ import {
 
 import {
   CHAPTER_COUNT_OPTIONS,
+  CONTENT_TYPE_OPTIONS,
+  DEMOGRAPHIC_OPTIONS,
   LANGUAGE_OPTIONS,
   MODE_OPTIONS,
   type ContentPreferenceRating,
@@ -80,9 +82,9 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           title: "Types",
           layout: "flow",
           value: this.types,
-          items: this.filterOptions.types,
+          items: CONTENT_TYPE_OPTIONS,
           minItemCount: 1,
-          maxItemCount: this.filterOptions.types.length,
+          maxItemCount: CONTENT_TYPE_OPTIONS.length,
           onValueChange: Application.Selector(
             this as XComicAdvancedSearchForm,
             "handleTypesChange",
@@ -104,9 +106,9 @@ export class XComicAdvancedSearchForm extends AdvancedSearchForm {
           title: "Demographics",
           layout: "flow",
           value: this.demographics,
-          items: this.filterOptions.demographics,
+          items: DEMOGRAPHIC_OPTIONS,
           minItemCount: 0,
-          maxItemCount: this.filterOptions.demographics.length,
+          maxItemCount: DEMOGRAPHIC_OPTIONS.length,
           onValueChange: Application.Selector(
             this as XComicAdvancedSearchForm,
             "handleDemographicsChange",

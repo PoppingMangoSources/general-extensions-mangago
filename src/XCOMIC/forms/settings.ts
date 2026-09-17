@@ -5,11 +5,13 @@ import { Form, Section, SelectRow, ToggleRow } from "@paperback/types";
 
 import {
   CONTENT_RATING_OPTIONS,
+  CONTENT_TYPE_OPTIONS,
   DEFAULT_CONTENT_RATINGS,
   DEFAULT_CONTENT_TYPES,
   DEFAULT_LANGUAGES,
   DOMAIN,
   LANGUAGE_OPTIONS,
+  LEGACY_DEFAULT_TYPE_SETS,
   LEGACY_FORMAT_MAP,
   LEGACY_TYPE_MAP,
   MIRRORS,
@@ -65,15 +67,9 @@ export const getPreferences = (): XComicPreferences => {
   const types = [...new Set(storedTypes.map((type) => LEGACY_TYPE_MAP[type] ?? type))].filter(
     (type): type is SeriesType => validTypes.has(type as SeriesType),
   );
-  const hadLegacyDefaults = [
-    "artbook",
-    "cartoon",
-    "imageset",
-    "manga",
-    "manhua",
-    "manhwa",
-    "western",
-  ].every((type) => storedTypes.includes(type));
+  const hadLegacyDefaults = LEGACY_DEFAULT_TYPE_SETS.some(
+    (set) => set.length === storedTypes.length && set.every((type) => storedTypes.includes(type)),
+  );
 
   const validLanguages = new Set(LANGUAGE_OPTIONS.map(({ id }) => id));
   const originalLanguages = (
@@ -222,9 +218,9 @@ export class XComicSettingsForm extends Form {
           title: "Content types",
           layout: "flow",
           value: this.types,
-          items: this.filterOptions.types,
+          items: CONTENT_TYPE_OPTIONS,
           minItemCount: 1,
-          maxItemCount: this.filterOptions.types.length,
+          maxItemCount: CONTENT_TYPE_OPTIONS.length,
           onValueChange: Application.Selector(
             this as XComicSettingsForm,
             "handleContentTypesChange",

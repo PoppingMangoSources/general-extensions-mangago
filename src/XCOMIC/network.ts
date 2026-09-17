@@ -9,7 +9,7 @@ import {
   type Response,
 } from "@paperback/types";
 
-import { getBaseUrl, getSelectedBaseUrl, setActiveBaseUrl } from "./forms/settings";
+import { getBaseUrl, getPreferences, getSelectedBaseUrl, setActiveBaseUrl } from "./forms/settings";
 import {
   CHAPTERS_QUERY,
   CHAPTER_PAGES_QUERY,
@@ -50,6 +50,15 @@ const mirrorOrigin = (url: string): string | undefined => {
   }
 };
 
+// The site keys some of what it serves to the languages asked for; "_t" is its own catch-all
+// rather than a language, and the API writes the regional codes with an underscore.
+const acceptLanguage = (): string => {
+  const languages = getPreferences()
+    .translatedLanguages.filter((language) => language !== "_t")
+    .map((language) => language.replaceAll("_", "-"));
+  return languages.join(",") || "en";
+};
+
 export class XComicInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
     const origin = mirrorOrigin(request.url) ?? getBaseUrl();
@@ -59,6 +68,7 @@ export class XComicInterceptor extends PaperbackInterceptor {
         ...request.headers,
         referer: `${origin}/`,
         origin,
+        "accept-language": acceptLanguage(),
         "user-agent": await Application.getDefaultUserAgent(),
       },
     };

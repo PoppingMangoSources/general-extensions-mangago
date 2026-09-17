@@ -293,13 +293,25 @@ export const CONTENT_RATING_GENRES = {
   erotica: ["adult", "erotica", "smut"],
   pornographic: ["hentai", "pornographic"],
 } as const satisfies Record<Exclude<ContentPreferenceRating, "safe">, readonly string[]>;
-export type SeriesType = "manga" | "manhua" | "manhwa" | "novel" | "oel" | "other";
+export type SeriesType =
+  | "cartoon"
+  | "imageset"
+  | "manga"
+  | "manhua"
+  | "manhwa"
+  | "oel"
+  | "other"
+  | "western";
 export const LEGACY_TYPE_MAP: Record<string, SeriesType> = {
   artbook: "other",
-  cartoon: "oel",
-  imageset: "other",
-  western: "oel",
+  novel: "other",
 };
+// Earlier releases shipped narrower default type sets. A reader still carrying one of them in
+// full gets the current default instead of silently filtering out the types it never listed.
+export const LEGACY_DEFAULT_TYPE_SETS: string[][] = [
+  ["artbook", "cartoon", "imageset", "manga", "manhua", "manhwa", "western"],
+  ["manhwa", "manga", "manhua", "other", "oel", "novel"],
+];
 export const LEGACY_FORMAT_MAP: Record<string, string> = { long_strip: "longstrip" };
 export type GenreMode = "and" | "or";
 export type TriState = Record<string, "included" | "excluded">;
@@ -321,15 +333,36 @@ export const DEFAULT_CONTENT_RATINGS: ContentPreferenceRating[] = [
   "erotica",
   "pornographic",
 ];
-export const DEFAULT_CONTENT_TYPES: SeriesType[] = [
-  "manhwa",
-  "manga",
-  "manhua",
-  "other",
-  "oel",
-  "novel",
-];
 export const DEFAULT_LANGUAGES: string[] = ["en"];
+
+// The site's own content types and demographics. Both are fixed vocabularies the filter ids
+// are built from, so they are declared here rather than scraped with the other pickers.
+export const CONTENT_TYPE_OPTIONS: Array<{ id: SeriesType; title: string }> = [
+  { id: "cartoon", title: "Cartoon" },
+  { id: "imageset", title: "Imageset" },
+  { id: "manga", title: "Manga" },
+  { id: "manhua", title: "Manhua" },
+  { id: "manhwa", title: "Manhwa" },
+  { id: "oel", title: "OEL" },
+  { id: "other", title: "Other" },
+  { id: "western", title: "Western" },
+];
+export const DEFAULT_CONTENT_TYPES: SeriesType[] = CONTENT_TYPE_OPTIONS.map(({ id }) => id);
+
+export const DEMOGRAPHIC_OPTIONS: Tag[] = [
+  { id: "shounen", title: "Shounen(B)" },
+  { id: "shoujo", title: "Shoujo(G)" },
+  { id: "seinen", title: "Seinen(M)" },
+  { id: "josei", title: "Josei(W)" },
+  { id: "kodomo", title: "Kodomo(Kid)" },
+  { id: "silver_golden", title: "Silver & Golden" },
+  { id: "non_human", title: "Non-human" },
+  { id: "male_oriented", title: "Male Oriented" },
+  { id: "female_oriented", title: "Female Oriented" },
+  { id: "male_demographic_with_female_author", title: "Male Demographic with Female Author" },
+  { id: "male_demographic_with_female_lead", title: "Male Demographic with Female Lead" },
+  { id: "female_demographic_with_male_lead", title: "Female Demographic with Male Lead" },
+];
 
 export const CONTENT_RATING_OPTIONS: Array<{ id: ContentPreferenceRating; title: string }> = [
   { id: "safe", title: "Safe" },
@@ -341,6 +374,10 @@ export const CONTENT_RATING_OPTIONS: Array<{ id: ContentPreferenceRating; title:
 // The SDK gives MangaInfo no language field, so the chapter language rides in additionalInfo.
 // Both the writer and the reader use this constant so the two can never drift apart.
 export const TRANSLATED_LANGUAGE_KEY = "Translated Language";
+
+// Chapters name the team behind their edition, and the chapter list carries no comic data,
+// so it rides alongside the language.
+export const EDITION_TEAM_KEY = "Team";
 
 // Only ids whose display name differs from title-casing the id itself.
 export const TAG_TITLE_OVERRIDES: Record<string, string> = {
@@ -385,11 +422,9 @@ export const CHAPTER_COUNT_OPTIONS: Tag[] = [
 
 export interface FilterOptions {
   contentRatings: Tag[];
-  demographics: Tag[];
   formats: Tag[];
   genres: Tag[];
   statuses: Tag[];
-  types: Tag[];
 }
 
 // Complete current picker; "Other" (_t) remains last.

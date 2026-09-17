@@ -18,6 +18,7 @@ import { getBaseUrl, getShowEditionInTitle } from "./forms/settings";
 import {
   CONTENT_RATING_GENRES,
   CONTENT_RATING_OPTIONS,
+  EDITION_TEAM_KEY,
   LANGUAGE_OPTIONS,
   LEGACY_FORMAT_MAP,
   LEGACY_TYPE_MAP,
@@ -94,14 +95,12 @@ export const parseFilterOptions = (html: string): FilterOptions => {
 
   const options = {
     contentRatings: filterGroup("content rating"),
-    demographics: filterGroup("demographics"),
     formats: taxonomyGroup("formats"),
     genres: taxonomyGroup("genres"),
     statuses: filterGroup("status"),
-    types: filterGroup("types"),
   };
-  // An empty single group degrades that one picker; losing both of these means the scrape broke.
-  if (!options.genres.length && !options.types.length) {
+  // An empty single group degrades that one picker; losing the genres means the scrape broke.
+  if (!options.genres.length) {
     throw new Error("XCOMIC returned incomplete search filters");
   }
   return options;
@@ -162,8 +161,10 @@ export const isComicAllowed = (comic: ComicData, preferences: XComicPreferences)
   }
   const translatedLanguages =
     comic.translatedLanguages ?? (comic.translatedLanguage ? [comic.translatedLanguage] : []);
+  // As in toTitleSources: an edition that states no language is no reason to hide the work.
   if (
     preferences.translatedLanguages.length &&
+    translatedLanguages.length &&
     !translatedLanguages.some((language) => preferences.translatedLanguages.includes(language))
   ) {
     return false;
@@ -238,21 +239,34 @@ const originalTitleForCard = (comic: ComicData): string | undefined => {
   return romanizedTitle ? Application.decodeHTMLEntities(romanizedTitle) : undefined;
 };
 
+// An importer marker: an id-shaped prefix, a colon, and no words after it ("src-site:mfx").
+const isMachineTag = (value: string): boolean => /^[a-z0-9_-]+:\S*$/i.test(value);
+
+// The "[Team]" suffix the site appends to a comic's own name.
+const bracketedTeam = (name: string): string | undefined => {
+  const trimmed = name.trimEnd();
+  if (!trimmed.endsWith("]")) return undefined;
+  return trimmed.slice(0, -1).split("[").pop()?.trim() || undefined;
+};
+
 // The team behind an edition. subName carries it on the title's comic nodes, but get_comicNode
-// leaves it empty, so the detail page falls back to the "[Team]" suffix the site puts on the
-// comic's own name. Machine tags ("src-site:mfx") are not a team name and are dropped.
+// leaves it empty, so the detail page falls back to the name's own suffix. A machine tag is not
+// a team name and is dropped.
 const editionLabel = (comic: ComicData): string | undefined => {
   const subName = comic.subName?.trim();
-  if (subName && !/^[a-z0-9_-]+:/i.test(subName)) return Application.decodeHTMLEntities(subName);
+  if (subName && !isMachineTag(subName)) return Application.decodeHTMLEntities(subName);
 
-  const name = comic.name.trimEnd();
-  if (!name.endsWith("]")) return undefined;
-  const team = name.slice(0, -1).split("[").pop()?.trim();
-  return team ? Application.decodeHTMLEntities(team) : undefined;
+  const team = bracketedTeam(comic.name);
+  return team && !isMachineTag(team) ? Application.decodeHTMLEntities(team) : undefined;
 };
 
 const displayTitle = (comic: ComicData): string => {
-  const name = Application.decodeHTMLEntities(comic.name);
+  const trimmed = comic.name.trimEnd();
+  const suffix = bracketedTeam(trimmed);
+  // An importer marker in the name is noise on a shelf, not part of the work's title.
+  const name = Application.decodeHTMLEntities(
+    suffix && isMachineTag(suffix) ? trimmed.slice(0, trimmed.lastIndexOf("[")).trimEnd() : trimmed,
+  );
   if (!getShowEditionInTitle()) return name;
   const edition = editionLabel(comic);
   return edition && !name.includes(edition) ? `${name} (${edition})` : name;
@@ -291,7 +305,7 @@ const toTitleSource = (node: ComicNode, source: ComicNode): ComicNode => ({
   data: {
     ...node.data,
     id: source.data.id,
-    name: source.data.name,
+    name: source.data.name.trim() || node.data.name,
     subName: source.data.subName,
     urlPath: source.data.urlPath ?? `/source/${source.data.id}`,
     translatedLanguage: source.data.translatedLanguage,
@@ -304,20 +318,23 @@ const toTitleSource = (node: ComicNode, source: ComicNode): ComicNode => ({
 // Preferred language first, then whichever edition carries the most chapters.
 export const toTitleSources = (node: ComicNode, preferredLanguages: string[]): ComicNode[] =>
   (node.comicNodes ?? [])
-    .filter((source): source is ComicNode =>
-      Boolean(source?.data.id && source.data.name && source.data.translatedLanguage),
-    )
+    .filter((source): source is ComicNode => Boolean(source?.data.id))
+    // An edition that states no language is no reason to hide the work.
     .filter(
       (source) =>
         !preferredLanguages.length ||
-        preferredLanguages.includes(source.data.translatedLanguage ?? ""),
+        !source.data.translatedLanguage ||
+        preferredLanguages.includes(source.data.translatedLanguage),
     )
     .sort((left, right) => {
-      const languageOrder = preferredLanguages.length
-        ? preferredLanguages.indexOf(left.data.translatedLanguage ?? "") -
-          preferredLanguages.indexOf(right.data.translatedLanguage ?? "")
-        : 0;
-      return languageOrder || (right.data.chaps_normal ?? 0) - (left.data.chaps_normal ?? 0);
+      const languageRank = (source: ComicNode): number => {
+        const index = preferredLanguages.indexOf(source.data.translatedLanguage ?? "");
+        return index === -1 ? preferredLanguages.length : index;
+      };
+      return (
+        languageRank(left) - languageRank(right) ||
+        (right.data.chaps_normal ?? 0) - (left.data.chaps_normal ?? 0)
+      );
     })
     .map((source) => toTitleSource(node, source));
 
@@ -511,6 +528,7 @@ export const toSourceManga = (node: ComicNode, mangaId = sanitizeId(node.data.id
       : undefined;
   const cover = toAbsoluteUrl(comic.urlCover ?? comic.remoteCoverUrl);
   const publishers = nodeNames(comic.publisherNodes);
+  const team = editionLabel(comic);
 
   return {
     mangaId,
@@ -528,6 +546,7 @@ export const toSourceManga = (node: ComicNode, mangaId = sanitizeId(node.data.id
       artworkUrls: cover ? [cover] : undefined,
       additionalInfo: {
         ...(comic.type ? { Type: titleCase(comic.type) } : {}),
+        ...(team ? { [EDITION_TEAM_KEY]: team } : {}),
         ...(comic.originalLanguage
           ? {
               "Original Language":
@@ -569,13 +588,18 @@ export const toChapter = (data: ChapterData, sourceManga: SourceManga): Chapter 
     .filter((value, index, values) => index === 0 || value !== values[0])
     .map((value) => Application.decodeHTMLEntities(value))
     .join(": ");
+  // The edition's own team names the upload; srcName is only the aggregator it came through.
+  const team = sourceManga.mangaInfo.additionalInfo?.[EDITION_TEAM_KEY];
   const sourceName = data.srcName?.trim();
   const profileNames = nodeNames(data.profileNodes);
-  const scanlators = sourceName
-    ? [Application.decodeHTMLEntities(sourceName.charAt(0).toUpperCase() + sourceName.slice(1))]
-    : profileNames.length > 0
-      ? profileNames
-      : nodeNames(data.groupNodes);
+  const scanlators =
+    typeof team === "string" && team
+      ? [team]
+      : sourceName
+        ? [Application.decodeHTMLEntities(sourceName.charAt(0).toUpperCase() + sourceName.slice(1))]
+        : profileNames.length > 0
+          ? profileNames
+          : nodeNames(data.groupNodes);
   const uploaderName = data.userNode?.data?.name?.trim();
   const uploader = uploaderName ? Application.decodeHTMLEntities(uploaderName) : undefined;
   const language = sourceManga.mangaInfo.additionalInfo?.[TRANSLATED_LANGUAGE_KEY];
