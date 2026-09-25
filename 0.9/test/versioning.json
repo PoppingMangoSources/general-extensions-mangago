@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-09-20T11:14:22.652Z",
+  "buildTime": "2026-09-25T01:37:39.222Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -289,7 +289,7 @@
     {
       "name": "MangaHome",
       "description": "Extension that pulls content from mangahome.com.",
-      "version": "1.0.0-alpha.7",
+      "version": "1.0.0-alpha.8",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
