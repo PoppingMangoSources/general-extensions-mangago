@@ -396,10 +396,15 @@ export class MangaHomeExtension implements ExtensionImpl<typeof MangaHomeConfig>
     if (!chapterId || !Number.isFinite(imageCount) || imageCount < 1) return existingPages;
     if (existingPages.length >= imageCount) return existingPages;
 
+    const key = $('input[id$="_key"], input[name="key"]').first().attr("value")?.trim() ?? "";
+    const firstImageSrc = $("#image").first().attr("src") ?? "";
     const userAgent = await Application.getDefaultUserAgent();
     const raw = await Application.executeInWebView({
       source: {
-        html: $.html(),
+        // A blank document, not the reader page: everything the walk needs is injected below,
+        // and loading the page itself pulls in ad, analytics and social scripts that cost far
+        // more than the chapter does.
+        html: "<!DOCTYPE html><html><head></head><body></body></html>",
         baseUrl: readerUrl,
         loadCSS: false,
         loadImages: false,
@@ -434,13 +439,12 @@ export class MangaHomeExtension implements ExtensionImpl<typeof MangaHomeConfig>
             pages[seedIndex] = normalize(seed[seedIndex]);
           }
 
-          var firstImage = document.querySelector("#image");
-          if (!pages[0] && firstImage) {
-            pages[0] = normalize(firstImage.getAttribute("src") || firstImage.src);
+          var firstImageSrc = ${JSON.stringify(firstImageSrc)};
+          if (!pages[0] && firstImageSrc) {
+            pages[0] = normalize(firstImageSrc);
           }
 
-          var keyInput = document.querySelector('input[id$="_key"], input[name="key"]');
-          var key = keyInput && "value" in keyInput ? String(keyInput.value || "") : "";
+          var key = ${JSON.stringify(key)};
 
           async function loadPage(page) {
             if (pages[page - 1]) return pages[page - 1];
@@ -479,9 +483,9 @@ export class MangaHomeExtension implements ExtensionImpl<typeof MangaHomeConfig>
             }
           }
 
-          for (var start = 1; start <= imageCount; start += 4) {
+          for (var start = 1; start <= imageCount; start += 8) {
             var batch = [];
-            for (var page = start; page < Math.min(start + 4, imageCount + 1); page++) {
+            for (var page = start; page < Math.min(start + 8, imageCount + 1); page++) {
               batch.push(loadPage(page));
             }
             var resolved = await Promise.all(batch);
