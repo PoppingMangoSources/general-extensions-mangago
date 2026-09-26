@@ -21,7 +21,12 @@ import {
 } from "@paperback/types";
 
 import { XComicAdvancedSearchForm } from "./forms/search";
-import { XComicSettingsForm, getPreferences, getVisibleSections } from "./forms/settings";
+import {
+  XComicSettingsForm,
+  getLetterMatching,
+  getPreferences,
+  getVisibleSections,
+} from "./forms/settings";
 import {
   DISCOVER_SECTIONS,
   DEFAULT_CONTENT_RATINGS,
@@ -367,7 +372,9 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     }
 
     return {
-      where: "browse",
+      // The slower mode only changes how the term is matched, so a browse with none is
+      // nothing for it to do.
+      where: word.trim() && getLetterMatching() ? "letter" : "browse",
       page,
       size: PAGE_SIZE,
       sortby: sortBy,

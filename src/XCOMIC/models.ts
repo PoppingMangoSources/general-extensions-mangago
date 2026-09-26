@@ -278,6 +278,7 @@ export const STATE_KEYS = {
   CONTENT_TYPES: "xcomic_content_types",
   EXCLUDED_GENRES: "xcomic_excluded_genres",
   EXCLUDED_FORMATS: "xcomic_excluded_formats",
+  LETTER_MATCHING: "xcomic_letter_matching",
   ORIGINAL_LANGUAGES: "xcomic_original_languages",
   SHOW_EDITION_IN_TITLE: "xcomic_show_edition_in_title",
   TRANSLATED_LANGUAGES: "xcomic_languages",
@@ -560,7 +561,7 @@ export interface SearchMetadata extends JSONObject {
 }
 
 export interface BrowseSelect {
-  where: "browse";
+  where: "browse" | "letter";
   page: number;
   size: number;
   sortby: string;

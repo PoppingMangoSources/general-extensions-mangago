@@ -54,6 +54,10 @@ export const setActiveBaseUrl = (value: string): void => {
 export const getShowEditionInTitle = (): boolean =>
   (Application.getState(STATE_KEYS.SHOW_EDITION_IN_TITLE) as boolean | undefined) ?? true;
 
+// Defaults off: the site marks this the slower of its two ways of matching a term.
+export const getLetterMatching = (): boolean =>
+  (Application.getState(STATE_KEYS.LETTER_MATCHING) as boolean | undefined) ?? false;
+
 export const getPreferences = (): XComicPreferences => {
   const validRatings = new Set(CONTENT_RATING_OPTIONS.map((option) => option.id));
   const storedRatings =
@@ -131,6 +135,7 @@ export class XComicSettingsForm extends Form {
   private originalLanguages: string[];
   private translatedLanguages: string[];
   private showEditionInTitle: boolean;
+  private letterMatching: boolean;
   private visibleSections: SectionId[];
 
   constructor(
@@ -147,6 +152,7 @@ export class XComicSettingsForm extends Form {
     this.originalLanguages = preferences.originalLanguages;
     this.translatedLanguages = preferences.translatedLanguages;
     this.showEditionInTitle = getShowEditionInTitle();
+    this.letterMatching = getLetterMatching();
     this.visibleSections = visibleSections;
   }
 
@@ -282,6 +288,23 @@ export class XComicSettingsForm extends Form {
           }),
         ],
       ),
+      Section(
+        {
+          id: "search",
+          footer:
+            "The site's other way of matching a search term, which it marks as the slower of the two.",
+        },
+        [
+          ToggleRow("letter_matching", {
+            title: "Letter matching",
+            value: this.letterMatching,
+            onValueChange: Application.Selector(
+              this as XComicSettingsForm,
+              "handleLetterMatchingChange",
+            ),
+          }),
+        ],
+      ),
       Section("discover", [
         SelectRow("visible_sections", {
           title: "Visible sections",
@@ -338,6 +361,11 @@ export class XComicSettingsForm extends Form {
   async handleShowEditionInTitleChange(value: boolean): Promise<void> {
     this.showEditionInTitle = value;
     saveSetting(this, STATE_KEYS.SHOW_EDITION_IN_TITLE, value);
+  }
+
+  async handleLetterMatchingChange(value: boolean): Promise<void> {
+    this.letterMatching = value;
+    saveSetting(this, STATE_KEYS.LETTER_MATCHING, value);
   }
 
   async handleVisibleSectionsChange(value: string[]): Promise<void> {
