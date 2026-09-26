@@ -487,16 +487,6 @@ const stripHtml = (html?: string | null): string => {
   );
 };
 
-export const parseTitleName = (html: string): string | undefined => {
-  const $ = cheerio.load(html);
-  const title = $("title")
-    .first()
-    .text()
-    .replace(/\s*::\s*(?:XCOMIC\.(?:ME|NET)|YONA\.TO|COMIK\.TO)\s*$/i, "")
-    .trim();
-  return title || undefined;
-};
-
 const formatDateYmd = (value: ComicData["originalPubFrom"]): string | undefined => {
   if (!value?.y) return undefined;
   return [value.y, value.m?.toString().padStart(2, "0"), value.d?.toString().padStart(2, "0")]

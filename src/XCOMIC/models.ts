@@ -152,6 +152,42 @@ query get_title_recentlyAdded($select: Title_RecentlyAdded_Select) {
 }
 `;
 
+// A title's own record, which browse does not carry: it names every edition and, when the site
+// has merged duplicate entries, the title that kept them.
+export const TITLE_NODE_QUERY = `
+query get_title_titleNode($id: ID!) {
+  get_title_titleNode(id: $id) {
+    data {
+      id
+      name: title
+      altNames: alt_titles
+      nativeTitle: native_title
+      romanizedTitle: romanized_title
+      originalLanguage: original_language
+      contentRating: content_rating_id
+      type: type_id
+      genres: genre_ids
+      tags: format_ids
+      demographics: demographic_ids
+      description
+      urlCover: cover_local_url
+      remoteCoverUrl: cover_url
+      urlPath
+      totalChapters: total_chapters
+      translatedLanguages: translated_languages
+      score_val: vote_val
+      isMerged: is_merged
+      mergedTo: merged_to
+    }
+    comicNodes {
+      data {
+        id name subName urlPath translatedLanguage chaps_normal
+      }
+    }
+  }
+}
+`;
+
 export const COMIC_QUERY = `
 query get_comicNode($id: ID!) {
   get_comicNode(id: $id) {
@@ -665,6 +701,9 @@ export interface ComicData {
   chaps_normal?: number | null;
   totalChapters?: number | null;
   chapterNodes_last?: ChapterNode[] | null;
+  // Set on a title the site has folded into another, which names the one that kept the editions.
+  isMerged?: boolean | null;
+  mergedTo?: string | null;
 }
 
 export interface ComicNode {
@@ -701,6 +740,10 @@ export interface RecentlyAddedResponse {
 
 export interface ComicNodeResponse {
   get_comicNode?: ComicNode | null;
+}
+
+export interface TitleNodeResponse {
+  get_title_titleNode?: ComicNode | null;
 }
 
 interface ChapterListResult {

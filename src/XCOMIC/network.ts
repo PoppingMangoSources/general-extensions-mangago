@@ -29,12 +29,14 @@ import {
   type LatestUploadsResponse,
   type RecentlyAddedResponse,
   TITLE_BROWSE_ITEMS_QUERY,
+  TITLE_NODE_QUERY,
   TITLE_RANDOM_QUERY,
   TITLE_BROWSE_PAGER_QUERY,
   type TitleBrowseItemsResponse,
   type TitleRandomResponse,
   type TitleBrowsePagerResponse,
   type TitleBrowseResponse,
+  type TitleNodeResponse,
 } from "./models";
 
 const MIRROR_IDS = MIRRORS.map((mirror) => mirror.id);
@@ -187,6 +189,9 @@ export const fetchRecentlyAdded = (before?: number): Promise<RecentlyAddedRespon
 export const fetchComic = (id: string): Promise<ComicNodeResponse> =>
   fetchGraphQL<ComicNodeResponse>(COMIC_QUERY, { id });
 
+export const fetchTitleNode = (id: string): Promise<TitleNodeResponse> =>
+  fetchGraphQL<TitleNodeResponse>(TITLE_NODE_QUERY, { id });
+
 export const fetchChapters = (comicId: string, page: number): Promise<ChapterListResponse> =>
   fetchGraphQL<ChapterListResponse>(CHAPTERS_QUERY, {
     select: { comic_id: comicId, page, size: CHAPTER_PAGE_SIZE, sortby: "chapter_desc" },
@@ -195,13 +200,6 @@ export const fetchChapters = (comicId: string, page: number): Promise<ChapterLis
 export const fetchSearchPage = (): Promise<string> =>
   fetchText({
     url: `${getBaseUrl()}/search`,
-    method: "GET",
-    headers: { accept: "text/html,application/xhtml+xml" },
-  });
-
-export const fetchTitlePage = (id: string): Promise<string> =>
-  fetchText({
-    url: `${getBaseUrl()}/title/${id}`,
     method: "GET",
     headers: { accept: "text/html,application/xhtml+xml" },
   });

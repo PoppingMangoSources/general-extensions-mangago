@@ -29,8 +29,6 @@ import {
 } from "./forms/settings";
 import {
   DISCOVER_SECTIONS,
-  DEFAULT_CONTENT_RATINGS,
-  DEFAULT_CONTENT_TYPES,
   MAX_LATEST_REQUESTS,
   PAGE_SIZE,
   SECTION_IDS,
@@ -51,18 +49,16 @@ import {
   fetchComic,
   fetchLatestUploads,
   fetchRecentlyAdded,
+  fetchTitleNode,
   fetchTitleRandom,
   fetchSearchPage,
   fetchTitleBrowse,
-  fetchTitleBrowseItems,
-  fetchTitlePage,
   XComicInterceptor,
 } from "./network";
 import {
   isComicAllowed,
   parseChapterDetails,
   parseFilterOptions,
-  parseTitleName,
   toChapter,
   toDiscoverItems,
   toLatestUploadNodes,
@@ -403,44 +399,38 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     metadata?: SearchMetadata,
   ): Promise<PagedResults<SearchResultItem> | undefined> {
     const match =
-      /^https?:\/\/(?:www\.)?(?:xcomic\.(?:me|net)|yona\.to|comik\.to)\/(comic|title)\/([a-zA-Z0-9]+)/i.exec(
+      /^https?:\/\/(?:www\.)?(?:xcomic\.(?:me|net)|yona\.to|comik\.to)\/(source|comic|title)\/([a-zA-Z0-9]+)/i.exec(
         title,
       );
     if (!match?.[1] || !match[2]) return undefined;
     const preferences = this.getEffectivePreferences(metadata);
-    const response =
+    const node =
       match[1] === "title"
-        ? await this.fetchTitleComic(match[2], preferences.translatedLanguages)
-        : await fetchComic(match[2]);
-    if (!response?.get_comicNode) return undefined;
-    if (!isComicAllowed(response.get_comicNode.data, preferences)) {
-      return { items: [] };
+        ? await this.resolveTitleSource(match[2], preferences.translatedLanguages)
+        : ((await fetchComic(match[2])).get_comicNode ?? undefined);
+    if (!node) return undefined;
+    if (!isComicAllowed(node.data, preferences)) return { items: [] };
+    return { items: [toSearchResultItem(node)] };
+  }
+
+  // The site folds duplicate titles into one and leaves the old record pointing at the keeper,
+  // so a link to the folded title still resolves. One hop only: a longer chain is the site's.
+  private async resolveTitleSource(
+    titleId: string,
+    languages: string[],
+  ): Promise<ComicNode | undefined> {
+    let node = (await fetchTitleNode(titleId)).get_title_titleNode ?? undefined;
+    const mergedTo = node?.data.mergedTo?.trim();
+    if (node?.data.isMerged && mergedTo && mergedTo !== titleId) {
+      node = (await fetchTitleNode(mergedTo)).get_title_titleNode ?? node;
     }
-    return { items: [toSearchResultItem(response.get_comicNode)] };
+    return node ? toPreferredTitleSource(node, languages) : undefined;
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
     const response = await fetchComic(mangaId);
     if (!response.get_comicNode) throw new Error(`Manga not found: ${mangaId}`);
     return toSourceManga(response.get_comicNode, mangaId);
-  }
-
-  private async fetchTitleComic(titleId: string, languages: string[]) {
-    const title = parseTitleName(await fetchTitlePage(titleId));
-    if (!title) return undefined;
-    const select = this.buildBrowseSelect(1, "field_score", title, undefined, {
-      contentRatings: DEFAULT_CONTENT_RATINGS,
-      excludedFormats: [],
-      excludedGenres: [],
-      originalLanguages: [],
-      translatedLanguages: languages,
-      types: DEFAULT_CONTENT_TYPES,
-    });
-    const titleNode = (await fetchTitleBrowseItems(select)).get_title_browse_items?.find(
-      (node) => node.data.id === titleId,
-    );
-    const source = titleNode ? toPreferredTitleSource(titleNode, languages) : undefined;
-    return source ? await fetchComic(source.data.id) : undefined;
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
