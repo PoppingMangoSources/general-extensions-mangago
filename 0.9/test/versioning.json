@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-09-25T01:37:39.222Z",
+  "buildTime": "2026-09-26T10:32:12.575Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -684,7 +684,7 @@
     {
       "name": "XCOMIC",
       "description": "Extension that pulls content from XCOMIC and its mirrors.",
-      "version": "1.0.0-alpha.73",
+      "version": "1.0.0-alpha.74",
       "icon": "icon.png",
       "language": "multi",
       "contentRating": "ADULT",
