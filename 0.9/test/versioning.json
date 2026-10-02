@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-09-28T02:32:09.597Z",
+  "buildTime": "2026-10-02T16:32:20.650Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -703,6 +703,29 @@
         }
       ],
       "id": "XCOMIC"
+    },
+    {
+      "name": "YaoiMe",
+      "description": "Extension that pulls content from yaoi.me.",
+      "version": "1.0.0-alpha.1",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "ADULT",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "YaoiMe"
     }
   ]
 }
