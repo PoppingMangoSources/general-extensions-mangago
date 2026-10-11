@@ -18,6 +18,7 @@ import {
   type Preferences,
   type SearchMetadata,
 } from "./models";
+import { fromTagId } from "./parsers";
 
 const IMAGE_REGEX = /\.(?:avif|gif|jpe?g|jxl|png|svg|webp)(?:[/?#]|$)|\/i\/[cp]\//i;
 
@@ -46,11 +47,12 @@ export class YaoiMeInterceptor extends PaperbackInterceptor {
         officialOnly: preferences.officialOnly,
       }),
     );
-    const cookie = [`yf.adult=1`, `yf.settings=${settings}`, request.headers?.cookie]
-      .filter(Boolean)
-      .join("; ");
     return {
       ...request,
+      // The site's preferences go into the cookie jar beside the clearance the cookie store adds.
+      // An explicit cookie header replaces that jar, so the clearance never reached the site and
+      // every request was challenged again.
+      cookies: { ...request.cookies, "yf.adult": "1", "yf.settings": settings },
       headers: {
         ...request.headers,
         accept:
@@ -59,7 +61,6 @@ export class YaoiMeInterceptor extends PaperbackInterceptor {
             ? "image/avif,image/webp,image/png,image/jpeg,image/*,*/*;q=0.8"
             : "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"),
         "accept-language": "en-US,en;q=0.8",
-        cookie,
         referer: request.headers?.referer ?? `${DOMAIN}/`,
         "user-agent": await Application.getDefaultUserAgent(),
       },
@@ -71,8 +72,14 @@ export class YaoiMeInterceptor extends PaperbackInterceptor {
     response: Response,
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
+    // The body is only sniffed on the statuses a challenge is served with, so an ordinary page that
+    // happens to mention a Turnstile key can never send a cleared session back into the challenge.
+    const challengeStatus = response.status === 403 || response.status === 503;
     const contentType = response.headers?.["content-type"] ?? "";
-    const body = contentType.includes("text/html") ? Application.arrayBufferToUTF8String(data) : "";
+    const body =
+      challengeStatus && contentType.includes("text/html")
+        ? Application.arrayBufferToUTF8String(data)
+        : "";
     if (
       response.headers?.["cf-mitigated"] === "challenge" ||
       /(?:Just a moment|cf-chl-|_cf_chl_opt|siteKey.{0,16}0x4)/i.test(body)
@@ -102,7 +109,7 @@ const fetchDocument = async (url: string): Promise<cheerio.CheerioAPI> =>
 const values = (state: SearchMetadata["genres"], selected: "included" | "excluded"): string[] =>
   Object.entries(state ?? {})
     .filter(([, value]) => value === selected)
-    .map(([id]) => id);
+    .map(([id]) => fromTagId(id));
 
 export const browseUrl = (
   page: number,

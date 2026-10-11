@@ -41,6 +41,25 @@ export const parseMangaId = (value?: string | null): string => {
   return SERIES_PATH.test(path) ? path : "";
 };
 
+// A tag id is the name percent-encoded, as the site's own /tag/ links carry it, so it passes
+// Paperback's id rules and decodes back to the name the browse filters expect. encodeURIComponent
+// leaves !'*~ alone, and Paperback rejects them.
+const toTagId = (name: string): string =>
+  encodeURIComponent(name).replace(
+    /[!'*~]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+
+export const fromTagId = (id: string): string => {
+  try {
+    return decodeURIComponent(id);
+  } catch {
+    return id;
+  }
+};
+
+const toTag = (name: string): Tag => ({ id: toTagId(name), title: name });
+
 const parseChapterId = (value?: string | null): string => {
   const path = safePath(value);
   return CHAPTER_PATH.test(path) ? path : "";
@@ -129,12 +148,15 @@ const parseCard = ($: cheerio.CheerioAPI, node: AnyNode): MangaCard | undefined 
   };
 };
 
-const sectionContainer = ($: cheerio.CheerioAPI, heading: string): cheerio.Cheerio<AnyNode> =>
-  $("h2")
+// The heading sits inside a .section-head row whose next sibling holds the cards; stepping only to
+// the heading's parent lands on that row's "See all" link instead.
+const sectionContainer = ($: cheerio.CheerioAPI, heading: string): cheerio.Cheerio<AnyNode> => {
+  const title = $("h2")
     .filter((_, element) => cleanText($(element).text()).toLowerCase() === heading.toLowerCase())
-    .first()
-    .parent()
-    .next();
+    .first();
+  const head = title.closest(".section-head");
+  return (head.length ? head : title.parent()).next();
+};
 
 export const parseHomeCards = ($: cheerio.CheerioAPI, heading: string): MangaCard[] => {
   const container = sectionContainer($, heading);
@@ -247,7 +269,7 @@ export const parseGenres = ($: cheerio.CheerioAPI): Tag[] => {
     try {
       const values = JSON.parse(match[1]) as { name?: unknown }[];
       const genres = values.flatMap(({ name }): Tag[] =>
-        typeof name === "string" && name ? [{ id: name, title: name }] : [],
+        typeof name === "string" && name ? [toTag(name)] : [],
       );
       if (genres.length) return genres;
     } catch (error) {
@@ -257,7 +279,7 @@ export const parseGenres = ($: cheerio.CheerioAPI): Tag[] => {
   const genres = new Map<string, Tag>();
   $("a[href^='/genre/']").each((_, element) => {
     const title = cleanText($(element).text());
-    if (title) genres.set(title, { id: title, title });
+    if (title) genres.set(title, toTag(title));
   });
   return [...genres.values()];
 };
@@ -297,20 +319,19 @@ export const parseMangaDetails = ($: cheerio.CheerioAPI, mangaId: string): Sourc
     cleanText($("[class*='score'], [title='Rating']").first().text()).match(/\d+(?:\.\d+)?/)?.[0] ??
       "",
   );
-  const tags = new Map<string, string>();
-  $("a[href^='/genre/'], a[href^='/tag/']").each((_, element) => {
-    const title = cleanText($(element).text());
-    if (title) tags.set(title, title);
-  });
-  const tagGroups: TagSection[] = tags.size
-    ? [
-        {
-          id: "tags",
-          title: "Genres & Tags",
-          tags: [...tags.values()].map((title) => ({ id: title, title })),
-        },
-      ]
-    : [];
+  // Genres and tags filter on separate browse parameters, so they stay in separate groups.
+  const tagGroup = (id: string, title: string, prefix: string): TagSection => {
+    const names = new Set<string>();
+    $(`a[href^='${prefix}']`).each((_, element) => {
+      const name = cleanText($(element).text());
+      if (name) names.add(name);
+    });
+    return { id, title, tags: [...names].map(toTag) };
+  };
+  const tagGroups = [
+    tagGroup("genres", "Genres", "/genre/"),
+    tagGroup("tags", "Tags", "/tag/"),
+  ].filter((group) => group.tags.length > 0);
   const synopsisHeading = $("h2")
     .filter((_, element) => cleanText($(element).text()) === "Synopsis")
     .first();
