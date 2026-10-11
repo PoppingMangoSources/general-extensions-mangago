@@ -18,7 +18,13 @@ import {
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
-import { DOMAIN, LANGUAGE_OPTIONS, type MangaCard, type SearchMetadata } from "./models";
+import {
+  DOMAIN,
+  SOURCE_NAMES,
+  type ChapterGroup,
+  type MangaCard,
+  type SearchMetadata,
+} from "./models";
 
 const SAFE_ID = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
 const SERIES_PATH = /^\/series\/\d+\/[a-zA-Z0-9._~-]+$/;
@@ -358,13 +364,6 @@ export const parseMangaDetails = ($: cheerio.CheerioAPI, mangaId: string): Sourc
   };
 };
 
-const chapterNumber = (label: string): number => {
-  const match = label.match(
-    /(?:chapter|chap|ch|episode|ep|special|bonus|extra|bounus)\.?\s*(-?\d+(?:\.\d+)?)/i,
-  );
-  return Number.parseFloat(match?.[1] ?? "0") || 0;
-};
-
 const chapterTitle = (label: string): string | undefined => {
   if (/^(?:chapter|chap|ch|episode|ep)\.?\s*-?\d+(?:\.\d+)?$/i.test(label)) return undefined;
   const match = label.match(
@@ -373,37 +372,91 @@ const chapterTitle = (label: string): string | undefined => {
   return cleanText(match?.[1] ?? label) || undefined;
 };
 
+// The JSON value opening at start, read past brackets that sit inside strings.
+const sliceJson = (payload: string, start: number): string | undefined => {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < payload.length; index++) {
+    const character = payload[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') inString = false;
+    } else if (character === '"') {
+      inString = true;
+    } else if (character === "[" || character === "{") {
+      depth++;
+    } else if (character === "]" || character === "}") {
+      depth--;
+      if (depth === 0) return payload.slice(start, index + 1);
+    }
+  }
+  return undefined;
+};
+
+const isChapterGroup = (value: unknown): value is ChapterGroup => {
+  if (!value || typeof value !== "object") return false;
+  const group = value as Partial<ChapterGroup>;
+  return (
+    typeof group.label === "string" &&
+    typeof group.num === "number" &&
+    Array.isArray(group.variants)
+  );
+};
+
+// The HTML renders only the first rows; the full list, with every upload of each chapter, is the
+// chapter component's data in the page payload.
 export const parseChapters = ($: cheerio.CheerioAPI, sourceManga: SourceManga): Chapter[] => {
-  const chapters: Chapter[] = [];
-  const seen = new Set<string>();
-  const links = $(".chapter-box a[href^='/chapter/']");
-  links.each((index, element) => {
-    const link = $(element);
-    const chapterId = parseChapterId(link.attr("href"));
-    if (!chapterId || seen.has(chapterId)) return;
-    seen.add(chapterId);
-    const row = link.parent();
-    const label = cleanText(link.find("b").text() || link.text());
-    const languageName = row.find("img[aria-label]").first().attr("aria-label") ?? "English";
-    const langCode =
-      LANGUAGE_OPTIONS.find(({ title }) => title.toLowerCase() === languageName.toLowerCase())
-        ?.id ?? "en";
-    const version = cleanText(row.find(".ch-src").first().attr("title")?.split(":")[0]);
-    const datetime = row.find("time").first().attr("datetime");
-    const publishDate = datetime ? new Date(datetime) : undefined;
-    chapters.push({
-      chapterId,
-      sourceManga,
-      langCode,
-      chapNum: chapterNumber(label),
-      title: chapterTitle(label),
-      version: version || undefined,
-      volume: 0,
-      sortingIndex: links.length - index,
-      publishDate: publishDate && !Number.isNaN(publishDate.getTime()) ? publishDate : undefined,
+  const payload = flightData($);
+  const groupsAt = payload.indexOf('"groups":[{');
+  const groupsJson = groupsAt >= 0 ? sliceJson(payload, groupsAt + '"groups":'.length) : undefined;
+  if (!groupsJson) throw new Error(`No chapter list found for ${sourceManga.mangaId}.`);
+  const sourcesAt = payload.indexOf('"sources":{', groupsAt);
+  const sourcesJson =
+    sourcesAt >= 0 ? sliceJson(payload, sourcesAt + '"sources":'.length) : undefined;
+  let groups: ChapterGroup[];
+  let sources: Record<string, string>;
+  try {
+    groups = (JSON.parse(groupsJson) as unknown[]).filter(isChapterGroup);
+    sources = sourcesJson ? (JSON.parse(sourcesJson) as Record<string, string>) : {};
+  } catch (error) {
+    throw new Error(`Could not read the chapter list for ${sourceManga.mangaId}.`, {
+      cause: error,
+    });
+  }
+
+  return groups.flatMap((group, index) => {
+    const variants = group.variants.filter(
+      (variant) => typeof variant?.id === "number" && typeof variant.s === "number",
+    );
+    const uploadsPerSource = new Map<number, number>();
+    for (const variant of variants) {
+      uploadsPerSource.set(variant.s, (uploadsPerSource.get(variant.s) ?? 0) + 1);
+    }
+    const numbered = new Map<number, number>();
+    const publishDate = group.createdAt ? new Date(group.createdAt) : undefined;
+    return variants.map((variant): Chapter => {
+      const key = sources[variant.s];
+      const name = key ? (SOURCE_NAMES[key] ?? key.charAt(0).toUpperCase() + key.slice(1)) : "";
+      const occurrence = (numbered.get(variant.s) ?? 0) + 1;
+      numbered.set(variant.s, occurrence);
+      // A source with several uploads of one chapter is numbered in the site's order, as it shows.
+      const version =
+        name && (uploadsPerSource.get(variant.s) ?? 0) > 1 ? `${name} (${occurrence})` : name;
+      return {
+        chapterId: `/chapter/${variant.s}/${variant.id}`,
+        sourceManga,
+        langCode: variant.lang || "en",
+        chapNum: group.num,
+        title: chapterTitle(cleanText(group.label)),
+        version: version || undefined,
+        volume: 0,
+        sortingIndex: groups.length - index,
+        publishDate: publishDate && !Number.isNaN(publishDate.getTime()) ? publishDate : undefined,
+      };
     });
   });
-  return chapters;
 };
 
 const base64Bytes = (value: string): Uint8Array => {

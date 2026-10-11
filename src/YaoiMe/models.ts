@@ -245,6 +245,35 @@ export interface PageMetadata extends JSONObject {
   page: number;
 }
 
+// The title page's chapter list ships every chapter with each of its uploads, best first. An upload
+// is read at /chapter/<s>/<id>, where s is the source's id for this one series.
+export interface ChapterVariant {
+  id: number;
+  s: number;
+  lang?: string;
+}
+
+export interface ChapterGroup {
+  label: string;
+  num: number;
+  createdAt?: number;
+  variants: ChapterVariant[];
+}
+
+// The page names sources by lowercase key; these are the spellings the site displays for them.
+export const SOURCE_NAMES: Record<string, string> = {
+  atsumaru: "Atsumaru",
+  comix: "Comix",
+  kaliscan: "KaliScan",
+  mangaball: "MangaBall",
+  mangago: "Mangago",
+  mangahome: "MangaHome",
+  mangak: "MangaK",
+  mangataro: "MangaTaro",
+  mangavyvy: "MangaVyvy",
+  yona: "Yona",
+};
+
 export interface MangaCard {
   mangaId: string;
   title: string;
