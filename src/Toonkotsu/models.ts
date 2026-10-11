@@ -101,8 +101,8 @@ export const SECTION_OPTIONS: Tag[] = SECTION_IDS.map((id) => ({
   title: SECTION_DEFINITIONS[id].title,
 }));
 
-// The site's browse sorts. Rating, views and follows share the catalogue's score and popularity
-// orderings, so each ordering is listed once.
+// The site's browse sorts as "<sort>-<order>". Rating, views and follows share the catalogue's
+// score and popularity orderings, so each ordering is listed once.
 export const SORT_OPTIONS = {
   RELEVANCE: { id: "relevance", label: "Best Match" },
   LATEST: { id: "latest-desc", label: "Latest Upload" },
@@ -189,6 +189,20 @@ export const UNLISTED_TAGS = new Set([
 ]);
 export const PORNOGRAPHIC_TAGS = new Set(["Hentai", "Adult", "Smut"]);
 
+// The catalogue files each tag under a category; the main genres have none.
+export const TAG_GROUPS = [
+  { id: "genres", title: "Genres", prefix: undefined },
+  { id: "themes", title: "Themes", prefix: "Theme" },
+  { id: "cast", title: "Cast", prefix: "Cast" },
+  { id: "setting", title: "Setting", prefix: "Setting" },
+  { id: "format", title: "Format", prefix: "Technical" },
+] as const;
+
+export const STATUS_NAMES: Record<string, string> = {
+  Complete: "Completed",
+  Canceled: "Cancelled",
+};
+
 export type ContentRatingId = "safe" | "suggestive" | "erotica" | "pornographic";
 export type TriState = Record<string, "included" | "excluded">;
 
@@ -219,6 +233,7 @@ export interface CatalogueFilters {
 
 export interface LatestChapterRef {
   id?: number;
+  label?: string | null;
   n?: number | null;
   at?: number | null;
 }
@@ -242,6 +257,8 @@ export interface Series {
   chapters?: number | null;
   authors?: string[] | null;
   adult?: boolean | null;
+  // Chapter opens, on reading rankings.
+  count?: number | null;
 }
 
 export interface ChapterGroup {
@@ -282,8 +299,14 @@ export interface SeriesResponse {
   chapters: ChapterEntry[];
 }
 
+export interface Facet {
+  name: string;
+  category?: string | null;
+  isAdult?: boolean | null;
+}
+
 export interface FacetsResponse {
-  genres?: { name: string; isAdult?: boolean | null }[];
+  genres?: Facet[];
 }
 
 export interface ReaderKeyResponse {

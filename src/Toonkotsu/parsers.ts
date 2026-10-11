@@ -8,11 +8,14 @@ import {
   type SearchResultItem,
   type SourceManga,
   type Tag,
+  type TagSection,
 } from "@paperback/types";
 
 import {
   DOMAIN,
   PORNOGRAPHIC_TAGS,
+  STATUS_NAMES,
+  TAG_GROUPS,
   UNLISTED_TAGS,
   type ChapterRelease,
   type ChapterResponse,
@@ -84,14 +87,20 @@ const cleanText = (value: string | null | undefined): string =>
     .replace(/\s+/g, " ")
     .trim();
 
-// Scores are reported out of 10 or out of 100 depending on the catalogue's source.
+// Scores are out of 100.
 const scoreOutOfTen = (score: number | null | undefined): number | undefined =>
-  score && score > 0 ? (score > 10 ? score / 10 : score) : undefined;
+  score && score > 0 ? score / 10 : undefined;
+
+const formatCount = (count: number): string =>
+  count >= 1000 ? `${Number((count / 1000).toFixed(1))}K` : String(count);
 
 const formatChapterNumber = (value: number): string => String(Number(value.toFixed(2)));
 
+// A oneshot is numbered 0 and labelled as such, so its label reads better than "Ch. 0".
 const chapterSubtitle = (series: Series): string | undefined => {
   const number = series.latest?.n;
+  const label = cleanText(series.latest?.label);
+  if (number === 0 && label && !/\d/.test(label)) return label;
   if (typeof number === "number") return `Ch. ${formatChapterNumber(number)}`;
   return series.chapters ? `${series.chapters} Chapters` : undefined;
 };
@@ -106,19 +115,23 @@ const baseItem = (series: Series, mangaId: string) => ({
 const withMangaId = <T>(series: Series, build: (mangaId: string) => T): T[] =>
   series.hid && HID_REGEX.test(series.hid) ? [build(series.hid)] : [];
 
-export const toFeaturedItems = (items: Series[]): DiscoverSectionItem[] =>
-  items.flatMap((series, index) =>
+export const toFeaturedItems = (items: { series: Series; rank: number }[]): DiscoverSectionItem[] =>
+  items.flatMap(({ series, rank }) =>
     withMangaId(series, (mangaId): DiscoverSectionItem => {
       const score = scoreOutOfTen(series.score);
       const subtitle = chapterSubtitle(series);
       const infoItems = [
         ...(score === undefined ? [] : [{ symbol: "star.fill", text: score.toFixed(1) }]),
-        ...(subtitle ? [{ symbol: "book.fill", text: subtitle }] : []),
+        ...(series.count
+          ? [{ symbol: "eye.fill", text: `${formatCount(series.count)} reads` }]
+          : subtitle
+            ? [{ symbol: "book.fill", text: subtitle }]
+            : []),
       ];
       return {
         type: "featuredCarouselItem",
         ...baseItem(series, mangaId),
-        supertitle: [`#${index + 1}`, series.type].filter(Boolean).join(" • "),
+        supertitle: [`#${rank}`, series.type, subtitle].filter(Boolean).join(" • "),
         summary: cleanText(series.description) || undefined,
         infoItems:
           infoItems.length === 2
@@ -168,12 +181,6 @@ const parseLabel = (release: ChapterRelease, number?: number | null) => {
   };
 };
 
-const releaseVersion = (release: ChapterRelease, group: string | undefined): string | undefined => {
-  if (group) return group;
-  const source = release.src?.trim();
-  return source ? source.charAt(0).toUpperCase() + source.slice(1) : undefined;
-};
-
 export const toLatestItems = (items: LatestResponse["items"]): DiscoverSectionItem[] =>
   items.flatMap(({ chapter, series }) =>
     withMangaId(series, (mangaId): DiscoverSectionItem => {
@@ -184,37 +191,47 @@ export const toLatestItems = (items: LatestResponse["items"]): DiscoverSectionIt
         type: "chapterUpdatesCarouselItem",
         ...baseItem(series, mangaId),
         chapterId: String(chapter.id),
-        subtitle: [number, releaseVersion(chapter, group)].filter(Boolean).join(" • ") || undefined,
+        subtitle: [number, group].filter(Boolean).join(" • ") || undefined,
         publishDate: chapter.at ? new Date(chapter.at) : undefined,
       };
     }),
   );
 
-// The home payload is keyed by row; a row is either a list of series or wraps one in "items".
-export const parseHomeRow = (home: Record<string, unknown>, row: string): Series[] => {
-  const rows = (home.rows as Record<string, unknown> | undefined) ?? home;
-  const value = rows[row];
-  const list = Array.isArray(value) ? value : (value as { items?: unknown } | undefined)?.items;
-  if (!Array.isArray(list)) throw new Error(`The site's home page has no "${row}" row.`);
-  return list.filter(
-    (entry): entry is Series =>
-      typeof entry === "object" && entry !== null && typeof (entry as Series).title === "string",
-  );
+const tagGroupId = (category: string | null | undefined): string => {
+  if (!category) return "genres";
+  return TAG_GROUPS.find(({ prefix }) => prefix && category.startsWith(prefix))?.id ?? "themes";
 };
 
-export const parseGenres = (facets: FacetsResponse, includeAdult: boolean): Tag[] =>
-  (facets.genres ?? [])
-    .filter(
-      (genre) =>
-        !UNLISTED_TAGS.has(genre.name) &&
-        (includeAdult || (!genre.isAdult && !PORNOGRAPHIC_TAGS.has(genre.name))),
-    )
-    .map((genre) => ({ id: toTagId(genre.name), title: genre.name }))
-    .sort((a, b) => a.title.localeCompare(b.title));
+// Hentai, Adult and Smut are offered once erotica is allowed, and tags the catalogue flags adult
+// only with pornographic titles, as the site does.
+export const parseTagGroups = (facets: FacetsResponse, ratings: string[]): TagSection[] => {
+  const groups = new Map<string, Tag[]>();
+  for (const facet of facets.genres ?? []) {
+    if (UNLISTED_TAGS.has(facet.name) || facet.category === "Demographic") continue;
+    if (facet.isAdult && !ratings.includes("pornographic")) continue;
+    if (
+      PORNOGRAPHIC_TAGS.has(facet.name) &&
+      !ratings.includes("erotica") &&
+      !ratings.includes("pornographic")
+    ) {
+      continue;
+    }
+    const id = tagGroupId(facet.category);
+    groups.set(id, [...(groups.get(id) ?? []), { id: toTagId(facet.name), title: facet.name }]);
+  }
+  return TAG_GROUPS.flatMap(({ id, title }) => {
+    const tags = groups.get(id)?.sort((a, b) => a.title.localeCompare(b.title)) ?? [];
+    return tags.length ? [{ id, title, tags }] : [];
+  });
+};
 
 const DEMOGRAPHICS = new Set(["Shounen", "Shoujo", "Seinen", "Josei"]);
 
-export const parseMangaDetails = ({ series }: SeriesResponse, mangaId: string): SourceManga => {
+export const parseMangaDetails = (
+  { series }: SeriesResponse,
+  mangaId: string,
+  facets: FacetsResponse,
+): SourceManga => {
   const primaryTitle = cleanText(series.title);
   const secondaryTitles = [
     ...new Set(
@@ -224,10 +241,10 @@ export const parseMangaDetails = ({ series }: SeriesResponse, mangaId: string): 
     ),
   ];
   const spoilers = new Set(series.spoilerTags ?? []);
+  const categories = new Map((facets.genres ?? []).map((facet) => [facet.name, facet.category]));
   const tags = (series.tags ?? []).filter((tag) => !UNLISTED_TAGS.has(tag) && !spoilers.has(tag));
   const demographic = (series.tags ?? []).find((tag) => DEMOGRAPHICS.has(tag));
   const authors = (series.authors ?? []).map(cleanText).filter(Boolean).join(", ");
-  const score = scoreOutOfTen(series.score);
   return {
     mangaId,
     mangaInfo: {
@@ -236,20 +253,17 @@ export const parseMangaDetails = ({ series }: SeriesResponse, mangaId: string): 
       thumbnailUrl: parseCoverUrl(series.cover, 720),
       synopsis: cleanText(series.description),
       contentRating: toContentRating(parseRatingId(series)),
-      status: series.status ?? undefined,
+      status: series.status ? (STATUS_NAMES[series.status] ?? series.status) : undefined,
       author: authors || undefined,
       artist: authors || undefined,
-      rating: score === undefined ? undefined : score / 10,
+      rating: series.score ? Math.round(series.score) / 100 : undefined,
       tagGroups: [
-        ...(tags.length
-          ? [
-              {
-                id: "genres",
-                title: "Genres",
-                tags: tags.map((tag) => ({ id: toTagId(tag), title: tag })),
-              },
-            ]
-          : []),
+        ...TAG_GROUPS.flatMap(({ id, title }) => {
+          const groupTags = tags.filter((tag) => tagGroupId(categories.get(tag)) === id);
+          return groupTags.length
+            ? [{ id, title, tags: groupTags.map((tag) => ({ id: toTagId(tag), title: tag })) }]
+            : [];
+        }),
         ...(demographic
           ? [
               {
@@ -285,7 +299,7 @@ export const parseChapters = (
       langCode: "en",
       chapNum: typeof entry.n === "number" ? entry.n : 0,
       title,
-      version: releaseVersion(release, group),
+      version: group,
       volume: 0,
       publishDate: at ? new Date(at) : undefined,
       sortingIndex: releases.length - index,

@@ -113,11 +113,11 @@ const fetchJson = async <T>(url: string, init?: RequestInit): Promise<T> => {
   return data as T;
 };
 
-const catalogueUrl = (
-  path: string,
-  params: Record<string, string | number | boolean | undefined>,
-) => {
-  const url = new URL(DOMAIN).addPathComponent("cdn").addPathComponent("v1");
+export type CatalogueParams = Record<string, string | number | boolean | undefined>;
+
+// The site skips empty and false parameters and sends true as "1".
+const siteUrl = (path: string, params: CatalogueParams) => {
+  const url = new URL(DOMAIN);
   for (const segment of path.split("/")) url.addPathComponent(segment);
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined || value === "" || value === false) continue;
@@ -126,31 +126,33 @@ const catalogueUrl = (
   return url.toString();
 };
 
-export type CatalogueParams = Record<string, string | number | boolean | undefined>;
-
-export const fetchHome = (sfw: boolean): Promise<Record<string, unknown>> =>
-  fetchJson(catalogueUrl("home", { sfw }));
-
 export const fetchBrowse = (params: CatalogueParams): Promise<SeriesListResponse> =>
-  fetchJson(catalogueUrl("browse", { limit: PAGE_SIZE, ...params }));
+  fetchJson(siteUrl("cdn/v1/browse", { limit: PAGE_SIZE, ...params }));
 
 export const fetchLatest = (page: number, params: CatalogueParams): Promise<LatestResponse> =>
-  fetchJson(catalogueUrl("latest", { ...params, page, limit: PAGE_SIZE }));
+  fetchJson(siteUrl("cdn/v1/latest", { ...params, page, limit: PAGE_SIZE }));
 
-// Rankings that depend on live reading activity are served by the site, not the catalogue.
-export const fetchRanking = (
+// Rankings built from this site's own readers are served by the site, not the catalogue. Discovery
+// rankings are posted as the browse parameters; reading counts are read with a query string.
+export const fetchDiscoveryRanking = (
   metric: string,
   params: CatalogueParams,
 ): Promise<SeriesListResponse> =>
   fetchJson(`${DOMAIN}/api/v1/rankings`, {
-    body: { params: { limit: PAGE_SIZE, ...params, metric } },
+    body: { params: { limit: PAGE_SIZE, ...params, discovery: metric, metric } },
   });
 
+export const fetchReadingRanking = (
+  metric: string,
+  params: CatalogueParams,
+): Promise<SeriesListResponse> =>
+  fetchJson(siteUrl("api/v1/rankings", { limit: PAGE_SIZE, ...params, metric }));
+
 export const fetchFacets = (): Promise<FacetsResponse> =>
-  fetchJson(catalogueUrl("facets", { sfw: false }));
+  fetchJson(siteUrl("cdn/v1/facets", { sfw: false }));
 
 export const fetchSeries = (mangaId: string): Promise<SeriesResponse> =>
-  fetchJson(catalogueUrl(`series/${mangaId}`, {}));
+  fetchJson(siteUrl(`cdn/v1/series/${mangaId}`, {}));
 
 export const fetchReaderKey = (): Promise<ReaderKeyResponse> =>
   fetchJson(`${DOMAIN}/api/manga/key`);

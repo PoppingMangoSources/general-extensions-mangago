@@ -15,6 +15,7 @@ import {
   TriStateSelectRow,
   type SearchQuery,
   type Tag,
+  type TagSection,
 } from "@paperback/types";
 
 import {
@@ -232,7 +233,7 @@ export class ToonkotsuSearchForm extends AdvancedSearchForm {
 
   constructor(
     query: SearchQuery<SearchMetadata>,
-    private readonly genreOptions: Tag[],
+    private readonly tagGroups: TagSection[],
   ) {
     super();
     const metadata = query.metadata ?? {};
@@ -250,152 +251,126 @@ export class ToonkotsuSearchForm extends AdvancedSearchForm {
     this.chaptersMax = metadata.chaptersMax ?? "";
   }
 
-  override getSections() {
-    return [
-      Section("genres", [
-        TriStateSelectRow("genres", {
-          title: "Genres",
-          layout: "flow",
-          value: this.genres,
-          items: this.genreOptions,
-          allowExclusion: true,
-          allowEmptySelection: true,
-          onValueChange: Application.Selector(this as ToonkotsuSearchForm, "handleGenresChange"),
-        }),
-        SelectRow("genre_mode", {
-          title: "Included Genres Must Match",
-          layout: "list",
-          value: [this.genreMode],
-          items: MATCH_MODE_OPTIONS,
-          minItemCount: 1,
-          maxItemCount: 1,
-          onValueChange: Application.Selector(this as ToonkotsuSearchForm, "handleGenreModeChange"),
-        }),
-        SelectRow("exclude_mode", {
-          title: "Excluded Genres Must Match",
-          layout: "list",
-          value: [this.excludeMode],
-          items: MATCH_MODE_OPTIONS,
-          minItemCount: 1,
-          maxItemCount: 1,
-          onValueChange: Application.Selector(
-            this as ToonkotsuSearchForm,
-            "handleExcludeModeChange",
-          ),
-        }),
-      ]),
-      Section("filters", [
-        SelectRow("demographics", {
-          title: "Demographic",
-          layout: "flow",
-          value: this.demographics,
-          items: DEMOGRAPHIC_OPTIONS,
-          minItemCount: 0,
-          maxItemCount: DEMOGRAPHIC_OPTIONS.length,
-          onValueChange: Application.Selector(
-            this as ToonkotsuSearchForm,
-            "handleDemographicsChange",
-          ),
-        }),
-        SelectRow("statuses", {
-          title: "Publication Status",
-          layout: "flow",
-          value: this.statuses,
-          items: STATUS_OPTIONS,
-          minItemCount: 0,
-          maxItemCount: STATUS_OPTIONS.length,
-          onValueChange: Application.Selector(this as ToonkotsuSearchForm, "handleStatusesChange"),
-        }),
-        SelectRow("languages", {
-          title: "Original Language",
-          layout: "list",
-          value: this.languages,
-          items: ORIGINAL_LANGUAGE_OPTIONS,
-          minItemCount: 0,
-          maxItemCount: ORIGINAL_LANGUAGE_OPTIONS.length,
-          onValueChange: Application.Selector(this as ToonkotsuSearchForm, "handleLanguagesChange"),
-        }),
-        SelectRow("ratings", {
-          title: "Content Rating",
-          layout: "flow",
-          value: this.ratings,
-          items: CONTENT_RATING_OPTIONS,
-          minItemCount: 1,
-          maxItemCount: CONTENT_RATING_OPTIONS.length,
-          onValueChange: Application.Selector(this as ToonkotsuSearchForm, "handleRatingsChange"),
-        }),
-      ]),
-      Section("details", [
-        InputRow("author", {
-          title: "Author",
-          value: this.author,
-          onValueChange: Application.Selector(this as ToonkotsuSearchForm, "handleAuthorChange"),
-        }),
-        InputRow("year_from", {
-          title: "Year From",
-          value: this.yearFrom,
-          onValueChange: Application.Selector(this as ToonkotsuSearchForm, "handleYearFromChange"),
-        }),
-        InputRow("year_to", {
-          title: "Year To",
-          value: this.yearTo,
-          onValueChange: Application.Selector(this as ToonkotsuSearchForm, "handleYearToChange"),
-        }),
-        InputRow("chapters_min", {
-          title: "Minimum Chapters",
-          value: this.chaptersMin,
-          onValueChange: Application.Selector(
-            this as ToonkotsuSearchForm,
-            "handleChaptersMinChange",
-          ),
-        }),
-        InputRow("chapters_max", {
-          title: "Maximum Chapters",
-          value: this.chaptersMax,
-          onValueChange: Application.Selector(
-            this as ToonkotsuSearchForm,
-            "handleChaptersMaxChange",
-          ),
-        }),
-      ]),
-    ];
+  private selectRow(
+    id: string,
+    title: string,
+    items: Tag[],
+    value: string[],
+    single: boolean,
+    update: (value: string[]) => void,
+  ) {
+    return SelectRow(id, {
+      title,
+      layout: single || items.length > 6 ? "list" : "flow",
+      value,
+      items,
+      minItemCount: single ? 1 : 0,
+      maxItemCount: single ? 1 : items.length,
+      onValueChange: closureSelector(this, id, async (selected: string[]) => update(selected)),
+    });
   }
 
-  async handleGenresChange(value: TriState): Promise<void> {
-    this.genres = value;
+  private inputRow(id: string, title: string, value: string, update: (value: string) => void) {
+    return InputRow(id, {
+      title,
+      value,
+      onValueChange: closureSelector(this, id, async (input: string) => update(input)),
+    });
   }
-  async handleGenreModeChange(value: string[]): Promise<void> {
-    this.genreMode = value[0] ?? "all";
-  }
-  async handleExcludeModeChange(value: string[]): Promise<void> {
-    this.excludeMode = value[0] ?? "any";
-  }
-  async handleDemographicsChange(value: string[]): Promise<void> {
-    this.demographics = value;
-  }
-  async handleStatusesChange(value: string[]): Promise<void> {
-    this.statuses = value;
-  }
-  async handleLanguagesChange(value: string[]): Promise<void> {
-    this.languages = value;
-  }
-  async handleRatingsChange(value: string[]): Promise<void> {
-    this.ratings = value;
-  }
-  async handleAuthorChange(value: string): Promise<void> {
-    this.author = value;
-  }
-  async handleYearFromChange(value: string): Promise<void> {
-    this.yearFrom = value;
-  }
-  async handleYearToChange(value: string): Promise<void> {
-    this.yearTo = value;
-  }
-  async handleChaptersMinChange(value: string): Promise<void> {
-    this.chaptersMin = value;
-  }
-  async handleChaptersMaxChange(value: string): Promise<void> {
-    this.chaptersMax = value;
+
+  // Every group filters the same genres parameter; a row only replaces its own tags' states.
+  override getSections() {
+    return [
+      Section(
+        "tags",
+        this.tagGroups.map((group) => {
+          const ids = new Set(group.tags.map(({ id }) => id));
+          return TriStateSelectRow(group.id, {
+            title: group.title,
+            layout: "flow",
+            value: Object.fromEntries(Object.entries(this.genres).filter(([id]) => ids.has(id))),
+            items: group.tags,
+            allowExclusion: true,
+            allowEmptySelection: true,
+            onValueChange: closureSelector(this, group.id, async (value: TriState) => {
+              this.genres = {
+                ...Object.fromEntries(Object.entries(this.genres).filter(([id]) => !ids.has(id))),
+                ...value,
+              };
+            }),
+          });
+        }),
+      ),
+      Section("tag_modes", [
+        this.selectRow(
+          "genre_mode",
+          "Included Tags Must Match",
+          MATCH_MODE_OPTIONS,
+          [this.genreMode],
+          true,
+          (value) => (this.genreMode = value[0] ?? "all"),
+        ),
+        this.selectRow(
+          "exclude_mode",
+          "Excluded Tags Must Match",
+          MATCH_MODE_OPTIONS,
+          [this.excludeMode],
+          true,
+          (value) => (this.excludeMode = value[0] ?? "any"),
+        ),
+      ]),
+      Section("filters", [
+        this.selectRow(
+          "demographics",
+          "Demographic",
+          DEMOGRAPHIC_OPTIONS,
+          this.demographics,
+          false,
+          (value) => (this.demographics = value),
+        ),
+        this.selectRow(
+          "statuses",
+          "Publication Status",
+          STATUS_OPTIONS,
+          this.statuses,
+          false,
+          (value) => (this.statuses = value),
+        ),
+        this.selectRow(
+          "languages",
+          "Original Language",
+          ORIGINAL_LANGUAGE_OPTIONS,
+          this.languages,
+          false,
+          (value) => (this.languages = value),
+        ),
+        this.selectRow(
+          "ratings",
+          "Content Rating",
+          CONTENT_RATING_OPTIONS,
+          this.ratings,
+          false,
+          (value) => (this.ratings = value),
+        ),
+      ]),
+      Section("details", [
+        this.inputRow("author", "Author", this.author, (value) => (this.author = value)),
+        this.inputRow("year_from", "Year From", this.yearFrom, (value) => (this.yearFrom = value)),
+        this.inputRow("year_to", "Year To", this.yearTo, (value) => (this.yearTo = value)),
+        this.inputRow(
+          "chapters_min",
+          "Minimum Chapters",
+          this.chaptersMin,
+          (value) => (this.chaptersMin = value),
+        ),
+        this.inputRow(
+          "chapters_max",
+          "Maximum Chapters",
+          this.chaptersMax,
+          (value) => (this.chaptersMax = value),
+        ),
+      ]),
+    ];
   }
 
   override getSearchQueryMetadata(): SearchMetadata {

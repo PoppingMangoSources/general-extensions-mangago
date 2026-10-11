@@ -20,7 +20,6 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
-  type Tag,
 } from "@paperback/types";
 
 import {
@@ -52,10 +51,10 @@ import {
 } from "./models";
 import {
   fetchBrowse,
+  fetchDiscoveryRanking,
   fetchFacets,
-  fetchHome,
   fetchLatest,
-  fetchRanking,
+  fetchReadingRanking,
   fetchReaderKey,
   fetchSeries,
   requestChapter,
@@ -66,11 +65,10 @@ import {
   fromTagId,
   parseChapterPages,
   parseChapters,
-  parseGenres,
-  parseHomeRow,
   parseMangaDetails,
   parseMangaIdFromUrl,
   parseRatingId,
+  parseTagGroups,
   toCarouselItems,
   toFeaturedItems,
   toLatestItems,
@@ -128,12 +126,11 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
     }));
   }
 
-  private async getGenreOptions(): Promise<Tag[]> {
-    return parseGenres(await this.getFacets(), getContentRatings().includes("pornographic"));
-  }
-
   async getSettingsForm(): Promise<Form> {
-    return new ToonkotsuSettingsForm(parseGenres(await this.getFacets(), true));
+    const groups = parseTagGroups(await this.getFacets(), ["pornographic"]);
+    return new ToonkotsuSettingsForm(
+      groups.flatMap(({ tags }) => tags).sort((a, b) => a.title.localeCompare(b.title)),
+    );
   }
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
@@ -165,8 +162,11 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
   ): Promise<PagedResults<DiscoverSectionItem>> {
     if (section.id === SECTIONS.GENRES) {
       const hidden = new Set(getHiddenTags());
+      const genres = parseTagGroups(await this.getFacets(), getContentRatings()).find(
+        ({ id }) => id === "genres",
+      );
       return {
-        items: (await this.getGenreOptions())
+        items: (genres?.tags ?? [])
           .filter((genre) => !hidden.has(genre.id))
           .map((genre) => ({
             type: "genresCarouselItem",
@@ -178,25 +178,26 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
     const page = metadata?.page ?? 1;
     const ratings = getContentRatings();
     const data = await this.loadSection(section.id, page, this.catalogueParams(ratings));
-    const items =
-      data.kind === "latest"
-        ? toLatestItems(data.items.filter(({ series }) => ratings.includes(parseRatingId(series))))
-        : this.toSectionItems(
-            section,
-            data.items.filter((series) => ratings.includes(parseRatingId(series))),
-          );
-    return { items, metadata: data.hasNext ? { page: page + 1 } : undefined };
-  }
-
-  private toSectionItems(section: DiscoverSection, items: Series[]): DiscoverSectionItem[] {
-    switch (section.type) {
-      case DiscoverSectionType.featured:
-        return toFeaturedItems(items);
-      case DiscoverSectionType.prominentCarousel:
-        return toCarouselItems(items, "prominentCarouselItem");
-      default:
-        return toCarouselItems(items, "simpleCarouselItem");
+    const allowed = (series: Series) => ratings.includes(parseRatingId(series));
+    let items: DiscoverSectionItem[];
+    if (data.kind === "latest") {
+      items = toLatestItems(data.items.filter(({ series }) => allowed(series)));
+    } else if (section.type === DiscoverSectionType.featured) {
+      // Ranks are the site's positions, so a title hidden by the settings leaves its number unused.
+      items = toFeaturedItems(
+        data.items.flatMap((series, index) =>
+          allowed(series) ? [{ series, rank: (page - 1) * PAGE_SIZE + index + 1 }] : [],
+        ),
+      );
+    } else {
+      items = toCarouselItems(
+        data.items.filter(allowed),
+        section.type === DiscoverSectionType.prominentCarousel
+          ? "prominentCarouselItem"
+          : "simpleCarouselItem",
+      );
     }
+    return { items, metadata: data.hasNext ? { page: page + 1 } : undefined };
   }
 
   private async loadSection(
@@ -205,12 +206,15 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
     params: CatalogueParams,
   ): Promise<SectionData> {
     switch (sectionId) {
-      case SECTIONS.MOST_READ:
-        return {
-          kind: "series",
-          items: parseHomeRow(await fetchHome(params.sfw === true), "mostread"),
-          hasNext: false,
-        };
+      case SECTIONS.MOST_READ: {
+        const data = await fetchReadingRanking("views", {
+          ...params,
+          sort: "latest",
+          order: "desc",
+          page,
+        });
+        return { kind: "series", items: data.items, hasNext: hasNextPage(data, page) };
+      }
       case SECTIONS.TRENDING:
         return this.browseSection({ ...params, sort: "popular", order: "desc", page }, page);
       case SECTIONS.TRENDING_NOW:
@@ -244,7 +248,7 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
     params: CatalogueParams,
     page: number,
   ): Promise<SectionData> {
-    const data = await fetchRanking(metric, { ...params, discovery: metric, page });
+    const data = await fetchDiscoveryRanking(metric, { ...params, page });
     return { kind: "series", items: data.items, hasNext: hasNextPage(data, page) };
   }
 
@@ -254,7 +258,10 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
   }
 
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
-    return new ToonkotsuSearchForm(query, await this.getGenreOptions());
+    return new ToonkotsuSearchForm(
+      query,
+      parseTagGroups(await this.getFacets(), query.metadata?.ratings ?? getContentRatings()),
+    );
   }
 
   async getSearchResults(
@@ -283,11 +290,12 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
     const genres = Object.entries(meta.genres ?? {});
     const genreNames = (state: "included" | "excluded") =>
       genres.filter(([, value]) => value === state).map(([id]) => fromTagId(id));
+    // Best Match ranks by the text query, so without one the site's default order applies.
     const sortId =
-      sortingOption?.id ?? (title ? SORT_OPTIONS.RELEVANCE.id : SORT_OPTIONS.LATEST.id);
-    // Best Match is the catalogue's default order for a text search and has no sort token.
-    const [sort = "", order = "desc"] =
-      sortId === SORT_OPTIONS.RELEVANCE.id ? [] : sortId.split("-");
+      sortingOption?.id === SORT_OPTIONS.RELEVANCE.id && !title
+        ? SORT_OPTIONS.LATEST.id
+        : (sortingOption?.id ?? (title ? SORT_OPTIONS.RELEVANCE.id : SORT_OPTIONS.LATEST.id));
+    const [sort, order = "desc"] = sortId.split("-");
     const params = this.catalogueParams(ratings, genreNames("excluded"));
     const data = await fetchBrowse({
       ...params,
@@ -303,7 +311,7 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
       yearTo: meta.yearTo,
       chaptersMin: meta.chaptersMin,
       chaptersMax: meta.chaptersMax,
-      sort: sort || (title ? undefined : "latest"),
+      sort,
       order,
       page,
     });
@@ -316,7 +324,8 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
-    return parseMangaDetails(await fetchSeries(mangaId), mangaId);
+    const [series, facets] = await Promise.all([fetchSeries(mangaId), this.getFacets()]);
+    return parseMangaDetails(series, mangaId, facets);
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
