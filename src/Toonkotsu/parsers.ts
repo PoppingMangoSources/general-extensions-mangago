@@ -53,13 +53,13 @@ export const parseMangaIdFromUrl = (value: string): string | undefined => {
 
 const COVER_SIZE_REGEX = /\/(?:220|460|720)\.webp$/;
 
-const parseCoverUrl = (cover: string | null | undefined, size: 460 | 720 = 460): string => {
-  if (!cover) return `${DOMAIN}/images/cover.webp`;
-  const url = cover.startsWith("http")
-    ? cover
-    : `${DOMAIN}${cover.startsWith("/") ? "" : "/"}${cover}`;
-  return url.replace(COVER_SIZE_REGEX, `/${size}.webp`);
-};
+const toAbsoluteUrl = (path: string): string =>
+  path.startsWith("http") ? path : `${DOMAIN}${path.startsWith("/") ? "" : "/"}${path}`;
+
+const parseCoverUrl = (cover: string | null | undefined, size: 460 | 720 = 460): string =>
+  cover
+    ? toAbsoluteUrl(cover).replace(COVER_SIZE_REGEX, `/${size}.webp`)
+    : `${DOMAIN}/images/cover.webp`;
 
 // The site's own rating ladder: a series flagged adult or tagged Hentai is pornographic, Smut or
 // Adult is erotica, Ecchi or Mature is suggestive.
@@ -244,6 +244,8 @@ export const parseMangaDetails = (
   const categories = new Map((facets.genres ?? []).map((facet) => [facet.name, facet.category]));
   const tags = (series.tags ?? []).filter((tag) => !UNLISTED_TAGS.has(tag) && !spoilers.has(tag));
   const demographic = (series.tags ?? []).find((tag) => DEMOGRAPHICS.has(tag));
+  // Most titles have no banner but carry the wide hero image the site shows in its place.
+  const banner = series.banner || series.hero;
   const authors = (series.authors ?? []).map(cleanText).filter(Boolean).join(", ");
   return {
     mangaId,
@@ -251,6 +253,7 @@ export const parseMangaDetails = (
       primaryTitle,
       secondaryTitles,
       thumbnailUrl: parseCoverUrl(series.cover, 720),
+      bannerUrl: banner ? toAbsoluteUrl(banner) : undefined,
       synopsis: cleanText(series.description),
       contentRating: toContentRating(parseRatingId(series)),
       status: series.status ? (STATUS_NAMES[series.status] ?? series.status) : undefined,
@@ -315,7 +318,7 @@ export const parseChapterPages = async (
   if (!pages.length) throw new Error("This chapter has no pages.");
   return Promise.all(
     pages.map(async (page) => {
-      const src = page.src.startsWith("http") ? page.src : `${DOMAIN}${page.src}`;
+      const src = toAbsoluteUrl(page.src);
       if (!page.k || !page.n) return src;
       const key = response.wrap === "v1" ? await unwrapPageKey(readerKey, page) : page.k;
       return encodePageUrl(src, key, page.n);

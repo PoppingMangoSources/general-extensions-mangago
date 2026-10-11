@@ -252,6 +252,8 @@ export interface Series {
   spoilerTags?: string[] | null;
   status?: string | null;
   cover?: string | null;
+  banner?: string | null;
+  hero?: string | null;
   score?: number | null;
   latest?: LatestChapterRef | null;
   chapters?: number | null;
