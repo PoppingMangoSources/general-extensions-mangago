@@ -181,7 +181,9 @@ export const parseBrowseCards = ($: cheerio.CheerioAPI): MangaCard[] => {
   const cards: MangaCard[] = [];
   const seen = new Set<string>();
   $("a.card-title[href^='/series/']").each((_, link) => {
-    const element = $(link).closest("div.relative.flex, div.min-w-0").first();
+    // The outer row first: its text column also carries min-w-0, and the cover is not in it.
+    const row = $(link).closest("div.relative.flex");
+    const element = row.length ? row : $(link).closest("div.min-w-0");
     const card = parseCard($, element.get(0) ?? link);
     if (!card || seen.has(card.mangaId)) return;
     seen.add(card.mangaId);
@@ -449,11 +451,18 @@ export const parseChapterDetails = async (
     keyMaterial.set(salt, seed.length);
     const digest = await crypto.subtle.digest("SHA-256", keyMaterial);
     const key = await crypto.subtle.importKey("raw", digest, "AES-GCM", false, ["decrypt"]);
-    const decrypted = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: new Uint8Array(iv).buffer },
-      key,
-      new Uint8Array(encrypted).buffer,
-    );
+    let decrypted: ArrayBuffer;
+    try {
+      decrypted = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: new Uint8Array(iv).buffer },
+        key,
+        new Uint8Array(encrypted).buffer,
+      );
+    } catch (error) {
+      throw new Error(`Could not decrypt the page list for chapter ${chapterId}.`, {
+        cause: error,
+      });
+    }
     const manifest = JSON.parse(Application.arrayBufferToUTF8String(decrypted)) as { p?: unknown };
     if (Array.isArray(manifest.p)) {
       hashes = manifest.p.filter((hash): hash is string => typeof hash === "string" && !!hash);
