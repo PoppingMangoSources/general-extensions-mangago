@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-10-11T22:24:15.627Z",
+  "buildTime": "2026-10-11T23:42:40.150Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -605,6 +605,29 @@
         }
       ],
       "id": "TempleScan"
+    },
+    {
+      "name": "Toonkotsu",
+      "description": "Extension that pulls content from toonkotsu.com.",
+      "version": "1.0.0-alpha.1",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "ADULT",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "Toonkotsu"
     },
     {
       "name": "ValirScans",
