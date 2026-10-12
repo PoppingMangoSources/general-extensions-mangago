@@ -14,7 +14,6 @@ import {
   PAGE_SIZE,
   type FacetsResponse,
   type LatestResponse,
-  type ReaderKeyResponse,
   type SeriesListResponse,
   type SeriesResponse,
 } from "./models";
@@ -154,10 +153,9 @@ export const fetchFacets = (): Promise<FacetsResponse> =>
 export const fetchSeries = (mangaId: string): Promise<SeriesResponse> =>
   fetchJson(siteUrl(`cdn/v1/series/${mangaId}`, {}));
 
-export const fetchReaderKey = (): Promise<ReaderKeyResponse> =>
-  fetchJson(`${DOMAIN}/api/manga/key`);
+// The reader answers its reading limit with a 429 whose body says how to recover, so these return
+// the status alongside the body.
+export const requestReaderKey = () => requestJson(`${DOMAIN}/api/manga/key`);
 
-// The reader answers a rate limit with a 429 whose body says how to recover, so the caller gets the
-// status alongside the body.
 export const requestChapter = (path: string, signature: string) =>
   requestJson(`${DOMAIN}${path}`, { headers: { "x-sig": signature } });

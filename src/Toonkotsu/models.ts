@@ -30,10 +30,9 @@ export const STATE_KEYS = {
 export const SECTIONS = {
   MOST_READ: "most-read",
   TRENDING: "trending",
-  TRENDING_NOW: "trending-now",
+  TOP_RATED: "top-rated",
   HIDDEN_GEMS: "hidden-gems",
   LATEST: "latest",
-  TOP_RATED: "top-rated",
   RECENTLY_ADDED: "recently-added",
   THIS_SEASON: "this-season",
   COMPLETED: "completed",
@@ -53,9 +52,9 @@ export const SECTION_DEFINITIONS: Record<SectionId, DiscoverSection> = {
     title: "Trending",
     type: DiscoverSectionType.prominentCarousel,
   },
-  [SECTIONS.TRENDING_NOW]: {
-    id: SECTIONS.TRENDING_NOW,
-    title: "Trending Now",
+  [SECTIONS.TOP_RATED]: {
+    id: SECTIONS.TOP_RATED,
+    title: "Top Rated",
     type: DiscoverSectionType.simpleCarousel,
   },
   [SECTIONS.HIDDEN_GEMS]: {
@@ -67,11 +66,6 @@ export const SECTION_DEFINITIONS: Record<SectionId, DiscoverSection> = {
     id: SECTIONS.LATEST,
     title: "Latest Updates",
     type: DiscoverSectionType.chapterUpdates,
-  },
-  [SECTIONS.TOP_RATED]: {
-    id: SECTIONS.TOP_RATED,
-    title: "Top Rated",
-    type: DiscoverSectionType.simpleCarousel,
   },
   [SECTIONS.RECENTLY_ADDED]: {
     id: SECTIONS.RECENTLY_ADDED,

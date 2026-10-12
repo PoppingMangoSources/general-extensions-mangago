@@ -44,6 +44,7 @@ import {
   type FacetsResponse,
   type LatestResponse,
   type PageMetadata,
+  type ReaderKeyResponse,
   type ReaderLimit,
   type SearchMetadata,
   type Series,
@@ -55,9 +56,9 @@ import {
   fetchFacets,
   fetchLatest,
   fetchReadingRanking,
-  fetchReaderKey,
   fetchSeries,
   requestChapter,
+  requestReaderKey,
   ToonkotsuInterceptor,
   type CatalogueParams,
 } from "./network";
@@ -217,8 +218,6 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
       }
       case SECTIONS.TRENDING:
         return this.browseSection({ ...params, sort: "popular", order: "desc", page }, page);
-      case SECTIONS.TRENDING_NOW:
-        return this.rankingSection("trending", params, page);
       case SECTIONS.HIDDEN_GEMS:
         return this.rankingSection("gems", params, page);
       case SECTIONS.LATEST: {
@@ -336,12 +335,15 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
     );
   }
 
-  private getReaderKey(): Promise<{ readerKey: ReaderKey; build: string }> {
-    return (this.readerKeyPromise ??= fetchReaderKey()
-      .then(async (response) => ({
-        readerKey: await deriveReaderKey(response),
-        build: response.build,
-      }))
+  private getReaderKey(chapterId: string): Promise<{ readerKey: ReaderKey; build: string }> {
+    return (this.readerKeyPromise ??= requestReaderKey()
+      .then(async ({ status, data }) => {
+        if (status < 200 || status >= 300) {
+          throw await readerError(status, data as ReaderLimit | undefined, chapterId);
+        }
+        const response = data as ReaderKeyResponse;
+        return { readerKey: await deriveReaderKey(response), build: response.build };
+      })
       .catch((error: unknown) => {
         this.readerKeyPromise = undefined;
         throw error;
@@ -351,7 +353,7 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
     const path = `/api/manga/chapter/${chapter.chapterId}`;
     for (let attempt = 0; ; attempt++) {
-      const { readerKey, build } = await this.getReaderKey();
+      const { readerKey, build } = await this.getReaderKey(chapter.chapterId);
       const { status, data } = await requestChapter(path, await signReaderPath(readerKey, path));
       if (status >= 200 && status < 300) {
         return {
@@ -366,26 +368,38 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
         this.readerKeyPromise = undefined;
         continue;
       }
-      if (limit?.code === "manga-limit") {
-        if (limit.transient) {
-          throw new Error(
-            `Toonkotsu is limiting reads right now. Try again in ${limit.retryAfterSec ?? 10} seconds.`,
-          );
-        }
-        // The site asks for a human check before more chapters; it is passed on the chapter page.
-        throw new CloudflareError({
-          url: `${DOMAIN}/title/${chapter.sourceManga.mangaId}/${chapter.chapterId}-chapter-${chapter.chapNum}`,
-          method: "GET",
-          headers: { "user-agent": await Application.getDefaultUserAgent() },
-        });
-      }
-      const reason =
-        build === READER_BUILD
-          ? ""
-          : " The site's reader has been updated, so this source needs an update too.";
-      throw new Error(`Could not load chapter ${chapter.chapterId} (status ${status}).${reason}`);
+      throw await readerError(status, limit, chapter.chapterId, build);
     }
   }
 }
+
+// Guests are asked to confirm they are human before reading on. The check runs in the site's own
+// reader, so the chapter is opened there and the session cookie it unlocks is kept.
+const readerError = async (
+  status: number,
+  limit: ReaderLimit | undefined,
+  chapterId: string,
+  build = READER_BUILD,
+): Promise<Error> => {
+  if (limit?.code === "manga-limit" && limit.transient) {
+    return new Error(
+      `Toonkotsu is limiting reads right now. Try again in ${limit.retryAfterSec || 10} seconds.`,
+    );
+  }
+  if (limit?.code === "manga-limit") {
+    return new CloudflareError({
+      url: `${DOMAIN}/chapter/${chapterId}`,
+      method: "GET",
+      headers: { "user-agent": await Application.getDefaultUserAgent() },
+    });
+  }
+  const reason =
+    build === READER_BUILD
+      ? ""
+      : " The site's reader has been updated, so this source needs an update too.";
+  return new Error(
+    `Could not load chapter ${chapterId} (status ${status}${limit?.error ? `: ${limit.error}` : ""}).${reason}`,
+  );
+};
 
 export const Toonkotsu = new ToonkotsuExtension();
