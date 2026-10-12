@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-10-12T16:35:46.919Z",
+  "buildTime": "2026-10-12T21:25:32.718Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -586,7 +586,7 @@
     {
       "name": "Temple Scan",
       "description": "Extension that pulls content from templetoons.com.",
-      "version": "1.0.0-alpha.24",
+      "version": "1.0.0-alpha.25",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
@@ -707,7 +707,7 @@
     {
       "name": "XCOMIC",
       "description": "Extension that pulls content from XCOMIC and its mirrors.",
-      "version": "1.0.0-alpha.76",
+      "version": "1.0.0-alpha.77",
       "icon": "icon.png",
       "language": "multi",
       "contentRating": "ADULT",
