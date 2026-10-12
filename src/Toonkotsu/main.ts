@@ -42,7 +42,6 @@ import {
   SORT_OPTIONS,
   STATUS_OPTIONS,
   TYPE_OPTIONS,
-  type ChapterResponse,
   type FacetsResponse,
   type LatestResponse,
   type PageMetadata,
@@ -72,6 +71,7 @@ import {
   parseMangaDetails,
   parseMangaIdFromUrl,
   parseRatingId,
+  parseReaderKeyResponse,
   parseTagGroups,
   toCarouselItems,
   toFeaturedItems,
@@ -373,7 +373,7 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
         if (status < 200 || status >= 300) {
           throw await readerError(status, data as ReaderLimit | undefined, chapterId);
         }
-        const response = data as ReaderKeyResponse;
+        const response = parseReaderKeyResponse(data);
         return { readerKey: await deriveReaderKey(response, this.readerSecret), response };
       })
       .catch((error: unknown) => {
@@ -392,7 +392,7 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
         const { readerKey, response } = recovered ?? (await this.getReaderKey(chapter.chapterId));
         const { status, data } = await requestChapter(path, await signReaderPath(readerKey, path));
         if (status >= 200 && status < 300) {
-          const pages = await parseChapterPages(data as ChapterResponse, readerKey);
+          const pages = await parseChapterPages(data, readerKey);
           if (recovered) {
             this.readerSecret = recovered.secret;
             this.readerSecretPromise = undefined;

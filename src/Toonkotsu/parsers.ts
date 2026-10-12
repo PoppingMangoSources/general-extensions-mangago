@@ -3,6 +3,7 @@
 
 import {
   ContentRating,
+  URL,
   type Chapter,
   type DiscoverSectionItem,
   type SearchResultItem,
@@ -18,15 +19,15 @@ import {
   TAG_GROUPS,
   UNLISTED_TAGS,
   type ChapterRelease,
-  type ChapterResponse,
   type ContentRatingId,
   type FacetsResponse,
   type LatestResponse,
+  type ReaderKeyResponse,
   type Series,
   type SeriesResponse,
 } from "./models";
 import { encodePageUrl } from "./network";
-import { unwrapPageKey, type ReaderKey } from "./utils";
+import { decodeBase64Url, unwrapPageKey, type ReaderKey } from "./utils";
 
 // A tag id is the name percent-encoded so it passes Paperback's id rules and decodes back to the
 // name the browse filters expect. encodeURIComponent leaves !'*~ alone, and Paperback rejects them.
@@ -312,18 +313,102 @@ export const parseChapters = (
   });
 };
 
+export const parseReaderKeyResponse = (value: unknown): ReaderKeyResponse => {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    !("key" in value) ||
+    typeof value.key !== "string" ||
+    !("build" in value) ||
+    typeof value.build !== "string" ||
+    !value.build.trim() ||
+    !("now" in value) ||
+    typeof value.now !== "number" ||
+    !Number.isFinite(value.now) ||
+    value.now <= 0
+  ) {
+    throw new Error(
+      "Toonkotsu returned invalid reader session data. The source may need an update.",
+    );
+  }
+  try {
+    decodeBase64Url(value.key);
+  } catch (error) {
+    throw new Error("Toonkotsu returned an invalid reader signing key.", { cause: error });
+  }
+  return { key: value.key, build: value.build, now: value.now };
+};
+
 export const parseChapterPages = async (
-  response: ChapterResponse,
+  response: unknown,
   readerKey: ReaderKey,
 ): Promise<string[]> => {
-  const pages = response.chapter?.pages ?? [];
+  if (
+    !response ||
+    typeof response !== "object" ||
+    !("chapter" in response) ||
+    !response.chapter ||
+    typeof response.chapter !== "object" ||
+    !("pages" in response.chapter) ||
+    !Array.isArray(response.chapter.pages)
+  ) {
+    throw new Error("Toonkotsu returned invalid chapter page data. The source may need an update.");
+  }
+  const wrap = "wrap" in response ? response.wrap : undefined;
+  if (wrap != null && wrap !== "" && wrap !== "v1") {
+    throw new Error("Unsupported Toonkotsu reader encryption version. Please update the source.");
+  }
+  const pages: unknown[] = response.chapter.pages;
   if (!pages.length) throw new Error("This chapter has no pages.");
   return Promise.all(
-    pages.map(async (page) => {
-      const src = toAbsoluteUrl(page.src);
-      if (!page.k || !page.n) return src;
-      const key = response.wrap === "v1" ? await unwrapPageKey(readerKey, page) : page.k;
-      return encodePageUrl(src, key, page.n);
+    pages.map(async (page, index) => {
+      if (
+        !page ||
+        typeof page !== "object" ||
+        !("src" in page) ||
+        typeof page.src !== "string" ||
+        !page.src.trim()
+      ) {
+        throw new Error(`Toonkotsu page ${index + 1} has no valid image URL.`);
+      }
+      const path = page.src.trim();
+      if (/\s/.test(path) || (/^[a-z][a-z\d+.-]*:/i.test(path) && !/^https?:\/\//i.test(path))) {
+        throw new Error(`Toonkotsu page ${index + 1} has an invalid image URL.`);
+      }
+      const src = path.startsWith("//")
+        ? `https:${path}`
+        : /^https?:\/\//i.test(path)
+          ? path
+          : toAbsoluteUrl(path);
+      try {
+        const url = new URL(src);
+        if (!url.hostname || !["http", "https"].includes(url.protocol.toLowerCase())) {
+          throw new Error("Expected an HTTP image URL.");
+        }
+      } catch (error) {
+        throw new Error(`Toonkotsu page ${index + 1} has an invalid image URL.`, { cause: error });
+      }
+      const key = "k" in page ? page.k : undefined;
+      const nonce = "n" in page ? page.n : undefined;
+      if (key == null && nonce == null) return src;
+      if (typeof key !== "string" || typeof nonce !== "string") {
+        throw new Error(`Toonkotsu page ${index + 1} has incomplete encryption metadata.`);
+      }
+      try {
+        const keyBytes = decodeBase64Url(key);
+        if (![16, 24, 32].includes(keyBytes.length)) {
+          throw new Error(`Unsupported AES key length (${keyBytes.length} bytes).`);
+        }
+        if (decodeBase64Url(nonce).length < 8) throw new Error("The AES-CTR nonce is too short.");
+        const pageKey =
+          wrap === "v1" ? await unwrapPageKey(readerKey, { src, k: key, n: nonce }) : key;
+        return encodePageUrl(src, pageKey, nonce);
+      } catch (error) {
+        throw new Error(
+          `Toonkotsu page ${index + 1}: ${error instanceof Error ? error.message : "Invalid encryption metadata."} The source may need an update.`,
+          { cause: error },
+        );
+      }
     }),
   );
 };

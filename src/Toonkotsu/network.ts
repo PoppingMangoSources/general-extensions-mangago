@@ -62,7 +62,13 @@ export class ToonkotsuInterceptor extends PaperbackInterceptor {
       });
     }
     const markerIndex = request.url.indexOf(PAGE_KEY_MARKER);
-    if (markerIndex < 0 || response.status < 200 || response.status >= 300) return data;
+    if (markerIndex < 0) return data;
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(
+        `Could not load Toonkotsu page (status ${response.status}): ${request.url.slice(0, markerIndex)}`,
+      );
+    }
+    if (!data.byteLength) throw new Error("Toonkotsu returned an empty page image.");
     const [key = "", nonce = ""] = request.url
       .slice(markerIndex + PAGE_KEY_MARKER.length)
       .split(".");

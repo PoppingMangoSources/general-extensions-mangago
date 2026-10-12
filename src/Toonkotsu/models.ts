@@ -319,11 +319,6 @@ export interface ReaderPage {
   n?: string | null;
 }
 
-export interface ChapterResponse {
-  wrap?: string | null;
-  chapter: { pages: ReaderPage[] };
-}
-
 export interface ReaderLimit {
   code?: string;
   error?: string;

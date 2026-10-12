@@ -12,13 +12,19 @@ const asciiBytes = (value: string): Uint8Array<ArrayBuffer> =>
 
 export const decodeBase64Url = (value: string): Uint8Array<ArrayBuffer> => {
   const clean = value.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  if (
+    !/^[A-Za-z0-9+/_-]+={0,2}$/.test(value) ||
+    clean.length % 4 === 1 ||
+    (value.includes("=") && value.length % 4 !== 0)
+  ) {
+    throw new Error("Invalid base64 reader data.");
+  }
   const bytes = new Uint8Array(Math.floor((clean.length * 3) / 4));
   let buffer = 0;
   let bits = 0;
   let index = 0;
   for (const character of clean) {
     const digit = BASE64.indexOf(character);
-    if (digit < 0) throw new Error(`Invalid base64 character in "${value}"`);
     buffer = (buffer << 6) | digit;
     bits += 6;
     if (bits >= 8) {
@@ -26,6 +32,7 @@ export const decodeBase64Url = (value: string): Uint8Array<ArrayBuffer> => {
       bytes[index++] = (buffer >> bits) & 0xff;
     }
   }
+  if (bits && buffer & ((1 << bits) - 1)) throw new Error("Invalid base64 reader data.");
   return bytes.subarray(0, index);
 };
 
@@ -254,6 +261,7 @@ const encryptBlock = (schedule: Uint32Array, input: Uint32Array, output: Uint32A
 // by a 64-bit big-endian block counter. Paperback's native crypto has no CTR mode, so the
 // keystream is generated here.
 export const decryptPage = (data: ArrayBuffer, key: Uint8Array, nonce: Uint8Array): ArrayBuffer => {
+  if (nonce.length < 8) throw new Error("Invalid AES-CTR page nonce: fewer than 8 bytes.");
   const schedule = expandKey(key);
   const bytes = new Uint8Array(data);
   const counter = new Uint32Array(4);
