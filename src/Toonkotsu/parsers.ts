@@ -47,7 +47,9 @@ export const fromTagId = (id: string): string => {
 const HID_REGEX = /^[a-z][0-9a-z]{4}$/;
 
 export const parseMangaIdFromUrl = (value: string): string | undefined => {
-  const hid = value.match(/toonkotsu\.com\/title\/([a-z][0-9a-z]{4})(?:[-/?#]|$)/i)?.[1];
+  const hid = value.match(
+    /^(?:https?:\/\/)?toonkotsu\.com\/title\/([a-z][0-9a-z]{4})(?:[-/?#]|$)/i,
+  )?.[1];
   return hid && HID_REGEX.test(hid) ? hid : undefined;
 };
 

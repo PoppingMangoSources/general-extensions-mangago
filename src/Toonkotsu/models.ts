@@ -157,12 +157,12 @@ export const DEMOGRAPHIC_OPTIONS: Tag[] = [
   { id: "none", title: "None" },
 ];
 
-export const STATUS_OPTIONS: Tag[] = [
-  { id: "ongoing", title: "Ongoing" },
-  { id: "completed", title: "Completed" },
-  { id: "hiatus", title: "Hiatus" },
-  { id: "cancelled", title: "Cancelled" },
-];
+export const STATUS_OPTIONS = [
+  { id: "ongoing", title: "Ongoing", value: "Ongoing" },
+  { id: "completed", title: "Completed", value: "Complete" },
+  { id: "hiatus", title: "Hiatus", value: "Hiatus" },
+  { id: "cancelled", title: "Cancelled", value: "Canceled" },
+] satisfies (Tag & { value: string })[];
 
 export const MATCH_MODE_OPTIONS: Tag[] = [
   { id: "all", title: "All" },
@@ -327,6 +327,7 @@ export interface ChapterResponse {
 export interface ReaderLimit {
   code?: string;
   error?: string;
+  reason?: string;
   resign?: boolean;
   transient?: boolean;
   retryAfterSec?: number;

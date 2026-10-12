@@ -6,10 +6,10 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "Toonkotsu",
   description: "Extension that pulls content from toonkotsu.com.",
-  version: "1.0.0-alpha.5",
+  version: "1.0.0-alpha.6",
   icon: "icon.png",
   language: "en",
-  contentRating: ContentRating.ADULT,
+  contentRating: ContentRating.MATURE,
   capabilities: [
     SourceIntents.CHAPTER_PROVIDING,
     SourceIntents.CLOUDFLARE_BYPASS_PROVIDING,

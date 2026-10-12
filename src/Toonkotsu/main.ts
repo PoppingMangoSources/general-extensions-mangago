@@ -39,6 +39,7 @@ import {
   SECTION_DEFINITIONS,
   SECTIONS,
   SORT_OPTIONS,
+  STATUS_OPTIONS,
   TYPE_OPTIONS,
   type ChapterResponse,
   type FacetsResponse,
@@ -220,17 +221,19 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
     params: CatalogueParams,
   ): Promise<SectionData> {
     switch (sectionId) {
-      case SECTIONS.MOST_READ: {
-        const data = await fetchReadingRanking("views", {
-          ...params,
-          sort: "latest",
-          order: "desc",
-          page,
-        });
+      case SECTIONS.MOST_READ:
+      case SECTIONS.TRENDING: {
+        const data = await fetchReadingRanking(
+          sectionId === SECTIONS.TRENDING ? "trending" : "views",
+          {
+            ...params,
+            sort: "latest",
+            order: "desc",
+            page,
+          },
+        );
         return { kind: "series", items: data.items, hasNext: hasNextPage(data, page) };
       }
-      case SECTIONS.TRENDING:
-        return this.browseSection({ ...params, sort: "popular", order: "desc", page }, page);
       case SECTIONS.HIDDEN_GEMS:
         return this.rankingSection("gems", params, page);
       case SECTIONS.LATEST: {
@@ -284,17 +287,22 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
     const title = query.title.trim();
     const pastedId = parseMangaIdFromUrl(title);
     if (pastedId) {
-      const manga = await this.getMangaDetails(pastedId);
-      return {
-        items: [
-          {
-            mangaId: pastedId,
-            title: manga.mangaInfo.primaryTitle,
-            imageUrl: manga.mangaInfo.thumbnailUrl,
-            contentRating: manga.mangaInfo.contentRating,
-          },
-        ],
-      };
+      try {
+        const manga = await this.getMangaDetails(pastedId);
+        return {
+          items: [
+            {
+              mangaId: pastedId,
+              title: manga.mangaInfo.primaryTitle,
+              imageUrl: manga.mangaInfo.thumbnailUrl,
+              contentRating: manga.mangaInfo.contentRating,
+            },
+          ],
+        };
+      } catch (error) {
+        if (error instanceof CloudflareError) throw error;
+        // URL lookup is optional; unresolved links continue through ordinary search.
+      }
     }
     const meta = query.metadata ?? {};
     const page = metadata?.page ?? 1;
@@ -317,7 +325,10 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
       genreMode: meta.genreMode,
       excludeMode: meta.excludeMode,
       demographic: meta.demographics?.join(",") || undefined,
-      status: meta.statuses?.join(",") || undefined,
+      status:
+        meta.statuses
+          ?.map((id) => STATUS_OPTIONS.find((option) => option.id === id)?.value ?? id)
+          .join(",") || undefined,
       author: meta.author,
       yearFrom: meta.yearFrom,
       yearTo: meta.yearTo,
@@ -394,9 +405,9 @@ const readerError = async (
   chapterId: string,
   build = READER_BUILD,
 ): Promise<Error> => {
-  if (limit?.code === "manga-limit" && limit.transient) {
+  if (limit?.code === "manga-limit" && (limit.transient || limit.reason === "wait")) {
     return new Error(
-      `Toonkotsu is limiting reads right now. Try again in ${limit.retryAfterSec || 10} seconds.`,
+      `Toonkotsu is limiting reads right now. Try again in ${limit.retryAfterSec || (limit.reason === "wait" ? 600 : 10)} seconds.`,
     );
   }
   if (limit?.code === "manga-limit") {
