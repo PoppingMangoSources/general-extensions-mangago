@@ -217,6 +217,8 @@ export interface SearchMetadata extends JSONObject {
 
 export interface PageMetadata extends JSONObject {
   page: number;
+  // Titles already shown in Latest Updates, so a later page does not repeat them.
+  seen?: number[];
 }
 
 export interface CatalogueFilters {

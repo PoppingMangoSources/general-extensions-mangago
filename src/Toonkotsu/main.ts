@@ -181,8 +181,16 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
     const data = await this.loadSection(section.id, page, this.catalogueParams(ratings));
     const allowed = (series: Series) => ratings.includes(parseRatingId(series));
     let items: DiscoverSectionItem[];
+    const seen = new Set(metadata?.seen ?? []);
     if (data.kind === "latest") {
-      items = toLatestItems(data.items.filter(({ series }) => allowed(series)));
+      // The feed lists every new chapter, but the site shows each title once, at its newest.
+      items = toLatestItems(
+        data.items.filter(({ series }) => {
+          if (seen.has(series.id)) return false;
+          seen.add(series.id);
+          return allowed(series);
+        }),
+      );
     } else if (section.type === DiscoverSectionType.featured) {
       // Ranks are the site's positions, so a title hidden by the settings leaves its number unused.
       items = toFeaturedItems(
@@ -198,7 +206,12 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
           : "simpleCarouselItem",
       );
     }
-    return { items, metadata: data.hasNext ? { page: page + 1 } : undefined };
+    return {
+      items,
+      metadata: data.hasNext
+        ? { page: page + 1, ...(data.kind === "latest" && { seen: [...seen] }) }
+        : undefined,
+    };
   }
 
   private async loadSection(
