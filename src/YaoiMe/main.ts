@@ -34,6 +34,7 @@ import {
   SECTION_DEFINITIONS,
   SECTIONS,
   SORT_OPTIONS,
+  type MangaCard,
   type PageMetadata,
   type SearchMetadata,
 } from "./models";
@@ -72,7 +73,6 @@ class YaoiMeExtension implements ExtensionImpl<typeof YaoiMeConfig> {
   private interceptor = new YaoiMeInterceptor("main", getPreferences, getSectionOrder);
   private homePromise?: Promise<CheerioAPI>;
   private genresPromise?: Promise<Tag[]>;
-  private seriesPage?: { mangaId: string; promise: Promise<CheerioAPI> };
 
   async initialise(): Promise<void> {
     this.rateLimiter.registerInterceptor();
@@ -101,14 +101,15 @@ class YaoiMeExtension implements ExtensionImpl<typeof YaoiMeConfig> {
   private clearMemos = (): void => {
     this.homePromise = undefined;
     this.genresPromise = undefined;
-    this.seriesPage = undefined;
   };
 
   async getSettingsForm(): Promise<Form> {
     return new YaoiMeSettingsForm(getPreferences(), getVisibleSections(), this.clearMemos);
   }
 
+  // Discover asks for its sections on every refresh, so the home page is fetched fresh each time.
   async getDiscoverSections(): Promise<DiscoverSection[]> {
+    this.homePromise = undefined;
     const visible = new Set(getVisibleSections());
     return getSectionOrder()
       .filter((id) => visible.has(id))
@@ -119,43 +120,42 @@ class YaoiMeExtension implements ExtensionImpl<typeof YaoiMeConfig> {
     section: DiscoverSection,
     _metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    if (section.id === SECTIONS.GENRES) {
-      return { items: (await this.getGenres()).map(toGenreItem) };
-    }
-    const $ = await this.getHomePage();
     switch (section.id) {
+      case SECTIONS.GENRES:
+        return { items: (await this.getGenres()).map(toGenreItem) };
       case SECTIONS.POPULAR:
-        return { items: parseHomeCards($, "Popular updates").map((card) => toFeaturedItem(card)) };
+        return this.getHomeSectionItems("Popular updates", (card) => [toFeaturedItem(card)]);
       case SECTIONS.BINGE:
-        return { items: parseHomeCards($, "Binge-worthy").map(toProminentItem) };
+        return this.getHomeSectionItems("Binge-worthy", (card) => [toProminentItem(card)]);
       case SECTIONS.TRENDING:
-        return { items: parseHomeCards($, "Trending now").map(toSimpleItem) };
+        return this.getHomeSectionItems("Trending now", (card) => [toSimpleItem(card)]);
       case SECTIONS.TOP_RATED:
-        return { items: parseHomeCards($, "Top rated").map(toSimpleItem) };
+        return this.getHomeSectionItems("Top rated", (card) => [toSimpleItem(card)]);
       case SECTIONS.LATEST:
-        return {
-          items: parseHomeCards($, "Latest releases").flatMap((card) => {
-            const item = toLatestItem(card);
-            return item ? [item] : [];
-          }),
-        };
+        return this.getHomeSectionItems("Latest releases", (card) => {
+          const item = toLatestItem(card);
+          return item ? [item] : [];
+        });
       case SECTIONS.BOOKMARKED:
-        return {
-          items: parseHomeCards($, "Most bookmarked").map((card) => toFeaturedItem(card, true)),
-        };
+        return this.getHomeSectionItems("Most bookmarked", (card) => [toFeaturedItem(card, true)]);
       case SECTIONS.HIDDEN_GEMS:
-        return { items: parseHomeCards($, "Hidden gems").map(toProminentItem) };
+        return this.getHomeSectionItems("Hidden gems", (card) => [toProminentItem(card)]);
       case SECTIONS.TALKED:
-        return { items: parseHomeCards($, "Most talked about").map(toSimpleItem) };
+        return this.getHomeSectionItems("Most talked about", (card) => [toSimpleItem(card)]);
       case SECTIONS.RISING:
-        return { items: parseHomeCards($, "Rising").map(toSimpleItem) };
+        return this.getHomeSectionItems("Rising", (card) => [toSimpleItem(card)]);
       default:
         return { items: [] };
     }
   }
 
-  private getHomePage(): Promise<CheerioAPI> {
-    return (this.homePromise ??= fetchHomePage());
+  // Every row comes from the one home page, shared by the sections loading together.
+  private async getHomeSectionItems(
+    heading: string,
+    toItems: (card: MangaCard) => DiscoverSectionItem[],
+  ): Promise<PagedResults<DiscoverSectionItem>> {
+    const $ = await (this.homePromise ??= fetchHomePage());
+    return { items: parseHomeCards($, heading).flatMap(toItems) };
   }
 
   private getGenres(): Promise<Tag[]> {
@@ -230,21 +230,16 @@ class YaoiMeExtension implements ExtensionImpl<typeof YaoiMeConfig> {
     }
   }
 
-  private getSeriesPage(mangaId: string): Promise<CheerioAPI> {
-    if (this.seriesPage?.mangaId === mangaId) return this.seriesPage.promise;
-    const promise = fetchSeriesPage(mangaId);
-    this.seriesPage = { mangaId, promise };
-    return promise;
-  }
-
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
-    return parseMangaDetails(await this.getSeriesPage(mangaId), mangaId);
+    return parseMangaDetails(await fetchSeriesPage(mangaId), mangaId);
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
-    const chapters = parseChapters(await this.getSeriesPage(sourceManga.mangaId), sourceManga);
-    if (!chapters.length) throw new Error(`No chapters found for ${sourceManga.mangaId}.`);
-    return chapters;
+    return parseChapters(
+      await fetchSeriesPage(sourceManga.mangaId),
+      sourceManga,
+      getPreferences().chapterLanguages,
+    );
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {

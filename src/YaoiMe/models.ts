@@ -260,19 +260,8 @@ export interface ChapterGroup {
   variants: ChapterVariant[];
 }
 
-// The page names sources by lowercase key; these are the spellings the site displays for them.
-export const SOURCE_NAMES: Record<string, string> = {
-  atsumaru: "Atsumaru",
-  comix: "Comix",
-  kaliscan: "KaliScan",
-  mangaball: "MangaBall",
-  mangago: "Mangago",
-  mangahome: "MangaHome",
-  mangak: "MangaK",
-  mangataro: "MangaTaro",
-  mangavyvy: "MangaVyvy",
-  yona: "Yona",
-};
+// The key the reader's page list is sealed with is SHA-256 of this seed followed by the blob's salt.
+export const PAGE_LIST_SEED = "04e858c4fcf16c2caf39f88027945aa5811eb29eabc97fa8f5e0b01315a65288";
 
 export interface MangaCard {
   mangaId: string;

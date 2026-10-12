@@ -20,7 +20,7 @@ import type { AnyNode } from "domhandler";
 
 import {
   DOMAIN,
-  SOURCE_NAMES,
+  PAGE_LIST_SEED,
   type ChapterGroup,
   type MangaCard,
   type SearchMetadata,
@@ -316,16 +316,32 @@ export const parseMangaDetails = ($: cheerio.CheerioAPI, mangaId: string): Sourc
   const primaryTitle = cleanText(titleElement.text());
   if (!primaryTitle) throw new Error(`No title found for ${mangaId}.`);
   const secondaryTitle = cleanText(titleElement.next("div").text());
-  const author = cleanText(header.find("a[href^='/author/']").first().text());
+  // The credits line reads "Story by A, B · Art by C"; both name lists link to /author/.
+  const credits = header.find("a[href^='/author/']").first().parent();
+  const [storyHtml = "", artHtml = ""] = (credits.html() ?? "").split(/Art by/i);
+  const creditNames = (html: string): string => {
+    const $credits = cheerio.load(html, null, false);
+    return $credits("a[href^='/author/']")
+      .toArray()
+      .map((element) => cleanText($credits(element).text()))
+      .filter(Boolean)
+      .join(", ");
+  };
+  const artist = creditNames(artHtml);
+  const author = creditNames(storyHtml) || artist;
   const headerText = cleanText(header.children("div").first().text());
   const status = headerText.match(/Ongoing|Completed|Hiatus|Cancelled/i)?.[0];
   const typeName = headerText.match(/Manga|Manhwa|Manhua|OEL|Novel|Other/i)?.[0];
   const ratingName = headerText.toLowerCase().match(/safe|suggestive|erotica|pornographic/)?.[0] as
     | MangaCard["contentRating"]
     | undefined;
+  // The score is out of 10, in the number beside its "score" label.
   const rating = Number.parseFloat(
-    cleanText($("[class*='score'], [title='Rating']").first().text()).match(/\d+(?:\.\d+)?/)?.[0] ??
-      "",
+    $("span.text-muted")
+      .filter((_, element) => cleanText($(element).text()) === "score")
+      .first()
+      .prev()
+      .text(),
   );
   // Genres and tags filter on separate browse parameters, so they stay in separate groups.
   const tagGroup = (id: string, title: string, prefix: string): TagSection => {
@@ -355,21 +371,26 @@ export const parseMangaDetails = ($: cheerio.CheerioAPI, mangaId: string): Sourc
       contentRating: toContentRating(ratingName ?? ratingFrom(header)),
       contentType: typeName?.toLowerCase() === "novel" ? "novel" : "comic",
       status,
-      artist: author || undefined,
+      artist: artist || author || undefined,
       author: author || undefined,
-      rating: Number.isFinite(rating) ? rating : undefined,
+      rating: Number.isFinite(rating) ? rating / 10 : undefined,
       tagGroups,
       shareUrl: `${DOMAIN}${mangaId}`,
     },
   };
 };
 
+const NUMBERED_LABEL =
+  /^(?:vol(?:ume)?\.?\s*\d+(?:\.\d+)?\s*)?(?:chapter|chap|ch|episode|ep)\.?\s*\d+(?:\.\d+)?/i;
+
+// "Vol.2 Ch.1.5" is only a number and "Ch.5: The Fall" carries a title, but "Ch.17.2-21" is a
+// range, so a separator followed by a digit keeps the whole label.
 const chapterTitle = (label: string): string | undefined => {
-  if (/^(?:chapter|chap|ch|episode|ep)\.?\s*-?\d+(?:\.\d+)?$/i.test(label)) return undefined;
-  const match = label.match(
-    /^(?:chapter|chap|ch|episode|ep)\.?\s*-?\d+(?:\.\d+)?\s*[-–—:]\s*(.+)$/i,
-  );
-  return cleanText(match?.[1] ?? label) || undefined;
+  const prefix = NUMBERED_LABEL.exec(label);
+  if (!prefix) return label || undefined;
+  const rest = label.slice(prefix[0].length).trim();
+  if (!rest) return undefined;
+  return /^[-–—:]\s*(\D.*)$/.exec(rest)?.[1] ?? label;
 };
 
 // The JSON value opening at start, read past brackets that sit inside strings.
@@ -406,8 +427,13 @@ const isChapterGroup = (value: unknown): value is ChapterGroup => {
 };
 
 // The HTML renders only the first rows; the full list, with every upload of each chapter, is the
-// chapter component's data in the page payload.
-export const parseChapters = ($: cheerio.CheerioAPI, sourceManga: SourceManga): Chapter[] => {
+// chapter component's data in the page payload. Its order is not by number, so chapters sort by
+// their number, as the site's own list does.
+export const parseChapters = (
+  $: cheerio.CheerioAPI,
+  sourceManga: SourceManga,
+  languages: string[],
+): Chapter[] => {
   const payload = flightData($);
   const groupsAt = payload.indexOf('"groups":[{');
   const groupsJson = groupsAt >= 0 ? sliceJson(payload, groupsAt + '"groups":'.length) : undefined;
@@ -426,9 +452,12 @@ export const parseChapters = ($: cheerio.CheerioAPI, sourceManga: SourceManga): 
     });
   }
 
-  return groups.flatMap((group, index) => {
+  return groups.flatMap((group) => {
     const variants = group.variants.filter(
-      (variant) => typeof variant?.id === "number" && typeof variant.s === "number",
+      (variant) =>
+        typeof variant?.id === "number" &&
+        typeof variant.s === "number" &&
+        languages.includes(variant.lang || "en"),
     );
     const uploadsPerSource = new Map<number, number>();
     for (const variant of variants) {
@@ -437,8 +466,8 @@ export const parseChapters = ($: cheerio.CheerioAPI, sourceManga: SourceManga): 
     const numbered = new Map<number, number>();
     const publishDate = group.createdAt ? new Date(group.createdAt) : undefined;
     return variants.map((variant): Chapter => {
-      const key = sources[variant.s];
-      const name = key ? (SOURCE_NAMES[key] ?? key.charAt(0).toUpperCase() + key.slice(1)) : "";
+      const key = sources[variant.s] ?? "";
+      const name = key.charAt(0).toUpperCase() + key.slice(1);
       const occurrence = (numbered.get(variant.s) ?? 0) + 1;
       numbered.set(variant.s, occurrence);
       // A source with several uploads of one chapter is numbered in the site's order, as it shows.
@@ -452,7 +481,7 @@ export const parseChapters = ($: cheerio.CheerioAPI, sourceManga: SourceManga): 
         title: chapterTitle(cleanText(group.label)),
         version: version || undefined,
         volume: 0,
-        sortingIndex: groups.length - index,
+        sortingIndex: group.num,
         publishDate: publishDate && !Number.isNaN(publishDate.getTime()) ? publishDate : undefined,
       };
     });
@@ -490,15 +519,9 @@ export const parseChapterDetails = async (
     const salt = data.subarray(0, 16);
     const iv = data.subarray(16, 28);
     const encrypted = data.subarray(28);
-    const mask = [
-      251, 68, 48, 74, 214, 173, 238, 166, 37, 228, 221, 68, 159, 198, 138, 8, 68, 65, 5, 4, 140,
-      228, 45, 105, 21, 139, 210, 15, 9, 184, 114, 163,
-    ];
-    const input = [
-      255, 172, 104, 142, 42, 92, 130, 138, 138, 221, 37, 196, 184, 82, 208, 173, 197, 95, 183, 154,
-      39, 45, 82, 193, 224, 107, 98, 28, 28, 30, 32, 43,
-    ];
-    const seed = Uint8Array.from(input, (value, index) => value ^ mask[index]);
+    const seed = Uint8Array.from(PAGE_LIST_SEED.match(/../g) ?? [], (byte) =>
+      Number.parseInt(byte, 16),
+    );
     const keyMaterial = new Uint8Array(seed.length + salt.length);
     keyMaterial.set(seed);
     keyMaterial.set(salt, seed.length);
@@ -525,7 +548,13 @@ export const parseChapterDetails = async (
     const pages = payload.match(/"pages":\[([\s\S]*?)\],"chapters"/)?.[1] ?? "";
     hashes = [...pages.matchAll(/"hash":"([^"]+)"/g)].map((match) => match[1]);
   }
-  if (!hashes.length) throw new Error(`No pages found for chapter ${chapterId}.`);
+  if (!hashes.length) {
+    throw new Error(
+      sealed
+        ? `The page list for chapter ${chapterId} is empty.`
+        : `The site sent no page list for chapter ${chapterId}.`,
+    );
+  }
   return {
     id: chapterId,
     mangaId,
