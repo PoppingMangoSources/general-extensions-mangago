@@ -24,6 +24,7 @@ import {
   type SeriesData,
   type TrendingEntry,
   type TrendingRange,
+  type RscTable,
   type TrendingResponse,
 } from "./models";
 
@@ -63,12 +64,33 @@ const sliceJson = (payload: string, start: number): string | undefined => {
 const decodeEscaped = (payload: string): string =>
   payload.replace(/\\"/g, '"').replace(/\\\\/g, "\\");
 
+// Renames every short key in a parsed value back to its logical name using the reverse of the
+// site's RSC table, so the rest of the parser never sees the rename.
+const remapRsc = (value: unknown, byShortKey: Record<string, string>): unknown => {
+  if (Array.isArray(value)) return value.map((item) => remapRsc(item, byShortKey));
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value)) {
+      out[byShortKey[key] ?? key] = remapRsc(item, byShortKey);
+    }
+    return out;
+  }
+  return value;
+};
+
+const reverseTable = (table: RscTable): Record<string, string> =>
+  Object.fromEntries(Object.entries(table).map(([logical, short]) => [short, logical]));
+
+// Finds the node opened by [logicalKey] (searched under its renamed short key), remaps it to
+// logical names, and returns it when it satisfies [matches]. [matches] always sees logical names.
 const scanByKey = <T>(
   payload: string,
-  key: string,
+  logicalKey: string,
+  table: RscTable,
   matches: (value: T) => boolean,
 ): T | undefined => {
-  const marker = `"${key}":`;
+  const byShortKey = reverseTable(table);
+  const marker = `"${table[logicalKey] ?? logicalKey}":`;
   let index = payload.indexOf(marker);
   while (index !== -1) {
     const start = index + marker.length;
@@ -76,7 +98,7 @@ const scanByKey = <T>(
       const raw = sliceJson(payload, start);
       if (raw !== undefined) {
         try {
-          const value = JSON.parse(raw) as T;
+          const value = remapRsc(JSON.parse(raw), byShortKey) as T;
           if (matches(value)) return value;
         } catch {
           // A key hit inside non-JSON markup; keep scanning.
@@ -92,13 +114,15 @@ const scanByKey = <T>(
 const extractByKey = <T>(
   payload: string,
   key: string,
+  table: RscTable,
   matches: (value: T) => boolean,
 ): T | undefined =>
-  scanByKey(payload, key, matches) ?? scanByKey(decodeEscaped(payload), key, matches);
+  scanByKey(payload, key, table, matches) ?? scanByKey(decodeEscaped(payload), key, table, matches);
 
 // The /comics stream carries the full directory as its largest array of
 // series entries.
-export const parseDirectory = (payload: string): BrowseSeries[] => {
+export const parseDirectory = (payload: string, table: RscTable): BrowseSeries[] | undefined => {
+  const byShortKey = reverseTable(table);
   let directory: BrowseSeries[] = [];
   for (const text of [payload, decodeEscaped(payload)]) {
     let index = text.indexOf("[{");
@@ -106,7 +130,7 @@ export const parseDirectory = (payload: string): BrowseSeries[] => {
       const raw = sliceJson(text, index);
       if (raw !== undefined && raw.length > 40) {
         try {
-          const value = JSON.parse(raw) as BrowseSeries[];
+          const value = remapRsc(JSON.parse(raw), byShortKey) as BrowseSeries[];
           if (
             Array.isArray(value) &&
             value.length > directory.length &&
@@ -124,10 +148,7 @@ export const parseDirectory = (payload: string): BrowseSeries[] => {
     }
     if (directory.length > 0) break;
   }
-  if (directory.length === 0) {
-    throw new Error("Temple Scan: no series directory found — the site layout may have changed");
-  }
-  return directory;
+  return directory.length > 0 ? directory : undefined;
 };
 
 // A long value (e.g. the description) is deduped into its own flight row and
@@ -150,15 +171,14 @@ const resolveFlightRef = (payload: string, ref: string): string | undefined => {
   return undefined;
 };
 
-export const parseSeriesData = (payload: string, mangaId: string): SeriesData => {
+export const parseSeriesData = (payload: string, table: RscTable): SeriesData | undefined => {
   const data = extractByKey<SeriesData>(
     payload,
     "seriesData",
-    (value) => !!value && typeof value === "object" && !!value.title,
+    table,
+    (value) => !!value && typeof value === "object" && !!value.title && Array.isArray(value.Season),
   );
-  if (!data) {
-    throw new Error(`Temple Scan: no details found for ${mangaId}`);
-  }
+  if (!data) return undefined;
   // A bare "$<row>" description is an unresolved flight reference; resolve it to
   // the real text, or blank it so the pointer never shows as the synopsis.
   if (typeof data.description === "string" && /^\$[0-9a-f]+$/i.test(data.description)) {
@@ -276,15 +296,18 @@ export const parseChapters = (
       publishDate: chapter.created_at ? new Date(chapter.created_at) : undefined,
     }));
 
-export const parseChapterPages = (payload: string, chapter: Chapter): ChapterDetails => {
-  const pages = extractByKey<string[]>(
-    payload,
-    "pages",
-    (value) => Array.isArray(value) && (value.length === 0 || typeof value[0] === "string"),
-  );
-  if (!pages || pages.length === 0) {
-    throw new Error(`Temple Scan: no pages found for chapter ${chapter.chapterId}`);
-  }
+export const parseChapterPages = (
+  payload: string,
+  chapter: Chapter,
+  table: RscTable,
+): ChapterDetails | undefined => {
+  const isImageList = (value: string[]): boolean =>
+    Array.isArray(value) && value.length > 0 && typeof value[0] === "string";
+  // The reader exposes the list under "images"; some older payloads used "pages".
+  const pages =
+    extractByKey<string[]>(payload, "images", table, isImageList) ??
+    extractByKey<string[]>(payload, "pages", table, isImageList);
+  if (!pages || pages.length === 0) return undefined;
   return {
     id: chapter.chapterId,
     mangaId: chapter.sourceManga.mangaId,
@@ -292,11 +315,12 @@ export const parseChapterPages = (payload: string, chapter: Chapter): ChapterDet
   };
 };
 
-export const parseHomeSections = (payload: string): HomeSections => ({
+export const parseHomeSections = (payload: string, table: RscTable): HomeSections => ({
   newSeries:
     extractByKey<HomeSeries[]>(
       payload,
       "data",
+      table,
       (value) =>
         Array.isArray(value) &&
         value.length > 0 &&
@@ -307,6 +331,7 @@ export const parseHomeSections = (payload: string): HomeSections => ({
     extractByKey<HomeSeries[]>(
       payload,
       "series",
+      table,
       (value) => Array.isArray(value) && value.length > 0 && Array.isArray(value[0]?.Chapter),
     ) ?? [],
 });
@@ -426,3 +451,33 @@ export const toTrendingItems = (entries: TrendingEntry[]): SearchResultItem[] =>
       contentRating: ContentRating.ADULT,
     };
   });
+
+// === RSC key-table support ===
+
+// The site's webpack chunk scripts, where its key-rename function lives.
+export const extractChunkUrls = (html: string): string[] => {
+  const urls = new Set<string>();
+  for (const match of html.matchAll(
+    /<script[^>]+src="([^"]*\/_next\/static\/chunks\/[^"]+\.js)"/g,
+  )) {
+    const url = match[1];
+    urls.add(url.startsWith("http") ? url : `${DOMAIN}${url.startsWith("/") ? "" : "/"}${url}`);
+  }
+  return [...urls];
+};
+
+// Every short key present in the payload; the decoder is probed with these.
+export const observedKeys = (payload: string): string[] => {
+  const keys = new Set<string>();
+  for (const text of [payload, decodeEscaped(payload)]) {
+    for (const match of text.matchAll(/"([A-Za-z0-9_$]{1,40})":/g)) keys.add(match[1]);
+  }
+  return [...keys];
+};
+
+// A short key the site has reassigned to another field must not keep its old logical name.
+export const mergeRscTable = (cached: RscTable, decoded: RscTable): RscTable => {
+  const reused = new Set(Object.values(decoded));
+  const kept = Object.entries(cached).filter(([, short]) => !reused.has(short));
+  return { ...Object.fromEntries(kept), ...decoded };
+};

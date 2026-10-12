@@ -4,11 +4,12 @@
 import {
   CloudflareError,
   PaperbackInterceptor,
+  type Cookie,
   type Request,
   type Response,
 } from "@paperback/types";
 
-import { API_URL, DOMAIN } from "./models";
+import { API_URL, DECODE_RSC_KEYS, DOMAIN, RSC_FIELDS, type RscTable } from "./models";
 
 export class TempleScanInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
@@ -86,3 +87,38 @@ const fetchApi = async (path: string): Promise<string> => {
 export const fetchFeatured = (): Promise<string> => fetchApi("/banners");
 
 export const fetchTrending = (): Promise<string> => fetchApi("/topSeries");
+
+// The rendered HTML (not the flight stream) carries the <script src> chunk list needed to find the
+// site's key decoder.
+export const fetchHtml = async (url: string): Promise<string> => {
+  const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
+  assertOk(url, response.status);
+  return Application.arrayBufferToUTF8String(buffer);
+};
+
+// Runs the site's own key-rename function in a WebView to recover the {logical: short} table.
+// A blank page on the site's origin lets same-origin chunk fetches carry the clearance cookie.
+export const decodeRscTable = async (
+  chunks: string[],
+  keys: string[],
+  cookies: Cookie[],
+): Promise<RscTable | null> => {
+  const userAgent = await Application.getDefaultUserAgent();
+  const inject =
+    `return (${DECODE_RSC_KEYS})(` +
+    `${JSON.stringify(chunks)}, ${JSON.stringify(keys)}, ${JSON.stringify(RSC_FIELDS)});`;
+  const { result } = await Application.executeInWebView({
+    source: {
+      html: "<!doctype html><html><head></head><body></body></html>",
+      baseUrl: `${DOMAIN}/`,
+      loadCSS: false,
+      loadImages: false,
+      userAgent,
+    },
+    inject,
+    storage: { cookies },
+  });
+  return result && typeof result === "object" && !Array.isArray(result)
+    ? (result as RscTable)
+    : null;
+};

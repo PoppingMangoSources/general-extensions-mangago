@@ -23,25 +23,33 @@ import {
 import { getShowPaidChapters, TempleScanAdvancedSearchForm, TempleScanSettingsForm } from "./forms";
 import {
   DISCOVER_SECTIONS,
+  DOMAIN,
   PAGE_SIZE,
   PAID_CHAPTER_SUFFIX,
+  RSC_KEYS_STATE,
   SECTIONS,
   SORTING_OPTIONS,
   type BrowseSeries,
   type HomeSections,
   type PageMetadata,
+  type RscTable,
   type SearchMetadata,
 } from "./models";
 import {
+  decodeRscTable,
   fetchChapterPage,
   fetchDirectory,
   fetchFeatured,
+  fetchHtml,
   fetchHomePage,
   fetchSeriesPage,
   fetchTrending,
   TempleScanInterceptor,
 } from "./network";
 import {
+  extractChunkUrls,
+  mergeRscTable,
+  observedKeys,
   parseChapterPages,
   parseChapters,
   parseDirectory,
@@ -77,6 +85,7 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
   private directoryPromise?: Promise<BrowseSeries[]>;
   private featuredPromise?: Promise<DiscoverSectionItem[]>;
   private homePromise?: Promise<HomeSections>;
+  private rscRefreshPromise?: Promise<RscTable | undefined>;
 
   async initialise(): Promise<void> {
     this.mainRateLimiter.registerInterceptor();
@@ -108,12 +117,20 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
-    const data = parseSeriesData(await fetchSeriesPage(mangaId), mangaId);
+    const payload = await fetchSeriesPage(mangaId);
+    const data = await this.withRscTable(`${DOMAIN}/comic/${mangaId}`, payload, (table) =>
+      parseSeriesData(payload, table),
+    );
     return toSourceManga(data, mangaId);
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
-    const data = parseSeriesData(await fetchSeriesPage(sourceManga.mangaId), sourceManga.mangaId);
+    const payload = await fetchSeriesPage(sourceManga.mangaId);
+    const data = await this.withRscTable(
+      `${DOMAIN}/comic/${sourceManga.mangaId}`,
+      payload,
+      (table) => parseSeriesData(payload, table),
+    );
     return parseChapters(data, sourceManga, getShowPaidChapters());
   }
 
@@ -122,7 +139,8 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
       throw new Error("This chapter is paid. Unlock it on the website before reading.");
     }
     const payload = await fetchChapterPage(chapter.sourceManga.mangaId, chapter.chapterId);
-    return parseChapterPages(payload, chapter);
+    const url = `${DOMAIN}/comic/${chapter.sourceManga.mangaId}/${chapter.chapterId}`;
+    return this.withRscTable(url, payload, (table) => parseChapterPages(payload, chapter, table));
   }
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
@@ -204,7 +222,9 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
 
   private getDirectory(): Promise<BrowseSeries[]> {
     this.directoryPromise ??= fetchDirectory()
-      .then(parseDirectory)
+      .then((payload) =>
+        this.withRscTable(`${DOMAIN}/comics`, payload, (table) => parseDirectory(payload, table)),
+      )
       .catch((error: unknown) => {
         this.directoryPromise = undefined;
         throw error;
@@ -223,11 +243,66 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
     return this.featuredPromise;
   }
 
+  // The site renames its RSC payload field keys; the table maps each logical name to the current
+  // short key and is kept in state across sessions.
+  private rscTable(): RscTable {
+    return (Application.getState(RSC_KEYS_STATE) as RscTable | undefined) ?? {};
+  }
+
+  // Reads [payload] with the cached key table. When it does not fit — the site has renamed keys we
+  // do not know — the table is rebuilt once from the site's bundle and the read is retried.
+  private async withRscTable<T>(
+    pageUrl: string,
+    payload: string,
+    parse: (table: RscTable) => T | undefined,
+  ): Promise<T> {
+    const cached = this.rscTable();
+    const first = parse(cached);
+    if (first !== undefined) return first;
+
+    const refreshed = await this.refreshRscTable(pageUrl, payload, cached);
+    const retry = refreshed === undefined ? undefined : parse(refreshed);
+    if (retry === undefined) {
+      throw new Error(
+        `Temple Scan: could not read the page data for ${pageUrl} — the site layout may have changed`,
+      );
+    }
+    return retry;
+  }
+
+  private refreshRscTable(
+    pageUrl: string,
+    payload: string,
+    cached: RscTable,
+  ): Promise<RscTable | undefined> {
+    // One rebuild serves every read waiting on it within a burst.
+    this.rscRefreshPromise ??= this.rebuildRscTable(pageUrl, payload, cached).finally(() => {
+      this.rscRefreshPromise = undefined;
+    });
+    return this.rscRefreshPromise;
+  }
+
+  private async rebuildRscTable(
+    pageUrl: string,
+    payload: string,
+    cached: RscTable,
+  ): Promise<RscTable | undefined> {
+    const chunks = extractChunkUrls(await fetchHtml(pageUrl));
+    if (chunks.length === 0) return undefined;
+    const keys = [...new Set([...observedKeys(payload), ...Object.values(cached)])];
+    const cookies = this.cookieStorageInterceptor.cookiesForUrl(`${DOMAIN}/`);
+    const decoded = await decodeRscTable(chunks, keys, cookies);
+    if (!decoded || Object.keys(decoded).length === 0) return undefined;
+    const merged = mergeRscTable(cached, decoded);
+    Application.setState(merged, RSC_KEYS_STATE);
+    return merged;
+  }
+
   // New Series and Latest Updates share the homepage; dedupe the fetch
   // within a refresh burst while reloading fresh data on the next refresh.
   private getHomeSections(): Promise<HomeSections> {
     this.homePromise ??= fetchHomePage()
-      .then(parseHomeSections)
+      .then((payload) => parseHomeSections(payload, this.rscTable()))
       .finally(() => {
         this.homePromise = undefined;
       });
