@@ -31,6 +31,7 @@ import {
   getVisibleSections,
 } from "./forms";
 import {
+  DOMAIN,
   SECTION_DEFINITIONS,
   SECTIONS,
   SORT_OPTIONS,
@@ -85,15 +86,11 @@ class YaoiMeExtension implements ExtensionImpl<typeof YaoiMeConfig> {
     cookies: Cookie[],
     _localStorage: Record<string, string>,
   ): Promise<void> {
+    // The reader's human check is passed in the site's own session, so every cookie is kept, not
+    // only the Cloudflare clearance.
     for (const cookie of cookies) {
       if (cookie.expires && cookie.expires.getTime() <= Date.now()) continue;
-      if (
-        cookie.name.startsWith("cf") ||
-        cookie.name.startsWith("_cf") ||
-        cookie.name.startsWith("__cf")
-      ) {
-        this.cookieStorageInterceptor.setCookie(cookie);
-      }
+      this.cookieStorageInterceptor.setCookie(cookie);
     }
     this.clearMemos();
   }
@@ -243,11 +240,19 @@ class YaoiMeExtension implements ExtensionImpl<typeof YaoiMeConfig> {
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    return parseChapterDetails(
+    const details = await parseChapterDetails(
       await fetchChapterPage(chapter.chapterId),
       chapter.chapterId,
       chapter.sourceManga.mangaId,
     );
+    if (details) return details;
+    // The site leaves the page list out until the reader's human check has been passed, which only
+    // happens in a browser, so the chapter is opened there.
+    throw new CloudflareError({
+      url: `${DOMAIN}${chapter.chapterId}`,
+      method: "GET",
+      headers: { "user-agent": await Application.getDefaultUserAgent() },
+    });
   }
 }
 

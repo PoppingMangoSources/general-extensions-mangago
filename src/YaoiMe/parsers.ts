@@ -508,7 +508,7 @@ export const parseChapterDetails = async (
   html: string,
   chapterId: string,
   mangaId: string,
-): Promise<ChapterDetails> => {
+): Promise<ChapterDetails | undefined> => {
   const $ = cheerio.load(html);
   const payload = flightData($);
   const sealedId = payload.match(/"sealed":"\$([0-9a-f]+)"/i)?.[1];
@@ -549,11 +549,8 @@ export const parseChapterDetails = async (
     hashes = [...pages.matchAll(/"hash":"([^"]+)"/g)].map((match) => match[1]);
   }
   if (!hashes.length) {
-    throw new Error(
-      sealed
-        ? `The page list for chapter ${chapterId} is empty.`
-        : `The site sent no page list for chapter ${chapterId}.`,
-    );
+    if (sealed) throw new Error(`The page list for chapter ${chapterId} is empty.`);
+    return undefined;
   }
   return {
     id: chapterId,
