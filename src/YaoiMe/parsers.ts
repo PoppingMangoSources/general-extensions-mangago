@@ -4,7 +4,6 @@
 import {
   ContentRating,
   type Chapter,
-  type ChapterDetails,
   type ChapterUpdatesCarouselItem,
   type FeaturedCarouselItem,
   type GenresCarouselItem,
@@ -18,13 +17,7 @@ import {
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
-import {
-  DOMAIN,
-  PAGE_LIST_SEED,
-  type ChapterGroup,
-  type MangaCard,
-  type SearchMetadata,
-} from "./models";
+import { DOMAIN, type ChapterGroup, type MangaCard, type SearchMetadata } from "./models";
 
 const SAFE_ID = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
 const SERIES_PATH = /^\/series\/\d+\/[a-zA-Z0-9._~-]+$/;
@@ -497,64 +490,84 @@ const base64Bytes = (value: string): Uint8Array => {
   return new Uint8Array(decoded);
 };
 
-const sealedValue = (payload: string, id: string): string | undefined => {
-  const header = new RegExp(`(?:^|\\n)${id}:T([0-9a-f]+),`, "i").exec(payload);
-  if (!header || header.index == null) return undefined;
+// A sealed page list is either inline or a text row ("<id>:T<hex length>,<data>") it points at.
+const sealedValue = (payload: string): string | undefined => {
+  const value = payload.match(/"sealed":"([^"]+)"/)?.[1];
+  if (!value?.startsWith("$")) return value;
+  const header = new RegExp(`(?:^|\\n)${value.slice(1)}:T([0-9a-f]+),`, "i").exec(payload);
+  if (!header) return undefined;
   const start = header.index + header[0].length;
   return payload.slice(start, start + Number.parseInt(header[1], 16));
 };
 
-export const parseChapterDetails = async (
-  html: string,
-  chapterId: string,
-  mangaId: string,
-): Promise<ChapterDetails | undefined> => {
+export interface ReaderPage {
+  hashes: string[];
+  sealed?: string;
+  build?: string;
+  scripts: string[];
+}
+
+// The page list is sealed in most chapters; its key ships in one of the page's scripts and changes
+// with every deploy of the site, so the build id and script list come along to find it.
+export const parseReaderPage = (html: string): ReaderPage => {
   const $ = cheerio.load(html);
   const payload = flightData($);
-  const sealedId = payload.match(/"sealed":"\$([0-9a-f]+)"/i)?.[1];
-  const sealed = sealedId ? sealedValue(payload, sealedId) : undefined;
-  let hashes: string[] = [];
-  if (sealed) {
-    const data = base64Bytes(sealed);
-    const salt = data.subarray(0, 16);
-    const iv = data.subarray(16, 28);
-    const encrypted = data.subarray(28);
-    const seed = Uint8Array.from(PAGE_LIST_SEED.match(/../g) ?? [], (byte) =>
-      Number.parseInt(byte, 16),
-    );
-    const keyMaterial = new Uint8Array(seed.length + salt.length);
-    keyMaterial.set(seed);
-    keyMaterial.set(salt, seed.length);
-    const digest = await crypto.subtle.digest("SHA-256", keyMaterial);
-    const key = await crypto.subtle.importKey("raw", digest, "AES-GCM", false, ["decrypt"]);
-    let decrypted: ArrayBuffer;
-    try {
-      decrypted = await crypto.subtle.decrypt(
-        { name: "AES-GCM", iv: new Uint8Array(iv).buffer },
-        key,
-        new Uint8Array(encrypted).buffer,
-      );
-    } catch (error) {
-      throw new Error(`Could not decrypt the page list for chapter ${chapterId}.`, {
-        cause: error,
-      });
-    }
-    const manifest = JSON.parse(Application.arrayBufferToUTF8String(decrypted)) as { p?: unknown };
-    if (Array.isArray(manifest.p)) {
-      hashes = manifest.p.filter((hash): hash is string => typeof hash === "string" && !!hash);
-    }
+  const pages = payload.match(/"pages":\[([\s\S]*?)\],"chapters"/)?.[1] ?? "";
+  // The page's components list their own scripts, where the reader's key lives, before the
+  // framework scripts tagged in the head.
+  const scripts = new Set<string>();
+  for (const match of payload.matchAll(/\/_next\/static\/chunks\/[\w.-]+\.js/g)) {
+    scripts.add(match[0]);
   }
-  if (!hashes.length) {
-    const pages = payload.match(/"pages":\[([\s\S]*?)\],"chapters"/)?.[1] ?? "";
-    hashes = [...pages.matchAll(/"hash":"([^"]+)"/g)].map((match) => match[1]);
-  }
-  if (!hashes.length) {
-    if (sealed) throw new Error(`The page list for chapter ${chapterId} is empty.`);
-    return undefined;
-  }
+  $("script[src^='/_next/static/chunks/']").each((_, element) => {
+    scripts.add($(element).attr("src") ?? "");
+  });
   return {
-    id: chapterId,
-    mangaId,
-    pages: hashes.map((hash) => `${DOMAIN}/i/p/${hash}`),
+    hashes: [...pages.matchAll(/"hash":"([^"]+)"/g)].map((match) => match[1]),
+    sealed: sealedValue(payload),
+    build: payload.match(/"b":"([^"]+)"/)?.[1],
+    scripts: [...scripts].filter(Boolean).map((path) => `${DOMAIN}${path}`),
   };
 };
+
+const BYTE_LIST = "(\\d{1,3}(?:,\\d{1,3}){31})";
+
+// The script exports sealKey as a 32-byte list XORed with a mask declared in the same module.
+export const parseSealKey = (script: string): string | undefined => {
+  const at = script.indexOf('"sealKey"');
+  if (at < 0) return undefined;
+  const module = script.slice(script.lastIndexOf('"use strict"', at), at + 400);
+  const bytes = (list: string) => list.split(",").map(Number);
+  const keyList = new RegExp(`"sealKey",0,\\(\\)=>\\w*\\(?\\[${BYTE_LIST}\\]`).exec(module)?.[1];
+  if (!keyList) return undefined;
+  const maskName = /=>\w+\^(\w+)\[\w+\]/.exec(module)?.[1];
+  const maskList = maskName
+    ? new RegExp(`\\b${maskName}=\\[${BYTE_LIST}\\]`).exec(module)?.[1]
+    : undefined;
+  const mask = maskList ? bytes(maskList) : [];
+  return bytes(keyList)
+    .map((byte, index) => (byte ^ (mask[index] ?? 0)).toString(16).padStart(2, "0"))
+    .join("");
+};
+
+export const decryptPageList = async (sealed: string, keyHex: string): Promise<string[]> => {
+  const data = base64Bytes(sealed);
+  const seed = Uint8Array.from(keyHex.match(/../g) ?? [], (byte) => Number.parseInt(byte, 16));
+  const keyMaterial = new Uint8Array(seed.length + 16);
+  keyMaterial.set(seed);
+  keyMaterial.set(data.subarray(0, 16), seed.length);
+  const digest = await crypto.subtle.digest("SHA-256", keyMaterial);
+  const key = await crypto.subtle.importKey("raw", digest, "AES-GCM", false, ["decrypt"]);
+  const decrypted = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: new Uint8Array(data.subarray(16, 28)).buffer },
+    key,
+    new Uint8Array(data.subarray(28)).buffer,
+  );
+  const manifest = JSON.parse(Application.arrayBufferToUTF8String(decrypted)) as { p?: unknown };
+  return Array.isArray(manifest.p)
+    ? manifest.p.filter((hash): hash is string => typeof hash === "string" && !!hash)
+    : [];
+};
+
+export const toPageUrls = (hashes: string[]): string[] =>
+  hashes.map((hash) => `${DOMAIN}/i/p/${hash}`);

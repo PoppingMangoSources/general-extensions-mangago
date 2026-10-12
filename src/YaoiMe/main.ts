@@ -35,8 +35,10 @@ import {
   SECTION_DEFINITIONS,
   SECTIONS,
   SORT_OPTIONS,
+  STATE_KEYS,
   type MangaCard,
   type PageMetadata,
+  type SealKey,
   type SearchMetadata,
 } from "./models";
 import {
@@ -45,22 +47,27 @@ import {
   fetchChapterPage,
   fetchHomePage,
   fetchSeriesPage,
+  fetchText,
 } from "./network";
 import {
   hasNextPage,
   parseBrowseCards,
-  parseChapterDetails,
+  decryptPageList,
   parseChapters,
   parseGenres,
   parseHomeCards,
   parseMangaDetails,
   parseMangaId,
+  parseReaderPage,
+  parseSealKey,
   toFeaturedItem,
   toGenreItem,
   toLatestItem,
   toProminentItem,
   toSearchResult,
+  toPageUrls,
   toSimpleItem,
+  type ReaderPage,
 } from "./parsers";
 import type YaoiMeConfig from "./pbconfig";
 
@@ -74,6 +81,7 @@ class YaoiMeExtension implements ExtensionImpl<typeof YaoiMeConfig> {
   private interceptor = new YaoiMeInterceptor("main", getPreferences, getSectionOrder);
   private homePromise?: Promise<CheerioAPI>;
   private genresPromise?: Promise<Tag[]>;
+  private sealKeyPromise?: Promise<string>;
 
   async initialise(): Promise<void> {
     this.rateLimiter.registerInterceptor();
@@ -240,12 +248,33 @@ class YaoiMeExtension implements ExtensionImpl<typeof YaoiMeConfig> {
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    const details = await parseChapterDetails(
-      await fetchChapterPage(chapter.chapterId),
-      chapter.chapterId,
-      chapter.sourceManga.mangaId,
-    );
-    if (details) return details;
+    const reader = parseReaderPage(await fetchChapterPage(chapter.chapterId));
+    let hashes = reader.hashes.filter(Boolean);
+    if (reader.sealed) {
+      try {
+        hashes = await decryptPageList(reader.sealed, await this.getSealKey(reader));
+      } catch (error) {
+        if (error instanceof CloudflareError) throw error;
+        // A kept key can predate a deploy that reused the build id, so the scripts are read again.
+        try {
+          hashes = await decryptPageList(reader.sealed, await this.getSealKey(reader, true));
+        } catch (retryError) {
+          if (retryError instanceof CloudflareError) throw retryError;
+          throw new Error(`Could not decrypt the page list for chapter ${chapter.chapterId}.`, {
+            cause: retryError,
+          });
+        }
+      }
+      if (!hashes.length)
+        throw new Error(`The page list for chapter ${chapter.chapterId} is empty.`);
+    }
+    if (hashes.length) {
+      return {
+        id: chapter.chapterId,
+        mangaId: chapter.sourceManga.mangaId,
+        pages: toPageUrls(hashes),
+      };
+    }
     // The site leaves the page list out until the reader's human check has been passed, which only
     // happens in a browser, so the chapter is opened there.
     throw new CloudflareError({
@@ -254,6 +283,26 @@ class YaoiMeExtension implements ExtensionImpl<typeof YaoiMeConfig> {
       headers: { "user-agent": await Application.getDefaultUserAgent() },
     });
   }
+
+  // The key is kept per build so it is read from the site's scripts once per deploy, not per chapter.
+  private async getSealKey(reader: ReaderPage, refresh = false): Promise<string> {
+    const stored = Application.getState(STATE_KEYS.SEAL_KEY) as SealKey | undefined;
+    if (!refresh && reader.build && stored?.build === reader.build) return stored.key;
+    const key = await (this.sealKeyPromise ??= findSealKey(reader.scripts).finally(() => {
+      this.sealKeyPromise = undefined;
+    }));
+    if (reader.build)
+      Application.setState({ build: reader.build, key } satisfies SealKey, STATE_KEYS.SEAL_KEY);
+    return key;
+  }
 }
+
+const findSealKey = async (scripts: string[]): Promise<string> => {
+  for (const url of scripts) {
+    const key = parseSealKey(await fetchText(url));
+    if (key) return key;
+  }
+  throw new Error("The site's reader script no longer carries a page-list key.");
+};
 
 export const YaoiMe = new YaoiMeExtension();

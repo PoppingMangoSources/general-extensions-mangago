@@ -17,6 +17,7 @@ export const STATE_KEYS = {
   CONTENT_TYPES: "yaoime_content_types",
   HIDDEN_TAGS: "yaoime_hidden_tags",
   OFFICIAL_ONLY: "yaoime_official_only",
+  SEAL_KEY: "yaoime_seal_key",
   SECTION_ORDER: "yaoime_section_order",
   VISIBLE_SECTIONS: "yaoime_visible_sections",
 } as const;
@@ -260,9 +261,6 @@ export interface ChapterGroup {
   variants: ChapterVariant[];
 }
 
-// The key the reader's page list is sealed with is SHA-256 of this seed followed by the blob's salt.
-export const PAGE_LIST_SEED = "04e858c4fcf16c2caf39f88027945aa5811eb29eabc97fa8f5e0b01315a65288";
-
 export interface MangaCard {
   mangaId: string;
   title: string;
@@ -274,4 +272,10 @@ export interface MangaCard {
   chapterId?: string;
   publishDate?: Date;
   contentRating: "safe" | "suggestive" | "erotica" | "pornographic";
+}
+
+// The page-list key read from the site's script, kept until the site deploys a new build.
+export interface SealKey {
+  build: string;
+  key: string;
 }

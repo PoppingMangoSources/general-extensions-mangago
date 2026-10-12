@@ -94,7 +94,7 @@ export class YaoiMeInterceptor extends PaperbackInterceptor {
   }
 }
 
-const fetchText = async (url: string): Promise<string> => {
+export const fetchText = async (url: string): Promise<string> => {
   const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
   if (response.status === 404) throw new Error(`Content not found: ${url}`);
   if (response.status < 200 || response.status >= 300) {
