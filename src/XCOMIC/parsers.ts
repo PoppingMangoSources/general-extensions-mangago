@@ -219,6 +219,24 @@ const displayTitle = (comic: ComicData): string => {
   return edition && !name.includes(edition) ? `${name} (${edition})` : name;
 };
 
+// The API reports "releasing" for an ongoing work; map the known states to their display names.
+const STATUS_LABELS: Record<string, string> = {
+  releasing: "Ongoing",
+  ongoing: "Ongoing",
+  completed: "Completed",
+  hiatus: "Hiatus",
+  cancelled: "Cancelled",
+  canceled: "Cancelled",
+  upcoming: "Upcoming",
+  pending: "Upcoming",
+};
+
+const statusLabel = (value?: string | null): string => {
+  const key = value?.trim().toLowerCase();
+  if (!key) return "Unknown";
+  return STATUS_LABELS[key] ?? titleCase(key);
+};
+
 const baseCard = (node: ComicNode) => {
   return {
     mangaId: sanitizeId(node.data.id),
@@ -262,9 +280,24 @@ const toTitleSource = (node: ComicNode, source: ComicNode): ComicNode => ({
   },
 });
 
+// Two editions of one work can carry the same team name; the comic id tells them apart so their
+// library entries and chapter versions do not collide.
+const disambiguateEditions = (sources: ComicNode[]): ComicNode[] => {
+  const counts = new Map<string, number>();
+  for (const source of sources) {
+    const label = editionLabel(source.data)?.toLowerCase();
+    if (label) counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  return sources.map((source) => {
+    const label = editionLabel(source.data);
+    if (!label || (counts.get(label.toLowerCase()) ?? 0) < 2) return source;
+    return { ...source, data: { ...source.data, subName: `${label} [${source.data.id}]` } };
+  });
+};
+
 // Preferred language first, then whichever edition carries the most chapters.
-export const toTitleSources = (node: ComicNode, preferredLanguages: string[]): ComicNode[] =>
-  (node.comicNodes ?? [])
+export const toTitleSources = (node: ComicNode, preferredLanguages: string[]): ComicNode[] => {
+  const sources = (node.comicNodes ?? [])
     .filter((source): source is ComicNode => Boolean(source?.data.id))
     // An edition that states no language is no reason to hide the work.
     .filter(
@@ -284,6 +317,8 @@ export const toTitleSources = (node: ComicNode, preferredLanguages: string[]): C
       );
     })
     .map((source) => toTitleSource(node, source));
+  return disambiguateEditions(sources);
+};
 
 export const toPreferredTitleSource = (
   node: ComicNode,
@@ -478,7 +513,7 @@ export const toSourceManga = (node: ComicNode, mangaId = sanitizeId(node.data.id
       artist: distinctArtists.join(", ") || undefined,
       contentRating: toContentRating(comic),
       rating,
-      status: titleCase(comic.originalStatus || comic.uploadStatus || "unknown"),
+      status: statusLabel(comic.originalStatus || comic.uploadStatus),
       tagGroups,
       artworkUrls: cover ? [cover] : undefined,
       additionalInfo: {
