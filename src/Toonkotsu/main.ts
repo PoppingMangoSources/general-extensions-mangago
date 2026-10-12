@@ -36,6 +36,7 @@ import {
   DOMAIN,
   PAGE_SIZE,
   READER_BUILD,
+  READER_SECRET,
   SECTION_DEFINITIONS,
   SECTIONS,
   SORT_OPTIONS,
@@ -57,6 +58,7 @@ import {
   fetchFacets,
   fetchLatest,
   fetchReadingRanking,
+  fetchReaderPage,
   fetchSeries,
   requestChapter,
   requestReaderKey,
@@ -77,7 +79,7 @@ import {
   toSearchResults,
 } from "./parsers";
 import type ToonkotsuConfig from "./pbconfig";
-import { deriveReaderKey, signReaderPath, type ReaderKey } from "./utils";
+import { captureReaderSecret, deriveReaderKey, signReaderPath, type ReaderKey } from "./utils";
 
 type SectionData =
   | { kind: "series"; items: Series[]; hasNext: boolean }
@@ -98,7 +100,10 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
   private cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
   private interceptor = new ToonkotsuInterceptor("main");
   private facetsPromise?: Promise<FacetsResponse>;
-  private readerKeyPromise?: Promise<{ readerKey: ReaderKey; build: string }>;
+  private readerKeyPromise?: Promise<{ readerKey: ReaderKey; response: ReaderKeyResponse }>;
+  private readerSecretPromise?: Promise<string>;
+  private readerSecret = READER_SECRET;
+  private readerBuild = READER_BUILD;
 
   async initialise(): Promise<void> {
     this.rateLimiter.registerInterceptor();
@@ -119,6 +124,7 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
     }
     this.facetsPromise = undefined;
     this.readerKeyPromise = undefined;
+    this.readerSecretPromise = undefined;
   }
 
   private getFacets(): Promise<FacetsResponse> {
@@ -359,14 +365,16 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
     );
   }
 
-  private getReaderKey(chapterId: string): Promise<{ readerKey: ReaderKey; build: string }> {
+  private getReaderKey(
+    chapterId: string,
+  ): Promise<{ readerKey: ReaderKey; response: ReaderKeyResponse }> {
     return (this.readerKeyPromise ??= requestReaderKey()
       .then(async ({ status, data }) => {
         if (status < 200 || status >= 300) {
           throw await readerError(status, data as ReaderLimit | undefined, chapterId);
         }
         const response = data as ReaderKeyResponse;
-        return { readerKey: await deriveReaderKey(response), build: response.build };
+        return { readerKey: await deriveReaderKey(response, this.readerSecret), response };
       })
       .catch((error: unknown) => {
         this.readerKeyPromise = undefined;
@@ -376,23 +384,63 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
     const path = `/api/manga/chapter/${chapter.chapterId}`;
-    for (let attempt = 0; ; attempt++) {
-      const { readerKey, build } = await this.getReaderKey(chapter.chapterId);
-      const { status, data } = await requestChapter(path, await signReaderPath(readerKey, path));
-      if (status >= 200 && status < 300) {
-        return {
-          id: chapter.chapterId,
-          mangaId: chapter.sourceManga.mangaId,
-          pages: await parseChapterPages(data as ChapterResponse, readerKey),
-        };
+    let recovered:
+      | { readerKey: ReaderKey; response: ReaderKeyResponse; secret: string }
+      | undefined;
+    try {
+      for (let attempt = 0; ; attempt++) {
+        const { readerKey, response } = recovered ?? (await this.getReaderKey(chapter.chapterId));
+        const { status, data } = await requestChapter(path, await signReaderPath(readerKey, path));
+        if (status >= 200 && status < 300) {
+          const pages = await parseChapterPages(data as ChapterResponse, readerKey);
+          if (recovered) {
+            this.readerSecret = recovered.secret;
+            this.readerSecretPromise = undefined;
+            this.readerKeyPromise = Promise.resolve({ readerKey, response });
+          }
+          this.readerBuild = response.build;
+          return { id: chapter.chapterId, mangaId: chapter.sourceManga.mangaId, pages };
+        }
+        const limit = (status === 429 ? data : undefined) as ReaderLimit | undefined;
+        const signingRejected = status === 401 || status === 403 || limit?.resign === true;
+        // Refresh an expired key first; only rediscover after a persistent signing/build failure.
+        if (attempt === 0 && signingRejected) {
+          this.readerKeyPromise = undefined;
+          continue;
+        }
+        if (
+          attempt === 1 &&
+          signingRejected &&
+          (limit?.resign || response.build !== this.readerBuild)
+        ) {
+          const url = `${DOMAIN}/chapter/${chapter.chapterId}`;
+          const secret = await (this.readerSecretPromise ??= fetchReaderPage(
+            chapter.chapterId,
+          ).then((html) =>
+            captureReaderSecret(
+              html,
+              url,
+              response,
+              this.cookieStorageInterceptor.cookiesForUrl(url),
+            ),
+          ));
+          recovered = {
+            secret,
+            response,
+            readerKey: { ...(await deriveReaderKey(response, secret)), offset: readerKey.offset },
+          };
+          continue;
+        }
+        throw await readerError(
+          status,
+          limit,
+          chapter.chapterId,
+          response.build !== this.readerBuild,
+        );
       }
-      const limit = (status === 429 ? data : undefined) as ReaderLimit | undefined;
-      // An expired or rotated reading key is refreshed once before giving up.
-      if (attempt === 0 && (status === 401 || status === 403 || limit?.resign)) {
-        this.readerKeyPromise = undefined;
-        continue;
-      }
-      throw await readerError(status, limit, chapter.chapterId, build);
+    } catch (error) {
+      this.readerSecretPromise = undefined;
+      throw error;
     }
   }
 }
@@ -403,7 +451,7 @@ const readerError = async (
   status: number,
   limit: ReaderLimit | undefined,
   chapterId: string,
-  build = READER_BUILD,
+  readerChanged = false,
 ): Promise<Error> => {
   if (limit?.code === "manga-limit" && (limit.transient || limit.reason === "wait")) {
     return new Error(
@@ -417,10 +465,9 @@ const readerError = async (
       headers: { "user-agent": await Application.getDefaultUserAgent() },
     });
   }
-  const reason =
-    build === READER_BUILD
-      ? ""
-      : " The site's reader has been updated, so this source needs an update too.";
+  const reason = readerChanged
+    ? " The site's reader has been updated, so this source needs an update too."
+    : "";
   return new Error(
     `Could not load chapter ${chapterId} (status ${status}${limit?.error ? `: ${limit.error}` : ""}).${reason}`,
   );

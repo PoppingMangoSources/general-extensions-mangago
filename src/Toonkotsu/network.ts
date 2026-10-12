@@ -157,5 +157,13 @@ export const fetchSeries = (mangaId: string): Promise<SeriesResponse> =>
 // the status alongside the body.
 export const requestReaderKey = () => requestJson(`${DOMAIN}/api/manga/key`);
 
+export const fetchReaderPage = async (chapterId: string): Promise<string> => {
+  const url = `${DOMAIN}/chapter/${chapterId}`;
+  const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
+  if (response.status < 200 || response.status >= 300)
+    throw new Error(`Could not fetch the reader configuration (status ${response.status}).`);
+  return Application.arrayBufferToUTF8String(buffer);
+};
+
 export const requestChapter = (path: string, signature: string) =>
   requestJson(`${DOMAIN}${path}`, { headers: { "x-sig": signature } });

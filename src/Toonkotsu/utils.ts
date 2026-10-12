@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
+import type { Cookie } from "@paperback/types";
+
 import { READER_SECRET, type ReaderKeyResponse, type ReaderPage } from "./models";
 
 const BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
@@ -47,10 +49,11 @@ export interface ReaderKey {
 
 // The served key is masked with a digest of the reader secret; unmasked it is the HMAC key that
 // signs chapter requests and unwraps page keys.
-export const deriveReaderKey = async (response: ReaderKeyResponse): Promise<ReaderKey> => {
-  const mask = new Uint8Array(
-    await crypto.subtle.digest("SHA-256", asciiBytes(`sign:${READER_SECRET}`)),
-  );
+export const deriveReaderKey = async (
+  response: ReaderKeyResponse,
+  secret = READER_SECRET,
+): Promise<ReaderKey> => {
+  const mask = new Uint8Array(await crypto.subtle.digest("SHA-256", asciiBytes(`sign:${secret}`)));
   const key = await crypto.subtle.importKey(
     "raw",
     xorCycle(decodeBase64Url(response.key), mask),
@@ -59,6 +62,70 @@ export const deriveReaderKey = async (response: ReaderKeyResponse): Promise<Read
     ["sign"],
   );
   return { key, offset: Number(response.now) - Date.now() || 0 };
+};
+
+// Capture the digest input, not the bundle's obfuscated variable names. Chapter requests are
+// blocked so recovery never downloads pages; the captured secret is validated by the caller.
+export const captureReaderSecret = async (
+  html: string,
+  url: string,
+  response: ReaderKeyResponse,
+  cookies: Cookie[],
+): Promise<string> => {
+  const bootstrap = `
+    window.__toonkotsuReaderSecret = new Promise((resolve) => {
+      let settled = false;
+      const finish = (secret) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(secret);
+      };
+      const timer = setTimeout(() => finish(""), 15000);
+      const digest = crypto.subtle.digest.bind(crypto.subtle);
+      crypto.subtle.digest = (algorithm, data) => {
+        const name = typeof algorithm === "string" ? algorithm : algorithm.name;
+        if (name.toUpperCase() === "SHA-256") {
+          const text = new TextDecoder().decode(data);
+          if (text.startsWith("sign:") && text.length > 5) {
+            finish(text.slice(5));
+            return Promise.reject(new Error("Signing configuration captured"));
+          }
+        }
+        return digest(algorithm, data);
+      };
+      const fetch = window.fetch.bind(window);
+      window.fetch = (input, init) => {
+        const path = new URL(typeof input === "string" ? input : input.url, location.href).pathname;
+        if (path === "/api/manga/key") {
+          return Promise.resolve(new Response(${JSON.stringify(JSON.stringify(response)).replace(/</g, "\\u003c")}, {
+            headers: { "content-type": "application/json" },
+          }));
+        }
+        if (path.startsWith("/api/manga/chapter/")) {
+          return Promise.reject(new Error("Chapter loading disabled during signing recovery"));
+        }
+        return fetch(input, init);
+      };
+    });
+  `;
+  const captured = await Application.executeInWebView({
+    source: {
+      html: `<script>${bootstrap}</script>${html}`,
+      baseUrl: url,
+      loadCSS: false,
+      loadImages: false,
+      userAgent: await Application.getDefaultUserAgent(),
+    },
+    inject: "return window.__toonkotsuReaderSecret;",
+    storage: { cookies },
+  });
+  if (typeof captured.result !== "string" || !captured.result) {
+    throw new Error(
+      "Could not recover Toonkotsu's signing configuration. The source may need an update.",
+    );
+  }
+  return captured.result;
 };
 
 const hmac = async (readerKey: ReaderKey, message: string): Promise<Uint8Array> =>
