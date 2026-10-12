@@ -12,7 +12,6 @@ import {
   type TagSection,
 } from "@paperback/types";
 import * as cheerio from "cheerio";
-import type { AnyNode } from "domhandler";
 
 import { getBaseUrl, getShowEditionInTitle } from "./forms/settings";
 import {
@@ -29,7 +28,6 @@ import {
   type ComicData,
   type ComicNode,
   type ContentPreferenceRating,
-  type FilterOptions,
   type LatestUploadsResult,
   type RankedMetric,
   type XComicPreferences,
@@ -56,57 +54,6 @@ const hasCoverUrl = (url: string | null | undefined): url is string =>
 const titleCase = (value: string): string =>
   value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
-export const parseFilterOptions = (html: string): FilterOptions => {
-  const $ = cheerio.load(html);
-  const toOptions = (elements: cheerio.Cheerio<AnyNode>): Tag[] => {
-    const seen = new Set<string>();
-    return elements
-      .map((_, element): Tag | undefined => {
-        const raw = $(element).attr(":")?.trim();
-        const title = $(element).find("span").first().text().trim();
-        if (!raw || !title) return undefined;
-        // Sanitized here and in toSourceManga alike, so a tapped tag matches a filter id.
-        const id = sanitizeId(raw);
-        if (seen.has(id)) return undefined;
-        seen.add(id);
-        return { id, title: Application.decodeHTMLEntities(title) };
-      })
-      .get()
-      .filter((option): option is Tag => option !== undefined);
-  };
-
-  const detailsGroup = (name: string) =>
-    $("details.group")
-      .filter((_, element) =>
-        $(element).find("summary").first().text().trim().toLowerCase().includes(name),
-      )
-      .first();
-  const filterGroup = (name: string): Tag[] => toOptions(detailsGroup(name).find("div, label"));
-  const taxonomyGroup = (name: string): Tag[] => {
-    const header = detailsGroup("genres")
-      .find("div")
-      .filter(
-        (_, element) =>
-          $(element).children().length === 0 && $(element).text().trim().toLowerCase() === name,
-      )
-      .first();
-    return toOptions(header.next().children("div"));
-  };
-
-  const options = {
-    contentRatings: filterGroup("content rating"),
-    formats: taxonomyGroup("formats"),
-    genres: taxonomyGroup("genres"),
-    statuses: filterGroup("status"),
-  };
-  // An empty single group degrades that one picker; losing the genres means the scrape broke.
-  if (!options.genres.length) {
-    throw new Error("XCOMIC returned incomplete search filters");
-  }
-  return options;
-};
-
-// The API filters on the declared rating alone, so genres and tags are escalated here as well.
 const contentPreferenceRating = (comic: ComicData): ContentPreferenceRating => {
   const taxonomy = [...(comic.genres ?? []), ...(comic.tags ?? [])].map((value) =>
     value.trim().toLowerCase(),

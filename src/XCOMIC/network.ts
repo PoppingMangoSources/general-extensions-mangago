@@ -197,12 +197,5 @@ export const fetchChapters = (comicId: string, page: number): Promise<ChapterLis
     select: { comic_id: comicId, page, size: CHAPTER_PAGE_SIZE, sortby: "chapter_desc" },
   });
 
-export const fetchSearchPage = (): Promise<string> =>
-  fetchText({
-    url: `${getBaseUrl()}/search`,
-    method: "GET",
-    headers: { accept: "text/html,application/xhtml+xml" },
-  });
-
 export const fetchChapterPages = (id: string): Promise<ChapterPagesResponse> =>
   fetchGraphQL<ChapterPagesResponse>(CHAPTER_PAGES_QUERY, { id });

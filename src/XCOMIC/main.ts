@@ -29,6 +29,7 @@ import {
 } from "./forms/settings";
 import {
   DISCOVER_SECTIONS,
+  FILTER_OPTIONS,
   MAX_LATEST_REQUESTS,
   PAGE_SIZE,
   SECTION_IDS,
@@ -36,7 +37,6 @@ import {
   SORTING_OPTIONS,
   type BrowseSelect,
   type ComicNode,
-  type FilterOptions,
   type PageMetadata,
   type RankedMetric,
   type SearchMetadata,
@@ -51,14 +51,12 @@ import {
   fetchRecentlyAdded,
   fetchTitleNode,
   fetchTitleRandom,
-  fetchSearchPage,
   fetchTitleBrowse,
   XComicInterceptor,
 } from "./network";
 import {
   isComicAllowed,
   parseChapterDetails,
-  parseFilterOptions,
   toChapter,
   toDiscoverItems,
   toLatestUploadNodes,
@@ -74,7 +72,6 @@ const idsWithState = (states: TriState | undefined, state: "included" | "exclude
   Object.entries(states ?? {}).flatMap(([id, value]) => (value === state ? [id] : []));
 
 class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
-  private filterOptionsPromise?: Promise<FilterOptions>;
   private rateLimiter = new BasicRateLimiter("xcomic-rate-limiter", {
     numberOfRequests: 3,
     bufferInterval: 1,
@@ -98,18 +95,12 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       if (cookie.expires && cookie.expires.getTime() <= Date.now()) continue;
       this.cookieStorageInterceptor.setCookie(cookie);
     }
-    this.filterOptionsPromise = undefined;
     Application.invalidateDiscoverSections();
   }
 
   async getSettingsForm(): Promise<Form> {
-    return new XComicSettingsForm(
-      getPreferences(),
-      getVisibleSections(),
-      await this.getFilterOptions(),
-      () => {
-        this.filterOptionsPromise = undefined;
-      },
+    return new XComicSettingsForm(getPreferences(), getVisibleSections(), FILTER_OPTIONS, () =>
+      Application.invalidateDiscoverSections(),
     );
   }
 
@@ -193,7 +184,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
 
   private async getGenresSection(): Promise<PagedResults<DiscoverSectionItem>> {
     return {
-      items: (await this.getFilterOptions()).genres.map((genre) => ({
+      items: FILTER_OPTIONS.genres.map((genre) => ({
         type: "genresCarouselItem",
         name: genre.title,
         searchQuery: {
@@ -217,12 +208,8 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     };
   }
 
-  private async getFilterOptions(): Promise<FilterOptions> {
-    return await (this.filterOptionsPromise ??= fetchSearchPage().then(parseFilterOptions));
-  }
-
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
-    return new XComicAdvancedSearchForm(query, getPreferences(), await this.getFilterOptions());
+    return new XComicAdvancedSearchForm(query, getPreferences(), FILTER_OPTIONS);
   }
 
   async getSortingOptions(): Promise<SortingOption[]> {
