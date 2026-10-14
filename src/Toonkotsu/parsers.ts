@@ -367,40 +367,40 @@ export const parseChapters = (
   const ordered = [...selected.values()].sort(
     ({ release: a, order: aOrder }, { release: b, order: bOrder }) => {
       if (bySeason) {
-        const season = (parseChapterSeason(b) ?? 1) - (parseChapterSeason(a) ?? 1);
+        const season = (parseChapterSeason(a) ?? 1) - (parseChapterSeason(b) ?? 1);
         if (season) return season;
       }
-      // Unassigned volumes are newest; a whole-volume upload heads its volume.
+      // Build oldest first so the zero-based index also represents the reading order.
       return (
-        (parseChapterNumber(b.vol) ?? Infinity) - (parseChapterNumber(a.vol) ?? Infinity) ||
-        (parseChapterNumber(b.n) ?? Infinity) - (parseChapterNumber(a.n) ?? Infinity) ||
-        a.position - b.position ||
-        aOrder - bOrder
+        (parseChapterNumber(a.vol) ?? Infinity) - (parseChapterNumber(b.vol) ?? Infinity) ||
+        (parseChapterNumber(a.n) ?? Infinity) - (parseChapterNumber(b.n) ?? Infinity) ||
+        b.position - a.position ||
+        bOrder - aOrder
       );
     },
   );
   const hasVolumeData = ordered.some(
     ({ release }) => parseChapterNumber(release.vol) !== undefined,
   );
-  let sortingIndex = ordered.length;
-  return ordered.map(({ release }) => {
-    const { title, group } = parseLabel(release, release.n);
-    const number = parseChapterNumber(release.n);
-    const volume = parseChapterNumber(release.vol);
-    return {
-      chapterId: String(release.id),
-      sourceManga,
-      langCode: "en",
-      chapNum: number ?? 0,
-      title,
-      version: group,
-      // Zero means no volume data; undefined means an unassigned volume in a numbered series.
-      volume: volume ?? (hasVolumeData ? undefined : 0),
-      publishDate: release.at ? new Date(release.at) : undefined,
-      // Paperback uses this override for ordering, independently of the displayed chapter number.
-      sortingIndex: sortingIndex--,
-    };
-  });
+  return ordered
+    .map(({ release }, index) => {
+      const { title, group } = parseLabel(release, release.n);
+      const number = parseChapterNumber(release.n);
+      const volume = parseChapterNumber(release.vol);
+      return {
+        chapterId: String(release.id),
+        sourceManga,
+        langCode: "en",
+        chapNum: number ?? 0,
+        title,
+        version: group,
+        // Zero means no volume data; undefined means an unassigned volume in a numbered series.
+        volume: volume ?? (hasVolumeData ? undefined : 0),
+        publishDate: release.at ? new Date(release.at) : undefined,
+        sortingIndex: index,
+      };
+    })
+    .reverse();
 };
 
 export const parseReaderKeyResponse = (value: unknown): ReaderKeyResponse => {
