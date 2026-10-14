@@ -27,6 +27,10 @@
 
 **PoppingMango** is an independent source list for [Paperback](https://paperback.moe) 0.9 covering novels, manga, manhwa, and manhua, maintained by Popmango. Every extension here is written and maintained in this repository, it is not a mirror of any other catalog.
 
+## Temporary sorting diagnostic
+
+**ToonkotsuSortCheck** is available on `0.9/test` while investigating chapter ordering. It uses the same Toonkotsu parser and reader under a separate source identity, and adds the returned sorting index to each chapter title. Search for the affected title in this source to test a fresh chapter list. The regular Toonkotsu library entry and reading progress stay separate.
+
 ## Sources
 
 **30 sources:** 26 manga, manhwa & manhua, and 4 novels, all available from `0.9/test`.
