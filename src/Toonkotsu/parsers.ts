@@ -346,44 +346,47 @@ export const parseChapters = (
       bySeason ? (parseChapterSeason(release) ?? 1) : "",
       parseChapterNumber(release.n) ?? `id:${release.canonicalId}`,
     ]);
-  const selected = new Map<string, (typeof releases)[number]>();
+  const selected = new Map<string, { release: (typeof releases)[number]; order: number }>();
   // Prefer complete uploads, then catalogue defaults, then catalogue position and release ID.
-  releases.sort(
-    (a, b) =>
-      Number(!!a.partial) - Number(!!b.partial) ||
-      Number(b.catalogueDefault) - Number(a.catalogueDefault) ||
-      a.position - b.position ||
-      a.id - b.id,
-  );
+  const compareReleases = (a: (typeof releases)[number], b: (typeof releases)[number]): number =>
+    Number(!!a.partial) - Number(!!b.partial) ||
+    Number(b.catalogueDefault) - Number(a.catalogueDefault) ||
+    a.position - b.position ||
+    a.id - b.id;
   const complete = new Set(releases.filter((release) => !release.partial).map(chapterKey));
   for (const release of releases) {
     const key = chapterKey(release);
     if (release.partial && complete.has(key)) continue;
     const { group } = parseLabel(release, release.n);
     const groupKey = JSON.stringify([key, release.group?.slug ?? group?.toLowerCase() ?? ""]);
-    if (!selected.has(groupKey)) selected.set(groupKey, release);
+    const current = selected.get(groupKey);
+    if (!current || compareReleases(release, current.release) < 0) {
+      selected.set(groupKey, { release, order: current?.order ?? selected.size });
+    }
   }
-  const ordered = [...selected.values()].sort((a, b) => {
-    if (bySeason) {
-      const season = (parseChapterSeason(b) ?? 1) - (parseChapterSeason(a) ?? 1);
-      if (season) return season;
-    }
-    if (byVolume) {
-      const aVolume = parseChapterNumber(a.vol);
-      const bVolume = parseChapterNumber(b.vol);
-      if (aVolume !== undefined && bVolume === undefined) return 1;
-      if (aVolume === undefined && bVolume !== undefined) return -1;
-      if (aVolume !== undefined && bVolume !== undefined && aVolume !== bVolume) {
-        return bVolume - aVolume;
+  const ordered = [...selected.values()].sort(
+    ({ release: a, order: aOrder }, { release: b, order: bOrder }) => {
+      if (bySeason) {
+        const season = (parseChapterSeason(a) ?? 1) - (parseChapterSeason(b) ?? 1);
+        if (season) return season;
       }
-    }
-    const aNumber = parseChapterNumber(a.n);
-    const bNumber = parseChapterNumber(b.n);
-    return aNumber !== undefined && bNumber !== undefined && aNumber !== bNumber
-      ? bNumber - aNumber
-      : a.position - b.position;
-  });
-  return ordered.map((release, index) => {
+      if (byVolume) {
+        const aVolume = parseChapterNumber(a.vol);
+        const bVolume = parseChapterNumber(b.vol);
+        if (aVolume !== undefined && bVolume === undefined) return -1;
+        if (aVolume === undefined && bVolume !== undefined) return 1;
+        if (aVolume !== undefined && bVolume !== undefined && aVolume !== bVolume) {
+          return aVolume - bVolume;
+        }
+      }
+      const aNumber = parseChapterNumber(a.n);
+      const bNumber = parseChapterNumber(b.n);
+      return aNumber !== undefined && bNumber !== undefined && aNumber !== bNumber
+        ? aNumber - bNumber
+        : b.position - a.position || aOrder - bOrder;
+    },
+  );
+  return ordered.map(({ release }, index) => {
     const { title, group } = parseLabel(release, release.n);
     return {
       chapterId: String(release.id),
@@ -394,7 +397,7 @@ export const parseChapters = (
       version: group,
       volume: parseChapterNumber(release.vol) ?? 0,
       publishDate: release.at ? new Date(release.at) : undefined,
-      sortingIndex: ordered.length - index,
+      sortingIndex: index + 1,
     };
   });
 };
