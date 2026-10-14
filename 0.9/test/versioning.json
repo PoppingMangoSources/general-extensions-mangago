@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-10-14T22:00:34.800Z",
+  "buildTime": "2026-10-14T23:40:15.421Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -563,7 +563,7 @@
     {
       "name": "Toonkotsu",
       "description": "Extension that pulls content from toonkotsu.com.",
-      "version": "1.0.0-alpha.16",
+      "version": "1.0.0-alpha.17",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
