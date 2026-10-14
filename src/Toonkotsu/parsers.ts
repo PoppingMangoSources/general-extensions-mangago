@@ -322,7 +322,6 @@ export const parseChapters = (
   { chapters }: SeriesResponse,
   sourceManga: SourceManga,
   languages: string[],
-  volumeOrder: boolean,
 ): Chapter[] => {
   if (!languages.includes("en")) return [];
   const releases = chapters.flatMap((entry, position) =>
@@ -380,33 +379,26 @@ export const parseChapters = (
       );
     },
   );
-  const useChapterOrder = volumeOrder && (byVolume || bySeason);
-  const chapterOrders = new Map<string, number>();
-  return ordered.map(({ release }, index) => {
+  const hasVolumeData = ordered.some(
+    ({ release }) => parseChapterNumber(release.vol) !== undefined,
+  );
+  let sortingIndex = ordered.length;
+  return ordered.map(({ release }) => {
     const { title, group } = parseLabel(release, release.n);
     const number = parseChapterNumber(release.n);
     const volume = parseChapterNumber(release.vol);
-    const key = chapterKey(release);
-    const order = chapterOrders.get(key) ?? ordered.length - chapterOrders.size;
-    chapterOrders.set(key, order);
-    const label = [
-      bySeason ? `Season ${parseChapterSeason(release) ?? 1}` : undefined,
-      volume !== undefined ? `Vol. ${formatChapterNumber(volume)}` : undefined,
-      number !== undefined ? `Ch. ${formatChapterNumber(number)}` : undefined,
-    ]
-      .filter(Boolean)
-      .join(" ");
     return {
       chapterId: String(release.id),
       sourceManga,
       langCode: "en",
-      // Paperback's primary sort key is chapNum, even when sortingIndex is supplied.
-      chapNum: useChapterOrder ? order : (number ?? 0),
-      title: useChapterOrder ? [label, title].filter(Boolean).join(" - ") || "Oneshot" : title,
+      chapNum: number ?? 0,
+      title,
       version: group,
-      volume: volume ?? 0,
+      // Zero means no volume data; undefined means an unassigned volume in a numbered series.
+      volume: volume ?? (hasVolumeData ? undefined : 0),
       publishDate: release.at ? new Date(release.at) : undefined,
-      sortingIndex: useChapterOrder ? order : ordered.length - index,
+      // Paperback uses this override for ordering, independently of the displayed chapter number.
+      sortingIndex: sortingIndex--,
     };
   });
 };

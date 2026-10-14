@@ -20,7 +20,6 @@ export const READER_BUILD = "1738e5282ffc19e6";
 
 export const STATE_KEYS = {
   CHAPTER_LANGUAGES: "toonkotsu_chapter_languages",
-  VOLUME_ORDER: "toonkotsu_volume_order",
   CONTENT_RATINGS: "toonkotsu_content_ratings",
   TYPES: "toonkotsu_types",
   HIDDEN_TAGS: "toonkotsu_hidden_tags",
