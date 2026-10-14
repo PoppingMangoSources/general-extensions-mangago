@@ -51,6 +51,9 @@ export const getChapterLanguages = (): string[] =>
     ["en"],
   );
 
+export const getVolumeOrder = (): boolean =>
+  Application.getState(STATE_KEYS.VOLUME_ORDER) !== false;
+
 export const getContentRatings = (): string[] =>
   storedSelection(
     STATE_KEYS.CONTENT_RATINGS,
@@ -128,6 +131,24 @@ export class ToonkotsuSettingsForm extends Form {
 
   override getSections() {
     return [
+      Section(
+        {
+          id: "chapters",
+          header: "Chapters",
+          footer:
+            "Keeps restarted chapter numbers within each volume. Original numbers remain in the titles. Turn off if a tracker needs the site's numeric chapter values. Reload chapters after changing.",
+        },
+        [
+          ToggleRow("volume_order", {
+            title: "Order Chapters by Volume",
+            value: getVolumeOrder(),
+            onValueChange: closureSelector(this, "volume_order", async (value: boolean) => {
+              Application.setState(value, STATE_KEYS.VOLUME_ORDER);
+              this.reloadForm();
+            }),
+          }),
+        ],
+      ),
       Section(
         {
           id: "browse",

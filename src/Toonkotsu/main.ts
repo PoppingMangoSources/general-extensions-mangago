@@ -29,6 +29,7 @@ import {
   getHiddenTags,
   getSectionOrder,
   getTypes,
+  getVolumeOrder,
   ToonkotsuSearchForm,
   ToonkotsuSettingsForm,
 } from "./forms";
@@ -365,6 +366,7 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
       await fetchSeries(sourceManga.mangaId),
       sourceManga,
       getChapterLanguages(),
+      getVolumeOrder(),
     );
   }
 

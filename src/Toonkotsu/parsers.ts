@@ -322,6 +322,7 @@ export const parseChapters = (
   { chapters }: SeriesResponse,
   sourceManga: SourceManga,
   languages: string[],
+  volumeOrder: boolean,
 ): Chapter[] => {
   if (!languages.includes("en")) return [];
   const releases = chapters.flatMap((entry, position) =>
@@ -367,37 +368,45 @@ export const parseChapters = (
   const ordered = [...selected.values()].sort(
     ({ release: a, order: aOrder }, { release: b, order: bOrder }) => {
       if (bySeason) {
-        const season = (parseChapterSeason(a) ?? 1) - (parseChapterSeason(b) ?? 1);
+        const season = (parseChapterSeason(b) ?? 1) - (parseChapterSeason(a) ?? 1);
         if (season) return season;
       }
-      if (byVolume) {
-        const aVolume = parseChapterNumber(a.vol);
-        const bVolume = parseChapterNumber(b.vol);
-        if (aVolume !== undefined && bVolume === undefined) return -1;
-        if (aVolume === undefined && bVolume !== undefined) return 1;
-        if (aVolume !== undefined && bVolume !== undefined && aVolume !== bVolume) {
-          return aVolume - bVolume;
-        }
-      }
-      const aNumber = parseChapterNumber(a.n);
-      const bNumber = parseChapterNumber(b.n);
-      return aNumber !== undefined && bNumber !== undefined && aNumber !== bNumber
-        ? aNumber - bNumber
-        : b.position - a.position || aOrder - bOrder;
+      // Unassigned volumes are newest; a whole-volume upload heads its volume.
+      return (
+        (parseChapterNumber(b.vol) ?? Infinity) - (parseChapterNumber(a.vol) ?? Infinity) ||
+        (parseChapterNumber(b.n) ?? Infinity) - (parseChapterNumber(a.n) ?? Infinity) ||
+        a.position - b.position ||
+        aOrder - bOrder
+      );
     },
   );
+  const useChapterOrder = volumeOrder && (byVolume || bySeason);
+  const chapterOrders = new Map<string, number>();
   return ordered.map(({ release }, index) => {
     const { title, group } = parseLabel(release, release.n);
+    const number = parseChapterNumber(release.n);
+    const volume = parseChapterNumber(release.vol);
+    const key = chapterKey(release);
+    const order = chapterOrders.get(key) ?? ordered.length - chapterOrders.size;
+    chapterOrders.set(key, order);
+    const label = [
+      bySeason ? `Season ${parseChapterSeason(release) ?? 1}` : undefined,
+      volume !== undefined ? `Vol. ${formatChapterNumber(volume)}` : undefined,
+      number !== undefined ? `Ch. ${formatChapterNumber(number)}` : undefined,
+    ]
+      .filter(Boolean)
+      .join(" ");
     return {
       chapterId: String(release.id),
       sourceManga,
       langCode: "en",
-      chapNum: parseChapterNumber(release.n) ?? 0,
-      title,
+      // Paperback's primary sort key is chapNum, even when sortingIndex is supplied.
+      chapNum: useChapterOrder ? order : (number ?? 0),
+      title: useChapterOrder ? [label, title].filter(Boolean).join(" - ") || "Oneshot" : title,
       version: group,
-      volume: parseChapterNumber(release.vol) ?? 0,
+      volume: volume ?? 0,
       publishDate: release.at ? new Date(release.at) : undefined,
-      sortingIndex: index + 1,
+      sortingIndex: useChapterOrder ? order : ordered.length - index,
     };
   });
 };
