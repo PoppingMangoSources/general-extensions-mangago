@@ -152,16 +152,19 @@ export const unwrapPageKey = async (readerKey: ReaderKey, page: ReaderPage): Pro
   );
 
 const SBOX = new Uint8Array(256);
-const MIX = [0, 1, 2, 3].map(() => new Uint32Array(256));
+const MIX = [0, 1, 2, 3].map(() => new Int32Array(256));
+const FINAL = [0, 1, 2, 3].map(() => new Int32Array(256));
 
 {
   const double = Array.from({ length: 256 }, (_, i) => (i < 128 ? i << 1 : (i << 1) ^ 0x11b));
+  const littleEndian = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
   let x = 0;
   let xi = 0;
   for (let i = 0; i < 256; i++) {
     let sx = xi ^ (xi << 1) ^ (xi << 2) ^ (xi << 3) ^ (xi << 4);
     sx = (sx >>> 8) ^ (sx & 0xff) ^ 0x63;
     SBOX[x] = sx;
+    for (let n = 0; n < 4; n++) FINAL[n]![x] = sx << (littleEndian ? n * 8 : 24 - n * 8);
     const x2 = double[x]!;
     const x8 = double[double[x2]!]!;
     const t = (double[sx]! * 0x101) ^ (sx * 0x1010100);
@@ -207,74 +210,115 @@ const expandKey = (key: Uint8Array): Uint32Array => {
   return schedule;
 };
 
-const [M0, M1, M2, M3] = MIX as [Uint32Array, Uint32Array, Uint32Array, Uint32Array];
-
-const encryptBlock = (schedule: Uint32Array, input: Uint32Array, output: Uint32Array): void => {
-  const rounds = schedule.length / 4 - 1;
-  let s0 = input[0]! ^ schedule[0]!;
-  let s1 = input[1]! ^ schedule[1]!;
-  let s2 = input[2]! ^ schedule[2]!;
-  let s3 = input[3]! ^ schedule[3]!;
-  let k = 4;
-  for (let round = 1; round < rounds; round++) {
-    const t0 =
-      M0[s0 >>> 24]! ^
-      M1[(s1 >>> 16) & 0xff]! ^
-      M2[(s2 >>> 8) & 0xff]! ^
-      M3[s3 & 0xff]! ^
-      schedule[k++]!;
-    const t1 =
-      M0[s1 >>> 24]! ^
-      M1[(s2 >>> 16) & 0xff]! ^
-      M2[(s3 >>> 8) & 0xff]! ^
-      M3[s0 & 0xff]! ^
-      schedule[k++]!;
-    const t2 =
-      M0[s2 >>> 24]! ^
-      M1[(s3 >>> 16) & 0xff]! ^
-      M2[(s0 >>> 8) & 0xff]! ^
-      M3[s1 & 0xff]! ^
-      schedule[k++]!;
-    const t3 =
-      M0[s3 >>> 24]! ^
-      M1[(s0 >>> 16) & 0xff]! ^
-      M2[(s1 >>> 8) & 0xff]! ^
-      M3[s2 & 0xff]! ^
-      schedule[k++]!;
-    s0 = t0;
-    s1 = t1;
-    s2 = t2;
-    s3 = t3;
-  }
-  const last = (a: number, b: number, c: number, d: number): number =>
-    (SBOX[a >>> 24]! << 24) |
-    (SBOX[(b >>> 16) & 0xff]! << 16) |
-    (SBOX[(c >>> 8) & 0xff]! << 8) |
-    SBOX[d & 0xff]!;
-  output[0] = last(s0, s1, s2, s3) ^ schedule[k++]!;
-  output[1] = last(s1, s2, s3, s0) ^ schedule[k++]!;
-  output[2] = last(s2, s3, s0, s1) ^ schedule[k++]!;
-  output[3] = last(s3, s0, s1, s2) ^ schedule[k]!;
-};
-
-// Pages are AES-CTR encrypted: the counter block is the first 8 bytes of the page nonce followed
-// by a 64-bit big-endian block counter. Paperback's native crypto has no CTR mode, so the
-// keystream is generated here.
+// Process full blocks as words and reuse the fixed first-round terms between counter changes.
+// The final-round tables use memory byte order so the same loop works on either endianness.
 export const decryptPage = (data: ArrayBuffer, key: Uint8Array, nonce: Uint8Array): ArrayBuffer => {
   if (nonce.length < 8) throw new Error("Invalid AES-CTR page nonce: fewer than 8 bytes.");
-  const schedule = expandKey(key);
+  const rk = new Int32Array(expandKey(key));
+  const rounds = rk.length / 4 - 1;
+  const end = rounds * 4;
+  const m0 = MIX[0];
+  const m1 = MIX[1];
+  const m2 = MIX[2];
+  const m3 = MIX[3];
+  const f0 = FINAL[0]!;
+  const f1 = FINAL[1]!;
+  const f2 = FINAL[2]!;
+  const f3 = FINAL[3]!;
+  // The last round key, rearranged into memory order like the FINAL tables.
+  const last = new Int32Array(4);
+  const lastView = new DataView(last.buffer);
+  for (let i = 0; i < 4; i++) lastView.setInt32(i * 4, rk[rounds * 4 + i]!, false);
+  const l0 = last[0]!;
+  const l1 = last[1]!;
+  const l2 = last[2]!;
+  const l3 = last[3]!;
+
+  const length = data.byteLength;
   const bytes = new Uint8Array(data);
-  const counter = new Uint32Array(4);
-  const stream = new Uint32Array(4);
-  counter[0] = (nonce[0]! << 24) | (nonce[1]! << 16) | (nonce[2]! << 8) | nonce[3]!;
-  counter[1] = (nonce[4]! << 24) | (nonce[5]! << 16) | (nonce[6]! << 8) | nonce[7]!;
-  for (let offset = 0, block = 0; offset < bytes.length; offset += 16, block++) {
-    counter[2] = Math.floor(block / 0x100000000);
-    counter[3] = block;
-    encryptBlock(schedule, counter, stream);
-    const end = Math.min(16, bytes.length - offset);
-    for (let i = 0; i < end; i++) {
-      bytes[offset + i]! ^= (stream[i >> 2]! >>> (24 - (i & 3) * 8)) & 0xff;
+  const wordCount = length >>> 2;
+  const words = new Int32Array(bytes.buffer, 0, wordCount);
+
+  const c0 = ((nonce[0]! << 24) | (nonce[1]! << 16) | (nonce[2]! << 8) | nonce[3]!) ^ rk[0]!;
+  const c1 = ((nonce[4]! << 24) | (nonce[5]! << 16) | (nonce[6]! << 8) | nonce[7]!) ^ rk[1]!;
+  const blocks = Math.ceil(length / 16);
+  // Round 1 terms that only depend on the fixed nonce words.
+  const a0 = m0[c0 >>> 24]! ^ m1[(c1 >>> 16) & 0xff]! ^ rk[4]!;
+  const a1 = m0[c1 >>> 24]! ^ m3[c0 & 0xff]! ^ rk[5]!;
+  const a2 = m2[(c0 >>> 8) & 0xff]! ^ m3[c1 & 0xff]! ^ rk[6]!;
+  const a3 = m1[(c0 >>> 16) & 0xff]! ^ m2[(c1 >>> 8) & 0xff]! ^ rk[7]!;
+
+  let c2 = 0;
+  let r0 = 0;
+  let b0 = 0;
+  let b1 = 0;
+  let b2 = 0;
+  let b3 = 0;
+  for (let block = 0, w = 0; block < blocks; block++, w += 4) {
+    const c3 = block ^ rk[3]!;
+    if (block === 0 || (block & 0xff) === 0) {
+      // Everything except the counter's low byte is fixed for the next 256 blocks.
+      c2 = Math.floor(block / 0x100000000) ^ rk[2]!;
+      r0 = a0 ^ m2[(c2 >>> 8) & 0xff]!;
+      const t1 = a1 ^ m1[(c2 >>> 16) & 0xff]! ^ m2[(c3 >>> 8) & 0xff]!;
+      const t2 = a2 ^ m0[c2 >>> 24]! ^ m1[(c3 >>> 16) & 0xff]!;
+      const t3 = a3 ^ m0[c3 >>> 24]! ^ m3[c2 & 0xff]!;
+      b0 = m1[(t1 >>> 16) & 0xff]! ^ m2[(t2 >>> 8) & 0xff]! ^ m3[t3 & 0xff]! ^ rk[8]!;
+      b1 = m0[t1 >>> 24]! ^ m1[(t2 >>> 16) & 0xff]! ^ m2[(t3 >>> 8) & 0xff]! ^ rk[9]!;
+      b2 = m0[t2 >>> 24]! ^ m1[(t3 >>> 16) & 0xff]! ^ m3[t1 & 0xff]! ^ rk[10]!;
+      b3 = m0[t3 >>> 24]! ^ m2[(t1 >>> 8) & 0xff]! ^ m3[t2 & 0xff]! ^ rk[11]!;
+    }
+    const t0 = r0 ^ m3[c3 & 0xff]!;
+    let s0 = b0 ^ m0[t0 >>> 24]!;
+    let s1 = b1 ^ m3[t0 & 0xff]!;
+    let s2 = b2 ^ m2[(t0 >>> 8) & 0xff]!;
+    let s3 = b3 ^ m1[(t0 >>> 16) & 0xff]!;
+    for (let k = 12; k < end;) {
+      const t0 =
+        m0[s0 >>> 24]! ^
+        m1[(s1 >>> 16) & 0xff]! ^
+        m2[(s2 >>> 8) & 0xff]! ^
+        m3[s3 & 0xff]! ^
+        rk[k++]!;
+      const t1 =
+        m0[s1 >>> 24]! ^
+        m1[(s2 >>> 16) & 0xff]! ^
+        m2[(s3 >>> 8) & 0xff]! ^
+        m3[s0 & 0xff]! ^
+        rk[k++]!;
+      const t2 =
+        m0[s2 >>> 24]! ^
+        m1[(s3 >>> 16) & 0xff]! ^
+        m2[(s0 >>> 8) & 0xff]! ^
+        m3[s1 & 0xff]! ^
+        rk[k++]!;
+      s3 =
+        m0[s3 >>> 24]! ^
+        m1[(s0 >>> 16) & 0xff]! ^
+        m2[(s1 >>> 8) & 0xff]! ^
+        m3[s2 & 0xff]! ^
+        rk[k++]!;
+      s0 = t0;
+      s1 = t1;
+      s2 = t2;
+    }
+    const o0 =
+      f0[s0 >>> 24]! ^ f1[(s1 >>> 16) & 0xff]! ^ f2[(s2 >>> 8) & 0xff]! ^ f3[s3 & 0xff]! ^ l0;
+    const o1 =
+      f0[s1 >>> 24]! ^ f1[(s2 >>> 16) & 0xff]! ^ f2[(s3 >>> 8) & 0xff]! ^ f3[s0 & 0xff]! ^ l1;
+    const o2 =
+      f0[s2 >>> 24]! ^ f1[(s3 >>> 16) & 0xff]! ^ f2[(s0 >>> 8) & 0xff]! ^ f3[s1 & 0xff]! ^ l2;
+    const o3 =
+      f0[s3 >>> 24]! ^ f1[(s0 >>> 16) & 0xff]! ^ f2[(s1 >>> 8) & 0xff]! ^ f3[s2 & 0xff]! ^ l3;
+
+    if (w + 4 <= wordCount) {
+      words[w]! ^= o0;
+      words[w + 1]! ^= o1;
+      words[w + 2]! ^= o2;
+      words[w + 3]! ^= o3;
+    } else {
+      const stream = new Uint8Array(new Int32Array([o0, o1, o2, o3]).buffer);
+      for (let i = block * 16; i < length; i++) bytes[i]! ^= stream[i - block * 16]!;
     }
   }
   return bytes.buffer;

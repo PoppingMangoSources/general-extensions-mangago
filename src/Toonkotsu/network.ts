@@ -159,6 +159,8 @@ export const fetchFacets = (): Promise<FacetsResponse> =>
 export const fetchSeries = (mangaId: string): Promise<SeriesResponse> =>
   fetchJson(siteUrl(`cdn/v1/series/${mangaId}`, {}));
 
+export const fetchSiteSession = (): Promise<unknown> => fetchJson(`${DOMAIN}/api/auth/me`);
+
 // The reader answers its reading limit with a 429 whose body says how to recover, so these return
 // the status alongside the body.
 export const requestReaderKey = () => requestJson(`${DOMAIN}/api/manga/key`);

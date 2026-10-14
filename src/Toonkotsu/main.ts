@@ -59,6 +59,7 @@ import {
   fetchReadingRanking,
   fetchReaderPage,
   fetchSeries,
+  fetchSiteSession,
   requestChapter,
   requestReaderKey,
   ToonkotsuInterceptor,
@@ -101,6 +102,7 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
   private interceptor = new ToonkotsuInterceptor("main");
   private facetsPromise?: Promise<FacetsResponse>;
   private readerKeyPromise?: Promise<{ readerKey: ReaderKey; response: ReaderKeyResponse }>;
+  private siteSessionPromise?: Promise<unknown>;
   private readerSecretPromise?: Promise<string>;
   private readerSecret = READER_SECRET;
   private readerBuild = READER_BUILD;
@@ -124,6 +126,7 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
     }
     this.facetsPromise = undefined;
     this.readerKeyPromise = undefined;
+    this.siteSessionPromise = undefined;
     this.readerSecretPromise = undefined;
   }
 
@@ -368,18 +371,22 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
   private getReaderKey(
     chapterId: string,
   ): Promise<{ readerKey: ReaderKey; response: ReaderKeyResponse }> {
-    return (this.readerKeyPromise ??= requestReaderKey()
-      .then(async ({ status, data }) => {
-        if (status < 200 || status >= 300) {
-          throw await readerError(status, data as ReaderLimit | undefined, chapterId);
-        }
-        const response = parseReaderKeyResponse(data);
-        return { readerKey: await deriveReaderKey(response, this.readerSecret), response };
-      })
-      .catch((error: unknown) => {
-        this.readerKeyPromise = undefined;
+    return (this.readerKeyPromise ??= (async () => {
+      // The site issues its guest cookie here before the reader key is requested.
+      await (this.siteSessionPromise ??= fetchSiteSession().catch((error: unknown) => {
+        this.siteSessionPromise = undefined;
         throw error;
       }));
+      const { status, data } = await requestReaderKey();
+      if (status < 200 || status >= 300) {
+        throw await readerError(status, data as ReaderLimit | undefined, chapterId);
+      }
+      const response = parseReaderKeyResponse(data);
+      return { readerKey: await deriveReaderKey(response, this.readerSecret), response };
+    })().catch((error: unknown) => {
+      this.readerKeyPromise = undefined;
+      throw error;
+    }));
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
