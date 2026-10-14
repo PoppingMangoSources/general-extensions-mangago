@@ -270,6 +270,7 @@ export interface ChapterRelease {
   at?: number | null;
   src?: string | null;
   group?: ChapterGroup | null;
+  partial?: boolean | null;
 }
 
 export interface ChapterEntry extends ChapterRelease {

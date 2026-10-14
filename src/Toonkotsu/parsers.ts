@@ -19,6 +19,7 @@ import {
   TAG_GROUPS,
   UNLISTED_TAGS,
   type ChapterRelease,
+  type ChapterEntry,
   type ContentRatingId,
   type FacetsResponse,
   type LatestResponse,
@@ -285,30 +286,115 @@ export const parseMangaDetails = (
   };
 };
 
-// Each chapter lists its main release first and alternate uploads in "alts"; every upload becomes
-// its own Chapter so the app can offer them as versions. The catalogue is English only.
+const parseChapterNumber = (value: string | number | null | undefined): number | undefined => {
+  if (value == null || String(value).trim() === "") return undefined;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : undefined;
+};
+
+const parseChapterSeason = (entry: ChapterEntry): number | undefined => {
+  const match = /^\s*\[?\s*(?:s|season)\s*(\d{1,3})\s*\]?\s*(?=[-:·–—|]|\s|$)/i.exec(
+    entry.label ?? "",
+  );
+  return match ? Number(match[1]) : undefined;
+};
+
+// The site separates volumes/seasons when at least three chapter numbers occur in multiple ones.
+const hasChapterNumberResets = (
+  entries: ChapterEntry[],
+  section: (entry: ChapterEntry) => number | undefined,
+): boolean => {
+  const sections = new Map<number, Set<number>>();
+  for (const entry of entries) {
+    const number = parseChapterNumber(entry.n);
+    const value = section(entry);
+    if (number === undefined || value === undefined) continue;
+    const values = sections.get(number) ?? new Set<number>();
+    values.add(value);
+    sections.set(number, values);
+  }
+  return [...sections.values()].filter((values) => values.size > 1).length >= 3;
+};
+
+// Keep one catalogue-selected upload per chapter and scanlator, as the site's chapter list does.
+// Actual release IDs remain usable by the reader. The catalogue is English only.
 export const parseChapters = (
   { chapters }: SeriesResponse,
   sourceManga: SourceManga,
   languages: string[],
 ): Chapter[] => {
   if (!languages.includes("en")) return [];
-  const releases = chapters.flatMap((entry) =>
-    [entry, ...(entry.alts ?? [])].map((release) => ({ entry, release })),
+  const releases = chapters.flatMap((entry, position) =>
+    [entry, ...(entry.alts ?? [])].map((release, index) => ({
+      ...release,
+      n: entry.n,
+      vol: entry.vol,
+      label: release.label ?? entry.label,
+      at: release.at ?? entry.at,
+      canonicalId: entry.id,
+      catalogueDefault: index === 0,
+      position,
+    })),
   );
-  return releases.map(({ entry, release }, index) => {
-    const { title, group } = parseLabel(release, entry.n);
-    const at = release.at ?? entry.at;
+  const byVolume = hasChapterNumberResets(releases, (entry) => parseChapterNumber(entry.vol));
+  const bySeason = hasChapterNumberResets(releases, parseChapterSeason);
+  const chapterKey = (release: (typeof releases)[number]): string =>
+    JSON.stringify([
+      byVolume
+        ? (parseChapterNumber(release.vol) ?? release.vol?.toString().trim().toLowerCase())
+        : "",
+      bySeason ? (parseChapterSeason(release) ?? 1) : "",
+      parseChapterNumber(release.n) ?? `id:${release.canonicalId}`,
+    ]);
+  const selected = new Map<string, (typeof releases)[number]>();
+  // Prefer complete uploads, then catalogue defaults, then catalogue position and release ID.
+  releases.sort(
+    (a, b) =>
+      Number(!!a.partial) - Number(!!b.partial) ||
+      Number(b.catalogueDefault) - Number(a.catalogueDefault) ||
+      a.position - b.position ||
+      a.id - b.id,
+  );
+  const complete = new Set(releases.filter((release) => !release.partial).map(chapterKey));
+  for (const release of releases) {
+    const key = chapterKey(release);
+    if (release.partial && complete.has(key)) continue;
+    const { group } = parseLabel(release, release.n);
+    const groupKey = JSON.stringify([key, release.group?.slug ?? group?.toLowerCase() ?? ""]);
+    if (!selected.has(groupKey)) selected.set(groupKey, release);
+  }
+  const ordered = [...selected.values()].sort((a, b) => {
+    if (bySeason) {
+      const season = (parseChapterSeason(b) ?? 1) - (parseChapterSeason(a) ?? 1);
+      if (season) return season;
+    }
+    if (byVolume) {
+      const aVolume = parseChapterNumber(a.vol);
+      const bVolume = parseChapterNumber(b.vol);
+      if (aVolume !== undefined && bVolume === undefined) return 1;
+      if (aVolume === undefined && bVolume !== undefined) return -1;
+      if (aVolume !== undefined && bVolume !== undefined && aVolume !== bVolume) {
+        return bVolume - aVolume;
+      }
+    }
+    const aNumber = parseChapterNumber(a.n);
+    const bNumber = parseChapterNumber(b.n);
+    return aNumber !== undefined && bNumber !== undefined && aNumber !== bNumber
+      ? bNumber - aNumber
+      : a.position - b.position;
+  });
+  return ordered.map((release, index) => {
+    const { title, group } = parseLabel(release, release.n);
     return {
       chapterId: String(release.id),
       sourceManga,
       langCode: "en",
-      chapNum: typeof entry.n === "number" ? entry.n : 0,
+      chapNum: parseChapterNumber(release.n) ?? 0,
       title,
       version: group,
-      volume: 0,
-      publishDate: at ? new Date(at) : undefined,
-      sortingIndex: releases.length - index,
+      volume: parseChapterNumber(release.vol) ?? 0,
+      publishDate: release.at ? new Date(release.at) : undefined,
+      sortingIndex: ordered.length - index,
     };
   });
 };
