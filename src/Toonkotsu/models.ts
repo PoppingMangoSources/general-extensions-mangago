@@ -5,7 +5,6 @@ import {
   DiscoverSectionType,
   type DiscoverSection,
   type JSONObject,
-  type SortingOption,
   type Tag,
 } from "@paperback/types";
 
@@ -95,27 +94,26 @@ export const SECTION_OPTIONS: Tag[] = SECTION_IDS.map((id) => ({
   title: SECTION_DEFINITIONS[id].title,
 }));
 
-// The site's browse sorts as "<sort>-<order>". Rating, views and follows share the catalogue's
-// score and popularity orderings, so each ordering is listed once.
-export const SORT_OPTIONS = {
-  RELEVANCE: { id: "relevance", label: "Best Match" },
-  LATEST: { id: "latest-desc", label: "Latest Upload" },
-  OTHERS: [
-    { id: "latest-asc", label: "Oldest Upload" },
-    { id: "new-desc", label: "Recently Added" },
-    { id: "new-asc", label: "Oldest Added" },
-    { id: "score-desc", label: "Highest Rated" },
-    { id: "score-asc", label: "Lowest Rated" },
-    { id: "popular-desc", label: "Most Popular" },
-    { id: "popular-asc", label: "Least Popular" },
-    { id: "chapters-desc", label: "Most Chapters" },
-    { id: "chapters-asc", label: "Fewest Chapters" },
-    { id: "year-desc", label: "Newest Year" },
-    { id: "year-asc", label: "Oldest Year" },
-    { id: "title-asc", label: "Title A-Z" },
-    { id: "title-desc", label: "Title Z-A" },
-  ],
-} as const satisfies Record<string, SortingOption | readonly SortingOption[]>;
+// The site's sort menu, in its order and under its names, each with the catalogue token the site's
+// own table sends. It gives ten names to eight orders: Updated and Uploaded Date are one, and View
+// and Follow Count another, and the same pairs pick the same list on the site.
+export const SORT_OPTIONS = [
+  { id: "createdAt", label: "Created Date", value: "new" },
+  { id: "updatedAt", label: "Updated Date", value: "latest" },
+  { id: "lastUploadedChapterAt", label: "Uploaded Date", value: "latest" },
+  { id: "relevance", label: "Best Match", value: "relevance" },
+  { id: "title", label: "Title", value: "title" },
+  { id: "year", label: "Year", value: "year" },
+  { id: "rating", label: "Rating", value: "score" },
+  { id: "views", label: "View Count", value: "popular" },
+  { id: "follows", label: "Follow Count", value: "popular" },
+  { id: "chapters", label: "Chapter Count", value: "chapters" },
+] as const;
+
+export const ORDER_OPTIONS: Tag[] = [
+  { id: "desc", title: "Descending" },
+  { id: "asc", title: "Ascending" },
+];
 
 export const CHAPTER_LANGUAGE_OPTIONS: Tag[] = [{ id: "en", title: "English" }];
 
@@ -137,16 +135,11 @@ export const TYPE_OPTIONS = [
   { id: "other", title: "Other", languages: ["xx"] },
 ];
 
-export const ORIGINAL_LANGUAGE_OPTIONS: Tag[] = [
-  { id: "en", title: "English" },
-  { id: "ja", title: "Japanese" },
-  { id: "ja-ro", title: "Japanese (Romanized)" },
-  { id: "ko", title: "Korean" },
-  { id: "ko-ro", title: "Korean (Romanized)" },
-  { id: "zh", title: "Chinese (Simplified)" },
-  { id: "zh-hk", title: "Chinese (Traditional)" },
-  { id: "zh-ro", title: "Chinese (Romanized)" },
-  { id: "xx", title: "Other" },
+export const COUNTRY_OPTIONS: Tag[] = [
+  { id: "ja", title: "Japan" },
+  { id: "ko", title: "Korea" },
+  { id: "zh", title: "China" },
+  { id: "en", title: "Western" },
 ];
 
 export const DEMOGRAPHIC_OPTIONS: Tag[] = [
@@ -165,8 +158,8 @@ export const STATUS_OPTIONS = [
 ] satisfies (Tag & { value: string })[];
 
 export const MATCH_MODE_OPTIONS: Tag[] = [
-  { id: "all", title: "All" },
-  { id: "any", title: "Any" },
+  { id: "all", title: "AND" },
+  { id: "any", title: "OR" },
 ];
 
 // Tags the site keeps out of its genre list: demographics have their own filter, and these are
@@ -179,18 +172,29 @@ export const UNLISTED_TAGS = new Set([
   "Lolicon",
   "Shotacon",
   "Other",
-  "Doujinshi",
 ]);
 export const PORNOGRAPHIC_TAGS = new Set(["Hentai", "Adult", "Smut"]);
 
-// The catalogue files each tag under a category; the main genres have none.
+// The site's tag picker: anything the catalogue files under a category reads as a theme there, as
+// do a few uncategorised names, and only the adult tags and Doujinshi stand apart from the genres.
 export const TAG_GROUPS = [
-  { id: "genres", title: "Genres", prefix: undefined },
-  { id: "themes", title: "Themes", prefix: "Theme" },
-  { id: "cast", title: "Cast", prefix: "Cast" },
-  { id: "setting", title: "Setting", prefix: "Setting" },
-  { id: "format", title: "Format", prefix: "Technical" },
+  { id: "content", title: "Content" },
+  { id: "format", title: "Format" },
+  { id: "genres", title: "Genre" },
+  { id: "themes", title: "Theme" },
 ] as const;
+export const CONTENT_TAGS = new Set(["Ecchi", "Mature", "Smut", "Adult", "Hentai"]);
+export const FORMAT_TAGS = new Set(["Doujinshi"]);
+export const THEME_TAGS = new Set([
+  "School Life",
+  "Martial Arts",
+  "Harem",
+  "Isekai",
+  "Gender Bender",
+  "Mecha",
+  "Supernatural",
+  "Historical",
+]);
 
 export const STATUS_NAMES: Record<string, string> = {
   Complete: "Completed",
@@ -213,6 +217,7 @@ export interface SearchMetadata extends JSONObject {
   yearTo?: string;
   chaptersMin?: string;
   chaptersMax?: string;
+  order?: string;
 }
 
 export interface PageMetadata extends JSONObject {

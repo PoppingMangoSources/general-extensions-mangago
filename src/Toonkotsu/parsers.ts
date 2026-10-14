@@ -13,10 +13,13 @@ import {
 } from "@paperback/types";
 
 import {
+  CONTENT_TAGS,
   DOMAIN,
+  FORMAT_TAGS,
   PORNOGRAPHIC_TAGS,
   STATUS_NAMES,
   TAG_GROUPS,
+  THEME_TAGS,
   UNLISTED_TAGS,
   type ChapterRelease,
   type ChapterEntry,
@@ -201,9 +204,10 @@ export const toLatestItems = (items: LatestResponse["items"]): DiscoverSectionIt
     }),
   );
 
-const tagGroupId = (category: string | null | undefined): string => {
-  if (!category) return "genres";
-  return TAG_GROUPS.find(({ prefix }) => prefix && category.startsWith(prefix))?.id ?? "themes";
+const tagGroupId = (name: string, category: string | null | undefined): string => {
+  if (category || THEME_TAGS.has(name)) return "themes";
+  if (CONTENT_TAGS.has(name)) return "content";
+  return FORMAT_TAGS.has(name) ? "format" : "genres";
 };
 
 // Hentai, Adult and Smut are offered once erotica is allowed, and tags the catalogue flags adult
@@ -220,7 +224,7 @@ export const parseTagGroups = (facets: FacetsResponse, ratings: string[]): TagSe
     ) {
       continue;
     }
-    const id = tagGroupId(facet.category);
+    const id = tagGroupId(facet.name, facet.category);
     groups.set(id, [...(groups.get(id) ?? []), { id: toTagId(facet.name), title: facet.name }]);
   }
   return TAG_GROUPS.flatMap(({ id, title }) => {
@@ -266,7 +270,7 @@ export const parseMangaDetails = (
       rating: series.score ? Math.round(series.score) / 100 : undefined,
       tagGroups: [
         ...TAG_GROUPS.flatMap(({ id, title }) => {
-          const groupTags = tags.filter((tag) => tagGroupId(categories.get(tag)) === id);
+          const groupTags = tags.filter((tag) => tagGroupId(tag, categories.get(tag)) === id);
           return groupTags.length
             ? [{ id, title, tags: groupTags.map((tag) => ({ id: toTagId(tag), title: tag })) }]
             : [];

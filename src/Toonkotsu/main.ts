@@ -276,9 +276,14 @@ export class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig>
     return { kind: "series", items: data.items, hasNext: hasNextPage(data, page) };
   }
 
+  // Paperback opens on the first option, so the sort the site opens on leads and the rest keep the
+  // site's order. Best Match ranks by the text query, so it is only offered with one.
   async getSortingOptions(query: SearchQuery<SearchMetadata>): Promise<SortingOption[]> {
-    const options = [SORT_OPTIONS.LATEST, ...SORT_OPTIONS.OTHERS];
-    return query.title.trim() ? [SORT_OPTIONS.RELEVANCE, ...options] : options;
+    const typed = Boolean(query.title.trim());
+    const lead = typed ? "relevance" : "lastUploadedChapterAt";
+    return SORT_OPTIONS.filter(({ id }) => typed || id !== "relevance")
+      .sort((a, b) => Number(b.id === lead) - Number(a.id === lead))
+      .map(({ id, label }) => ({ id, label }));
   }
 
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
@@ -321,10 +326,12 @@ export class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig>
       genres.filter(([, value]) => value === state).map(([id]) => fromTagId(id));
     // Best Match ranks by the text query, so without one the site's default order applies.
     const sortId =
-      sortingOption?.id === SORT_OPTIONS.RELEVANCE.id && !title
-        ? SORT_OPTIONS.LATEST.id
-        : (sortingOption?.id ?? (title ? SORT_OPTIONS.RELEVANCE.id : SORT_OPTIONS.LATEST.id));
-    const [sort, order = "desc"] = sortId.split("-");
+      sortingOption?.id === "relevance" && !title
+        ? "lastUploadedChapterAt"
+        : (sortingOption?.id ?? (title ? "relevance" : "lastUploadedChapterAt"));
+    const sort = SORT_OPTIONS.find(({ id }) => id === sortId)?.value ?? "latest";
+    // The site only ever sends whole numbers here, so anything else typed is left out, not sent.
+    const whole = (value?: string) => (value && /^\d+$/.test(value) ? Number(value) : undefined);
     const params = this.catalogueParams(ratings, genreNames("excluded"));
     const data = await fetchBrowse({
       ...params,
@@ -339,12 +346,13 @@ export class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig>
           ?.map((id) => STATUS_OPTIONS.find((option) => option.id === id)?.value ?? id)
           .join(",") || undefined,
       author: meta.author,
-      yearFrom: meta.yearFrom,
-      yearTo: meta.yearTo,
-      chaptersMin: meta.chaptersMin,
-      chaptersMax: meta.chaptersMax,
+      yearFrom: whole(meta.yearFrom),
+      yearTo: whole(meta.yearTo),
+      chaptersMin: whole(meta.chaptersMin),
+      chaptersMax: whole(meta.chaptersMax),
       sort,
-      order,
+      // Best Match has no direction; every other sort takes the Order filter, as on the site.
+      order: sort !== "relevance" && meta.order === "asc" ? "asc" : "desc",
       page,
     });
     return {

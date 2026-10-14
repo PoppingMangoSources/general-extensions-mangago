@@ -21,10 +21,11 @@ import {
 import {
   CHAPTER_LANGUAGE_OPTIONS,
   CONTENT_RATING_OPTIONS,
+  COUNTRY_OPTIONS,
   DEFAULT_CONTENT_RATINGS,
   DEMOGRAPHIC_OPTIONS,
   MATCH_MODE_OPTIONS,
-  ORIGINAL_LANGUAGE_OPTIONS,
+  ORDER_OPTIONS,
   SECTION_DEFINITIONS,
   SECTION_IDS,
   STATE_KEYS,
@@ -230,6 +231,7 @@ export class ToonkotsuSearchForm extends AdvancedSearchForm {
   private yearTo: string;
   private chaptersMin: string;
   private chaptersMax: string;
+  private order: string;
 
   constructor(
     query: SearchQuery<SearchMetadata>,
@@ -249,6 +251,7 @@ export class ToonkotsuSearchForm extends AdvancedSearchForm {
     this.yearTo = metadata.yearTo ?? "";
     this.chaptersMin = metadata.chaptersMin ?? "";
     this.chaptersMax = metadata.chaptersMax ?? "";
+    this.order = metadata.order ?? "desc";
   }
 
   private selectRow(
@@ -278,9 +281,60 @@ export class ToonkotsuSearchForm extends AdvancedSearchForm {
     });
   }
 
-  // Every group filters the same genres parameter; a row only replaces its own tags' states.
+  // Laid out as the site lays out its own filters. Every tag group filters the same genres
+  // parameter, so a row only replaces its own tags' states.
   override getSections() {
     return [
+      Section("ranges", [
+        this.inputRow("year_from", "Year From", this.yearFrom, (value) => (this.yearFrom = value)),
+        this.inputRow("year_to", "Year To", this.yearTo, (value) => (this.yearTo = value)),
+        this.inputRow(
+          "chapters_min",
+          "Chapters From",
+          this.chaptersMin,
+          (value) => (this.chaptersMin = value),
+        ),
+        this.inputRow(
+          "chapters_max",
+          "Chapters To",
+          this.chaptersMax,
+          (value) => (this.chaptersMax = value),
+        ),
+      ]),
+      Section("filters", [
+        this.selectRow(
+          "statuses",
+          "Status",
+          STATUS_OPTIONS,
+          this.statuses,
+          false,
+          (value) => (this.statuses = value),
+        ),
+        this.selectRow(
+          "ratings",
+          "Content Rating",
+          CONTENT_RATING_OPTIONS,
+          this.ratings,
+          false,
+          (value) => (this.ratings = value),
+        ),
+        this.selectRow(
+          "demographics",
+          "Demographic",
+          DEMOGRAPHIC_OPTIONS,
+          this.demographics,
+          false,
+          (value) => (this.demographics = value),
+        ),
+        this.selectRow(
+          "languages",
+          "Country",
+          COUNTRY_OPTIONS,
+          this.languages,
+          false,
+          (value) => (this.languages = value),
+        ),
+      ]),
       Section(
         "tags",
         this.tagGroups.map((group) => {
@@ -304,7 +358,7 @@ export class ToonkotsuSearchForm extends AdvancedSearchForm {
       Section("tag_modes", [
         this.selectRow(
           "genre_mode",
-          "Included Tags Must Match",
+          "Tag Inclusion Mode",
           MATCH_MODE_OPTIONS,
           [this.genreMode],
           true,
@@ -312,63 +366,26 @@ export class ToonkotsuSearchForm extends AdvancedSearchForm {
         ),
         this.selectRow(
           "exclude_mode",
-          "Excluded Tags Must Match",
+          "Tag Exclusion Mode",
           MATCH_MODE_OPTIONS,
           [this.excludeMode],
           true,
           (value) => (this.excludeMode = value[0] ?? "any"),
         ),
       ]),
-      Section("filters", [
+      // Paperback's sort menu has no direction of its own; the site sets it here, beside the sort.
+      Section("order", [
         this.selectRow(
-          "demographics",
-          "Demographic",
-          DEMOGRAPHIC_OPTIONS,
-          this.demographics,
-          false,
-          (value) => (this.demographics = value),
-        ),
-        this.selectRow(
-          "statuses",
-          "Publication Status",
-          STATUS_OPTIONS,
-          this.statuses,
-          false,
-          (value) => (this.statuses = value),
-        ),
-        this.selectRow(
-          "languages",
-          "Original Language",
-          ORIGINAL_LANGUAGE_OPTIONS,
-          this.languages,
-          false,
-          (value) => (this.languages = value),
-        ),
-        this.selectRow(
-          "ratings",
-          "Content Rating",
-          CONTENT_RATING_OPTIONS,
-          this.ratings,
-          false,
-          (value) => (this.ratings = value),
+          "order",
+          "Order",
+          ORDER_OPTIONS,
+          [this.order],
+          true,
+          (value) => (this.order = value[0] ?? "desc"),
         ),
       ]),
-      Section("details", [
+      Section("author", [
         this.inputRow("author", "Author", this.author, (value) => (this.author = value)),
-        this.inputRow("year_from", "Year From", this.yearFrom, (value) => (this.yearFrom = value)),
-        this.inputRow("year_to", "Year To", this.yearTo, (value) => (this.yearTo = value)),
-        this.inputRow(
-          "chapters_min",
-          "Minimum Chapters",
-          this.chaptersMin,
-          (value) => (this.chaptersMin = value),
-        ),
-        this.inputRow(
-          "chapters_max",
-          "Maximum Chapters",
-          this.chaptersMax,
-          (value) => (this.chaptersMax = value),
-        ),
       ]),
     ];
   }
@@ -387,6 +404,7 @@ export class ToonkotsuSearchForm extends AdvancedSearchForm {
       yearTo: this.yearTo.trim() || undefined,
       chaptersMin: this.chaptersMin.trim() || undefined,
       chaptersMax: this.chaptersMax.trim() || undefined,
+      order: this.order === "asc" ? "asc" : undefined,
     };
   }
 }
