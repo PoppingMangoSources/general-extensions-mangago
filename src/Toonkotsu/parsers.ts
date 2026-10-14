@@ -367,40 +367,43 @@ export const parseChapters = (
   const ordered = [...selected.values()].sort(
     ({ release: a, order: aOrder }, { release: b, order: bOrder }) => {
       if (bySeason) {
-        const season = (parseChapterSeason(a) ?? 1) - (parseChapterSeason(b) ?? 1);
+        const season = (parseChapterSeason(b) ?? 1) - (parseChapterSeason(a) ?? 1);
         if (season) return season;
       }
-      // Build oldest first so the zero-based index also represents the reading order.
+      // Unassigned volumes are newest; a whole-volume upload heads its volume.
       return (
-        (parseChapterNumber(a.vol) ?? Infinity) - (parseChapterNumber(b.vol) ?? Infinity) ||
-        (parseChapterNumber(a.n) ?? Infinity) - (parseChapterNumber(b.n) ?? Infinity) ||
-        b.position - a.position ||
-        bOrder - aOrder
+        (parseChapterNumber(b.vol) ?? Infinity) - (parseChapterNumber(a.vol) ?? Infinity) ||
+        (parseChapterNumber(b.n) ?? Infinity) - (parseChapterNumber(a.n) ?? Infinity) ||
+        a.position - b.position ||
+        aOrder - bOrder
       );
     },
   );
   const hasVolumeData = ordered.some(
     ({ release }) => parseChapterNumber(release.vol) !== undefined,
   );
-  return ordered
-    .map(({ release }, index) => {
-      const { title, group } = parseLabel(release, release.n);
-      const number = parseChapterNumber(release.n);
-      const volume = parseChapterNumber(release.vol);
-      return {
-        chapterId: String(release.id),
-        sourceManga,
-        langCode: "en",
-        chapNum: number ?? 0,
-        title,
-        version: group,
-        // Zero means no volume data; undefined means an unassigned volume in a numbered series.
-        volume: volume ?? (hasVolumeData ? undefined : 0),
-        publishDate: release.at ? new Date(release.at) : undefined,
-        sortingIndex: index,
-      };
-    })
-    .reverse();
+  const parsed: Chapter[] = [];
+  let sortingIndex = 0;
+  for (const { release } of ordered) {
+    const { title, group } = parseLabel(release, release.n);
+    const number = parseChapterNumber(release.n);
+    const volume = parseChapterNumber(release.vol);
+    // Match WeebCentral's negative index override without renumbering the chapter.
+    sortingIndex--;
+    parsed.push({
+      chapterId: String(release.id),
+      sourceManga,
+      langCode: "en",
+      chapNum: number ?? 0,
+      title,
+      version: group,
+      // Zero means no volume data; undefined means an unassigned volume in a numbered series.
+      volume: volume ?? (hasVolumeData ? undefined : 0),
+      publishDate: release.at ? new Date(release.at) : undefined,
+      sortingIndex,
+    });
+  }
+  return parsed;
 };
 
 export const parseReaderKeyResponse = (value: unknown): ReaderKeyResponse => {
