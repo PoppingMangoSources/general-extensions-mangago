@@ -29,10 +29,9 @@ export const STATE_KEYS = {
 export const SECTIONS = {
   MOST_READ: "most-read",
   TRENDING: "trending",
-  TOP_RATED: "top-rated",
+  RECENTLY_ADDED: "recently-added",
   HIDDEN_GEMS: "hidden-gems",
   LATEST: "latest",
-  RECENTLY_ADDED: "recently-added",
   THIS_SEASON: "this-season",
   COMPLETED: "completed",
   GENRES: "genres",
@@ -44,46 +43,49 @@ export const SECTION_DEFINITIONS: Record<SectionId, DiscoverSection> = {
   [SECTIONS.MOST_READ]: {
     id: SECTIONS.MOST_READ,
     title: "Most Read",
+    subtitle: "The titles readers open most",
     type: DiscoverSectionType.featured,
   },
   [SECTIONS.TRENDING]: {
     id: SECTIONS.TRENDING,
     title: "Trending",
+    subtitle: "What is gaining momentum with readers",
     type: DiscoverSectionType.prominentCarousel,
   },
-  [SECTIONS.TOP_RATED]: {
-    id: SECTIONS.TOP_RATED,
-    title: "Top Rated",
+  [SECTIONS.RECENTLY_ADDED]: {
+    id: SECTIONS.RECENTLY_ADDED,
+    title: "Recently Added",
+    subtitle: "New arrivals in the catalogue",
     type: DiscoverSectionType.simpleCarousel,
   },
   [SECTIONS.HIDDEN_GEMS]: {
     id: SECTIONS.HIDDEN_GEMS,
     title: "Hidden Gems",
+    subtitle: "Highly rated finds with fewer readers",
     type: DiscoverSectionType.simpleCarousel,
   },
   [SECTIONS.LATEST]: {
     id: SECTIONS.LATEST,
     title: "Latest Updates",
+    subtitle: "Fresh chapter uploads as they arrive",
     type: DiscoverSectionType.chapterUpdates,
-  },
-  [SECTIONS.RECENTLY_ADDED]: {
-    id: SECTIONS.RECENTLY_ADDED,
-    title: "Recently Added",
-    type: DiscoverSectionType.simpleCarousel,
   },
   [SECTIONS.THIS_SEASON]: {
     id: SECTIONS.THIS_SEASON,
     title: "This Season",
+    subtitle: "The catalogue's seasonal picks",
     type: DiscoverSectionType.simpleCarousel,
   },
   [SECTIONS.COMPLETED]: {
     id: SECTIONS.COMPLETED,
     title: "Completed",
+    subtitle: "Finished stories to read from start to end",
     type: DiscoverSectionType.simpleCarousel,
   },
   [SECTIONS.GENRES]: {
     id: SECTIONS.GENRES,
     title: "Genres",
+    subtitle: "Find your next read by genre",
     type: DiscoverSectionType.genres,
   },
 };

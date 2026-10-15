@@ -249,8 +249,6 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
         const data = await fetchLatest(page, params);
         return { kind: "latest", items: data.items, hasNext: data.hasNextPage ?? false };
       }
-      case SECTIONS.TOP_RATED:
-        return this.browseSection({ ...params, sort: "score", order: "desc", page }, page);
       case SECTIONS.RECENTLY_ADDED:
         return this.browseSection({ ...params, sort: "new", order: "desc", page }, page);
       case SECTIONS.THIS_SEASON:

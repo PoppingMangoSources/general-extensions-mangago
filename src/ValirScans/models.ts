@@ -237,8 +237,7 @@ export const SECTIONS = {
 export const DISCOVER_SECTIONS: DiscoverSection[] = [
   {
     id: SECTIONS.FEATURED,
-    title: "Top 10",
-    subtitle: "The site's highest-rated novels and comics",
+    title: "",
     type: DiscoverSectionType.featured,
   },
   {
