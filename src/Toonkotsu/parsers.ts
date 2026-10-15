@@ -296,6 +296,62 @@ const parseChapterNumber = (value: string | number | null | undefined): number |
   return Number.isFinite(number) ? number : undefined;
 };
 
+const decimalPlaces = (value: number): number => {
+  const [mantissa, exponent = "0"] = String(value).split("e");
+  return Math.max(0, (mantissa?.split(".")[1]?.length ?? 0) - Number(exponent));
+};
+
+// Paperback groups versions by chapter number, even when the volumes differ.
+const separateChapterNumbers = (chapters: Chapter[]): Chapter[] => {
+  if (!chapters.length) return chapters;
+  const knownVolumes = [...new Set(chapters.flatMap(({ volume }) => volume ?? []))];
+  const unassignedVolume = Math.floor(Math.max(0, ...knownVolumes)) + 1;
+  const volumes = [...knownVolumes, unassignedVolume];
+  const offset = Math.min(0, ...volumes);
+  // Scale fractional volumes together so each volume has a distinct integer suffix.
+  const scale = 10 ** Math.max(...volumes.map(decimalPlaces));
+  const volumesByNumber = new Map<number, Set<number>>();
+  for (const chapter of chapters) {
+    const values = volumesByNumber.get(chapter.chapNum) ?? new Set<number>();
+    values.add(chapter.volume ?? unassignedVolume);
+    volumesByNumber.set(chapter.chapNum, values);
+  }
+  const lowestVolumes = new Map(
+    [...volumesByNumber].map(([number, values]) => [number, Math.min(...values)]),
+  );
+  let width = Math.max(3, String(Math.round((Math.max(...volumes) - offset) * scale)).length);
+  for (;;) {
+    const occupied = new Map<number, string>();
+    const parsed: Chapter[] = [];
+    let collision = false;
+    for (const chapter of chapters) {
+      const volume = chapter.volume ?? unassignedVolume;
+      const key = JSON.stringify([volume, chapter.chapNum]);
+      let number = chapter.chapNum;
+      if (volume !== lowestVolumes.get(chapter.chapNum)) {
+        const original = number.toFixed(decimalPlaces(number));
+        const suffix = String(Math.round((volume - offset) * scale)).padStart(width, "0");
+        number = Number(`${original}${original.includes(".") ? "" : "."}${suffix}`);
+        if (!Number.isFinite(number) || number === chapter.chapNum) {
+          throw new Error("Cannot separate these chapter numbers without losing precision.");
+        }
+      }
+      const previous = occupied.get(number);
+      if (previous !== undefined && previous !== key) {
+        collision = true;
+        break;
+      }
+      occupied.set(number, key);
+      parsed.push({ ...chapter, chapNum: number });
+    }
+    if (!collision) {
+      return parsed;
+    }
+    // A real fractional chapter may already use the proposed suffix; try a longer one.
+    width++;
+  }
+};
+
 const parseChapterSeason = (entry: ChapterEntry): number | undefined => {
   const match = /^\s*\[?\s*(?:s|season)\s*(\d{1,3})\s*\]?\s*(?=[-:·–—|]|\s|$)/i.exec(
     entry.label ?? "",
@@ -392,7 +448,7 @@ export const parseChapters = (
     const { title, group } = parseLabel(release, release.n);
     const number = parseChapterNumber(release.n);
     const volume = parseChapterNumber(release.vol);
-    // Match WeebCentral's negative index override without renumbering the chapter.
+    // Keep the site's volume-first order when Paperback sorts the chapter groups.
     sortingIndex--;
     parsed.push({
       chapterId: String(release.id),
@@ -407,7 +463,7 @@ export const parseChapters = (
       sortingIndex,
     });
   }
-  return parsed;
+  return separateChapterNumbers(parsed);
 };
 
 export const parseReaderKeyResponse = (value: unknown): ReaderKeyResponse => {

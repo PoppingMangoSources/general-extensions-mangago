@@ -29,7 +29,7 @@
 
 ## Temporary sorting diagnostic
 
-**ToonkotsuSortCheck** is available on `0.9/test` while investigating chapter ordering. It uses the same Toonkotsu parser and reader under a separate source identity. Chapter numbers shared by multiple volumes keep their original number in the lowest volume; later volumes receive a decimal volume suffix, such as `1.002` for Volume 2. Unassigned volumes use the number after the highest volume. Real fractional chapters are preserved, and longer suffixes are used if needed to avoid collisions. The regular Toonkotsu library entry and reading progress stay separate.
+Toonkotsu separates chapter numbers reused across volumes with a decimal volume suffix, such as `1.002` for Volume 2, so Paperback keeps each volume's chapters in the site's order. The lowest volume retains the original chapter number, and uploads of the same chapter stay grouped together.
 
 ## Sources
 

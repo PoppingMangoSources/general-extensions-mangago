@@ -92,7 +92,7 @@ const hasNextPage = (data: SeriesListResponse, page: number): boolean =>
     ? page * (data.limit ?? PAGE_SIZE) < data.total
     : data.items.length >= PAGE_SIZE);
 
-export class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
+class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
   private rateLimiter = new BasicRateLimiter("rateLimiter", {
     numberOfRequests: 5,
     bufferInterval: 1,
