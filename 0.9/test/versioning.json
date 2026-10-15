@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-10-15T17:08:23.207Z",
+  "buildTime": "2026-10-15T18:09:59.921Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -563,7 +563,7 @@
     {
       "name": "Toonkotsu",
       "description": "Extension that pulls content from toonkotsu.com.",
-      "version": "1.0.0-alpha.18",
+      "version": "1.0.0-alpha.19",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
@@ -586,7 +586,7 @@
     {
       "name": "ValirScans",
       "description": "Extension that pulls comics and novels from valirscans.org.",
-      "version": "1.0.0-alpha.21",
+      "version": "1.0.0-alpha.22",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
