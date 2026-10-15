@@ -85,7 +85,6 @@ export const SECTION_DEFINITIONS: Record<SectionId, DiscoverSection> = {
   [SECTIONS.GENRES]: {
     id: SECTIONS.GENRES,
     title: "Genres",
-    subtitle: "Find your next read by genre",
     type: DiscoverSectionType.genres,
   },
 };

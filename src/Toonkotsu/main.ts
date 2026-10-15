@@ -148,7 +148,11 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
     const hidden = new Set(getHiddenSections());
     return getSectionOrder()
       .filter((id) => !hidden.has(id))
-      .map((id) => SECTION_DEFINITIONS[id]);
+      .map((id) =>
+        id === SECTIONS.GENRES
+          ? { ...SECTION_DEFINITIONS[id], title: "" }
+          : SECTION_DEFINITIONS[id],
+      );
   }
 
   // The settings' types and hidden tags narrow every catalogue request; pornographic titles are
