@@ -38,6 +38,7 @@ import {
   fetchBrowsePage,
   fetchChapterPage,
   fetchHomePage,
+  fetchFacets,
   fetchSeriesPage,
   ValirScansInterceptor,
 } from "./network";
@@ -138,11 +139,20 @@ class ValirScansExtension implements ExtensionImpl<typeof ValirScansConfig> {
     section: DiscoverSection,
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    if (section.id === SECTIONS.NEW_SERIES) {
+    if (section.id === SECTIONS.NEW_SERIES || section.id === SECTIONS.TOP_RATED) {
       const page = metadata?.page ?? 1;
-      const browse = parseBrowsePage(await fetchBrowsePage(page, undefined, "newest"));
+      const browse = parseBrowsePage(
+        await fetchBrowsePage(
+          page,
+          undefined,
+          section.id === SECTIONS.TOP_RATED ? "rating" : "newest",
+        ),
+      );
       return {
-        items: toCarouselItems(browse.series, "simpleCarouselItem"),
+        items: toCarouselItems(
+          browse.series,
+          section.id === SECTIONS.TOP_RATED ? "prominentCarouselItem" : "simpleCarouselItem",
+        ),
         metadata: browse.hasMore ? { page: page + 1 } : undefined,
       };
     }
@@ -150,7 +160,7 @@ class ValirScansExtension implements ExtensionImpl<typeof ValirScansConfig> {
     const home = await this.getHomeSections();
     switch (section.id) {
       case SECTIONS.FEATURED:
-        return { items: toFeaturedItems(home.featured) };
+        return { items: toFeaturedItems(home.mostPopular) };
       case SECTIONS.EDITORS_PICKS:
         return { items: toCarouselItems(home.editorsPicks, "prominentCarouselItem") };
       case SECTIONS.LATEST_COMICS:
@@ -159,8 +169,6 @@ class ValirScansExtension implements ExtensionImpl<typeof ValirScansConfig> {
         return { items: toChapterUpdateItems(home.latestUpdates, true) };
       case SECTIONS.POPULAR_TODAY:
         return { items: toCarouselItems(home.popularToday, "prominentCarouselItem") };
-      case SECTIONS.MOST_POPULAR:
-        return { items: toCarouselItems(home.mostPopular, "simpleCarouselItem", true) };
       default:
         return { items: [] };
     }
@@ -193,7 +201,7 @@ class ValirScansExtension implements ExtensionImpl<typeof ValirScansConfig> {
   }
 
   private getTaxonomy(): Promise<FilterTaxonomy> {
-    this.taxonomyPromise ??= fetchBrowsePage(1)
+    this.taxonomyPromise ??= fetchFacets()
       .then(parseFilterTaxonomy)
       .then((taxonomy) => (taxonomy.genres.length > 0 ? taxonomy : { ...taxonomy, genres: GENRES }))
       .catch((error: unknown) => {

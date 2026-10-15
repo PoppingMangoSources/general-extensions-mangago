@@ -20,6 +20,7 @@ import {
   type FilterTaxonomy,
   type HomeSections,
   LOCKED_CHAPTER_PREFIX,
+  NOVEL_TYPES,
   type ValirChapterItem,
   type ValirReaderData,
   type ValirSeries,
@@ -35,8 +36,14 @@ const sanitizeId = (value: string): string =>
 
 // Page data ships in a Next.js RSC flight stream as escaped JS string literals;
 // undo that escaping so JSON values can later be sliced out by their keys.
-const decodeFlightPayload = (html: string): string =>
-  html.replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+const decodeFlightPayload = (html: string): string => {
+  const chunks: string[] = [];
+  for (const match of html.matchAll(/<script[^>]*>self\.__next_f\.push\(([\s\S]*?)\)<\/script>/g)) {
+    const row: unknown = JSON.parse(match[1]);
+    if (Array.isArray(row) && typeof row[1] === "string") chunks.push(row[1]);
+  }
+  return chunks.length ? chunks.join("") : html;
+};
 
 const sliceBalanced = (payload: string, start: number): string | undefined => {
   let depth = 0;
@@ -90,7 +97,17 @@ const extractByMarker = <T>(payload: string, marker: string, keepMarker = false)
 };
 
 const isNovel = (series: ValirSeries): boolean =>
-  (series.type ?? "").toUpperCase().includes("NOVEL");
+  NOVEL_TYPES.some(
+    (name) => name.toUpperCase() === (series.type ?? "").replaceAll("_", " ").toUpperCase(),
+  );
+
+const seriesTitle = (series: ValirSeries): string => {
+  const title = cleanText(series.title);
+  const type = (series.type ?? "").replaceAll("_", " ").trim();
+  if (!type || ["MANHWA", "MANHUA", "MANGA", "OEL"].includes(type.toUpperCase())) return title;
+  const label = type.toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return `${title} (${label})`;
+};
 
 // Series URLs are /series/{comic|novel}/{urlSlug}; keeping both parts in the
 // manga id lets every endpoint rebuild the URL without extra lookups.
@@ -120,16 +137,23 @@ const cleanText = (value?: string | null): string =>
 const toTitleCase = (value: string): string =>
   value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
 
-const statSubtitle = (series: ValirSeries, rank?: number): string | undefined => {
-  // Ranked carousels lead with the rank number, unranked ones with the rating;
-  // both trail with view count. Keeping it to two stats stops the subtitle from
-  // overflowing the card.
-  const lead =
-    rank !== undefined ? `#${rank}` : series.rating ? `★ ${series.rating.toFixed(1)}` : "";
-  const parts = [lead, series.viewCount ? `${formatCount(series.viewCount)} views` : ""].filter(
-    Boolean,
+const statSubtitle = (series: ValirSeries): string | undefined => {
+  const parts = [
+    series.rating ? `★ ${series.rating.toFixed(1)}` : "",
+    series.viewCount ? `${formatCount(series.viewCount)} views` : "",
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : undefined;
+};
+
+const isValirSeries = (value: unknown): value is ValirSeries => {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "slug" in value &&
+    typeof value.slug === "string" &&
+    "title" in value &&
+    typeof value.title === "string"
   );
-  return parts.length > 0 ? parts.join(" · ") : undefined;
 };
 
 export const parseHomeSections = (html: string): HomeSections => {
@@ -138,44 +162,44 @@ export const parseHomeSections = (html: string): HomeSections => {
     (list) => Array.isArray(list) && list.length > 0,
   );
   return {
-    featured: extractByMarker<ValirSeries[]>(payload, '"initialSlides":')[0] ?? [],
     // The card-stack, updates and new-series components all pass a `series`
     // prop; tell them apart by the fields unique to each item shape.
     editorsPicks:
       seriesLists.find((list) => "viewCount" in list[0] && !("createdAt" in list[0])) ?? [],
     latestUpdates: seriesLists.find((list) => "lastChapterAt" in list[0]) ?? [],
     popularToday: extractByMarker<ValirSeries[]>(payload, '"novels":')[0] ?? [],
-    // Ranked cards are emitted in rank order, one `novel` prop per card.
-    mostPopular: extractByMarker<ValirSeries>(payload, '"novel":').filter(
-      (series) => !!series.slug && !!series.title,
+    // The Top 10 component supplies its ranked cards in a single rows prop.
+    mostPopular: (extractByMarker<ValirSeries[]>(payload, '"rows":')[0] ?? []).filter(
+      isValirSeries,
     ),
   };
 };
 
 // The filter component holds the full genre/tag lists as flat `{ name, slug }`
 // records; match on top-level name+slug to isolate them from nested card data.
-export const parseFilterTaxonomy = (html: string): FilterTaxonomy => {
-  const payload = decodeFlightPayload(html);
-  const pick = (key: string): FilterOption[] =>
-    (
-      extractByMarker<{ name?: string; slug?: string }[]>(payload, `"${key}":`)
-        .filter((list) => Array.isArray(list) && !!list[0]?.name && !!list[0]?.slug)
-        .sort((a, b) => b.length - a.length)[0] ?? []
-    ).flatMap((entry) =>
-      entry.name && entry.slug
+export const parseFilterTaxonomy = (body: string): FilterTaxonomy => {
+  const result = JSON.parse(body) as {
+    genres?: { name?: string; slug?: string }[];
+    tags?: { name?: string; slug?: string }[];
+  };
+  const pick = (entries: { name?: string; slug?: string }[] | undefined): FilterOption[] =>
+    (entries ?? []).flatMap((entry) =>
+      typeof entry.name === "string" && typeof entry.slug === "string"
         ? [{ id: sanitizeId(entry.slug), title: cleanText(entry.name) }]
         : [],
     );
-  return { genres: pick("genres"), tags: pick("tags") };
+  return { genres: pick(result.genres), tags: pick(result.tags) };
 };
 
-export const parseBrowsePage = (html: string): BrowsePage => {
-  const payload = decodeFlightPayload(html);
-  const series = extractByMarker<ValirSeries[]>(payload, '"initialSeries":')[0];
-  if (!series) {
-    throw new Error("ValirScans: no series list found in browse page");
-  }
-  return { series, hasMore: payload.includes('"initialHasMore":true') };
+export const parseBrowsePage = (body: string): BrowsePage => {
+  const result = JSON.parse(body) as { data?: unknown; meta?: { hasMore?: boolean } };
+  if (
+    !Array.isArray(result.data) ||
+    !result.data.every(isValirSeries) ||
+    typeof result.meta?.hasMore !== "boolean"
+  )
+    throw new Error("ValirScans returned an invalid catalogue response.");
+  return { series: result.data, hasMore: result.meta.hasMore };
 };
 
 export const parseSeriesPage = (html: string): ValirSeriesPage => {
@@ -216,7 +240,7 @@ export const parseMangaDetails = (page: ValirSeriesPage, mangaId: string): Sourc
   return {
     mangaId,
     mangaInfo: {
-      primaryTitle: cleanText(series.title),
+      primaryTitle: seriesTitle(series),
       secondaryTitles,
       thumbnailUrl: toAbsoluteUrl(series.coverImage),
       bannerUrl: series.bannerImage ? toAbsoluteUrl(series.bannerImage) : undefined,
@@ -353,8 +377,15 @@ export const toFeaturedItems = (list: ValirSeries[]): DiscoverSectionItem[] =>
       type: "featuredCarouselItem",
       mangaId: toMangaId(series),
       imageUrl: toAbsoluteUrl(series.coverImage),
-      title: cleanText(series.title),
-      supertitle: series.type ? toTitleCase(series.type.replaceAll("_", " ")) : undefined,
+      title: seriesTitle(series),
+      supertitle:
+        (series.genres ?? [])
+          .flatMap((entry) => {
+            const genre = entry.genre ?? entry;
+            return genre.name ? [cleanText(genre.name)] : [];
+          })
+          .slice(0, 2)
+          .join(" • ") || undefined,
       summary: cleanText(series.description) || undefined,
       infoItems: (infoItems.length > 0
         ? infoItems
@@ -366,14 +397,13 @@ export const toFeaturedItems = (list: ValirSeries[]): DiscoverSectionItem[] =>
 export const toCarouselItems = (
   list: ValirSeries[],
   type: "simpleCarouselItem" | "prominentCarouselItem",
-  ranked = false,
 ): DiscoverSectionItem[] =>
-  list.map((series, index) => ({
+  list.map((series) => ({
     type,
     mangaId: toMangaId(series),
     imageUrl: toAbsoluteUrl(series.coverImage),
-    title: cleanText(series.title),
-    subtitle: statSubtitle(series, ranked ? index + 1 : undefined),
+    title: seriesTitle(series),
+    subtitle: statSubtitle(series),
     contentRating: toContentRating(series),
   }));
 
@@ -395,7 +425,7 @@ export const toChapterUpdateItems = (
           mangaId: toMangaId(series),
           chapterId: String(chapter.number),
           imageUrl: toAbsoluteUrl(series.coverImage),
-          title: cleanText(series.title),
+          title: seriesTitle(series),
           // Update cards show the chapter number, not its title text (some
           // chapters carry a name after the number that would read oddly here).
           subtitle: `Chapter ${chapter.number}`,
@@ -414,7 +444,7 @@ export const toSearchResultItem = (series: ValirSeries): SearchResultItem => {
     .join(" · ");
   return {
     mangaId: toMangaId(series),
-    title: cleanText(series.title),
+    title: seriesTitle(series),
     imageUrl: toAbsoluteUrl(series.coverImage),
     subtitle: subtitle.length > 0 ? subtitle : undefined,
     contentRating: toContentRating(series),

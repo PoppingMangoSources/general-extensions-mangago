@@ -4,12 +4,14 @@
 import {
   AdvancedSearchForm,
   InputRow,
+  SelectRow,
   Section,
   TriStateSelectRow,
   type SearchQuery,
 } from "@paperback/types";
 
 import {
+  CHAPTER_PRESETS,
   ORIGIN_OPTIONS,
   STATUS_OPTIONS,
   TYPE_OPTIONS,
@@ -65,7 +67,19 @@ export class ValirScansAdvancedSearchForm extends AdvancedSearchForm {
       this.triStateSection("types", "Types", TYPE_OPTIONS, "handleTypesChange"),
       this.triStateSection("statuses", "Status", STATUS_OPTIONS, "handleStatusesChange"),
       this.triStateSection("origins", "Origins", ORIGIN_OPTIONS, "handleOriginsChange"),
-      Section({ id: "chapter_count", footer: "Number of chapters, e.g. 20 to 100." }, [
+      Section({ id: "chapter_count", footer: "Custom bounds override the quick selection." }, [
+        SelectRow("chapter_preset", {
+          title: "Quick Select",
+          items: CHAPTER_PRESETS,
+          value: this.searchMetadata.chapterPreset ? [this.searchMetadata.chapterPreset] : [],
+          layout: "flow",
+          minItemCount: 0,
+          maxItemCount: 1,
+          onValueChange: Application.Selector(
+            this as ValirScansAdvancedSearchForm,
+            "handleChapterPresetChange",
+          ),
+        }),
         InputRow("min_chapters", {
           title: "Chapters From",
           value: this.searchMetadata.minChapters ?? "",
@@ -109,6 +123,10 @@ export class ValirScansAdvancedSearchForm extends AdvancedSearchForm {
 
   async handleOriginsChange(value: TriState): Promise<void> {
     this.searchMetadata.origins = ValirScansAdvancedSearchForm.sparse(value);
+  }
+
+  async handleChapterPresetChange(value: string[]): Promise<void> {
+    this.searchMetadata.chapterPreset = value[0] || undefined;
   }
 
   async handleMinChaptersChange(value: string): Promise<void> {

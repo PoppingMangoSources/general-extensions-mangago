@@ -86,7 +86,6 @@ export interface ValirAccountStatus {
 }
 
 export interface HomeSections {
-  featured: ValirSeries[];
   editorsPicks: ValirSeries[];
   latestUpdates: ValirSeries[];
   popularToday: ValirSeries[];
@@ -121,6 +120,7 @@ export interface SearchMetadata extends JSONObject {
   origins?: TriState;
   minChapters?: string;
   maxChapters?: string;
+  chapterPreset?: string;
 }
 
 export const SORTING_OPTIONS: SortingOption[] = [
@@ -135,27 +135,47 @@ export const SORTING_OPTIONS: SortingOption[] = [
 
 // Option ids are the exact values the site's browse URL accepts
 // (e.g. ?type=Manhwa, ?status=Ongoing, ?origin=KOREAN).
+export const NOVEL_TYPES = [
+  "Novel",
+  "Light Novel",
+  "Web Novel",
+  "Published Novel",
+  "Fanfiction",
+  "Original Fiction",
+  "One Shot",
+];
+
 export const TYPE_OPTIONS: FilterOption[] = [
   { id: "Manhwa", title: "Manhwa" },
   { id: "Manhua", title: "Manhua" },
   { id: "Manga", title: "Manga" },
-  { id: "Comic", title: "Comic" },
   { id: "Webtoon", title: "Webtoon" },
-  { id: "Novel", title: "Novel" },
+  ...NOVEL_TYPES.map((type) => ({ id: type, title: type })),
 ];
 
 export const STATUS_OPTIONS: FilterOption[] = [
   { id: "Ongoing", title: "Ongoing" },
   { id: "Completed", title: "Completed" },
   { id: "Hiatus", title: "Hiatus" },
-  { id: "Cancelled", title: "Cancelled" },
+  { id: "Dropped", title: "Dropped" },
+  { id: "Discontinued", title: "Discontinued" },
+  { id: "Upcoming", title: "Upcoming" },
 ];
 
 export const ORIGIN_OPTIONS: FilterOption[] = [
   { id: "KOREAN", title: "Korean" },
   { id: "JAPANESE", title: "Japanese" },
   { id: "CHINESE", title: "Chinese" },
-  { id: "ENGLISH", title: "English" },
+  { id: "OTHER", title: "Other" },
+];
+
+export const CHAPTER_PRESETS = [
+  { id: "", title: "Any" },
+  { id: "1-50", title: "1–50" },
+  { id: "50-100", title: "50–100" },
+  { id: "100-200", title: "100–200" },
+  { id: "200+", title: "200+" },
+  { id: "500+", title: "500+" },
 ];
 
 // Bundled fallback for the genre filter; the live taxonomy (genres + the
@@ -210,13 +230,23 @@ export const SECTIONS = {
   LATEST_COMICS: "latest-comics",
   LATEST_NOVELS: "latest-novels",
   POPULAR_TODAY: "popular-today",
-  MOST_POPULAR: "most-popular",
+  TOP_RATED: "top-rated",
   NEW_SERIES: "new-series",
 } as const;
 
 export const DISCOVER_SECTIONS: DiscoverSection[] = [
-  { id: SECTIONS.FEATURED, title: "Top Featured", type: DiscoverSectionType.featured },
-  { id: SECTIONS.MOST_POPULAR, title: "Most Popular", type: DiscoverSectionType.simpleCarousel },
+  {
+    id: SECTIONS.FEATURED,
+    title: "Top 10",
+    subtitle: "The site's highest-rated novels and comics",
+    type: DiscoverSectionType.featured,
+  },
+  {
+    id: SECTIONS.TOP_RATED,
+    title: "Top Rated",
+    subtitle: "The highest-rated titles in the catalogue",
+    type: DiscoverSectionType.prominentCarousel,
+  },
   {
     id: SECTIONS.LATEST_COMICS,
     title: "Latest Comic Updates",

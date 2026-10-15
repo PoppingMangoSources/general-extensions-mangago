@@ -10,7 +10,14 @@ import {
 } from "@paperback/types";
 
 import { getBaseUrl } from "./forms/settings";
-import { type SearchMetadata, type TriState, type ValirAccountStatus } from "./models";
+import {
+  TYPE_OPTIONS,
+  STATUS_OPTIONS,
+  ORIGIN_OPTIONS,
+  type SearchMetadata,
+  type TriState,
+  type ValirAccountStatus,
+} from "./models";
 
 // Discover loads several sections at once, so a challenge would otherwise
 // raise one bypass prompt per in-flight request. Only the first challenge in
@@ -109,30 +116,45 @@ export const fetchBrowsePage = (
   sort?: string,
   filters?: SearchMetadata,
 ): Promise<string> => {
-  const url = new URL(`${getBaseUrl()}/series`).setQueryItem("page", page.toString());
+  const url = new URL(`${getBaseUrl()}/api/series`)
+    .setQueryItem("page", page.toString())
+    .setQueryItem("limit", "24")
+    .setQueryItem("mode", "all");
   if (query?.trim()) url.setQueryItem("q", query.trim());
-  if (sort) {
-    url.setQueryItem("sort", sort).setQueryItem("order", "desc");
-  }
-  const triStateParams: [string, TriState | undefined][] = [
+  if (sort) url.setQueryItem("sort", sort).setQueryItem("order", "desc");
+  for (const [name, record] of [
     ["genre", filters?.genres],
     ["tag", filters?.tags],
-    ["type", filters?.types],
-    ["status", filters?.statuses],
-    ["origin", filters?.origins],
-  ];
-  for (const [param, record] of triStateParams) {
-    const included = pickState(record, "included");
-    const excluded = pickState(record, "excluded");
-    if (included.length > 0) url.setQueryItem(param, included);
-    if (excluded.length > 0) {
-      url.setQueryItem(`exclude${param.charAt(0).toUpperCase()}${param.slice(1)}`, excluded);
-    }
+  ] as const) {
+    const included = pickState(record, "included"),
+      excluded = pickState(record, "excluded");
+    if (included.length) url.setQueryItem(name, included.join(","));
+    if (excluded.length) url.setQueryItem(`ex${name}`, excluded.join(","));
   }
-  if (filters?.minChapters) url.setQueryItem("minChapters", filters.minChapters);
-  if (filters?.maxChapters) url.setQueryItem("maxChapters", filters.maxChapters);
+  for (const [name, record, options] of [
+    ["type", filters?.types, TYPE_OPTIONS],
+    ["status", filters?.statuses, STATUS_OPTIONS],
+    ["origin", filters?.origins, ORIGIN_OPTIONS],
+  ] as const) {
+    const included = pickState(record, "included"),
+      excluded = pickState(record, "excluded");
+    if (!included.length && !excluded.length) continue;
+    const selected = (included.length ? included : options.map((option) => option.id)).filter(
+      (id) => !excluded.includes(id),
+    );
+    if (!selected.length) return Promise.resolve('{"data":[],"meta":{"hasMore":false}}');
+    url.setQueryItem(name, selected.join(","));
+  }
+  const preset = /^(\d+)(?:-(\d+)|(\+))$/.exec(filters?.chapterPreset ?? "");
+  const custom = !!(filters?.minChapters || filters?.maxChapters);
+  const min = custom ? filters?.minChapters : preset?.[1];
+  const max = custom ? filters?.maxChapters : preset?.[2];
+  if (min) url.setQueryItem("ch_min", min);
+  if (max) url.setQueryItem("ch_max", max);
   return fetchPage(url.toString());
 };
+
+export const fetchFacets = (): Promise<string> => fetchPage(`${getBaseUrl()}/api/series/facets`);
 
 export const fetchSeriesPage = (mangaId: string, page = 1): Promise<string> =>
   fetchPage(`${getBaseUrl()}/series/${mangaId}${page > 1 ? `?page=${page}` : ""}`);
