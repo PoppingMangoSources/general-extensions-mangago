@@ -9,7 +9,7 @@ export default {
   ...ToonkotsuConfig,
   name: "ToonkotsuSortCheck",
   description:
-    "Temporary Toonkotsu sorting diagnostic. Uses fresh chapter records and displays each sorting index.",
-  version: "1.0.0-alpha.1",
+    "Temporary Toonkotsu sorting test. Adds volume suffixes to chapter numbers that clash across volumes.",
+  version: "1.0.0-alpha.2",
   badges: [{ label: "Sorting Test", textColor: "#ffffff", backgroundColor: "#9368a8" }],
 } satisfies ExtensionInfo;

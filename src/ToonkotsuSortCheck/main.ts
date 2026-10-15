@@ -4,6 +4,7 @@
 import type { Chapter, ExtensionImpl, SourceManga } from "@paperback/types";
 
 import { ToonkotsuExtension } from "../Toonkotsu/main";
+import { parseChapters } from "./parsers";
 import type ToonkotsuSortCheckConfig from "./pbconfig";
 
 class ToonkotsuSortCheckExtension
@@ -11,13 +12,7 @@ class ToonkotsuSortCheckExtension
   implements ExtensionImpl<typeof ToonkotsuSortCheckConfig>
 {
   override async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
-    const chapters = await super.getChapters(sourceManga);
-    return chapters.map((chapter) => ({
-      ...chapter,
-      title: [chapter.title, `Sort Check 1: index ${chapter.sortingIndex}`]
-        .filter(Boolean)
-        .join(" - "),
-    }));
+    return parseChapters(await super.getChapters(sourceManga));
   }
 }
 
