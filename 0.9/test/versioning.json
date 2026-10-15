@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-10-14T23:40:15.421Z",
+  "buildTime": "2026-10-15T09:44:20.521Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -585,8 +585,8 @@
     },
     {
       "name": "ToonkotsuSortCheck",
-      "description": "Temporary Toonkotsu sorting diagnostic. Uses fresh chapter records and displays each sorting index.",
-      "version": "1.0.0-alpha.1",
+      "description": "Temporary Toonkotsu sorting test. Adds volume suffixes to chapter numbers that clash across volumes.",
+      "version": "1.0.0-alpha.2",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
