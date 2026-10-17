@@ -9,11 +9,12 @@ export const FALLBACK_IMAGE_URL = `${DOMAIN}/logo.png`;
 export const PAGE_SIZE = 20;
 
 export const SECTIONS = {
-  POPULAR_YEAR: "popular_year",
+  FEATURED: "featured",
+  POPULAR: "popular",
   POPULAR_WEEK: "popular_week",
   POPULAR_MONTH: "popular_month",
+  POPULAR_YEAR: "popular_year",
   LATEST: "latest",
-  FEATURED: "featured",
   NOVELS: "novels",
   LATEST_NOVELS: "latest_novels",
   POPULAR_NOVELS: "popular_novels",
@@ -170,6 +171,7 @@ export interface MangaListItem {
   mangaId: string;
   title: string;
   imageUrl: string;
+  bannerImageUrl: string;
   summary?: string;
   author?: string;
   status?: string;

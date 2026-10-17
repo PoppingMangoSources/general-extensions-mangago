@@ -60,8 +60,8 @@ const firstImageUrl = (...values: (string | null | undefined)[]): string => {
   return "";
 };
 
-// Cards use still images: a carousel of animated covers stalls and can crash Discover. A title's
-// own page and the site's short hand-picked row keep the animation.
+// Cards use still images unless a row asks for animation: animated covers in every carousel stall
+// and can crash Discover.
 const stillImageUrl = (...values: (string | null | undefined)[]): string => {
   for (const value of values) {
     const url = toAbsoluteUrl(value);
@@ -139,7 +139,6 @@ const formatViews = (views?: number): string | undefined => {
   return `${views} views`;
 };
 
-// A card shows the series' cover, never the wide banner, so a title looks the same in every row.
 export const parseMangaList = (series: Series[], animated = false): MangaListItem[] =>
   series.map((item) => {
     const views =
@@ -151,6 +150,10 @@ export const parseMangaList = (series: Series[], animated = false): MangaListIte
         (animated
           ? firstImageUrl(item.coverUrl, item.bannerUrl)
           : stillImageUrl(item.coverUrl, item.bannerUrl)) || FALLBACK_IMAGE_URL,
+      bannerImageUrl:
+        (animated
+          ? firstImageUrl(item.bannerUrl, item.coverUrl)
+          : stillImageUrl(item.bannerUrl, item.coverUrl)) || FALLBACK_IMAGE_URL,
       summary: decodeText(item.description) || undefined,
       author: decodeText(item.author) || undefined,
       status: mapStatus(item.publicationStatus),
@@ -176,7 +179,7 @@ export const toFeaturedItem = (item: MangaListItem): DiscoverSectionItem => {
     type: "featuredCarouselItem",
     mangaId: item.mangaId,
     title: item.title,
-    imageUrl: item.imageUrl,
+    imageUrl: item.bannerImageUrl,
     supertitle: item.mediaType,
     summary: item.summary,
     infoItems:
