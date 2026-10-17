@@ -9,7 +9,16 @@ import {
   type Response,
 } from "@paperback/types";
 
-import { API_URL, DECODE_RSC_KEYS, DOMAIN, RSC_FIELDS, type RscTable } from "./models";
+import {
+  API_URL,
+  DOMAIN,
+  READ_SITE_PAGE,
+  SITE_PAGE_SETTLE_MS,
+  SITE_PAGE_TIMEOUT_MS,
+  type SitePageKind,
+} from "./models";
+
+const IMAGE_REGEX = /\/uploads\/|\.(?:avif|gif|jpe?g|png|webp)(?:[?#]|$)/i;
 
 export class TempleScanInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
@@ -24,6 +33,15 @@ export class TempleScanInterceptor extends PaperbackInterceptor {
       headers: {
         ...request.headers,
         ...(firstParty ? { referer: `${DOMAIN}/` } : {}),
+        // The image host checks for the headers a browser sends with an image load.
+        ...(IMAGE_REGEX.test(request.url)
+          ? {
+              accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+              "sec-fetch-site": "same-site",
+              "sec-fetch-mode": "no-cors",
+              "sec-fetch-dest": "image",
+            }
+          : {}),
         "user-agent": await Application.getDefaultUserAgent(),
       },
     };
@@ -43,11 +61,22 @@ export class TempleScanInterceptor extends PaperbackInterceptor {
         },
       });
     }
+    // The site's own verification redirects to /challenge, which passes in a browser and sends it
+    // back to the page it was asked for.
+    if (/^https:\/\/templetoons\.com\/challenge(?:[?#]|$)/i.test(response.url ?? "")) {
+      throw new CloudflareError({
+        url: request.url,
+        method: "GET",
+        headers: {
+          "user-agent": await Application.getDefaultUserAgent(),
+        },
+      });
+    }
     return data;
   }
 }
 
-// Without this an error body reaches the flight parser as "no series data".
+// Without this an error body reaches the parsers as "no data".
 const assertOk = (url: string, status: number): void => {
   if (status === 404) throw new Error(`Content not found: ${url}`);
   if (status < 200 || status >= 300) {
@@ -55,27 +84,11 @@ const assertOk = (url: string, status: number): void => {
   }
 };
 
-// Routes are Next.js App Router pages; the `rsc` header returns the flight
-// stream carrying the page's data instead of the rendered HTML shell.
-const fetchRsc = async (url: string): Promise<string> => {
-  const [response, buffer] = await Application.scheduleRequest({
-    url,
-    method: "GET",
-    headers: { rsc: "1" },
-  });
+export const fetchHtml = async (url: string): Promise<string> => {
+  const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
   assertOk(url, response.status);
   return Application.arrayBufferToUTF8String(buffer);
 };
-
-export const fetchDirectory = (): Promise<string> => fetchRsc(`${DOMAIN}/comics`);
-
-export const fetchHomePage = (): Promise<string> => fetchRsc(`${DOMAIN}/`);
-
-export const fetchSeriesPage = (mangaId: string): Promise<string> =>
-  fetchRsc(`${DOMAIN}/comic/${mangaId}`);
-
-export const fetchChapterPage = (mangaId: string, chapterId: string): Promise<string> =>
-  fetchRsc(`${DOMAIN}/comic/${mangaId}/${chapterId}`);
 
 const fetchApi = async (path: string): Promise<string> => {
   const url = `${API_URL}${path}`;
@@ -88,37 +101,46 @@ export const fetchFeatured = (): Promise<string> => fetchApi("/banners");
 
 export const fetchTrending = (): Promise<string> => fetchApi("/topSeries");
 
-// The rendered HTML (not the flight stream) carries the <script src> chunk list needed to find the
-// site's key decoder.
-export const fetchHtml = async (url: string): Promise<string> => {
-  const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
-  assertOk(url, response.status);
-  return Application.arrayBufferToUTF8String(buffer);
-};
-
-// Runs the site's own key-rename function in a WebView to recover the {logical: short} table.
-// A blank page on the site's origin lets same-origin chunk fetches carry the clearance cookie.
-export const decodeRscTable = async (
-  chunks: string[],
-  keys: string[],
+// The page is fetched here, where a challenge is caught, and then run in a WebView so the site's
+// app hydrates and its state can be read. Resolves undefined when a page settles without the data,
+// as a locked chapter does.
+export const readSitePage = async <T>(
+  url: string,
+  kind: SitePageKind,
   cookies: Cookie[],
-): Promise<RscTable | null> => {
-  const userAgent = await Application.getDefaultUserAgent();
-  const inject =
-    `return (${DECODE_RSC_KEYS})(` +
-    `${JSON.stringify(chunks)}, ${JSON.stringify(keys)}, ${JSON.stringify(RSC_FIELDS)});`;
+): Promise<T | undefined> => {
+  const html = await fetchHtml(url);
   const { result } = await Application.executeInWebView({
     source: {
-      html: "<!doctype html><html><head></head><body></body></html>",
-      baseUrl: `${DOMAIN}/`,
+      html,
+      baseUrl: url,
       loadCSS: false,
       loadImages: false,
-      userAgent,
+      userAgent: await Application.getDefaultUserAgent(),
     },
-    inject,
+    // Serialized in the page, since the WebView writes large numbers in exponent form.
+    inject: `
+      const read = ${READ_SITE_PAGE};
+      return new Promise((resolve) => {
+        const started = Date.now();
+        const poll = () => {
+          const elapsed = Date.now() - started;
+          const page = read(${JSON.stringify(kind)}, ${kind === "pages"} && elapsed >= ${SITE_PAGE_SETTLE_MS});
+          if (page) resolve(JSON.stringify(page.data));
+          else if (elapsed >= ${SITE_PAGE_TIMEOUT_MS}) resolve(null);
+          else setTimeout(poll, 250);
+        };
+        poll();
+      });
+    `,
     storage: { cookies },
   });
-  return result && typeof result === "object" && !Array.isArray(result)
-    ? (result as RscTable)
-    : null;
+  if (typeof result !== "string") {
+    throw new Error(`Temple Scan: the page did not load its data in time: ${url}`);
+  }
+  try {
+    return (JSON.parse(result) as T | null) ?? undefined;
+  } catch (error) {
+    throw new Error(`Temple Scan: could not read the page data for ${url}`, { cause: error });
+  }
 };

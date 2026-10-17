@@ -19,50 +19,31 @@ export interface BrowseSeries {
   title: string;
   alternative_names?: string | null;
   thumbnail?: string | null;
+  badge?: string | null;
   status?: string | null;
   update_chapter?: string | null;
   created_at?: string | null;
   total_views?: number;
 }
 
-export interface SeasonChapter {
-  chapter_slug: string;
-  chapter_name?: string | null;
-  chapter_title?: string | null;
-  created_at?: string | null;
-  price?: number | null;
-  index?: string | number;
+// A chapter as the series page's app holds it.
+export interface SiteChapter {
+  slug: string;
+  name?: string | null;
+  title?: string | null;
+  premium?: boolean | null;
+  createdAt?: number | null;
 }
 
-export interface SeriesData {
-  series_slug: string;
-  title: string;
+// The schema.org block the series page embeds.
+export interface ComicSeriesLd {
+  "@type"?: string;
+  name?: string | null;
   description?: string | null;
-  author?: string | null;
-  studio?: string | null;
-  badge?: string | null;
-  status?: string | null;
-  release_year?: string | number | null;
-  alternative_names?: string | null;
-  thumbnail?: string | null;
-  total_views?: number;
-  tag_series?: { tag?: { name?: string } }[];
-  Season?: { Chapter?: SeasonChapter[] }[];
-}
-
-// Homepage cards: "Comics Update" entries carry their newest chapters,
-// "New Series" entries do not.
-export interface HomeSeries {
-  series_slug: string;
-  title: string;
-  thumbnail?: string | null;
-  badge?: string | null;
-  Chapter?: SeasonChapter[];
-}
-
-export interface HomeSections {
-  newSeries: HomeSeries[];
-  updates: HomeSeries[];
+  image?: string | null;
+  author?: { name?: string | null } | null;
+  alternateName?: string | null;
+  genre?: string[] | null;
 }
 
 export interface FeaturedEntry {
@@ -132,50 +113,52 @@ export const SECTIONS = {
 export const DISCOVER_SECTIONS: DiscoverSection[] = [
   { id: SECTIONS.FEATURED, title: "Featured", type: DiscoverSectionType.featured },
   { id: SECTIONS.NEW_SERIES, title: "New Series", type: DiscoverSectionType.simpleCarousel },
-  { id: SECTIONS.LATEST, title: "Latest Updates", type: DiscoverSectionType.chapterUpdates },
+  { id: SECTIONS.LATEST, title: "Latest Updates", type: DiscoverSectionType.simpleCarousel },
   { id: SECTIONS.TRENDING, title: "Trending", type: DiscoverSectionType.genres },
 ];
 
-// === RSC field-key decoding ===
-// The site renames a fixed set of Next.js payload field keys to short keys and renames them back
-// with a function in its client bundle. The table maps each logical name to the site's current
-// short key; it is empty until the site renames anything, so ordinary reads need no WebView.
-export type RscTable = Record<string, string>;
+// The site keeps its data in its app rather than in a stable payload, so a page is loaded in a
+// WebView and the data is read from the app's React state, found by its shape.
+export type SitePageKind = "catalog" | "chapters" | "pages";
 
-export const RSC_KEYS_STATE = "templescan_rsc_keys";
+// How long the app is given to fill in its state, and how long a reader page may go without page
+// images before it is taken to have none, as a locked chapter does.
+export const SITE_PAGE_TIMEOUT_MS = 30_000;
+export const SITE_PAGE_SETTLE_MS = 10_000;
 
-// Validates that the decoder was found: at least one of these must be in the table it returns.
-export const RSC_FIELDS = ["title", "series_slug", "Season", "images"];
-
-// Finds the site's RSC key decoder among the page's webpack modules and returns its rename table.
-// Run in a WebView confined to the site; a direct port of keiyoushi's decode_rsc_keys.js.
-export const DECODE_RSC_KEYS = `async (chunks, keys, fields) => {
-  const sources = await Promise.all(chunks.map(async (url) => (await fetch(url)).text()));
-  for (const source of sources) {
-    if (/^(?:"use strict";)?\\(self\\.webpackChunk\\w*=/.test(source)) (0, eval)(source);
-  }
-  const probe = Object.fromEntries(keys.map((key) => [key, key]));
-  const factories = Object.keys(self)
-    .filter((name) => name.startsWith("webpackChunk"))
-    .flatMap((name) => self[name])
-    .flatMap((entry) => Object.values(entry[1]));
-  for (const factory of factories) {
-    const module = { exports: {} };
-    const require = () => { throw new Error(); };
-    require.r = () => {};
-    require.d = (target, getters) => {
-      for (const name in getters) Object.defineProperty(target, name, { get: getters[name], enumerable: true });
-    };
-    try { factory(module, module.exports, require); } catch { continue; }
-    for (const exported of Object.values(module.exports)) {
-      let decoded;
-      try { decoded = exported(probe); } catch { continue; }
-      if (!decoded || typeof decoded !== "object") continue;
-      const table = Object.fromEntries(
-        Object.entries(decoded).filter(([name, key]) => name !== key && keys.includes(key)),
-      );
-      if (fields.some((field) => field in table)) return table;
+export const READ_SITE_PAGE = `(kind, settled) => {
+  const isObjects = (v, ...keys) =>
+    Array.isArray(v) && v.length > 0 && v[0] !== null && typeof v[0] === "object" && keys.every((k) => k in v[0]);
+  const shapes = {
+    catalog: (v) => isObjects(v, "series_slug", "title", "total_views"),
+    chapters: (v) => isObjects(v, "slug", "createdAt"),
+    pages: (v) => Array.isArray(v) && v.length > 0 && typeof v[0] === "string" && v[0].includes("/uploads/"),
+  };
+  const matches = shapes[kind];
+  // The shallowest depth each object was searched at; a deeper first visit must not hide it.
+  const seen = new Map();
+  const search = (value, depth) => {
+    if (value === null || typeof value !== "object" || value.$$typeof || seen.get(value) <= depth) return null;
+    seen.set(value, depth);
+    if (matches(value)) return value;
+    // Long arrays are data of another shape; short ones include React's [value, deps] memo pairs.
+    if (depth >= 2 || (Array.isArray(value) && value.length > 4)) return null;
+    for (const child of Object.values(value)) {
+      const found = search(child, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  };
+  for (const element of document.querySelectorAll("body *")) {
+    const fiberKey = Object.keys(element).find((k) => k.startsWith("__reactFiber$"));
+    let fiber = fiberKey && element[fiberKey];
+    for (let level = 0; fiber && level < 6; level++, fiber = fiber.return) {
+      let found = search(fiber.memoizedProps, 0);
+      for (let hook = fiber.memoizedState; !found && hook; hook = hook.next) {
+        found = search(hook.memoizedState, 0);
+      }
+      if (found) return { data: found };
     }
   }
-  return null;
+  return settled ? { data: null } : null;
 }`;

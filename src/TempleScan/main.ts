@@ -28,44 +28,32 @@ import {
   DOMAIN,
   PAGE_SIZE,
   PAID_CHAPTER_SUFFIX,
-  RSC_KEYS_STATE,
   SECTIONS,
   SORTING_OPTIONS,
   type BrowseSeries,
-  type HomeSections,
   type PageMetadata,
-  type RscTable,
   type SearchMetadata,
+  type SiteChapter,
+  type SitePageKind,
 } from "./models";
 import {
-  decodeRscTable,
-  fetchChapterPage,
-  fetchDirectory,
   fetchFeatured,
   fetchHtml,
-  fetchHomePage,
-  fetchSeriesPage,
   fetchTrending,
+  readSitePage,
   TempleScanInterceptor,
 } from "./network";
 import {
-  extractChunkUrls,
-  mergeRscTable,
-  observedKeys,
-  parseChapterPages,
   parseChapters,
-  parseDirectory,
   parseFeatured,
-  parseHomeSections,
-  parseSeriesData,
+  parseMangaDetails,
   parseTrending,
+  sortSeries,
+  toCarouselItem,
   toFeaturedItems,
-  toNewSeriesItems,
   toSearchResultItem,
-  toSourceManga,
   toTrendingItems,
   toTrendingSections,
-  toUpdateItems,
   withFeaturedCovers,
 } from "./parsers";
 import type TempleScanConfig from "./pbconfig";
@@ -83,11 +71,9 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
     storage: "stateManager",
   });
 
-  // The browse endpoint returns the whole directory; cache it per session.
+  // The comics page holds the whole catalog; it is read once per session.
   private directoryPromise?: Promise<BrowseSeries[]>;
   private featuredPromise?: Promise<DiscoverSectionItem[]>;
-  private homePromise?: Promise<HomeSections>;
-  private rscRefreshPromise?: Promise<RscTable | undefined>;
 
   async initialise(): Promise<void> {
     this.mainRateLimiter.registerInterceptor();
@@ -102,15 +88,10 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
   ): Promise<void> {
     this.directoryPromise = undefined;
     this.featuredPromise = undefined;
-    this.homePromise = undefined;
+    // The site's own verification keeps its pass in its own cookie, alongside Cloudflare's.
     for (const cookie of cookies) {
-      if (
-        cookie.name.startsWith("cf") ||
-        cookie.name.startsWith("_cf") ||
-        cookie.name.startsWith("__cf")
-      ) {
-        this.cookieStorageInterceptor.setCookie(cookie);
-      }
+      if (cookie.expires && cookie.expires.getTime() <= Date.now()) continue;
+      this.cookieStorageInterceptor.setCookie(cookie);
     }
   }
 
@@ -119,28 +100,31 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
-    const payload = await fetchSeriesPage(mangaId);
-    const data = await this.withRscTable(`${DOMAIN}/comic/${mangaId}`, payload, (table) =>
-      parseSeriesData(payload, table),
+    const [html, directory] = await Promise.all([
+      fetchHtml(`${DOMAIN}/comic/${mangaId}`),
+      this.getDirectory(),
+    ]);
+    return parseMangaDetails(
+      html,
+      mangaId,
+      directory.find((series) => series.series_slug === mangaId),
     );
-    return toSourceManga(data, mangaId);
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
-    const payload = await fetchSeriesPage(sourceManga.mangaId);
-    const data = await this.withRscTable(
+    const chapters = await this.readSitePage<SiteChapter[]>(
       `${DOMAIN}/comic/${sourceManga.mangaId}`,
-      payload,
-      (table) => parseSeriesData(payload, table),
+      "chapters",
     );
-    return parseChapters(data, sourceManga, getShowPaidChapters());
+    if (!chapters) throw new Error(`Temple Scan: no chapters found for ${sourceManga.mangaId}`);
+    return parseChapters(chapters, sourceManga, getShowPaidChapters());
   }
 
   async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
     const [first] = updateManager.getQueuedItems();
     if (!first) return;
     try {
-      await fetchSeriesPage(first.mangaId);
+      await fetchHtml(`${DOMAIN}/comic/${first.mangaId}`);
     } catch (error) {
       if (error instanceof CloudflareError) throw error;
     }
@@ -150,9 +134,14 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
     if (chapter.chapterId.endsWith(PAID_CHAPTER_SUFFIX)) {
       throw new Error("This chapter is paid. Unlock it on the website before reading.");
     }
-    const payload = await fetchChapterPage(chapter.sourceManga.mangaId, chapter.chapterId);
-    const url = `${DOMAIN}/comic/${chapter.sourceManga.mangaId}/${chapter.chapterId}`;
-    return this.withRscTable(url, payload, (table) => parseChapterPages(payload, chapter, table));
+    const pages = await this.readSitePage<string[]>(
+      `${DOMAIN}/comic/${chapter.sourceManga.mangaId}/${chapter.chapterId}`,
+      "pages",
+    );
+    if (!pages?.length) {
+      throw new Error("Temple Scan: no pages found. The chapter may be locked on the website.");
+    }
+    return { id: chapter.chapterId, mangaId: chapter.sourceManga.mangaId, pages };
   }
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
@@ -161,19 +150,15 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
 
   async getDiscoverSectionItems(
     section: DiscoverSection,
-    _metadata: PageMetadata | undefined,
+    metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
       case SECTIONS.FEATURED:
         return { items: await this.getFeaturedItems() };
-      case SECTIONS.NEW_SERIES: {
-        const home = await this.getHomeSections();
-        return { items: toNewSeriesItems(home.newSeries) };
-      }
-      case SECTIONS.LATEST: {
-        const home = await this.getHomeSections();
-        return { items: toUpdateItems(home.updates) };
-      }
+      case SECTIONS.NEW_SERIES:
+        return this.getDirectorySection("created", metadata);
+      case SECTIONS.LATEST:
+        return this.getDirectorySection("updated", metadata);
       case SECTIONS.TRENDING:
         return { items: toTrendingSections() };
       default:
@@ -207,20 +192,7 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
       return titleMatch && (!status || series.status === status);
     });
 
-    const time = (value: string | null | undefined): number => {
-      const parsed = new Date(value ?? "").getTime();
-      return isNaN(parsed) ? 0 : parsed;
-    };
-    const sorted = filtered.sort((a, b) => {
-      switch (sortingOption?.id) {
-        case "updated":
-          return time(b.update_chapter) - time(a.update_chapter);
-        case "created":
-          return time(b.created_at) - time(a.created_at);
-        default:
-          return (b.total_views ?? 0) - (a.total_views ?? 0);
-      }
-    });
+    const sorted = sortSeries(filtered, sortingOption?.id);
 
     return {
       items: sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(toSearchResultItem),
@@ -232,16 +204,33 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
     return SORTING_OPTIONS;
   }
 
+  private readSitePage<T>(url: string, kind: SitePageKind): Promise<T | undefined> {
+    return readSitePage<T>(url, kind, this.cookieStorageInterceptor.cookiesForUrl(url));
+  }
+
   private getDirectory(): Promise<BrowseSeries[]> {
-    this.directoryPromise ??= fetchDirectory()
-      .then((payload) =>
-        this.withRscTable(`${DOMAIN}/comics`, payload, (table) => parseDirectory(payload, table)),
-      )
+    this.directoryPromise ??= this.readSitePage<BrowseSeries[]>(`${DOMAIN}/comics`, "catalog")
+      .then((directory) => {
+        if (!directory) throw new Error("Temple Scan: the comics page listed no series");
+        return directory;
+      })
       .catch((error: unknown) => {
         this.directoryPromise = undefined;
         throw error;
       });
     return this.directoryPromise;
+  }
+
+  private async getDirectorySection(
+    sort: string,
+    metadata: PageMetadata | undefined,
+  ): Promise<PagedResults<DiscoverSectionItem>> {
+    const page = metadata?.page ?? 1;
+    const sorted = sortSeries(await this.getDirectory(), sort);
+    return {
+      items: sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(toCarouselItem),
+      metadata: page * PAGE_SIZE < sorted.length ? { page: page + 1 } : undefined,
+    };
   }
 
   private getFeaturedItems(): Promise<DiscoverSectionItem[]> {
@@ -253,72 +242,6 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
         throw error;
       });
     return this.featuredPromise;
-  }
-
-  // The site renames its RSC payload field keys; the table maps each logical name to the current
-  // short key and is kept in state across sessions.
-  private rscTable(): RscTable {
-    return (Application.getState(RSC_KEYS_STATE) as RscTable | undefined) ?? {};
-  }
-
-  // Reads [payload] with the cached key table. When it does not fit — the site has renamed keys we
-  // do not know — the table is rebuilt once from the site's bundle and the read is retried.
-  private async withRscTable<T>(
-    pageUrl: string,
-    payload: string,
-    parse: (table: RscTable) => T | undefined,
-  ): Promise<T> {
-    const cached = this.rscTable();
-    const first = parse(cached);
-    if (first !== undefined) return first;
-
-    const refreshed = await this.refreshRscTable(pageUrl, payload, cached);
-    const retry = refreshed === undefined ? undefined : parse(refreshed);
-    if (retry === undefined) {
-      throw new Error(
-        `Temple Scan: could not read the page data for ${pageUrl} — the site layout may have changed`,
-      );
-    }
-    return retry;
-  }
-
-  private refreshRscTable(
-    pageUrl: string,
-    payload: string,
-    cached: RscTable,
-  ): Promise<RscTable | undefined> {
-    // One rebuild serves every read waiting on it within a burst.
-    this.rscRefreshPromise ??= this.rebuildRscTable(pageUrl, payload, cached).finally(() => {
-      this.rscRefreshPromise = undefined;
-    });
-    return this.rscRefreshPromise;
-  }
-
-  private async rebuildRscTable(
-    pageUrl: string,
-    payload: string,
-    cached: RscTable,
-  ): Promise<RscTable | undefined> {
-    const chunks = extractChunkUrls(await fetchHtml(pageUrl));
-    if (chunks.length === 0) return undefined;
-    const keys = [...new Set([...observedKeys(payload), ...Object.values(cached)])];
-    const cookies = this.cookieStorageInterceptor.cookiesForUrl(`${DOMAIN}/`);
-    const decoded = await decodeRscTable(chunks, keys, cookies);
-    if (!decoded || Object.keys(decoded).length === 0) return undefined;
-    const merged = mergeRscTable(cached, decoded);
-    Application.setState(merged, RSC_KEYS_STATE);
-    return merged;
-  }
-
-  // New Series and Latest Updates share the homepage; dedupe the fetch
-  // within a refresh burst while reloading fresh data on the next refresh.
-  private getHomeSections(): Promise<HomeSections> {
-    this.homePromise ??= fetchHomePage()
-      .then((payload) => parseHomeSections(payload, this.rscTable()))
-      .finally(() => {
-        this.homePromise = undefined;
-      });
-    return this.homePromise;
   }
 }
 
