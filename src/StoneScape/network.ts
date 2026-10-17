@@ -19,7 +19,6 @@ import {
   type GenreResponse,
   type NovelChapterResponse,
   type PopularPeriod,
-  type PopularSeriesResponse,
   type Series,
   type SeriesQuery,
   type SeriesResponse,
@@ -115,12 +114,14 @@ export const fetchPopular = (
   period: PopularPeriod,
   contentType: ContentType,
   limit: number,
-): Promise<PopularSeriesResponse> =>
-  fetchApi<PopularSeriesResponse>(
+  page = 1,
+): Promise<SeriesResponse> =>
+  fetchApi<SeriesResponse>(
     apiUrl("series", "popular")
       .setQueryItem("period", period)
       .setQueryItem("contentType", contentType)
       .setQueryItem("limit", limit.toString())
+      .setQueryItem("page", page.toString())
       .toString(),
   );
 

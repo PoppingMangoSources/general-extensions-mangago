@@ -61,7 +61,7 @@ const firstImageUrl = (...values: (string | null | undefined)[]): string => {
 };
 
 // Cards use still images: a carousel of animated covers stalls and can crash Discover. A title's
-// own page shows one cover, so it keeps the animation.
+// own page and the site's short hand-picked row keep the animation.
 const stillImageUrl = (...values: (string | null | undefined)[]): string => {
   for (const value of values) {
     const url = toAbsoluteUrl(value);
@@ -139,15 +139,18 @@ const formatViews = (views?: number): string | undefined => {
   return `${views} views`;
 };
 
-export const parseMangaList = (series: Series[]): MangaListItem[] =>
+// A card shows the series' cover, never the wide banner, so a title looks the same in every row.
+export const parseMangaList = (series: Series[], animated = false): MangaListItem[] =>
   series.map((item) => {
     const views =
       item.totalViews == null ? undefined : Number.parseInt(String(item.totalViews), 10);
     return {
       mangaId: encodeMangaId(item.slug),
       title: decodeText(item.title),
-      imageUrl: stillImageUrl(item.coverUrl, item.bannerUrl) || FALLBACK_IMAGE_URL,
-      bannerImageUrl: stillImageUrl(item.bannerUrl, item.coverUrl) || FALLBACK_IMAGE_URL,
+      imageUrl:
+        (animated
+          ? firstImageUrl(item.coverUrl, item.bannerUrl)
+          : stillImageUrl(item.coverUrl, item.bannerUrl)) || FALLBACK_IMAGE_URL,
       summary: decodeText(item.description) || undefined,
       author: decodeText(item.author) || undefined,
       status: mapStatus(item.publicationStatus),
@@ -173,7 +176,7 @@ export const toFeaturedItem = (item: MangaListItem): DiscoverSectionItem => {
     type: "featuredCarouselItem",
     mangaId: item.mangaId,
     title: item.title,
-    imageUrl: item.bannerImageUrl,
+    imageUrl: item.imageUrl,
     supertitle: item.mediaType,
     summary: item.summary,
     infoItems:
@@ -187,6 +190,18 @@ export const toFeaturedItem = (item: MangaListItem): DiscoverSectionItem => {
     contentRating: item.contentRating,
   };
 };
+
+export const toCarouselItem = (
+  item: MangaListItem,
+  type: "prominentCarouselItem" | "simpleCarouselItem",
+): DiscoverSectionItem => ({
+  type,
+  mangaId: item.mangaId,
+  title: item.title,
+  imageUrl: item.imageUrl,
+  subtitle: item.mediaType,
+  contentRating: item.contentRating,
+});
 
 export const toSearchResultItem = (item: MangaListItem): SearchResultItem => {
   const subtitle = [

@@ -9,9 +9,11 @@ export const FALLBACK_IMAGE_URL = `${DOMAIN}/logo.png`;
 export const PAGE_SIZE = 20;
 
 export const SECTIONS = {
-  FEATURED: "featured",
-  POPULAR: "popular",
+  POPULAR_YEAR: "popular_year",
+  POPULAR_WEEK: "popular_week",
+  POPULAR_MONTH: "popular_month",
   LATEST: "latest",
+  FEATURED: "featured",
   NOVELS: "novels",
   LATEST_NOVELS: "latest_novels",
   POPULAR_NOVELS: "popular_novels",
@@ -113,10 +115,6 @@ export interface BannerResponse {
   showNovelSection?: boolean;
 }
 
-export interface PopularSeriesResponse {
-  data: Series[];
-}
-
 export interface Genre {
   slug: string;
   label: string;
@@ -172,7 +170,6 @@ export interface MangaListItem {
   mangaId: string;
   title: string;
   imageUrl: string;
-  bannerImageUrl: string;
   summary?: string;
   author?: string;
   status?: string;

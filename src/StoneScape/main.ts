@@ -33,7 +33,9 @@ import {
   SECTIONS,
   SORT_OPTIONS,
   type ContentType,
+  type MangaListItem,
   type PageMetadata,
+  type PopularPeriod,
   type SearchMetadata,
   type Series,
   type TriState,
@@ -58,6 +60,7 @@ import {
   parseMangaDetails,
   parseMangaList,
   parseNovelChapter,
+  toCarouselItem,
   toChapterUpdateItem,
   toFeaturedItem,
   toSearchResultItem,
@@ -169,14 +172,28 @@ class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
-      { id: SECTIONS.FEATURED, title: "Featured Series", type: DiscoverSectionType.featured },
-      { id: SECTIONS.POPULAR, title: "Popular Series", type: DiscoverSectionType.genres },
+      {
+        id: SECTIONS.POPULAR_YEAR,
+        title: "Popular This Year",
+        type: DiscoverSectionType.featured,
+      },
+      {
+        id: SECTIONS.POPULAR_WEEK,
+        title: "Popular This Week",
+        type: DiscoverSectionType.prominentCarousel,
+      },
+      {
+        id: SECTIONS.POPULAR_MONTH,
+        title: "Popular This Month",
+        type: DiscoverSectionType.simpleCarousel,
+      },
       {
         id: SECTIONS.LATEST,
         title: "Latest Releases",
         type: DiscoverSectionType.chapterUpdates,
       },
-      { id: SECTIONS.NOVELS, title: "Novels", type: DiscoverSectionType.featured },
+      { id: SECTIONS.FEATURED, title: "Featured", type: DiscoverSectionType.simpleCarousel },
+      { id: SECTIONS.NOVELS, title: "Novels", type: DiscoverSectionType.simpleCarousel },
       {
         id: SECTIONS.LATEST_NOVELS,
         title: "Latest Novels",
@@ -191,23 +208,33 @@ class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
     ];
   }
 
+  // Every row is one request.
   async getDiscoverSectionItems(
     section: DiscoverSection,
-    _metadata: PageMetadata | undefined,
+    metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
+    const page = metadata?.page ?? 1;
     switch (section.id) {
+      case SECTIONS.POPULAR_YEAR:
+        return this.getPopularSection("year", page, toFeaturedItem);
+      case SECTIONS.POPULAR_WEEK:
+        return this.getPopularSection("week", page, (item) =>
+          toCarouselItem(item, "prominentCarouselItem"),
+        );
+      case SECTIONS.POPULAR_MONTH:
+        return this.getPopularSection("month", page, (item) =>
+          toCarouselItem(item, "simpleCarouselItem"),
+        );
+      case SECTIONS.LATEST:
+        return this.getLatestSection("manhwa", page);
       case SECTIONS.FEATURED:
         return this.getFeaturedSection("manhwa");
-      case SECTIONS.POPULAR:
-        return this.getPopularPeriodSection("manhwa");
-      case SECTIONS.LATEST:
-        return this.getLatestSection("manhwa");
       case SECTIONS.NOVELS:
         return this.getFeaturedSection("novel");
       case SECTIONS.LATEST_NOVELS:
-        return this.getLatestSection("novel");
+        return this.getLatestSection("novel", page);
       case SECTIONS.POPULAR_NOVELS:
-        return this.getPopularPeriodSection("novel");
+        return this.getPopularNovelsSection();
       case SECTIONS.GENRES:
         return this.getGenresSection();
       default:
@@ -215,32 +242,33 @@ class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
     }
   }
 
-  private async getFeaturedSection(
-    contentType: ContentType,
+  private async getPopularSection(
+    period: PopularPeriod,
+    page: number,
+    toItem: (item: MangaListItem) => DiscoverSectionItem,
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    const [banner, seriesResponse] = await Promise.all([
-      fetchBanner(contentType),
-      fetchSeries({ page: 1, limit: 100, contentType }),
-    ]);
-    if (contentType === "novel" && banner.showNovelSection === false) return { items: [] };
-
-    const seriesById = new Map(seriesResponse.data.map((series) => [series.seriesId, series]));
-    const featuredSeries = banner.featuredSeries.map((series) => {
-      const listing = seriesById.get(series.seriesId);
-      return {
-        ...listing,
-        ...series,
-        contentType: listing?.contentType ?? contentType,
-      };
-    });
+    const response = await fetchPopular(period, "manhwa", PAGE_SIZE, page);
     return {
-      items: parseMangaList(featuredSeries)
-        .filter((item) => item.imageUrl.length > 0)
-        .map(toFeaturedItem),
+      items: parseMangaList(response.data).map(toItem),
+      metadata: page < (response.pagination?.totalPages ?? 0) ? { page: page + 1 } : undefined,
     };
   }
 
-  private getPopularPeriodSection(contentType: ContentType): PagedResults<DiscoverSectionItem> {
+  // The site's hand-picked set arrives whole, so it is shown as given. It is short, so its
+  // animated covers are kept.
+  private async getFeaturedSection(
+    contentType: ContentType,
+  ): Promise<PagedResults<DiscoverSectionItem>> {
+    const banner = await fetchBanner(contentType);
+    if (contentType === "novel" && banner.showNovelSection === false) return { items: [] };
+    return {
+      items: parseMangaList(banner.featuredSeries, true).map((item) =>
+        toCarouselItem(item, "simpleCarouselItem"),
+      ),
+    };
+  }
+
+  private getPopularNovelsSection(): PagedResults<DiscoverSectionItem> {
     return {
       items: PERIOD_OPTIONS.map((period): DiscoverSectionItem => ({
         type: "genresCarouselItem",
@@ -248,7 +276,7 @@ class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
         searchQuery: {
           title: "",
           metadata: {
-            contentType: { [contentTypeFilterId(contentType)]: "included" },
+            contentType: { [contentTypeFilterId("novel")]: "included" },
             popularPeriod: period.id,
           } satisfies SearchMetadata,
         },
@@ -258,25 +286,15 @@ class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
 
   private async getLatestSection(
     contentType: ContentType,
+    page: number,
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    const response = await fetchSeries({
-      page: 1,
-      limit: contentType === "novel" ? 8 : 12,
-      contentType,
-    });
+    const response = await fetchSeries({ page, limit: PAGE_SIZE, contentType });
     return {
       items: response.data.flatMap((series) => {
         const item = toChapterUpdateItem(series, contentType);
-        if (
-          !item ||
-          !("imageUrl" in item) ||
-          typeof item.imageUrl !== "string" ||
-          !/^https?:\/\/\S+$/i.test(item.imageUrl)
-        ) {
-          return [];
-        }
-        return [item];
+        return item ? [item] : [];
       }),
+      metadata: page < (response.pagination?.totalPages ?? 0) ? { page: page + 1 } : undefined,
     };
   }
 
