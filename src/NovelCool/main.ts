@@ -231,7 +231,7 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
   }
 
   private getSearchOptions(): Promise<SearchOptions> {
-    return (this.searchOptionsPromise ??= fetchSearchPage({ page: 1 }).then(parseSearchOptions));
+    return (this.searchOptionsPromise ??= fetchUrlPage("/search/").then(parseSearchOptions));
   }
 
   async getSortingOptions(_query: SearchQuery<SearchMetadata>): Promise<SortingOption[]> {

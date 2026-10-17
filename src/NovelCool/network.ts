@@ -184,9 +184,10 @@ export const buildCategoryUrl = (path: string, page: number): string => {
   return siteUrl(pagedPath);
 };
 
+// The site only runs a search when `name` and `page` are both sent, even empty or 1; without them
+// it serves the blank search form, so a genre-only search found nothing.
 export const buildSearchUrl = (request: SearchRequest): string => {
-  const url = new URL(`${DOMAIN}/search/`).setQueryItem("type", "high");
-  addQueryItem(url, "name", request.title);
+  const url = new URL(`${DOMAIN}/search/`).setQueryItem("name", request.title?.trim() ?? "");
   if (request.title) addQueryItem(url, "name_sel", request.nameMethod ?? "contain");
   addQueryItem(url, "author", request.author);
   if (request.author) addQueryItem(url, "author_sel", request.authorMethod ?? "contain");
@@ -199,7 +200,7 @@ export const buildSearchUrl = (request: SearchRequest): string => {
   }
   addQueryItem(url, "publish_year", request.year);
   addQueryItem(url, "rate_star", request.rating);
-  if (request.page > 1) url.setQueryItem("page", request.page.toString());
+  url.setQueryItem("page", request.page.toString());
   return url.toString();
 };
 
