@@ -173,5 +173,6 @@ export const fetchReaderPage = async (chapterId: string): Promise<string> => {
   return Application.arrayBufferToUTF8String(buffer);
 };
 
-export const requestChapter = (path: string, signature: string) =>
-  requestJson(`${DOMAIN}${path}`, { headers: { "x-sig": signature } });
+// The site serves unmasked page keys to an unsigned read, so the signature is only the fallback.
+export const requestChapter = (path: string, signature?: string) =>
+  requestJson(`${DOMAIN}${path}`, signature ? { headers: { "x-sig": signature } } : undefined);

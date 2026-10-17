@@ -3,7 +3,12 @@
 
 import type { Cookie } from "@paperback/types";
 
-import { READER_SECRET, type ReaderKeyResponse, type ReaderPage } from "./models";
+import {
+  HUMAN_CHECK_TIMEOUT_MS,
+  READER_SECRET,
+  type ReaderKeyResponse,
+  type ReaderPage,
+} from "./models";
 
 const BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
@@ -133,6 +138,42 @@ export const captureReaderSecret = async (
     );
   }
   return captured.result;
+};
+
+// The site's own reader runs the human check, which often passes without a tap. Its record of
+// requests shows the unlock being posted without touching the page, which its checks could notice.
+// Returns the cookies the unlocked session leaves, or undefined when the check did not pass.
+export const runHumanCheck = async (
+  html: string,
+  url: string,
+  cookies: Cookie[],
+): Promise<Cookie[] | undefined> => {
+  const { result, storage } = await Application.executeInWebView({
+    source: {
+      html,
+      baseUrl: url,
+      loadCSS: true,
+      loadImages: false,
+      userAgent: await Application.getDefaultUserAgent(),
+    },
+    inject: `
+      return new Promise((resolve) => {
+        const started = Date.now();
+        const poll = () => {
+          if (performance.getEntriesByType("resource").some((entry) => entry.name.includes("/api/manga/unlock"))) {
+            resolve(true);
+          } else if (Date.now() - started > ${HUMAN_CHECK_TIMEOUT_MS}) {
+            resolve(false);
+          } else {
+            setTimeout(poll, 500);
+          }
+        };
+        poll();
+      });
+    `,
+    storage: { cookies },
+  });
+  return result === true ? storage.cookies : undefined;
 };
 
 const hmac = async (readerKey: ReaderKey, message: string): Promise<Uint8Array> =>

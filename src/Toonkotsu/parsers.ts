@@ -376,16 +376,20 @@ const hasChapterNumberResets = (
   return [...sections.values()].filter((values) => values.size > 1).length >= 3;
 };
 
-// Keep one catalogue-selected upload per chapter and scanlator, as the site's chapter list does.
-// Actual release IDs remain usable by the reader. The catalogue is English only.
+// The download as the site quotes it: whole megabytes from 100 up, one decimal below.
+const sizeLabel = (mb: number | null | undefined): string | undefined =>
+  mb && mb > 0 ? `${Number(mb.toFixed(mb >= 100 ? 0 : 1))} MB` : undefined;
+
+// Keep a group's best upload of each chapter, its widest and then largest, as the site's chapter
+// list does. With mainOnly only the upload the site lists first is kept; with showSize a group's
+// uploads of different sizes stay apart, each with its size in the title.
 export const parseChapters = (
   { chapters }: SeriesResponse,
   sourceManga: SourceManga,
-  languages: string[],
+  { mainOnly, showSize }: { mainOnly: boolean; showSize: boolean },
 ): Chapter[] => {
-  if (!languages.includes("en")) return [];
   const releases = chapters.flatMap((entry, position) =>
-    [entry, ...(entry.alts ?? [])].map((release, index) => ({
+    (mainOnly ? [entry] : [entry, ...(entry.alts ?? [])]).map((release, index) => ({
       ...release,
       n: entry.n,
       vol: entry.vol,
@@ -407,9 +411,11 @@ export const parseChapters = (
       parseChapterNumber(release.n) ?? `id:${release.canonicalId}`,
     ]);
   const selected = new Map<string, { release: (typeof releases)[number]; order: number }>();
-  // Prefer complete uploads, then catalogue defaults, then catalogue position and release ID.
+  // Prefer complete uploads, then the widest and largest, then catalogue defaults, position and ID.
   const compareReleases = (a: (typeof releases)[number], b: (typeof releases)[number]): number =>
     Number(!!a.partial) - Number(!!b.partial) ||
+    (b.w ?? 0) - (a.w ?? 0) ||
+    (b.mb ?? 0) - (a.mb ?? 0) ||
     Number(b.catalogueDefault) - Number(a.catalogueDefault) ||
     a.position - b.position ||
     a.id - b.id;
@@ -418,7 +424,11 @@ export const parseChapters = (
     const key = chapterKey(release);
     if (release.partial && complete.has(key)) continue;
     const { group } = parseLabel(release, release.n);
-    const groupKey = JSON.stringify([key, release.group?.slug ?? group?.toLowerCase() ?? ""]);
+    const groupKey = JSON.stringify([
+      key,
+      release.group?.slug ?? group?.toLowerCase() ?? "",
+      showSize ? (sizeLabel(release.mb) ?? "") : "",
+    ]);
     const current = selected.get(groupKey);
     if (!current || compareReleases(release, current.release) < 0) {
       selected.set(groupKey, { release, order: current?.order ?? selected.size });
@@ -448,6 +458,7 @@ export const parseChapters = (
     const { title, group } = parseLabel(release, release.n);
     const number = parseChapterNumber(release.n);
     const volume = parseChapterNumber(release.vol);
+    const size = showSize ? sizeLabel(release.mb) : undefined;
     // Keep the site's volume-first order when Paperback sorts the chapter groups.
     sortingIndex--;
     parsed.push({
@@ -455,7 +466,7 @@ export const parseChapters = (
       sourceManga,
       langCode: "en",
       chapNum: number ?? 0,
-      title,
+      title: title && size ? `${title} (${size})` : (title ?? size),
       version: group,
       // Zero means no volume data; undefined means an unassigned volume in a numbered series.
       volume: volume ?? (hasVolumeData ? undefined : 0),
@@ -492,9 +503,17 @@ export const parseReaderKeyResponse = (value: unknown): ReaderKeyResponse => {
   return { key: value.key, build: value.build, now: value.now };
 };
 
+// A "v1" wrap masks the page keys, which only a signed read can unmask.
+export const hasWrappedKeys = (response: unknown): boolean =>
+  !!response &&
+  typeof response === "object" &&
+  "wrap" in response &&
+  response.wrap != null &&
+  response.wrap !== "";
+
 export const parseChapterPages = async (
   response: unknown,
-  readerKey: ReaderKey,
+  readerKey?: ReaderKey,
 ): Promise<string[]> => {
   if (
     !response ||
@@ -511,6 +530,7 @@ export const parseChapterPages = async (
   if (wrap != null && wrap !== "" && wrap !== "v1") {
     throw new Error("Unsupported Toonkotsu reader encryption version. Please update the source.");
   }
+  if (wrap === "v1" && !readerKey) throw new Error("Toonkotsu masked this chapter's page keys.");
   const pages: unknown[] = response.chapter.pages;
   if (!pages.length) throw new Error("This chapter has no pages.");
   return Promise.all(
@@ -554,7 +574,9 @@ export const parseChapterPages = async (
         }
         if (decodeBase64Url(nonce).length < 8) throw new Error("The AES-CTR nonce is too short.");
         const pageKey =
-          wrap === "v1" ? await unwrapPageKey(readerKey, { src, k: key, n: nonce }) : key;
+          wrap === "v1" && readerKey
+            ? await unwrapPageKey(readerKey, { src, k: key, n: nonce })
+            : key;
         return encodePageUrl(src, pageKey, nonce);
       } catch (error) {
         throw new Error(

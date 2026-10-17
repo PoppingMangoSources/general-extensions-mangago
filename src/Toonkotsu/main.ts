@@ -23,11 +23,12 @@ import {
 } from "@paperback/types";
 
 import {
-  getChapterLanguages,
   getContentRatings,
+  getDeduplicateChapters,
   getHiddenSections,
   getHiddenTags,
   getSectionOrder,
+  getShowUploadSize,
   getTypes,
   ToonkotsuSearchForm,
   ToonkotsuSettingsForm,
@@ -67,6 +68,7 @@ import {
 } from "./network";
 import {
   fromTagId,
+  hasWrappedKeys,
   parseChapterPages,
   parseChapters,
   parseMangaDetails,
@@ -80,7 +82,15 @@ import {
   toSearchResults,
 } from "./parsers";
 import type ToonkotsuConfig from "./pbconfig";
-import { captureReaderSecret, deriveReaderKey, signReaderPath, type ReaderKey } from "./utils";
+import {
+  captureReaderSecret,
+  deriveReaderKey,
+  runHumanCheck,
+  signReaderPath,
+  type ReaderKey,
+} from "./utils";
+
+type ReaderSession = { readerKey: ReaderKey; response: ReaderKeyResponse };
 
 type SectionData =
   | { kind: "series"; items: Series[]; hasNext: boolean }
@@ -101,7 +111,7 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
   private cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
   private interceptor = new ToonkotsuInterceptor("main");
   private facetsPromise?: Promise<FacetsResponse>;
-  private readerKeyPromise?: Promise<{ readerKey: ReaderKey; response: ReaderKeyResponse }>;
+  private readerKeyPromise?: Promise<ReaderSession | undefined>;
   private siteSessionPromise?: Promise<unknown>;
   private readerSecretPromise?: Promise<string>;
   private readerSecret = READER_SECRET;
@@ -120,10 +130,7 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
     cookies: Cookie[],
     _localStorage: Record<string, string>,
   ): Promise<void> {
-    for (const cookie of cookies) {
-      if (cookie.expires && cookie.expires.getTime() <= Date.now()) continue;
-      this.cookieStorageInterceptor.setCookie(cookie);
-    }
+    this.saveCookies(cookies);
     this.facetsPromise = undefined;
     this.readerKeyPromise = undefined;
     this.siteSessionPromise = undefined;
@@ -156,14 +163,20 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
   }
 
   // The settings' types and hidden tags narrow every catalogue request; pornographic titles are
-  // only requested when that rating is on.
-  private catalogueParams(ratings: string[], extraExcluded: string[] = []): CatalogueParams {
+  // only requested when that rating is on. A hidden tag a search asks for is shown for that search.
+  private catalogueParams(
+    ratings: string[],
+    extraExcluded: string[] = [],
+    included: string[] = [],
+  ): CatalogueParams {
     const types = getTypes();
     const languages =
       types.length < TYPE_OPTIONS.length
         ? TYPE_OPTIONS.filter(({ id }) => types.includes(id)).flatMap(({ languages }) => languages)
         : [];
-    const exclude = [...new Set([...getHiddenTags().map(fromTagId), ...extraExcluded])];
+    const exclude = [...new Set([...getHiddenTags().map(fromTagId), ...extraExcluded])].filter(
+      (tag) => !included.includes(tag),
+    );
     return {
       sfw: !ratings.includes("pornographic"),
       originalLanguage: languages.join(",") || undefined,
@@ -334,12 +347,13 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
     const sort = SORT_OPTIONS.find(({ id }) => id === sortId)?.value ?? "latest";
     // The site only ever sends whole numbers here, so anything else typed is left out, not sent.
     const whole = (value?: string) => (value && /^\d+$/.test(value) ? Number(value) : undefined);
-    const params = this.catalogueParams(ratings, genreNames("excluded"));
+    const included = genreNames("included");
+    const params = this.catalogueParams(ratings, genreNames("excluded"), included);
     const data = await fetchBrowse({
       ...params,
       q: title || undefined,
       originalLanguage: meta.languages?.join(",") || params.originalLanguage,
-      genres: genreNames("included").join(",") || undefined,
+      genres: included.join(",") || undefined,
       genreMode: meta.genreMode,
       excludeMode: meta.excludeMode,
       demographic: meta.demographics?.join(",") || undefined,
@@ -352,9 +366,11 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
       yearTo: whole(meta.yearTo),
       chaptersMin: whole(meta.chaptersMin),
       chaptersMax: whole(meta.chaptersMax),
+      hasChapters: meta.hasChapters ? "true" : undefined,
       sort,
-      // Best Match has no direction; every other sort takes the Order filter, as on the site.
-      order: sort !== "relevance" && meta.order === "asc" ? "asc" : "desc",
+      // Best Match has no direction. Every other sort takes the Order filter, as on the site, which
+      // otherwise starts a title list at A and every other list newest or highest first.
+      order: sort === "relevance" ? "desc" : (meta.order ?? (sort === "title" ? "asc" : "desc")),
       page,
     });
     return {
@@ -371,42 +387,96 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
-    return parseChapters(
-      await fetchSeries(sourceManga.mangaId),
-      sourceManga,
-      getChapterLanguages(),
-    );
+    return parseChapters(await fetchSeries(sourceManga.mangaId), sourceManga, {
+      mainOnly: getDeduplicateChapters(),
+      showSize: getShowUploadSize(),
+    });
   }
 
-  private getReaderKey(
-    chapterId: string,
-  ): Promise<{ readerKey: ReaderKey; response: ReaderKeyResponse }> {
-    return (this.readerKeyPromise ??= (async () => {
-      // The site issues its guest cookie here before the reader key is requested.
-      await (this.siteSessionPromise ??= fetchSiteSession().catch((error: unknown) => {
-        this.siteSessionPromise = undefined;
-        throw error;
-      }));
-      const { status, data } = await requestReaderKey();
-      if (status < 200 || status >= 300) {
-        throw await readerError(status, data as ReaderLimit | undefined, chapterId);
-      }
-      const response = parseReaderKeyResponse(data);
-      return { readerKey: await deriveReaderKey(response, this.readerSecret), response };
-    })().catch((error: unknown) => {
-      this.readerKeyPromise = undefined;
+  private getSiteSession(): Promise<unknown> {
+    // The site issues its guest cookie here, and the reader refuses a visitor without one.
+    return (this.siteSessionPromise ??= fetchSiteSession().catch((error: unknown) => {
+      this.siteSessionPromise = undefined;
       throw error;
     }));
   }
 
+  // Resolves undefined when the site asks for its human check before handing out a key.
+  private getReaderKey(): Promise<ReaderSession | undefined> {
+    return (this.readerKeyPromise ??= (async () => {
+      await this.getSiteSession();
+      const { status, data } = await requestReaderKey();
+      if (status < 200 || status >= 300) {
+        const limit = status === 429 ? (data as ReaderLimit | undefined) : undefined;
+        if (needsHumanCheck(limit)) return undefined;
+        throw readerError(status, limit, "the reader key");
+      }
+      const response = parseReaderKeyResponse(data);
+      return { readerKey: await deriveReaderKey(response, this.readerSecret), response };
+    })().then(
+      (session) => {
+        if (!session) this.readerKeyPromise = undefined;
+        return session;
+      },
+      (error: unknown) => {
+        this.readerKeyPromise = undefined;
+        throw error;
+      },
+    ));
+  }
+
+  private saveCookies(cookies: Cookie[]): void {
+    for (const cookie of cookies) {
+      if (cookie.expires && cookie.expires.getTime() <= Date.now()) continue;
+      this.cookieStorageInterceptor.setCookie(cookie);
+    }
+  }
+
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    const path = `/api/manga/chapter/${chapter.chapterId}`;
-    let recovered:
-      | { readerKey: ReaderKey; response: ReaderKeyResponse; secret: string }
-      | undefined;
+    const { chapterId } = chapter;
+    for (let checked = false; ; checked = true) {
+      const pages = await this.readChapter(chapterId);
+      if (pages) return { id: chapterId, mangaId: chapter.sourceManga.mangaId, pages };
+      // The check runs in the site's own reader, so a check that does not pass on its own opens the
+      // chapter there for the user, and the session cookie it unlocks is kept.
+      if (checked || !(await this.passHumanCheck(chapterId))) {
+        throw new CloudflareError({
+          url: `${DOMAIN}/chapter/${chapterId}`,
+          method: "GET",
+          headers: { "user-agent": await Application.getDefaultUserAgent() },
+        });
+      }
+      // The site's reader drops its key once the check is passed.
+      this.readerKeyPromise = undefined;
+    }
+  }
+
+  // Resolves undefined when the site asks for its human check.
+  private async readChapter(chapterId: string): Promise<string[] | undefined> {
+    const path = `/api/manga/chapter/${chapterId}`;
+    await this.getSiteSession();
+    let { status, data } = await requestChapter(path);
+    if (status === 401 || status === 403) {
+      this.siteSessionPromise = undefined;
+      await this.getSiteSession();
+      ({ status, data } = await requestChapter(path));
+    }
+    if (status >= 200 && status < 300 && !hasWrappedKeys(data)) return parseChapterPages(data);
+    // A human check or a wait stands however the chapter is asked for; any other refusal, or masked
+    // page keys, is answered by signing.
+    if (needsHumanCheck(status === 429 ? (data as ReaderLimit | undefined) : undefined)) {
+      return undefined;
+    }
+    return this.readSigned(chapterId, path);
+  }
+
+  private async readSigned(chapterId: string, path: string): Promise<string[] | undefined> {
+    let recovered: (ReaderSession & { secret: string }) | undefined;
     try {
       for (let attempt = 0; ; attempt++) {
-        const { readerKey, response } = recovered ?? (await this.getReaderKey(chapter.chapterId));
+        const session = recovered ?? (await this.getReaderKey());
+        if (!session) return undefined;
+        const { readerKey, response } = session;
         const { status, data } = await requestChapter(path, await signReaderPath(readerKey, path));
         if (status >= 200 && status < 300) {
           const pages = await parseChapterPages(data, readerKey);
@@ -416,13 +486,16 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
             this.readerKeyPromise = Promise.resolve({ readerKey, response });
           }
           this.readerBuild = response.build;
-          return { id: chapter.chapterId, mangaId: chapter.sourceManga.mangaId, pages };
+          return pages;
         }
         const limit = (status === 429 ? data : undefined) as ReaderLimit | undefined;
-        const signingRejected = status === 401 || status === 403 || limit?.resign === true;
-        // Refresh an expired key first; only rediscover after a persistent signing/build failure.
+        const sessionRejected = status === 401 || status === 403;
+        const signingRejected = sessionRejected || limit?.resign === true;
+        // Refresh an expired key, and a refused guest session with it, first; only rediscover after
+        // a persistent signing/build failure.
         if (attempt === 0 && signingRejected) {
           this.readerKeyPromise = undefined;
+          if (sessionRejected) this.siteSessionPromise = undefined;
           continue;
         }
         if (
@@ -430,16 +503,15 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
           signingRejected &&
           (limit?.resign || response.build !== this.readerBuild)
         ) {
-          const url = `${DOMAIN}/chapter/${chapter.chapterId}`;
-          const secret = await (this.readerSecretPromise ??= fetchReaderPage(
-            chapter.chapterId,
-          ).then((html) =>
-            captureReaderSecret(
-              html,
-              url,
-              response,
-              this.cookieStorageInterceptor.cookiesForUrl(url),
-            ),
+          const url = `${DOMAIN}/chapter/${chapterId}`;
+          const secret = await (this.readerSecretPromise ??= fetchReaderPage(chapterId).then(
+            (html) =>
+              captureReaderSecret(
+                html,
+                url,
+                response,
+                this.cookieStorageInterceptor.cookiesForUrl(url),
+              ),
           ));
           recovered = {
             secret,
@@ -448,10 +520,11 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
           };
           continue;
         }
-        throw await readerError(
+        if (needsHumanCheck(limit)) return undefined;
+        throw readerError(
           status,
           limit,
-          chapter.chapterId,
+          `chapter ${chapterId}`,
           response.build !== this.readerBuild,
         );
       }
@@ -460,33 +533,46 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
       throw error;
     }
   }
+
+  private async passHumanCheck(chapterId: string): Promise<boolean> {
+    const url = `${DOMAIN}/chapter/${chapterId}`;
+    const html = await fetchReaderPage(chapterId);
+    let cookies: Cookie[] | undefined;
+    try {
+      cookies = await runHumanCheck(html, url, this.cookieStorageInterceptor.cookiesForUrl(url));
+    } catch {
+      // A WebView that cannot run the check falls back to the user passing it on the site.
+      return false;
+    }
+    if (!cookies) return false;
+    this.saveCookies(cookies);
+    return true;
+  }
 }
 
-// Guests are asked to confirm they are human before reading on. The check runs in the site's own
-// reader, so the chapter is opened there and the session cookie it unlocks is kept.
-const readerError = async (
-  status: number,
-  limit: ReaderLimit | undefined,
-  chapterId: string,
-  readerChanged = false,
-): Promise<Error> => {
-  if (limit?.code === "manga-limit" && (limit.transient || limit.reason === "wait")) {
-    return new Error(
+// Guests are asked to confirm they are human before reading on. A timed limit is reported with its
+// wait; any other reading limit is the human check.
+const needsHumanCheck = (limit: ReaderLimit | undefined): boolean => {
+  if (limit?.code !== "manga-limit" || limit.resign) return false;
+  if (limit.transient || limit.reason === "wait") {
+    throw new Error(
       `Toonkotsu is limiting reads right now. Try again in ${limit.retryAfterSec || (limit.reason === "wait" ? 600 : 10)} seconds.`,
     );
   }
-  if (limit?.code === "manga-limit") {
-    return new CloudflareError({
-      url: `${DOMAIN}/chapter/${chapterId}`,
-      method: "GET",
-      headers: { "user-agent": await Application.getDefaultUserAgent() },
-    });
-  }
+  return true;
+};
+
+const readerError = (
+  status: number,
+  limit: ReaderLimit | undefined,
+  subject: string,
+  readerChanged = false,
+): Error => {
   const reason = readerChanged
     ? " The site's reader has been updated, so this source needs an update too."
     : "";
   return new Error(
-    `Could not load chapter ${chapterId} (status ${status}${limit?.error ? `: ${limit.error}` : ""}).${reason}`,
+    `Could not load ${subject} (status ${status}${limit?.error ? `: ${limit.error}` : ""}).${reason}`,
   );
 };
 

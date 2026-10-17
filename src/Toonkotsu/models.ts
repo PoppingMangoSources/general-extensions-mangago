@@ -17,13 +17,17 @@ export const PAGE_SIZE = 42;
 export const READER_SECRET = "NO57DoQRq7oxY3MCO5_SNw4_3vFRsUq7";
 export const READER_BUILD = "1738e5282ffc19e6";
 
+// How long the site's reader is given to pass its human check without a tap.
+export const HUMAN_CHECK_TIMEOUT_MS = 20_000;
+
 export const STATE_KEYS = {
-  CHAPTER_LANGUAGES: "toonkotsu_chapter_languages",
   CONTENT_RATINGS: "toonkotsu_content_ratings",
   TYPES: "toonkotsu_types",
   HIDDEN_TAGS: "toonkotsu_hidden_tags",
   SECTION_ORDER: "toonkotsu_section_order",
   HIDDEN_SECTIONS: "toonkotsu_hidden_sections",
+  DEDUPLICATE_CHAPTERS: "toonkotsu_deduplicate_chapters",
+  SHOW_UPLOAD_SIZE: "toonkotsu_show_upload_size",
 } as const;
 
 export const SECTIONS = {
@@ -111,12 +115,12 @@ export const SORT_OPTIONS = [
   { id: "chapters", label: "Chapter Count", value: "chapters" },
 ] as const;
 
+// Default follows the site: a title list starts at A, every other sort newest or highest first.
 export const ORDER_OPTIONS: Tag[] = [
+  { id: "default", title: "Default" },
   { id: "desc", title: "Descending" },
   { id: "asc", title: "Ascending" },
 ];
-
-export const CHAPTER_LANGUAGE_OPTIONS: Tag[] = [{ id: "en", title: "English" }];
 
 export const CONTENT_RATING_OPTIONS: Tag[] = [
   { id: "safe", title: "Safe" },
@@ -219,6 +223,7 @@ export interface SearchMetadata extends JSONObject {
   chaptersMin?: string;
   chaptersMax?: string;
   order?: string;
+  hasChapters?: boolean;
 }
 
 export interface PageMetadata extends JSONObject {
@@ -277,6 +282,9 @@ export interface ChapterRelease {
   src?: string | null;
   group?: ChapterGroup | null;
   partial?: boolean | null;
+  // Page width in pixels and download size in megabytes, which rank a group's uploads.
+  w?: number | null;
+  mb?: number | null;
 }
 
 export interface ChapterEntry extends ChapterRelease {

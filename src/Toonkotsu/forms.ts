@@ -19,7 +19,6 @@ import {
 } from "@paperback/types";
 
 import {
-  CHAPTER_LANGUAGE_OPTIONS,
   CONTENT_RATING_OPTIONS,
   COUNTRY_OPTIONS,
   DEFAULT_CONTENT_RATINGS,
@@ -45,13 +44,6 @@ const storedSelection = (key: string, valid: string[], fallback: string[]): stri
   return selected.length ? [...new Set(selected)] : fallback;
 };
 
-export const getChapterLanguages = (): string[] =>
-  storedSelection(
-    STATE_KEYS.CHAPTER_LANGUAGES,
-    CHAPTER_LANGUAGE_OPTIONS.map(({ id }) => id),
-    ["en"],
-  );
-
 export const getContentRatings = (): string[] =>
   storedSelection(
     STATE_KEYS.CONTENT_RATINGS,
@@ -72,6 +64,12 @@ export const getSectionOrder = (): SectionId[] => {
   const order = [...new Set(stored.filter((id) => SECTION_IDS.includes(id)))];
   return [...order, ...SECTION_IDS.filter((id) => !order.includes(id))];
 };
+
+export const getDeduplicateChapters = (): boolean =>
+  (Application.getState(STATE_KEYS.DEDUPLICATE_CHAPTERS) as boolean | undefined) ?? false;
+
+export const getShowUploadSize = (): boolean =>
+  (Application.getState(STATE_KEYS.SHOW_UPLOAD_SIZE) as boolean | undefined) ?? true;
 
 export const getHiddenSections = (): SectionId[] =>
   (Application.getState(STATE_KEYS.HIDDEN_SECTIONS) as SectionId[] | undefined) ?? [];
@@ -137,18 +135,6 @@ export class ToonkotsuSettingsForm extends Form {
             "Applies to Discover and search. Pornographic titles are only requested when that rating is on.",
         },
         [
-          SelectRow("chapter_languages", {
-            title: "Chapter Languages",
-            layout: "list",
-            value: getChapterLanguages(),
-            items: CHAPTER_LANGUAGE_OPTIONS,
-            minItemCount: 1,
-            maxItemCount: CHAPTER_LANGUAGE_OPTIONS.length,
-            onValueChange: Application.Selector(
-              this as ToonkotsuSettingsForm,
-              "handleChapterLanguagesChange",
-            ),
-          }),
           SelectRow("content_ratings", {
             title: "Content Ratings",
             layout: "flow",
@@ -185,6 +171,32 @@ export class ToonkotsuSettingsForm extends Form {
           }),
         ],
       ),
+      Section(
+        {
+          id: "chapters",
+          header: "Chapter Settings",
+          footer:
+            "Deduplicate Chapters lists only the upload the site shows first for each chapter, not one from every group. Upload Size adds each upload's size to its title and lists a group's uploads of different sizes separately; with it off only the group's best upload is listed.",
+        },
+        [
+          ToggleRow("deduplicate_chapters", {
+            title: "Deduplicate Chapters",
+            value: getDeduplicateChapters(),
+            onValueChange: Application.Selector(
+              this as ToonkotsuSettingsForm,
+              "handleDeduplicateChaptersChange",
+            ),
+          }),
+          ToggleRow("show_upload_size", {
+            title: "Upload Size",
+            value: getShowUploadSize(),
+            onValueChange: Application.Selector(
+              this as ToonkotsuSettingsForm,
+              "handleShowUploadSizeChange",
+            ),
+          }),
+        ],
+      ),
       Section("home", [
         NavigationRow("home_sections", {
           title: "Home Sections",
@@ -201,8 +213,12 @@ export class ToonkotsuSettingsForm extends Form {
     this.reloadForm();
   }
 
-  async handleChapterLanguagesChange(value: string[]): Promise<void> {
-    this.save(STATE_KEYS.CHAPTER_LANGUAGES, value);
+  async handleDeduplicateChaptersChange(value: boolean): Promise<void> {
+    Application.setState(value, STATE_KEYS.DEDUPLICATE_CHAPTERS);
+  }
+
+  async handleShowUploadSizeChange(value: boolean): Promise<void> {
+    Application.setState(value, STATE_KEYS.SHOW_UPLOAD_SIZE);
   }
 
   async handleContentRatingsChange(value: string[]): Promise<void> {
@@ -232,6 +248,7 @@ export class ToonkotsuSearchForm extends AdvancedSearchForm {
   private chaptersMin: string;
   private chaptersMax: string;
   private order: string;
+  private hasChapters: boolean;
 
   constructor(
     query: SearchQuery<SearchMetadata>,
@@ -251,7 +268,8 @@ export class ToonkotsuSearchForm extends AdvancedSearchForm {
     this.yearTo = metadata.yearTo ?? "";
     this.chaptersMin = metadata.chaptersMin ?? "";
     this.chaptersMax = metadata.chaptersMax ?? "";
-    this.order = metadata.order ?? "desc";
+    this.order = metadata.order ?? "default";
+    this.hasChapters = metadata.hasChapters ?? false;
   }
 
   private selectRow(
@@ -334,6 +352,13 @@ export class ToonkotsuSearchForm extends AdvancedSearchForm {
           false,
           (value) => (this.languages = value),
         ),
+        ToggleRow("has_chapters", {
+          title: "Has Chapters",
+          value: this.hasChapters,
+          onValueChange: closureSelector(this, "has_chapters", async (value: boolean) => {
+            this.hasChapters = value;
+          }),
+        }),
       ]),
       Section(
         "tags",
@@ -381,7 +406,7 @@ export class ToonkotsuSearchForm extends AdvancedSearchForm {
           ORDER_OPTIONS,
           [this.order],
           true,
-          (value) => (this.order = value[0] ?? "desc"),
+          (value) => (this.order = value[0] ?? "default"),
         ),
       ]),
       Section("author", [
@@ -404,7 +429,8 @@ export class ToonkotsuSearchForm extends AdvancedSearchForm {
       yearTo: this.yearTo.trim() || undefined,
       chaptersMin: this.chaptersMin.trim() || undefined,
       chaptersMax: this.chaptersMax.trim() || undefined,
-      order: this.order === "asc" ? "asc" : undefined,
+      order: this.order === "default" ? undefined : this.order,
+      hasChapters: this.hasChapters || undefined,
     };
   }
 }
