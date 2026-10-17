@@ -4,7 +4,6 @@
 import {
   CloudflareError,
   PaperbackInterceptor,
-  URL,
   type Request,
   type Response,
 } from "@paperback/types";
@@ -25,7 +24,6 @@ import {
   type ChapterInfoResponse,
   type ChapterListResponse,
   type ContentType,
-  type SearchRequest,
 } from "./models";
 
 const URL_SCHEME_REGEX = /^[a-z][a-z0-9+.-]*:/i;
@@ -173,39 +171,14 @@ const fetchApi = async <T extends { error_code: string; error_msg?: string }>(
   return data;
 };
 
-const addQueryItem = (url: URL, key: string, value?: string): void => {
-  const cleanValue = value?.trim();
-  if (cleanValue) url.setQueryItem(key, cleanValue);
-};
-
 export const buildCategoryUrl = (path: string, page: number): string => {
   const cleanPath = path.replace(/[?#].*$/, "").replace(/\/+$/, "");
   const pagedPath = page <= 1 ? cleanPath : `${cleanPath.replace(/\.html$/i, "")}_${page}.html`;
   return siteUrl(pagedPath);
 };
 
-// The site only runs a search when `name` and `page` are both sent, even empty or 1; without them
-// it serves the blank search form, so a genre-only search found nothing.
-export const buildSearchUrl = (request: SearchRequest): string => {
-  const url = new URL(`${DOMAIN}/search/`).setQueryItem("name", request.title?.trim() ?? "");
-  if (request.title) addQueryItem(url, "name_sel", request.nameMethod ?? "contain");
-  addQueryItem(url, "author", request.author);
-  if (request.author) addQueryItem(url, "author_sel", request.authorMethod ?? "contain");
-  addQueryItem(url, "completed_series", request.status);
-  // The site's form always sends both lists, each with a leading comma, empty or not.
-  url.setQueryItem("category_id", `,${(request.genresInclude ?? []).join(",")}`);
-  url.setQueryItem("out_category_id", `,${(request.genresExclude ?? []).join(",")}`);
-  addQueryItem(url, "publish_year", request.year);
-  addQueryItem(url, "rate_star", request.rating);
-  url.setQueryItem("page", request.page.toString());
-  return url.toString();
-};
-
 export const fetchCategoryPage = (path: string, page: number): Promise<cheerio.CheerioAPI> =>
   fetchDocument(buildCategoryUrl(path, page));
-
-export const fetchSearchPage = (request: SearchRequest): Promise<cheerio.CheerioAPI> =>
-  fetchDocument(buildSearchUrl(request));
 
 export const fetchUrlPage = (url: string): Promise<cheerio.CheerioAPI> =>
   fetchDocument(siteUrl(url));

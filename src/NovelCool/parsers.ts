@@ -22,7 +22,6 @@ import {
   type NovelCoolChapter,
   type NovelCoolChapterInfo,
   type SearchOptions,
-  type TriState,
 } from "./models";
 
 const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
@@ -265,42 +264,33 @@ export const parseApiListings = (books: NovelCoolBook[]): ListingItem[] =>
         : undefined,
   }));
 
-export const parseSearchOptions = ($: cheerio.CheerioAPI): SearchOptions => {
-  const genres: Tag[] = [];
-  const seen = new Set<string>();
-  for (const element of $(".category-list .category-id-item").toArray()) {
-    const item = $(element);
-    const id = cleanText(item.attr("cate_id") ?? item.attr("data-cate-id"));
-    const title = cleanText(item.attr("title") ?? item.text());
-    if (!id || !title || seen.has(id)) continue;
-    seen.add(id);
-    genres.push({ id: id.replace(SAFE_ID_REGEX, "-"), title });
-  }
+const CATEGORY_PAGE_REGEX = /\/category\/([^/?#]+)\.html$/;
 
-  const years: Tag[] = [];
-  for (const element of $(
-    ".category-year-item[cate_year], select[name='publish_year'] option, [data-year], a[href*='publish_year=']",
-  ).toArray()) {
-    const item = $(element);
-    const id = cleanText(
-      item.attr("cate_year") ??
-        item.attr("value") ??
-        item.attr("data-year") ??
-        item.attr("href")?.match(/[?&]publish_year=([^&#]+)/)?.[1],
-    );
-    const year = Number.parseInt(id, 10);
-    if (
-      !/^\d{4}$/.test(id) ||
-      year < 1900 ||
-      year > 2100 ||
-      years.some((entry) => entry.id === id)
-    ) {
-      continue;
-    }
-    years.push({ id, title: id });
-  }
-  years.sort((left, right) => Number(right.id) - Number(left.id));
-  return { genres, years };
+// The category directory lists each genre and year as its own page; a genre's id is its page name.
+export const parseSearchOptions = ($: cheerio.CheerioAPI): SearchOptions => {
+  const linksIn = (group: string) =>
+    $(".category-group")
+      .filter((_, element) =>
+        cleanText($(element).find(".category-list-title").first().text()).startsWith(group),
+      )
+      .find(".category-list a")
+      .toArray()
+      .flatMap((element) => {
+        const link = $(element);
+        const id = link.attr("href")?.match(CATEGORY_PAGE_REGEX)?.[1];
+        const title = cleanText(link.attr("title") ?? link.text());
+        return id && title ? [{ id: id.replace(SAFE_ID_REGEX, "-"), title }] : [];
+      });
+  const years = linksIn("Year").filter(({ id }) => {
+    const year = Number(id);
+    return /^\d{4}$/.test(id) && year >= 1900 && year <= 2100;
+  });
+  return {
+    genres: linksIn("Genres"),
+    statuses: linksIn("Status"),
+    years,
+    letters: linksIn("Alphabetic"),
+  };
 };
 
 export const parseBookId = ($: cheerio.CheerioAPI): string => {
@@ -331,17 +321,13 @@ const cleanCreator = (value?: string | null): string | undefined => {
   return creator && !/^(?:n\/a|unknown)$/i.test(creator) ? creator : undefined;
 };
 
-// A genre is matched to the search filter's id by its name, so a tag tapped on a title filters by
-// the same id the search form sends.
+// A title's genres are matched to the genre pages by name, so a tag tapped on a title opens the same
+// page the genre filter does.
 export const toGenreId = (name: string, genres: Tag[]): string | undefined => {
   const key = name.trim().toLowerCase();
   return (
     genres.find((genre) => genre.id === name)?.id ??
-    genres.find(
-      (genre) =>
-        genre.title.trim().toLowerCase() === key ||
-        genre.title.replace(SAFE_ID_REGEX, "-").toLowerCase() === key,
-    )?.id
+    genres.find((genre) => genre.title.trim().toLowerCase() === key)?.id
   );
 };
 
@@ -357,7 +343,9 @@ export const parseMangaDetails = (
 
   const genres = book.category_list ?? [];
   const tags = genres.map((genre) => ({
-    id: toGenreId(genre, genreOptions) ?? genre.replace(SAFE_ID_REGEX, "-"),
+    id:
+      toGenreId(genre, genreOptions) ??
+      genre.trim().replace(/\s+/g, "+").replace(SAFE_ID_REGEX, "-"),
     title: genre,
   }));
   const rating = Number(book.rate_star);
@@ -486,14 +474,6 @@ export const parseChapterDetails = (
 
 export const hasNextPage = ($: cheerio.CheerioAPI): boolean =>
   $("div.page-nav a div.next, .page-nav a.next, .pagination a.next").length > 0;
-
-export const pickTriState = (
-  value: TriState | undefined,
-  state: "included" | "excluded",
-): string[] =>
-  Object.entries(value ?? {})
-    .filter(([, current]) => current === state)
-    .map(([id]) => id);
 
 const chapterLabel = (title: string): string => {
   const number = chapterNumber(title);

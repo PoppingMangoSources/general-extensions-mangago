@@ -46,7 +46,6 @@ import {
   fetchBrowse,
   fetchCategoryPage,
   fetchChapterInfo,
-  fetchSearchPage,
   fetchUrlPage,
   NovelCoolInterceptor,
 } from "./network";
@@ -61,7 +60,6 @@ import {
   parseListings,
   parseMangaDetails,
   parseSearchOptions,
-  pickTriState,
   toFeaturedItem,
   toGenreId,
   toSearchResultItem,
@@ -216,7 +214,7 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
   }
 
   private getSearchOptions(): Promise<SearchOptions> {
-    return (this.searchOptionsPromise ??= fetchUrlPage("/search/").then(parseSearchOptions));
+    return (this.searchOptionsPromise ??= fetchUrlPage("/category/").then(parseSearchOptions));
   }
 
   async getSortingOptions(_query: SearchQuery<SearchMetadata>): Promise<SortingOption[]> {
@@ -238,16 +236,8 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
     const page = metadata?.page ?? 1;
     const searchMetadata = query.metadata ?? {};
     const title = (query.title ?? "").trim();
-    const hasAdvancedFilters =
-      Boolean(searchMetadata.author) ||
-      Boolean(searchMetadata.status?.length) ||
-      Boolean(searchMetadata.year?.length) ||
-      Boolean(searchMetadata.rating?.length) ||
-      Object.keys(searchMetadata.genres ?? {}).length > 0 ||
-      Boolean(searchMetadata.nameMethod?.length) ||
-      Boolean(searchMetadata.authorMethod?.length);
 
-    if (title && !hasAdvancedFilters) {
+    if (title) {
       const [novels, manga] = await Promise.all([
         fetchBookSearch(title, "novel", page),
         fetchBookSearch(title, "manga", page),
@@ -259,7 +249,14 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
       };
     }
 
-    if (!title && !hasAdvancedFilters && sortingOption?.id !== "rating") {
+    // The site's search form ignores its filters, so they browse the category directory instead,
+    // one page of it at a time. A genre saved from an older version by name is matched to its page.
+    const genre = searchMetadata.genre?.[0];
+    const category = genre
+      ? (toGenreId(genre, await this.getGenreOptions()) ?? genre)
+      : (searchMetadata.status?.[0] ?? searchMetadata.year?.[0] ?? searchMetadata.letter?.[0]);
+
+    if (!category && sortingOption?.id !== "rating") {
       const items = await this.getBrowseItems(browseOrderForSort(sortingOption?.id), page);
       return {
         items: items.filter((item) => item.imageUrl.length > 0).map(toSearchResultItem),
@@ -267,27 +264,10 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
       };
     }
 
-    // A tag saved from a title before ids were matched carries its name; it is mapped to the id.
-    const genreOptions = Object.keys(searchMetadata.genres ?? {}).length
-      ? (await this.getSearchOptions()).genres
-      : [];
-    const genreIds = (state: "included" | "excluded"): string[] =>
-      pickTriState(searchMetadata.genres, state).flatMap((id) => toGenreId(id, genreOptions) ?? []);
-    const document =
-      sortingOption?.id === "rating" && !title && !hasAdvancedFilters
-        ? await fetchCategoryPage(CATEGORY_PATHS.RATING, page)
-        : await fetchSearchPage({
-            page,
-            title: title || undefined,
-            nameMethod: searchMetadata.nameMethod?.[0],
-            author: searchMetadata.author,
-            authorMethod: searchMetadata.authorMethod?.[0],
-            status: searchMetadata.status?.[0],
-            genresInclude: genreIds("included"),
-            genresExclude: genreIds("excluded"),
-            year: searchMetadata.year?.[0],
-            rating: searchMetadata.rating?.[0],
-          });
+    const document = await fetchCategoryPage(
+      category ? `/category/${category}.html` : CATEGORY_PATHS.RATING,
+      page,
+    );
     return {
       items: parseListings(document)
         .filter((item) => item.imageUrl.length > 0)

@@ -3,183 +3,91 @@
 
 import {
   AdvancedSearchForm,
-  InputRow,
   Section,
   SelectRow,
-  TriStateSelectRow,
   type SearchQuery,
+  type Tag,
 } from "@paperback/types";
 
-import {
-  MATCH_OPTIONS,
-  RATING_OPTIONS,
-  STATUS_OPTIONS,
-  type SearchMetadata,
-  type SearchOptions,
-  type TriState,
-} from "./models";
+import type { SearchMetadata, SearchOptions } from "./models";
 
+type FilterKey = "genre" | "status" | "year" | "letter";
+type Handler =
+  | "handleGenreChange"
+  | "handleStatusChange"
+  | "handleYearChange"
+  | "handleLetterChange";
+
+// Mirrors the site's category directory: each option is its own page, so picking one clears the
+// others, as the site does.
 export class NovelCoolAdvancedSearchForm extends AdvancedSearchForm {
-  private nameMethod: string[];
-  private author: string;
-  private authorMethod: string[];
-  private genres: TriState;
-  private year: string[];
-  private status: string[];
-  private rating: string[];
-  private readonly options: SearchOptions;
+  private filter: { key: FilterKey; id: string } | undefined;
 
-  constructor(searchQuery: SearchQuery<SearchMetadata>, options: SearchOptions) {
+  constructor(
+    searchQuery: SearchQuery<SearchMetadata>,
+    private readonly options: SearchOptions,
+  ) {
     super();
     const metadata = searchQuery.metadata ?? {};
-    this.nameMethod = metadata.nameMethod ?? ["contain"];
-    this.author = metadata.author ?? "";
-    this.authorMethod = metadata.authorMethod ?? ["contain"];
-    this.genres = { ...metadata.genres };
-    this.year = metadata.year ?? [];
-    this.status = metadata.status ?? [];
-    this.rating = metadata.rating ?? [];
-    this.options = options;
+    const key = (["genre", "status", "year", "letter"] as const).find(
+      (name) => metadata[name]?.[0],
+    );
+    const id = key ? metadata[key]?.[0] : undefined;
+    this.filter = key && id ? { key, id } : undefined;
+  }
+
+  private row(key: FilterKey, title: string, items: Tag[], handler: Handler) {
+    return SelectRow(key, {
+      title,
+      layout: "flow",
+      value: this.filter?.key === key ? [this.filter.id] : [],
+      items,
+      minItemCount: 0,
+      maxItemCount: 1,
+      onValueChange: Application.Selector(this as NovelCoolAdvancedSearchForm, handler),
+    });
   }
 
   override getSections() {
     return [
-      Section("series", [
-        SelectRow("name_method", {
-          title: "Series Name Match",
-          layout: "flow",
-          value: this.nameMethod,
-          items: MATCH_OPTIONS,
-          minItemCount: 1,
-          maxItemCount: 1,
-          onValueChange: Application.Selector(
-            this as NovelCoolAdvancedSearchForm,
-            "handleNameMethodChange",
-          ),
-        }),
-      ]),
-      Section("author", [
-        InputRow("author", {
-          title: "Author Name",
-          value: this.author,
-          onValueChange: Application.Selector(
-            this as NovelCoolAdvancedSearchForm,
-            "handleAuthorChange",
-          ),
-        }),
-        SelectRow("author_method", {
-          title: "Author Name Match",
-          layout: "flow",
-          value: this.authorMethod,
-          items: MATCH_OPTIONS,
-          minItemCount: 1,
-          maxItemCount: 1,
-          onValueChange: Application.Selector(
-            this as NovelCoolAdvancedSearchForm,
-            "handleAuthorMethodChange",
-          ),
-        }),
-      ]),
-      Section({ id: "genres", footer: "Tap once to include and twice to exclude." }, [
-        TriStateSelectRow("genres", {
-          title: "Genres",
-          layout: "flow",
-          value: this.genres,
-          items: this.options.genres,
-          allowExclusion: true,
-          allowEmptySelection: true,
-          onValueChange: Application.Selector(
-            this as NovelCoolAdvancedSearchForm,
-            "handleGenresChange",
-          ),
-        }),
-      ]),
-      Section("year", [
-        SelectRow("year", {
-          title: "Year",
-          layout: "flow",
-          value: this.year,
-          items: this.options.years,
-          minItemCount: 0,
-          maxItemCount: 1,
-          onValueChange: Application.Selector(
-            this as NovelCoolAdvancedSearchForm,
-            "handleYearChange",
-          ),
-        }),
-      ]),
-      Section("status", [
-        SelectRow("status", {
-          title: "Status",
-          layout: "flow",
-          value: this.status,
-          items: STATUS_OPTIONS,
-          minItemCount: 0,
-          maxItemCount: 1,
-          onValueChange: Application.Selector(
-            this as NovelCoolAdvancedSearchForm,
-            "handleStatusChange",
-          ),
-        }),
-      ]),
-      Section("rating", [
-        SelectRow("rating", {
-          title: "Rating",
-          layout: "flow",
-          value: this.rating,
-          items: RATING_OPTIONS,
-          minItemCount: 0,
-          maxItemCount: 1,
-          onValueChange: Application.Selector(
-            this as NovelCoolAdvancedSearchForm,
-            "handleRatingChange",
-          ),
-        }),
-      ]),
+      Section(
+        {
+          id: "browse",
+          footer:
+            "The site lists one of these at a time, and not alongside a typed title, which searches on its own.",
+        },
+        [
+          this.row("genre", "Genre", this.options.genres, "handleGenreChange"),
+          this.row("status", "Status", this.options.statuses, "handleStatusChange"),
+          this.row("year", "Year", this.options.years, "handleYearChange"),
+          this.row("letter", "Alphabetic", this.options.letters, "handleLetterChange"),
+        ],
+      ),
     ];
   }
 
-  async handleNameMethodChange(value: string[]): Promise<void> {
-    this.nameMethod = value;
+  private select(key: FilterKey, value: string[]): void {
+    this.filter = value[0] ? { key, id: value[0] } : undefined;
+    this.reloadForm();
   }
 
-  async handleAuthorChange(value: string): Promise<void> {
-    this.author = value.trim();
-  }
-
-  async handleAuthorMethodChange(value: string[]): Promise<void> {
-    this.authorMethod = value;
-  }
-
-  async handleGenresChange(value: TriState): Promise<void> {
-    this.genres = value;
-  }
-
-  async handleYearChange(value: string[]): Promise<void> {
-    this.year = value;
+  async handleGenreChange(value: string[]): Promise<void> {
+    this.select("genre", value);
   }
 
   async handleStatusChange(value: string[]): Promise<void> {
-    this.status = value;
+    this.select("status", value);
   }
 
-  async handleRatingChange(value: string[]): Promise<void> {
-    this.rating = value;
+  async handleYearChange(value: string[]): Promise<void> {
+    this.select("year", value);
+  }
+
+  async handleLetterChange(value: string[]): Promise<void> {
+    this.select("letter", value);
   }
 
   override getSearchQueryMetadata(): SearchMetadata {
-    const metadata: SearchMetadata = {};
-    if (this.nameMethod[0] && this.nameMethod[0] !== "contain") {
-      metadata.nameMethod = this.nameMethod;
-    }
-    if (this.author) metadata.author = this.author;
-    if (this.authorMethod[0] && this.authorMethod[0] !== "contain") {
-      metadata.authorMethod = this.authorMethod;
-    }
-    if (Object.keys(this.genres).length > 0) metadata.genres = this.genres;
-    if (this.year.length > 0) metadata.year = this.year;
-    if (this.status.length > 0) metadata.status = this.status;
-    if (this.rating.length > 0) metadata.rating = this.rating;
-    return metadata;
+    return this.filter ? { [this.filter.key]: [this.filter.id] } : {};
   }
 }

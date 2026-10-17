@@ -53,24 +53,6 @@ export const SORT_OPTIONS: SortingOption[] = [
   { id: "rating", label: "Rating" },
 ];
 
-export const MATCH_OPTIONS: Tag[] = [
-  { id: "contain", title: "Contain" },
-  { id: "begin", title: "Begin" },
-  { id: "end", title: "End" },
-];
-
-export const STATUS_OPTIONS: Tag[] = [
-  { id: "NO", title: "Ongoing" },
-  { id: "YES", title: "Completed" },
-];
-
-export const RATING_OPTIONS: Tag[] = [
-  { id: "5", title: "5 Stars" },
-  { id: "4", title: "4 Stars and Up" },
-  { id: "3", title: "3 Stars and Up" },
-  { id: "2", title: "2 Stars and Up" },
-];
-
 export const TYPE_TITLES = new Set([
   "comic",
   "comics",
@@ -91,29 +73,12 @@ export interface PageMetadata extends JSONObject {
   page: number;
 }
 
-export type TriState = Record<string, "included" | "excluded">;
-
+// Each value is a page of the site's category directory, which lists one at a time.
 export interface SearchMetadata extends JSONObject {
-  nameMethod?: string[];
-  author?: string;
-  authorMethod?: string[];
+  genre?: string[];
   status?: string[];
-  genres?: TriState;
   year?: string[];
-  rating?: string[];
-}
-
-export interface SearchRequest {
-  page: number;
-  title?: string;
-  nameMethod?: string;
-  author?: string;
-  authorMethod?: string;
-  status?: string;
-  genresInclude?: string[];
-  genresExclude?: string[];
-  year?: string;
-  rating?: string;
+  letter?: string[];
 }
 
 export interface ListingChapter {
@@ -137,7 +102,9 @@ export interface ListingItem {
 
 export interface SearchOptions {
   genres: Tag[];
+  statuses: Tag[];
   years: Tag[];
+  letters: Tag[];
 }
 
 export interface ApiResponse {
