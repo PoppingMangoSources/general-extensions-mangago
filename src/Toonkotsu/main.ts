@@ -83,13 +83,7 @@ import {
   toSearchResults,
 } from "./parsers";
 import type ToonkotsuConfig from "./pbconfig";
-import {
-  captureReaderSecret,
-  deriveReaderKey,
-  runHumanCheck,
-  signReaderPath,
-  type ReaderKey,
-} from "./utils";
+import { captureReaderSecret, deriveReaderKey, signReaderPath, type ReaderKey } from "./utils";
 
 type ReaderSession = { readerKey: ReaderKey; response: ReaderKeyResponse };
 
@@ -444,22 +438,15 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    const { chapterId } = chapter;
-    for (let checked = false; ; checked = true) {
-      const pages = await this.readChapter(chapterId);
-      if (pages) return { id: chapterId, mangaId: chapter.sourceManga.mangaId, pages };
-      // The check runs in the site's own reader, so a check that does not pass on its own opens the
-      // chapter there for the user, and the session cookie it unlocks is kept.
-      if (checked || !(await this.passHumanCheck(chapterId))) {
-        throw new CloudflareError({
-          url: `${DOMAIN}/chapter/${chapterId}`,
-          method: "GET",
-          headers: { "user-agent": await Application.getDefaultUserAgent() },
-        });
-      }
-      // The site's reader drops its key once the check is passed.
-      this.readerKeyPromise = undefined;
-    }
+    const pages = await this.readChapter(chapter.chapterId);
+    if (pages) return { id: chapter.chapterId, mangaId: chapter.sourceManga.mangaId, pages };
+    // The check needs the reader to see it, so the chapter is opened in the site's own reader to
+    // pass it there, and the session cookie it unlocks is kept.
+    throw new CloudflareError({
+      url: `${DOMAIN}/chapter/${chapter.chapterId}`,
+      method: "GET",
+      headers: { "user-agent": await Application.getDefaultUserAgent() },
+    });
   }
 
   // Resolves undefined when the site asks for its human check.
@@ -543,21 +530,6 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
       this.readerSecretPromise = undefined;
       throw error;
     }
-  }
-
-  private async passHumanCheck(chapterId: string): Promise<boolean> {
-    const url = `${DOMAIN}/chapter/${chapterId}`;
-    const html = await fetchReaderPage(chapterId);
-    let cookies: Cookie[] | undefined;
-    try {
-      cookies = await runHumanCheck(html, url, this.cookieStorageInterceptor.cookiesForUrl(url));
-    } catch {
-      // A WebView that cannot run the check falls back to the user passing it on the site.
-      return false;
-    }
-    if (!cookies) return false;
-    this.saveCookies(cookies);
-    return true;
   }
 }
 

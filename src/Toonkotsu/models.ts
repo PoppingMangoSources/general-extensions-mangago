@@ -17,9 +17,6 @@ export const PAGE_SIZE = 42;
 export const READER_SECRET = "NO57DoQRq7oxY3MCO5_SNw4_3vFRsUq7";
 export const READER_BUILD = "1738e5282ffc19e6";
 
-// How long the site's reader is given to pass its human check without a tap.
-export const HUMAN_CHECK_TIMEOUT_MS = 20_000;
-
 export const STATE_KEYS = {
   CONTENT_RATINGS: "toonkotsu_content_ratings",
   TYPES: "toonkotsu_types",
