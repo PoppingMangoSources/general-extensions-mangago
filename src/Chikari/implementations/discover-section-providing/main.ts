@@ -9,7 +9,11 @@ import type {
 } from "@paperback/types";
 
 import type { ChikariImplementation } from "../../main";
-import { getSectionOrder, getVisibleSections } from "../settings-form-providing/main";
+import {
+  getPreferences,
+  getSectionOrder,
+  getVisibleSections,
+} from "../settings-form-providing/main";
 import {
   BOOKMARK_PERIOD_FILTERS,
   PERIOD_FILTERS,
@@ -69,12 +73,13 @@ export class DiscoverProvider {
     this: ChikariImplementation,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     return {
-      items: findHomeRow(await this.getHomeData(), "popular").map(toFeaturedItem),
+      items: findHomeRow(await this.getHomeData(), "popular", "comic").map(toFeaturedItem),
     };
   }
 
+  // Untyped search metadata defaults to every medium, novels included.
   async getTrendingSection(): Promise<PagedResults<DiscoverSectionItem>> {
-    return { items: toPeriodFilterItems(PERIOD_FILTERS, "trending") };
+    return { items: toPeriodFilterItems(PERIOD_FILTERS, "trending", getPreferences().types) };
   }
 
   async getTrendingNovelsSection(): Promise<PagedResults<DiscoverSectionItem>> {
@@ -89,10 +94,12 @@ export class DiscoverProvider {
     this: ChikariImplementation,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     return {
-      items: findHomeRow(await this.getHomeData(), "recently-updated").flatMap((series) => {
-        const item = toRecentlyUpdatedItem(series);
-        return item ? [item] : [];
-      }),
+      items: findHomeRow(await this.getHomeData(), "recently-updated", "comic").flatMap(
+        (series) => {
+          const item = toRecentlyUpdatedItem(series);
+          return item ? [item] : [];
+        },
+      ),
     };
   }
 
@@ -100,16 +107,22 @@ export class DiscoverProvider {
     this: ChikariImplementation,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     return {
-      items: findHomeRow(await this.getNovelHomeData(), "recently-updated").flatMap((series) => {
-        const item = toRecentlyUpdatedItem(series, "novel");
-        return item ? [item] : [];
-      }),
+      items: findHomeRow(await this.getNovelHomeData(), "recently-updated", "novel").flatMap(
+        (series) => {
+          const item = toRecentlyUpdatedItem(series, "novel");
+          return item ? [item] : [];
+        },
+      ),
     };
   }
 
   async getMostBookmarkedSection(): Promise<PagedResults<DiscoverSectionItem>> {
     return {
-      items: toPeriodFilterItems(BOOKMARK_PERIOD_FILTERS, "most_bookmarked"),
+      items: toPeriodFilterItems(
+        BOOKMARK_PERIOD_FILTERS,
+        "most_bookmarked",
+        getPreferences().types,
+      ),
     };
   }
 

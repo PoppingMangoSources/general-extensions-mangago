@@ -24,8 +24,15 @@ import {
 } from "../shared/parsers";
 import type { FilterItem, TypeFilter } from "./models";
 
-export const findHomeRow = (response: HomeResponse, slug: HomeRow["slug"]): SeriesItem[] =>
-  response.rows.find((row) => row.slug === slug)?.items ?? [];
+// Home rows can mix comics and novels; an item the API tags with another medium is left out.
+export const findHomeRow = (
+  response: HomeResponse,
+  slug: HomeRow["slug"],
+  medium: Medium,
+): SeriesItem[] =>
+  (response.rows.find((row) => row.slug === slug)?.items ?? []).filter(
+    (series) => (series.medium ?? medium) === medium,
+  );
 
 export const toFeaturedItem = (series: SeriesItem): DiscoverSectionItem => {
   const rating = formatRating(series.rating);
@@ -73,14 +80,14 @@ export const toRecentlyUpdatedItem = (
 export const toPeriodFilterItems = (
   filters: FilterItem[],
   sort: SortId,
-  types?: SeriesType[],
+  types: SeriesType[],
 ): DiscoverSectionItem[] =>
   filters.map((filter) => ({
     type: "genresCarouselItem",
     name: filter.title,
     searchQuery: {
       title: "",
-      metadata: { sort, period: filter.id, ...(types ? { types } : {}) },
+      metadata: { sort, period: filter.id, types },
     },
   }));
 
