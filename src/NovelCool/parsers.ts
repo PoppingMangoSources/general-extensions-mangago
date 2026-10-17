@@ -5,7 +5,6 @@ import {
   ContentRating,
   type Chapter,
   type ChapterDetails,
-  type ChapterUpdatesCarouselItem,
   type DiscoverSectionItem,
   type FeaturedCarouselItem,
   type SearchResultItem,
@@ -201,7 +200,9 @@ export const parseListings = ($: cheerio.CheerioAPI): ListingItem[] => {
     seen.add(mangaId);
 
     const genres = item
-      .find(".book-cate a, .book-data-info a[href*='/category/'], .book-info a[href*='/category/']")
+      .find(
+        ".book-tag, .book-cate a, .book-data-info a[href*='/category/'], .book-info a[href*='/category/']",
+      )
       .toArray()
       .map((genre) => cleanText($(genre).text()))
       .filter(
@@ -505,24 +506,16 @@ export const toSimpleItem = (item: ListingItem): DiscoverSectionItem => ({
   contentRating: contentRatingForGenres(item.genres),
 });
 
-export const toLatestItem = (
-  item: ListingItem,
-  dateAnchor: number,
-): ChapterUpdatesCarouselItem | DiscoverSectionItem => {
-  if (!item.latestChapter) return toSimpleItem(item);
-  return {
-    type: "chapterUpdatesCarouselItem",
-    mangaId: item.mangaId,
-    chapterId: item.latestChapter.chapterId,
-    imageUrl: item.imageUrl,
-    title: item.title,
-    subtitle: [item.type, chapterLabel(item.latestChapter.title)]
-      .filter((value): value is string => Boolean(value))
-      .join(" • "),
-    publishDate: parseDate(item.latestChapter.dateText ?? item.updatedText, dateAnchor),
-    contentRating: contentRatingForGenres(item.genres),
-  };
-};
+export const toUpdatedItem = (item: ListingItem): DiscoverSectionItem => ({
+  type: "simpleCarouselItem",
+  mangaId: item.mangaId,
+  imageUrl: item.imageUrl,
+  title: item.title,
+  subtitle:
+    [item.type, item.updatedText].filter((value): value is string => Boolean(value)).join(" • ") ||
+    undefined,
+  contentRating: contentRatingForGenres(item.genres),
+});
 
 export const toSearchResultItem = (item: ListingItem): SearchResultItem => ({
   mangaId: item.mangaId,

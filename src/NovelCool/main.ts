@@ -22,16 +22,19 @@ import {
   type SourceManga,
   type UpdateManager,
 } from "@paperback/types";
+import type * as cheerio from "cheerio";
 
 import { NovelCoolAdvancedSearchForm } from "./forms";
 import {
   CATEGORY_PATHS,
   DOMAIN,
+  GENRE_SECTIONS,
   PAGE_SIZE,
   SECTIONS,
   SORT_OPTIONS,
   STATE_KEYS,
   type BrowseOrder,
+  type ListingItem,
   type PageMetadata,
   type SearchMetadata,
   type SearchOptions,
@@ -60,9 +63,9 @@ import {
   parseSearchOptions,
   pickTriState,
   toFeaturedItem,
-  toLatestItem,
   toSearchResultItem,
   toSimpleItem,
+  toUpdatedItem,
 } from "./parsers";
 import type NovelCoolConfig from "./pbconfig";
 
@@ -118,9 +121,14 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
       { id: SECTIONS.FEATURED, title: "Featured", type: DiscoverSectionType.featured },
-      { id: SECTIONS.LATEST, title: "Latest", type: DiscoverSectionType.chapterUpdates },
+      { id: SECTIONS.LATEST, title: "Latest", type: DiscoverSectionType.simpleCarousel },
       { id: SECTIONS.POPULAR, title: "Popular", type: DiscoverSectionType.simpleCarousel },
       { id: SECTIONS.COMPLETED, title: "Completed", type: DiscoverSectionType.simpleCarousel },
+      ...Object.entries(GENRE_SECTIONS).map(([id, genre]) => ({
+        id,
+        title: genre,
+        type: DiscoverSectionType.simpleCarousel,
+      })),
     ];
   }
 
@@ -132,11 +140,26 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
       case SECTIONS.FEATURED:
         return this.getFeaturedSection();
       case SECTIONS.LATEST:
-        return this.getLatestSection(metadata);
+        // The app API's latest feed has stalled, so the site's own feed is read. Its cards carry
+        // no chapter links, so they open the title rather than a chapter.
+        return this.getHtmlSection(
+          (page) => fetchCategoryPage(CATEGORY_PATHS.LATEST, page),
+          metadata,
+          toUpdatedItem,
+        );
       case SECTIONS.POPULAR:
         return this.getApiSection("hot", metadata, toSimpleItem);
       case SECTIONS.COMPLETED:
-        return this.getHtmlSection(CATEGORY_PATHS.COMPLETED, metadata);
+        return this.getHtmlSection(
+          (page) => fetchCategoryPage(CATEGORY_PATHS.COMPLETED, page),
+          metadata,
+        );
+      case SECTIONS.ROMANCE:
+      case SECTIONS.COMEDY:
+      case SECTIONS.FANTASY:
+      case SECTIONS.DRAMA:
+      case SECTIONS.ACTION:
+        return this.getGenreSection(GENRE_SECTIONS[section.id], metadata);
       default:
         return { items: [] };
     }
@@ -147,19 +170,6 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
       items: parseFeatured(await fetchUrlPage(DOMAIN))
         .filter((item) => item.imageUrl.length > 0)
         .map(toFeaturedItem),
-    };
-  }
-
-  private async getLatestSection(
-    metadata: PageMetadata | undefined,
-  ): Promise<PagedResults<DiscoverSectionItem>> {
-    const page = metadata?.page ?? 1;
-    const document = await fetchCategoryPage(CATEGORY_PATHS.LATEST, page);
-    return {
-      items: parseListings(document)
-        .filter((item) => item.imageUrl.length > 0)
-        .map((item) => toLatestItem(item, this.dateAnchor())),
-      metadata: hasNextPage(document) ? { page: page + 1 } : undefined,
     };
   }
 
@@ -176,16 +186,33 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
     };
   }
 
-  private async getHtmlSection(
-    path: string,
+  // The app API has no genre listing, so the section filters the site's search by the
+  // genre's cate_id as scraped from the search page, the same id the search form sends.
+  private async getGenreSection(
+    genre: string,
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
+    const genreId = (await this.getSearchOptions()).genres.find(
+      (option) => option.title.toLowerCase() === genre.toLowerCase(),
+    )?.id;
+    if (!genreId) throw new Error(`NovelCool did not list the ${genre} genre.`);
+    return this.getHtmlSection(
+      (page) => fetchSearchPage({ page, genresInclude: [genreId] }),
+      metadata,
+    );
+  }
+
+  private async getHtmlSection(
+    fetchPage: (page: number) => Promise<cheerio.CheerioAPI>,
+    metadata: PageMetadata | undefined,
+    toItem: (item: ListingItem) => DiscoverSectionItem = toSimpleItem,
+  ): Promise<PagedResults<DiscoverSectionItem>> {
     const page = metadata?.page ?? 1;
-    const document = await fetchCategoryPage(path, page);
+    const document = await fetchPage(page);
     return {
       items: parseListings(document)
         .filter((item) => item.imageUrl.length > 0)
-        .map(toSimpleItem),
+        .map(toItem),
       metadata: hasNextPage(document) ? { page: page + 1 } : undefined,
     };
   }
@@ -205,14 +232,6 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
 
   private getSearchOptions(): Promise<SearchOptions> {
     return (this.searchOptionsPromise ??= fetchSearchPage({ page: 1 }).then(parseSearchOptions));
-  }
-
-  private dateAnchor(): number {
-    const existing = Application.getState(STATE_KEYS.RELATIVE_DATE_ANCHOR) as number | undefined;
-    if (existing != null) return existing;
-    const created = Date.now();
-    Application.setState(created, STATE_KEYS.RELATIVE_DATE_ANCHOR);
-    return created;
   }
 
   async getSortingOptions(_query: SearchQuery<SearchMetadata>): Promise<SortingOption[]> {
