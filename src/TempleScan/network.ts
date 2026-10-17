@@ -10,13 +10,14 @@ import {
 } from "@paperback/types";
 
 import {
-  API_URL,
   DOMAIN,
   READ_SITE_PAGE,
   SITE_PAGE_SETTLE_MS,
   SITE_PAGE_TIMEOUT_MS,
   type SitePageKind,
 } from "./models";
+
+const CHALLENGE_PAGE_REGEX = /\/app\/challenge\/page-[\w-]+\.js/;
 
 const IMAGE_REGEX = /\/uploads\/|\.(?:avif|gif|jpe?g|png|webp)(?:[?#]|$)/i;
 
@@ -61,9 +62,13 @@ export class TempleScanInterceptor extends PaperbackInterceptor {
         },
       });
     }
-    // The site's own verification redirects to /challenge, which passes in a browser and sends it
-    // back to the page it was asked for.
-    if (/^https:\/\/templetoons\.com\/challenge(?:[?#]|$)/i.test(response.url ?? "")) {
+    // The site serves its own Turnstile check in place of a page, with a 200, until a browser has
+    // passed it; the check passes on its own in the app's browser and sends it back to the page.
+    if (
+      /^https:\/\/templetoons\.com\//i.test(request.url) &&
+      !IMAGE_REGEX.test(request.url) &&
+      CHALLENGE_PAGE_REGEX.test(Application.arrayBufferToUTF8String(data))
+    ) {
       throw new CloudflareError({
         url: request.url,
         method: "GET",
@@ -89,17 +94,6 @@ export const fetchHtml = async (url: string): Promise<string> => {
   assertOk(url, response.status);
   return Application.arrayBufferToUTF8String(buffer);
 };
-
-const fetchApi = async (path: string): Promise<string> => {
-  const url = `${API_URL}${path}`;
-  const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
-  assertOk(url, response.status);
-  return Application.arrayBufferToUTF8String(buffer);
-};
-
-export const fetchFeatured = (): Promise<string> => fetchApi("/banners");
-
-export const fetchTrending = (): Promise<string> => fetchApi("/topSeries");
 
 // The page is fetched here, where a challenge is caught, and then run in a WebView so the site's
 // app hydrates and its state can be read. Resolves undefined when a page settles without the data,

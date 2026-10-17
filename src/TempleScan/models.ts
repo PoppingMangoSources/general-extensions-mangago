@@ -9,7 +9,6 @@ import {
 } from "@paperback/types";
 
 export const DOMAIN = "https://templetoons.com";
-export const API_URL = "https://api.templetoons.com/api";
 export const PAID_CHAPTER_SUFFIX = "#paid";
 
 export const PAGE_SIZE = 20;
@@ -46,40 +45,10 @@ export interface ComicSeriesLd {
   genre?: string[] | null;
 }
 
-export interface FeaturedEntry {
-  series_slug: string;
-  title: string;
-  thumbnail?: string | null;
-  banner?: string | null;
-  protagonist?: string | null;
-  description?: string | null;
-  author?: string | null;
-  total_views?: number;
-}
-
-export interface TrendingEntry {
-  series_slug: string;
-  title: string;
-  thumbnail?: string | null;
-  badge?: string | null;
-  day_views?: number;
-  week_views?: number;
-  month_views?: number;
-}
-
-export interface TrendingResponse {
-  dayRes?: TrendingEntry[];
-  weekRes?: TrendingEntry[];
-  mensualRes?: TrendingEntry[];
-}
-
-export type TrendingRange = "day" | "week" | "month";
-
 export type PageMetadata = { page: number };
 
 export interface SearchMetadata extends JSONObject {
   status?: string;
-  trending?: TrendingRange;
 }
 
 export const SORTING_OPTIONS: SortingOption[] = [
@@ -97,24 +66,16 @@ export const STATUS_OPTIONS = [
   { id: "Dropped", title: "Dropped" },
 ];
 
-export const TRENDING_RANGES: { id: TrendingRange; title: string }[] = [
-  { id: "day", title: "Today" },
-  { id: "week", title: "This Week" },
-  { id: "month", title: "Monthly" },
-];
-
 export const SECTIONS = {
-  FEATURED: "featured",
+  POPULAR: "popular",
   NEW_SERIES: "new-series",
   LATEST: "latest",
-  TRENDING: "trending",
 } as const;
 
 export const DISCOVER_SECTIONS: DiscoverSection[] = [
-  { id: SECTIONS.FEATURED, title: "Featured", type: DiscoverSectionType.featured },
+  { id: SECTIONS.POPULAR, title: "Popular", type: DiscoverSectionType.featured },
   { id: SECTIONS.NEW_SERIES, title: "New Series", type: DiscoverSectionType.simpleCarousel },
   { id: SECTIONS.LATEST, title: "Latest Updates", type: DiscoverSectionType.simpleCarousel },
-  { id: SECTIONS.TRENDING, title: "Trending", type: DiscoverSectionType.genres },
 ];
 
 // The site keeps its data in its app rather than in a stable payload, so a page is loaded in a

@@ -14,15 +14,9 @@ import * as cheerio from "cheerio";
 import {
   DOMAIN,
   PAID_CHAPTER_SUFFIX,
-  TRENDING_RANGES,
   type BrowseSeries,
   type ComicSeriesLd,
-  type FeaturedEntry,
-  type SearchMetadata,
   type SiteChapter,
-  type TrendingEntry,
-  type TrendingRange,
-  type TrendingResponse,
 } from "./models";
 
 // Paperback rejects ids containing characters outside this set.
@@ -176,46 +170,17 @@ export const toCarouselItem = (series: BrowseSeries): DiscoverSectionItem => ({
   contentRating: ContentRating.ADULT,
 });
 
-export const parseFeatured = (response: string): FeaturedEntry[] => {
-  let parsed: FeaturedEntry[];
-  try {
-    parsed = JSON.parse(response) as FeaturedEntry[];
-  } catch (error) {
-    throw new Error("Temple Scan: could not parse the featured list", { cause: error });
-  }
-  if (!Array.isArray(parsed)) {
-    throw new Error("Temple Scan: the featured response is not a list");
-  }
-  return parsed.filter((entry) => entry.series_slug && entry.title);
-};
-
-export const withFeaturedCovers = (
-  entries: FeaturedEntry[],
-  directory: BrowseSeries[],
-): FeaturedEntry[] => {
-  const covers = new Map(directory.map((series) => [series.series_slug, series.thumbnail]));
-  return entries.map((entry) => ({
-    ...entry,
-    thumbnail: covers.get(entry.series_slug),
-  }));
-};
-
-export const toFeaturedItems = (entries: FeaturedEntry[]): DiscoverSectionItem[] =>
-  entries.map((entry) => ({
-    type: "featuredCarouselItem",
-    mangaId: entry.series_slug,
-    title: entry.title,
-    // The featured carousel renders one image as both the portrait tile and the
-    // card background, so a wide hero banner crops badly. Prefer the protagonist
-    // character art, falling back to the portrait cover then the banner.
-    imageUrl: entry.protagonist ?? entry.thumbnail ?? entry.banner ?? "",
-    supertitle: entry.author ?? undefined,
-    summary: cleanDescription(entry.description ?? "") || undefined,
-    infoItems: entry.total_views
-      ? [{ symbol: "eye.fill", text: formatCount(entry.total_views) }]
-      : undefined,
-    contentRating: ContentRating.ADULT,
-  }));
+export const toFeaturedItem = (series: BrowseSeries): DiscoverSectionItem => ({
+  type: "featuredCarouselItem",
+  mangaId: series.series_slug,
+  title: series.title,
+  imageUrl: series.thumbnail ?? "",
+  supertitle: series.badge ?? undefined,
+  infoItems: series.total_views
+    ? [{ symbol: "eye.fill", text: formatCount(series.total_views) }]
+    : undefined,
+  contentRating: ContentRating.ADULT,
+});
 
 export const toSearchResultItem = (series: BrowseSeries): SearchResultItem => ({
   mangaId: series.series_slug,
@@ -224,42 +189,3 @@ export const toSearchResultItem = (series: BrowseSeries): SearchResultItem => ({
   subtitle: series.total_views ? `${formatCount(series.total_views)} views` : undefined,
   contentRating: ContentRating.ADULT,
 });
-
-export const toTrendingSections = (): DiscoverSectionItem[] =>
-  TRENDING_RANGES.map((range) => ({
-    type: "genresCarouselItem",
-    name: range.title,
-    searchQuery: {
-      title: "",
-      metadata: { trending: range.id } satisfies SearchMetadata,
-    },
-  }));
-
-export const parseTrending = (response: string, range: TrendingRange): TrendingEntry[] => {
-  let parsed: TrendingResponse;
-  try {
-    parsed = JSON.parse(response) as TrendingResponse;
-  } catch (error) {
-    throw new Error("Temple Scan: could not parse the trending list", { cause: error });
-  }
-  const lists: Record<TrendingRange, TrendingEntry[] | undefined> = {
-    day: parsed.dayRes,
-    week: parsed.weekRes,
-    month: parsed.mensualRes,
-  };
-  return lists[range] ?? [];
-};
-
-export const toTrendingItems = (entries: TrendingEntry[]): SearchResultItem[] =>
-  entries.map((entry, index) => {
-    const views = entry.day_views ?? entry.week_views ?? entry.month_views;
-    return {
-      mangaId: entry.series_slug,
-      title: entry.title,
-      imageUrl: entry.thumbnail ?? "",
-      subtitle: [`#${index + 1}`, views ? `${formatCount(views)} views` : ""]
-        .filter(Boolean)
-        .join(" · "),
-      contentRating: ContentRating.ADULT,
-    };
-  });

@@ -36,25 +36,14 @@ import {
   type SiteChapter,
   type SitePageKind,
 } from "./models";
-import {
-  fetchFeatured,
-  fetchHtml,
-  fetchTrending,
-  readSitePage,
-  TempleScanInterceptor,
-} from "./network";
+import { fetchHtml, readSitePage, TempleScanInterceptor } from "./network";
 import {
   parseChapters,
-  parseFeatured,
   parseMangaDetails,
-  parseTrending,
   sortSeries,
+  toFeaturedItem,
   toCarouselItem,
-  toFeaturedItems,
   toSearchResultItem,
-  toTrendingItems,
-  toTrendingSections,
-  withFeaturedCovers,
 } from "./parsers";
 import type TempleScanConfig from "./pbconfig";
 
@@ -73,7 +62,6 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
 
   // The comics page holds the whole catalog; it is read once per session.
   private directoryPromise?: Promise<BrowseSeries[]>;
-  private featuredPromise?: Promise<DiscoverSectionItem[]>;
 
   async initialise(): Promise<void> {
     this.mainRateLimiter.registerInterceptor();
@@ -87,7 +75,6 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
     _localStorage: Record<string, string>,
   ): Promise<void> {
     this.directoryPromise = undefined;
-    this.featuredPromise = undefined;
     // The site's own verification keeps its pass in its own cookie, alongside Cloudflare's.
     for (const cookie of cookies) {
       if (cookie.expires && cookie.expires.getTime() <= Date.now()) continue;
@@ -153,14 +140,16 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
-      case SECTIONS.FEATURED:
-        return { items: await this.getFeaturedItems() };
+      case SECTIONS.POPULAR:
+        return {
+          items: sortSeries(await this.getDirectory(), "views")
+            .slice(0, PAGE_SIZE)
+            .map(toFeaturedItem),
+        };
       case SECTIONS.NEW_SERIES:
         return this.getDirectorySection("created", metadata);
       case SECTIONS.LATEST:
         return this.getDirectorySection("updated", metadata);
-      case SECTIONS.TRENDING:
-        return { items: toTrendingSections() };
       default:
         return { items: [] };
     }
@@ -175,11 +164,6 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
     metadata: PageMetadata | undefined,
     sortingOption?: SortingOption,
   ): Promise<PagedResults<SearchResultItem>> {
-    if (query.metadata?.trending) {
-      const entries = parseTrending(await fetchTrending(), query.metadata.trending);
-      return { items: toTrendingItems(entries) };
-    }
-
     const page = metadata?.page ?? 1;
     const title = query.title.trim().toLowerCase();
     const status = query.metadata?.status;
@@ -231,17 +215,6 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
       items: sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(toCarouselItem),
       metadata: page * PAGE_SIZE < sorted.length ? { page: page + 1 } : undefined,
     };
-  }
-
-  private getFeaturedItems(): Promise<DiscoverSectionItem[]> {
-    this.featuredPromise ??= Promise.all([fetchFeatured().then(parseFeatured), this.getDirectory()])
-      .then(([entries, directory]) => withFeaturedCovers(entries, directory))
-      .then(toFeaturedItems)
-      .catch((error: unknown) => {
-        this.featuredPromise = undefined;
-        throw error;
-      });
-    return this.featuredPromise;
   }
 }
 
