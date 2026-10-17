@@ -222,7 +222,8 @@ export const parseHomepageRail = ($: cheerio.CheerioAPI, title: string): MangaLi
     .filter((_, element) => {
       const clone = $(element).clone();
       clone.children().remove();
-      return cleanText(clone.text()).toLowerCase() === title.toLowerCase();
+      // Headings can carry a promo prefix, e.g. `"FREE" Only Cocomic`.
+      return cleanText(clone.text()).toLowerCase().endsWith(title.toLowerCase());
     })
     .first();
   const block = heading.nextAll(".wp-block-wp-manga-gutenberg-manga-sliders-block").first();
