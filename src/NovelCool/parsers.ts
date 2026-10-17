@@ -331,7 +331,25 @@ const cleanCreator = (value?: string | null): string | undefined => {
   return creator && !/^(?:n\/a|unknown)$/i.test(creator) ? creator : undefined;
 };
 
-export const parseMangaDetails = (book: NovelCoolBook, mangaId: string): SourceManga => {
+// A genre is matched to the search filter's id by its name, so a tag tapped on a title filters by
+// the same id the search form sends.
+export const toGenreId = (name: string, genres: Tag[]): string | undefined => {
+  const key = name.trim().toLowerCase();
+  return (
+    genres.find((genre) => genre.id === name)?.id ??
+    genres.find(
+      (genre) =>
+        genre.title.trim().toLowerCase() === key ||
+        genre.title.replace(SAFE_ID_REGEX, "-").toLowerCase() === key,
+    )?.id
+  );
+};
+
+export const parseMangaDetails = (
+  book: NovelCoolBook,
+  mangaId: string,
+  genreOptions: Tag[] = [],
+): SourceManga => {
   const primaryTitle = cleanText(book.name);
   const thumbnailUrl = resolveUrl(book.cover);
   if (!primaryTitle) throw new Error(`Unable to parse title details for ${mangaId}.`);
@@ -339,7 +357,7 @@ export const parseMangaDetails = (book: NovelCoolBook, mangaId: string): SourceM
 
   const genres = book.category_list ?? [];
   const tags = genres.map((genre) => ({
-    id: genre.replace(SAFE_ID_REGEX, "-"),
+    id: toGenreId(genre, genreOptions) ?? genre.replace(SAFE_ID_REGEX, "-"),
     title: genre,
   }));
   const rating = Number(book.rate_star);

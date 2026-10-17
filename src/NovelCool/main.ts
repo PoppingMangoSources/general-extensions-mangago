@@ -20,6 +20,7 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
+  type Tag,
   type UpdateManager,
 } from "@paperback/types";
 import type * as cheerio from "cheerio";
@@ -62,6 +63,7 @@ import {
   parseSearchOptions,
   pickTriState,
   toFeaturedItem,
+  toGenreId,
   toSearchResultItem,
   toSimpleItem,
   toUpdatedItem,
@@ -202,6 +204,17 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
     });
   }
 
+  // Details still load when the genre list cannot be read; their tags then keep their names.
+  private async getGenreOptions(): Promise<Tag[]> {
+    try {
+      return (await this.getSearchOptions()).genres;
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+      this.searchOptionsPromise = undefined;
+      return [];
+    }
+  }
+
   private getSearchOptions(): Promise<SearchOptions> {
     return (this.searchOptionsPromise ??= fetchUrlPage("/search/").then(parseSearchOptions));
   }
@@ -254,6 +267,12 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
       };
     }
 
+    // A tag saved from a title before ids were matched carries its name; it is mapped to the id.
+    const genreOptions = Object.keys(searchMetadata.genres ?? {}).length
+      ? (await this.getSearchOptions()).genres
+      : [];
+    const genreIds = (state: "included" | "excluded"): string[] =>
+      pickTriState(searchMetadata.genres, state).flatMap((id) => toGenreId(id, genreOptions) ?? []);
     const document =
       sortingOption?.id === "rating" && !title && !hasAdvancedFilters
         ? await fetchCategoryPage(CATEGORY_PATHS.RATING, page)
@@ -264,8 +283,8 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
             author: searchMetadata.author,
             authorMethod: searchMetadata.authorMethod?.[0],
             status: searchMetadata.status?.[0],
-            genresInclude: pickTriState(searchMetadata.genres, "included"),
-            genresExclude: pickTriState(searchMetadata.genres, "excluded"),
+            genresInclude: genreIds("included"),
+            genresExclude: genreIds("excluded"),
             year: searchMetadata.year?.[0],
             rating: searchMetadata.rating?.[0],
           });
@@ -306,9 +325,12 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
-    const book = (await fetchBookInfo(await this.resolveBookId(mangaId))).info;
-    if (!book) throw new Error(`NovelCool returned no details for book ${mangaId}.`);
-    return parseMangaDetails(book, mangaId);
+    const [response, genreOptions] = await Promise.all([
+      this.resolveBookId(mangaId).then(fetchBookInfo),
+      this.getGenreOptions(),
+    ]);
+    if (!response.info) throw new Error(`NovelCool returned no details for book ${mangaId}.`);
+    return parseMangaDetails(response.info, mangaId, genreOptions);
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {

@@ -192,12 +192,9 @@ export const buildSearchUrl = (request: SearchRequest): string => {
   addQueryItem(url, "author", request.author);
   if (request.author) addQueryItem(url, "author_sel", request.authorMethod ?? "contain");
   addQueryItem(url, "completed_series", request.status);
-  if (request.genresInclude?.length) {
-    url.setQueryItem("category_id", `,${request.genresInclude.join(",")}`);
-  }
-  if (request.genresExclude?.length) {
-    url.setQueryItem("out_category_id", `,${request.genresExclude.join(",")}`);
-  }
+  // The site's form always sends both lists, each with a leading comma, empty or not.
+  url.setQueryItem("category_id", `,${(request.genresInclude ?? []).join(",")}`);
+  url.setQueryItem("out_category_id", `,${(request.genresExclude ?? []).join(",")}`);
   addQueryItem(url, "publish_year", request.year);
   addQueryItem(url, "rate_star", request.rating);
   url.setQueryItem("page", request.page.toString());
