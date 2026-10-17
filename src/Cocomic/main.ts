@@ -17,6 +17,7 @@ import {
   type SortingOption,
   type SourceManga,
   type Tag,
+  type UpdateManager,
 } from "@paperback/types";
 
 import { CocomicAdvancedSearchForm } from "./forms";
@@ -254,6 +255,16 @@ class CocomicExtension implements ExtensionImpl<typeof CocomicConfig> {
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
     return parseChapters(await fetchChapterList(sourceManga.mangaId), sourceManga);
+  }
+
+  async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
+    const [first] = updateManager.getQueuedItems();
+    if (!first) return;
+    try {
+      await fetchChapterList(first.mangaId);
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+    }
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {

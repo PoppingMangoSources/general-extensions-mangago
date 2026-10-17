@@ -21,6 +21,7 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
+  type UpdateManager,
 } from "@paperback/types";
 import type { CheerioAPI } from "cheerio";
 
@@ -464,6 +465,16 @@ class VioletScansExtension implements ExtensionImpl<typeof VioletScansConfig> {
       sourceManga,
       getShowLockedChapters(),
     );
+  }
+
+  async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
+    const [first] = updateManager.getQueuedItems();
+    if (!first) return;
+    try {
+      await fetchMangaPage(first.mangaId);
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+    }
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {

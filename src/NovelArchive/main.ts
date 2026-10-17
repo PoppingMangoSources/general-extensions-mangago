@@ -21,6 +21,7 @@ import {
   type SortingOption,
   type SourceManga,
   type Tag,
+  type UpdateManager,
 } from "@paperback/types";
 
 import { NovelArchiveAdvancedSearchForm } from "./forms/search";
@@ -304,6 +305,16 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
     );
 
     return mergeChapterVersions(chapters, ...sourceChapterLists);
+  }
+
+  async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
+    const [first] = updateManager.getQueuedItems();
+    if (!first) return;
+    try {
+      await fetchApi<NovelDetailResponse>(novelsUrl(decodeId(first.mangaId)));
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+    }
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {

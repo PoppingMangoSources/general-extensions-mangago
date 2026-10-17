@@ -19,6 +19,7 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
+  type UpdateManager,
 } from "@paperback/types";
 import type * as cheerio from "cheerio";
 
@@ -425,6 +426,16 @@ export class MangaHereExtension implements ExtensionImpl<typeof MangaHereConfig>
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
     return parseChapters(await fetchDocument(mangaUrl(sourceManga.mangaId)), sourceManga);
+  }
+
+  async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
+    const [first] = updateManager.getQueuedItems();
+    if (!first) return;
+    try {
+      await fetchDocument(mangaUrl(first.mangaId));
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+    }
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {

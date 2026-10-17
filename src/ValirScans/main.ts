@@ -3,6 +3,7 @@
 
 import {
   BasicRateLimiter,
+  CloudflareError,
   CookieStorageInterceptor,
   type AdvancedSearchForm,
   type Chapter,
@@ -18,6 +19,7 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
+  type UpdateManager,
 } from "@paperback/types";
 
 import { ValirScansAdvancedSearchForm } from "./forms/search";
@@ -121,6 +123,16 @@ class ValirScansExtension implements ExtensionImpl<typeof ValirScansConfig> {
       ),
     );
     return parseChapters([firstPage, ...laterPages], sourceManga, getShowPaidChapters());
+  }
+
+  async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
+    const [first] = updateManager.getQueuedItems();
+    if (!first) return;
+    try {
+      await fetchSeriesPage(first.mangaId);
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+    }
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {

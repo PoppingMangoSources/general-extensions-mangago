@@ -21,6 +21,7 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
+  type UpdateManager,
 } from "@paperback/types";
 
 import { LuaComicAdvancedSearchForm } from "./forms/search";
@@ -268,6 +269,16 @@ class LuaComicExtension implements ExtensionImpl<typeof LuaComicConfig> {
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
     const slug = decodeSlugId(sourceManga.mangaId);
     return parseChapterList(await this.fetchAllChapters(slug), sourceManga, getShowPaidChapters());
+  }
+
+  async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
+    const [first] = updateManager.getQueuedItems();
+    if (!first) return;
+    try {
+      await this.fetchAllChapters(decodeSlugId(first.mangaId));
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+    }
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {

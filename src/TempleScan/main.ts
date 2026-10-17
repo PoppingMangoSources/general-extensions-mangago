@@ -3,6 +3,7 @@
 
 import {
   BasicRateLimiter,
+  CloudflareError,
   CookieStorageInterceptor,
   type AdvancedSearchForm,
   type Chapter,
@@ -18,6 +19,7 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
+  type UpdateManager,
 } from "@paperback/types";
 
 import { getShowPaidChapters, TempleScanAdvancedSearchForm, TempleScanSettingsForm } from "./forms";
@@ -132,6 +134,16 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
       (table) => parseSeriesData(payload, table),
     );
     return parseChapters(data, sourceManga, getShowPaidChapters());
+  }
+
+  async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
+    const [first] = updateManager.getQueuedItems();
+    if (!first) return;
+    try {
+      await fetchSeriesPage(first.mangaId);
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+    }
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {

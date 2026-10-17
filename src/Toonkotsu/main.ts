@@ -20,6 +20,7 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
+  type UpdateManager,
 } from "@paperback/types";
 
 import {
@@ -391,6 +392,16 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
       mainOnly: getDeduplicateChapters(),
       showSize: getShowUploadSize(),
     });
+  }
+
+  async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
+    const [first] = updateManager.getQueuedItems();
+    if (!first) return;
+    try {
+      await fetchSeries(first.mangaId);
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+    }
   }
 
   private getSiteSession(): Promise<unknown> {

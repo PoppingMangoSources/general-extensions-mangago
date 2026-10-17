@@ -3,6 +3,7 @@
 
 import {
   BasicRateLimiter,
+  CloudflareError,
   type AdvancedSearchForm,
   type Chapter,
   type ChapterDetails,
@@ -17,6 +18,7 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
+  type UpdateManager,
 } from "@paperback/types";
 import * as cheerio from "cheerio";
 
@@ -300,6 +302,16 @@ class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     checkpoint.completedAt = Date.now();
     Application.setState(undefined, STATE_KEYS.CHAPTER_CRAWL);
     return chapters;
+  }
+
+  async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
+    const [first] = updateManager.getQueuedItems();
+    if (!first) return;
+    try {
+      await fetchChapterListPage(extractNovelId(first.mangaId), 1);
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+    }
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {

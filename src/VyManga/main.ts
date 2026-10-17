@@ -22,6 +22,7 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
+  type UpdateManager,
 } from "@paperback/types";
 
 import { VyMangaSearchForm } from "./forms/search";
@@ -291,6 +292,16 @@ class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
     const $ = await fetchCheerio({ url: this.mangaUrl(sourceManga.mangaId), method: "GET" });
     return parseChapters($, this.baseUrl, sourceManga);
+  }
+
+  async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
+    const [first] = updateManager.getQueuedItems();
+    if (!first) return;
+    try {
+      await fetchCheerio({ url: this.mangaUrl(first.mangaId), method: "GET" });
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+    }
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {

@@ -1,7 +1,13 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import type { Chapter, ChapterDetails, SourceManga } from "@paperback/types";
+import {
+  CloudflareError,
+  type Chapter,
+  type ChapterDetails,
+  type SourceManga,
+  type UpdateManager,
+} from "@paperback/types";
 
 import {
   fetchChapterDetails,
@@ -18,6 +24,17 @@ export class ChapterProvider {
     const response =
       medium === "novel" ? await fetchNovelChapters(slug) : await fetchChapters(slug);
     return parseChapters(response.items, sourceManga);
+  }
+
+  async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
+    const [first] = updateManager.getQueuedItems();
+    if (!first) return;
+    const { medium, slug } = decodeMangaId(first.mangaId);
+    try {
+      await (medium === "novel" ? fetchNovelChapters(slug) : fetchChapters(slug));
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+    }
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {

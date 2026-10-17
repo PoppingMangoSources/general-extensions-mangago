@@ -22,6 +22,7 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
+  type UpdateManager,
 } from "@paperback/types";
 import * as cheerio from "cheerio";
 
@@ -255,6 +256,16 @@ class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsConfig> {
       list = list.filter((chapter) => !chapter.chapterId.endsWith(LOCK_SUFFIX));
     }
     return finalizeChapters(list);
+  }
+
+  async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
+    const [first] = updateManager.getQueuedItems();
+    if (!first) return;
+    try {
+      await fetchCheerio({ url: this.mangaUrl(first.mangaId), method: "GET" });
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+    }
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {

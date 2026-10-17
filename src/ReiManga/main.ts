@@ -3,6 +3,7 @@
 
 import {
   BasicRateLimiter,
+  CloudflareError,
   CookieStorageInterceptor,
   DiscoverSectionType,
   type AdvancedSearchForm,
@@ -19,6 +20,7 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
+  type UpdateManager,
 } from "@paperback/types";
 
 import { getBaseUrl, ReiMangaAdvancedSearchForm, ReiMangaSettingsForm } from "./forms";
@@ -265,6 +267,16 @@ class ReiMangaExtension implements ExtensionImpl<typeof ReiMangaConfig> {
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
     const body = await fetchFlight(`${getBaseUrl()}/manga/${sourceManga.mangaId}`);
     return parseChapters(body, sourceManga);
+  }
+
+  async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
+    const [first] = updateManager.getQueuedItems();
+    if (!first) return;
+    try {
+      await fetchFlight(`${getBaseUrl()}/manga/${first.mangaId}`);
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+    }
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {

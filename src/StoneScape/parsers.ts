@@ -52,10 +52,10 @@ export const toAbsoluteUrl = (value?: string | null): string => {
   return /^https?:\/\/[^/\s?#]+(?:[/?#]|$)/i.test(absolute) ? absolute : "";
 };
 
-const staticImageUrl = (...values: (string | null | undefined)[]): string => {
+const firstImageUrl = (...values: (string | null | undefined)[]): string => {
   for (const value of values) {
     const url = toAbsoluteUrl(value);
-    if (url && !/\.gif(?:[?#]|$)/i.test(url)) return url;
+    if (url) return url;
   }
   return "";
 };
@@ -136,8 +136,8 @@ export const parseMangaList = (series: Series[]): MangaListItem[] =>
     return {
       mangaId: encodeMangaId(item.slug),
       title: decodeText(item.title),
-      imageUrl: staticImageUrl(item.coverUrl, item.bannerUrl) || FALLBACK_IMAGE_URL,
-      bannerImageUrl: staticImageUrl(item.bannerUrl, item.coverUrl) || FALLBACK_IMAGE_URL,
+      imageUrl: firstImageUrl(item.coverUrl, item.bannerUrl) || FALLBACK_IMAGE_URL,
+      bannerImageUrl: firstImageUrl(item.bannerUrl, item.coverUrl) || FALLBACK_IMAGE_URL,
       summary: decodeText(item.description) || undefined,
       author: decodeText(item.author) || undefined,
       status: mapStatus(item.publicationStatus),
@@ -217,7 +217,7 @@ export const toChapterUpdateItem = (
         ? encodeNovelChapterId(series.slug, chapter.chapterNumber)
         : chapter.chapterId.replace(SAFE_ID_REGEX, "-"),
     title: decodeText(series.title),
-    imageUrl: staticImageUrl(series.coverUrl, series.bannerUrl) || FALLBACK_IMAGE_URL,
+    imageUrl: firstImageUrl(series.coverUrl, series.bannerUrl) || FALLBACK_IMAGE_URL,
     subtitle: `${formatMediaType(series)} • Ch. ${formatChapterNumber(chapter.chapterNumber)}`,
     publishDate,
     contentRating: contentRatingForGenres(series.genres ?? []),
@@ -241,7 +241,7 @@ export const parseMangaDetails = (series: Series): SourceManga => {
       .replace(/([a-z])([A-Z])/g, "$1 $2")
       .replace(/\b\w/g, (character) => character.toUpperCase()),
   }));
-  const thumbnailUrl = staticImageUrl(series.coverUrl, series.bannerUrl) || FALLBACK_IMAGE_URL;
+  const thumbnailUrl = firstImageUrl(series.coverUrl, series.bannerUrl) || FALLBACK_IMAGE_URL;
 
   return {
     mangaId: encodeMangaId(series.slug),

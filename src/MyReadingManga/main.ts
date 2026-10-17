@@ -20,6 +20,7 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
+  type UpdateManager,
 } from "@paperback/types";
 
 import {
@@ -121,6 +122,16 @@ class MyReadingMangaExtension implements ExtensionImpl<typeof MyReadingMangaConf
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
     const $ = await fetchMangaPage(sourceManga.mangaId);
     return parseChapters($, sourceManga);
+  }
+
+  async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
+    const [first] = updateManager.getQueuedItems();
+    if (!first) return;
+    try {
+      await fetchMangaPage(first.mangaId);
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+    }
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {

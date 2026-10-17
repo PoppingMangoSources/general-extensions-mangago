@@ -21,6 +21,7 @@ import {
   type SortingOption,
   type SourceManga,
   type Tag,
+  type UpdateManager,
 } from "@paperback/types";
 
 import { StoneScapeAdvancedSearchForm } from "./forms/search";
@@ -420,6 +421,16 @@ class StoneScapeExtension implements ExtensionImpl<typeof StoneScapeConfig> {
       sourceManga.mangaInfo.contentType === "novel" ? "novel" : "manhwa",
       getShowLockedChapters(),
     );
+  }
+
+  async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
+    const [first] = updateManager.getQueuedItems();
+    if (!first) return;
+    try {
+      await fetchChapters(decodeMangaId(first.mangaId));
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+    }
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {

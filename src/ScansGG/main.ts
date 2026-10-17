@@ -20,6 +20,7 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
+  type UpdateManager,
 } from "@paperback/types";
 
 import { ScansGGAdvancedSearchForm } from "./forms/search";
@@ -402,6 +403,21 @@ class ScansGGExtension implements ExtensionImpl<typeof ScansGGConfig> {
     }
 
     return parseChapterList(chapters, sourceManga, numericSeriesId(sourceManga.mangaId));
+  }
+
+  async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
+    const [first] = updateManager.getQueuedItems();
+    if (!first) return;
+    try {
+      await fetchApi<ChapterDto[]>("chapters", {
+        series_id: numericSeriesId(first.mangaId),
+        limit: CHAPTER_PAGE_SIZE,
+        page: 1,
+        group_details: true,
+      });
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+    }
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {

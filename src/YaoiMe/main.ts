@@ -20,6 +20,7 @@ import {
   type SortingOption,
   type SourceManga,
   type Tag,
+  type UpdateManager,
 } from "@paperback/types";
 import type { CheerioAPI } from "cheerio";
 
@@ -245,6 +246,16 @@ class YaoiMeExtension implements ExtensionImpl<typeof YaoiMeConfig> {
       sourceManga,
       getPreferences().chapterLanguages,
     );
+  }
+
+  async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
+    const [first] = updateManager.getQueuedItems();
+    if (!first) return;
+    try {
+      await fetchSeriesPage(first.mangaId);
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+    }
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {

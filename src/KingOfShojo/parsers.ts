@@ -461,6 +461,7 @@ export const parseChapterPages = ($: CheerioAPI, base: string): string[] => {
   return [...new Set(pages)];
 };
 
+// GIFs load as they are, since the proxy returns only their first frame.
 export const proxyImage = (url: string, mode: string): string => {
   if (mode === "original") return url;
   const match = url.match(/^https?:\/\/(.+)$/i);
@@ -468,7 +469,7 @@ export const proxyImage = (url: string, mode: string): string => {
     !match ||
     /\/\/wsrv\.nl\//i.test(url) ||
     /[?#]/.test(url) ||
-    !/\.(avif|gif|jpe?g|jxl|png|webp)$/i.test(url)
+    !/\.(avif|jpe?g|jxl|png|webp)$/i.test(url)
   ) {
     return url;
   }

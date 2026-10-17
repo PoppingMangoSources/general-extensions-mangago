@@ -3,6 +3,7 @@
 
 import {
   BasicRateLimiter,
+  CloudflareError,
   CookieStorageInterceptor,
   type AdvancedSearchForm,
   type Chapter,
@@ -18,6 +19,7 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
+  type UpdateManager,
 } from "@paperback/types";
 
 import { XComicAdvancedSearchForm } from "./forms/search";
@@ -438,6 +440,16 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
         .filter((item) => item.data.dbStatus === "normal")
         .map((item) => toChapter(item.data, sourceManga)),
     );
+  }
+
+  async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
+    const [first] = updateManager.getQueuedItems();
+    if (!first) return;
+    try {
+      await fetchChapters(first.mangaId, 1);
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+    }
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {

@@ -3,6 +3,7 @@
 
 import {
   BasicRateLimiter,
+  CloudflareError,
   CookieStorageInterceptor,
   DiscoverSectionType,
   type Chapter,
@@ -21,6 +22,7 @@ import {
   type SortingOption,
   type SourceManga,
   type TagSection,
+  type UpdateManager,
 } from "@paperback/types";
 import * as cheerio from "cheerio";
 import { type AnyNode } from "domhandler";
@@ -183,18 +185,30 @@ export abstract class MangaStreamGeneric implements ExtensionImpl<typeof basePbC
 
     return this.parser.parseMangaDetails($, mangaId, this);
   }
-  async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
-    const request = {
-      url: getUsePostIds()
-        ? `${this.domain}/?p=${sourceManga.mangaId}/`
-        : `${this.domain}/${this.directoryPath}/${sourceManga.mangaId}/`,
-      method: "GET",
-    };
+  private chapterListUrl(mangaId: string): string {
+    return getUsePostIds()
+      ? `${this.domain}/?p=${mangaId}/`
+      : `${this.domain}/${this.directoryPath}/${mangaId}/`;
+  }
 
-    const [, buffer] = await Application.scheduleRequest(request);
+  async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
+    const [, buffer] = await Application.scheduleRequest({
+      url: this.chapterListUrl(sourceManga.mangaId),
+      method: "GET",
+    });
     const $ = cheerio.load(Application.arrayBufferToUTF8String(buffer));
 
     return this.parser.parseChapterList($, sourceManga, this);
+  }
+
+  async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
+    const [first] = updateManager.getQueuedItems();
+    if (!first) return;
+    try {
+      await Application.scheduleRequest({ url: this.chapterListUrl(first.mangaId), method: "GET" });
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+    }
   }
   async getChapterDetails(chap: Chapter): Promise<ChapterDetails> {
     if (chap.chapterId.endsWith(LOCKED_CHAPTER_SUFFIX)) {

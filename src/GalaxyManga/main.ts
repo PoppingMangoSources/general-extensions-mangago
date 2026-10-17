@@ -20,6 +20,7 @@ import {
   type SortingOption,
   type SourceManga,
   type Tag,
+  type UpdateManager,
 } from "@paperback/types";
 import type { CheerioAPI } from "cheerio";
 
@@ -306,6 +307,16 @@ class GalaxyMangaExtension implements ExtensionImpl<typeof GalaxyMangaConfig> {
       throw new Error(`No chapters found for ${sourceManga.mangaId}.`);
     }
     return chapters;
+  }
+
+  async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
+    const [first] = updateManager.getQueuedItems();
+    if (!first) return;
+    try {
+      await fetchMangaPage(first.mangaId);
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+    }
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {

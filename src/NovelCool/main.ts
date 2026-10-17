@@ -20,6 +20,7 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
+  type UpdateManager,
 } from "@paperback/types";
 
 import { NovelCoolAdvancedSearchForm } from "./forms";
@@ -322,6 +323,16 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
     const bookId = await this.resolveBookId(sourceManga.mangaId);
     return parseChapters((await fetchBookChapters(bookId)).list ?? [], sourceManga);
+  }
+
+  async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
+    const [first] = updateManager.getQueuedItems();
+    if (!first) return;
+    try {
+      await fetchBookChapters(await this.resolveBookId(first.mangaId));
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+    }
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {

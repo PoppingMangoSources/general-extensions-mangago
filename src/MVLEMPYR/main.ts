@@ -19,6 +19,7 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
+  type UpdateManager,
 } from "@paperback/types";
 import type { CheerioAPI } from "cheerio";
 
@@ -358,6 +359,16 @@ class MvlempyrExtension implements ExtensionImpl<typeof MvlempyrConfig> {
       throw new Error(`No chapters found for ${sourceManga.mangaId}.`);
     }
     return chapters;
+  }
+
+  async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
+    const [first] = updateManager.getQueuedItems();
+    if (!first) return;
+    try {
+      await fetchNovelChapterPosts(chapterTagId(await this.getNovelCode(first.mangaId)), 1);
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+    }
   }
 
   private async getNovelCode(mangaId: string): Promise<number> {

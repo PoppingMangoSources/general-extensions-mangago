@@ -6,7 +6,7 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "LikeManga",
   description: "Extension that pulls content from likemanga.ink.",
-  version: "1.0.0-alpha.8",
+  version: "1.0.0-alpha.9",
   icon: "icon.png",
   language: "en",
   contentRating: ContentRating.ADULT,
