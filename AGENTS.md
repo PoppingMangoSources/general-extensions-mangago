@@ -302,7 +302,7 @@ const genres = await (this.genresPromise ??= fetchGenres());
 - Guard optional fields (`chapter.images ?? {}` before `Object.entries`). Never leak `(string | undefined)[]` into a `string[]` field — filter/guard `$(el).attr("src")` maps before assigning to `pages`.
 - **Run scraped display text through `Application.decodeHTMLEntities(...)`** — titles, secondary titles, subtitles, synopsis, author/artist, chapter names — at the parser boundary.
 - **Read cover/thumbnail URLs from lazy-load attrs first** (`data-src`/`data-lazy-src`/`data-cfsrc`/`srcset`) before the placeholder `src`.
-- **Pass images through untouched.** The app detects an image's format from its bytes and animates GIFs, so never skip a `.gif` cover or page, or send a GIF through a resizing proxy, which returns only its first frame. Animated WebP still shows only its first frame, so prefer a GIF where the site offers both.
+- **Pass images through untouched.** The app detects an image's format from its bytes and animates GIFs, so never skip a `.gif` page, or send a GIF through a resizing proxy, which returns only its first frame. A title's own cover may be a GIF, but Discover, search and list cards use a still image where the site offers one: a carousel of animated covers stalls and can crash Discover (StoneScape). Animated WebP still shows only its first frame.
 - **Validate scraped JSON with a type-guard (`isX(v): v is X`) before casting**, rather than a blind `as X` on shape-uncertain payloads (e.g. Next.js flight data).
 - **Source real chapter dates** from the site's own field (`<time datetime>`, epoch-millis) and keep the no-`Date.now()`-at-parse rule above.
 

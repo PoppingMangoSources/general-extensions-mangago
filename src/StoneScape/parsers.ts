@@ -60,6 +60,16 @@ const firstImageUrl = (...values: (string | null | undefined)[]): string => {
   return "";
 };
 
+// Cards use still images: a carousel of animated covers stalls and can crash Discover. A title's
+// own page shows one cover, so it keeps the animation.
+const stillImageUrl = (...values: (string | null | undefined)[]): string => {
+  for (const value of values) {
+    const url = toAbsoluteUrl(value);
+    if (url && !/\.(?:gif|apng)(?:[?#]|$)/i.test(url)) return url;
+  }
+  return "";
+};
+
 const decodeText = (value?: string | null): string =>
   Application.decodeHTMLEntities((value ?? "").trim());
 
@@ -136,8 +146,8 @@ export const parseMangaList = (series: Series[]): MangaListItem[] =>
     return {
       mangaId: encodeMangaId(item.slug),
       title: decodeText(item.title),
-      imageUrl: firstImageUrl(item.coverUrl, item.bannerUrl) || FALLBACK_IMAGE_URL,
-      bannerImageUrl: firstImageUrl(item.bannerUrl, item.coverUrl) || FALLBACK_IMAGE_URL,
+      imageUrl: stillImageUrl(item.coverUrl, item.bannerUrl) || FALLBACK_IMAGE_URL,
+      bannerImageUrl: stillImageUrl(item.bannerUrl, item.coverUrl) || FALLBACK_IMAGE_URL,
       summary: decodeText(item.description) || undefined,
       author: decodeText(item.author) || undefined,
       status: mapStatus(item.publicationStatus),
@@ -217,7 +227,7 @@ export const toChapterUpdateItem = (
         ? encodeNovelChapterId(series.slug, chapter.chapterNumber)
         : chapter.chapterId.replace(SAFE_ID_REGEX, "-"),
     title: decodeText(series.title),
-    imageUrl: firstImageUrl(series.coverUrl, series.bannerUrl) || FALLBACK_IMAGE_URL,
+    imageUrl: stillImageUrl(series.coverUrl, series.bannerUrl) || FALLBACK_IMAGE_URL,
     subtitle: `${formatMediaType(series)} • Ch. ${formatChapterNumber(chapter.chapterNumber)}`,
     publishDate,
     contentRating: contentRatingForGenres(series.genres ?? []),
