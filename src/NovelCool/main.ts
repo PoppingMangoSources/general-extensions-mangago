@@ -28,7 +28,6 @@ import { NovelCoolAdvancedSearchForm } from "./forms";
 import {
   CATEGORY_PATHS,
   DOMAIN,
-  GENRE_SECTIONS,
   PAGE_SIZE,
   SECTIONS,
   SORT_OPTIONS,
@@ -124,11 +123,6 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
       { id: SECTIONS.LATEST, title: "Latest", type: DiscoverSectionType.simpleCarousel },
       { id: SECTIONS.POPULAR, title: "Popular", type: DiscoverSectionType.simpleCarousel },
       { id: SECTIONS.COMPLETED, title: "Completed", type: DiscoverSectionType.simpleCarousel },
-      ...Object.entries(GENRE_SECTIONS).map(([id, genre]) => ({
-        id,
-        title: genre,
-        type: DiscoverSectionType.simpleCarousel,
-      })),
     ];
   }
 
@@ -154,12 +148,6 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
           (page) => fetchCategoryPage(CATEGORY_PATHS.COMPLETED, page),
           metadata,
         );
-      case SECTIONS.ROMANCE:
-      case SECTIONS.COMEDY:
-      case SECTIONS.FANTASY:
-      case SECTIONS.DRAMA:
-      case SECTIONS.ACTION:
-        return this.getGenreSection(GENRE_SECTIONS[section.id], metadata);
       default:
         return { items: [] };
     }
@@ -184,22 +172,6 @@ class NovelCoolExtension implements ExtensionImpl<typeof NovelCoolConfig> {
       items: items.filter((item) => item.imageUrl.length > 0).map(mapper),
       metadata: items.length >= PAGE_SIZE ? { page: page + 1 } : undefined,
     };
-  }
-
-  // The app API has no genre listing, so the section filters the site's search by the
-  // genre's cate_id as scraped from the search page, the same id the search form sends.
-  private async getGenreSection(
-    genre: string,
-    metadata: PageMetadata | undefined,
-  ): Promise<PagedResults<DiscoverSectionItem>> {
-    const genreId = (await this.getSearchOptions()).genres.find(
-      (option) => option.title.toLowerCase() === genre.toLowerCase(),
-    )?.id;
-    if (!genreId) throw new Error(`NovelCool did not list the ${genre} genre.`);
-    return this.getHtmlSection(
-      (page) => fetchSearchPage({ page, genresInclude: [genreId] }),
-      metadata,
-    );
   }
 
   private async getHtmlSection(

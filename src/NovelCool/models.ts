@@ -34,20 +34,6 @@ export const SECTIONS = {
   LATEST: "latest",
   POPULAR: "popular",
   COMPLETED: "completed",
-  ROMANCE: "genre_romance",
-  COMEDY: "genre_comedy",
-  FANTASY: "genre_fantasy",
-  DRAMA: "genre_drama",
-  ACTION: "genre_action",
-} as const;
-
-// Values are the genre titles the site's search page lists.
-export const GENRE_SECTIONS = {
-  [SECTIONS.ROMANCE]: "Romance",
-  [SECTIONS.COMEDY]: "Comedy",
-  [SECTIONS.FANTASY]: "Fantasy",
-  [SECTIONS.DRAMA]: "Drama",
-  [SECTIONS.ACTION]: "Action",
 } as const;
 
 export const CATEGORY_PATHS = {
