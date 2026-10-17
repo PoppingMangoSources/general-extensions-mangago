@@ -194,18 +194,6 @@ export const toFeaturedItem = (item: MangaListItem): DiscoverSectionItem => {
   };
 };
 
-export const toCarouselItem = (
-  item: MangaListItem,
-  type: "prominentCarouselItem" | "simpleCarouselItem",
-): DiscoverSectionItem => ({
-  type,
-  mangaId: item.mangaId,
-  title: item.title,
-  imageUrl: item.imageUrl,
-  subtitle: item.mediaType,
-  contentRating: item.contentRating,
-});
-
 export const toSearchResultItem = (item: MangaListItem): SearchResultItem => {
   const subtitle = [
     item.mediaType,

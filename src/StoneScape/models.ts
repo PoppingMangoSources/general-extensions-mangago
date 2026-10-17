@@ -11,9 +11,6 @@ export const PAGE_SIZE = 20;
 export const SECTIONS = {
   FEATURED: "featured",
   POPULAR: "popular",
-  POPULAR_WEEK: "popular_week",
-  POPULAR_MONTH: "popular_month",
-  POPULAR_YEAR: "popular_year",
   LATEST: "latest",
   NOVELS: "novels",
   LATEST_NOVELS: "latest_novels",
