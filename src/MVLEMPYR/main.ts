@@ -151,7 +151,7 @@ class MvlempyrExtension implements ExtensionImpl<typeof MvlempyrConfig> {
       case SECTIONS.TOP_RATED:
         return this.getCatalogueSection("rating", page, toFeaturedCatalogueItem);
       case SECTIONS.NEW_UPDATES:
-        return this.getNewUpdatesSection(page);
+        return this.getNewUpdatesSection(page, metadata?.seen);
       case SECTIONS.COMPLETED:
         return this.getHomeSection(HOME_SECTION_CLASSES.COMPLETED, toSimpleHomeItem);
       case SECTIONS.NEW_ARRIVALS:
@@ -197,20 +197,27 @@ class MvlempyrExtension implements ExtensionImpl<typeof MvlempyrConfig> {
     };
   }
 
-  private async getNewUpdatesSection(page: number): Promise<PagedResults<DiscoverSectionItem>> {
+  private async getNewUpdatesSection(
+    page: number,
+    previouslySeen: string[] = [],
+  ): Promise<PagedResults<DiscoverSectionItem>> {
     const [{ posts, totalPages }, catalogue] = await Promise.all([
       fetchLatestChapterPosts(page),
       this.getCatalogue(),
     ]);
     const byCode = new Map(catalogue.map((novel) => [novel.code, novel]));
+    const seen = new Set(previouslySeen);
     return {
+      // The feed lists every new chapter newest-first; the site shows each title once, at its newest.
       items: posts.flatMap((post) => {
-        const code = Number(post.acf?.novel_code);
-        const novel = byCode.get(code);
-        const item = novel ? toChapterUpdateItem(post, novel) : undefined;
-        return item ? [item] : [];
+        const novel = byCode.get(Number(post.acf?.novel_code));
+        if (!novel || seen.has(novel.slug)) return [];
+        const item = toChapterUpdateItem(post, novel);
+        if (!item) return [];
+        seen.add(novel.slug);
+        return [item];
       }),
-      metadata: page < totalPages ? { page: page + 1 } : undefined,
+      metadata: page < totalPages ? { page: page + 1, seen: [...seen] } : undefined,
     };
   }
 

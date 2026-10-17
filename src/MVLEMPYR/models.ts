@@ -172,6 +172,8 @@ export type TriState = Record<string, "included" | "excluded">;
 
 export interface PageMetadata extends JSONObject {
   page: number;
+  // Titles already shown in New Updates, so a later page does not repeat them.
+  seen?: string[];
 }
 
 export interface SearchMetadata extends JSONObject {
