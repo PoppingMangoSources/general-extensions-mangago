@@ -36,7 +36,13 @@ import {
   type SiteChapter,
   type SitePageKind,
 } from "./models";
-import { fetchHtml, readSitePage, TempleScanInterceptor } from "./network";
+import {
+  fetchHtml,
+  isChallengePage,
+  passChallenge,
+  readSitePage,
+  TempleScanInterceptor,
+} from "./network";
 import {
   parseChapters,
   parseMangaDetails,
@@ -62,6 +68,8 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
 
   // The comics page holds the whole catalog; it is read once per session.
   private directoryPromise?: Promise<BrowseSeries[]>;
+  // One pass of the site's check serves every page waiting on it.
+  private challengePromise?: Promise<boolean>;
 
   async initialise(): Promise<void> {
     this.mainRateLimiter.registerInterceptor();
@@ -75,11 +83,48 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
     _localStorage: Record<string, string>,
   ): Promise<void> {
     this.directoryPromise = undefined;
-    // The site's own verification keeps its pass in its own cookie, alongside Cloudflare's.
+    this.saveCookies(cookies);
+  }
+
+  // The site's own verification keeps its pass in its own cookie, alongside Cloudflare's.
+  private saveCookies(cookies: Cookie[]): void {
     for (const cookie of cookies) {
       if (cookie.expires && cookie.expires.getTime() <= Date.now()) continue;
       this.cookieStorageInterceptor.setCookie(cookie);
     }
+  }
+
+  // A page served as the site's check is passed in the background and fetched again; the check is
+  // only handed to the user when it does not pass on its own.
+  private async fetchPage(url: string): Promise<string> {
+    const html = await fetchHtml(url);
+    if (!isChallengePage(html)) return html;
+    if (
+      await (this.challengePromise ??= this.passChallenge(html, url).finally(() => {
+        this.challengePromise = undefined;
+      }))
+    ) {
+      const retried = await fetchHtml(url);
+      if (!isChallengePage(retried)) return retried;
+    }
+    throw new CloudflareError({
+      url,
+      method: "GET",
+      headers: { "user-agent": await Application.getDefaultUserAgent() },
+    });
+  }
+
+  private async passChallenge(html: string, url: string): Promise<boolean> {
+    let cookies: Cookie[] | undefined;
+    try {
+      cookies = await passChallenge(html, url, this.cookieStorageInterceptor.cookiesForUrl(url));
+    } catch {
+      // A WebView that cannot run the check leaves it to the user.
+      return false;
+    }
+    if (!cookies) return false;
+    this.saveCookies(cookies);
+    return true;
   }
 
   async getSettingsForm(): Promise<Form> {
@@ -88,7 +133,7 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
     const [html, directory] = await Promise.all([
-      fetchHtml(`${DOMAIN}/comic/${mangaId}`),
+      this.fetchPage(`${DOMAIN}/comic/${mangaId}`),
       this.getDirectory(),
     ]);
     return parseMangaDetails(
@@ -111,7 +156,7 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
     const [first] = updateManager.getQueuedItems();
     if (!first) return;
     try {
-      await fetchHtml(`${DOMAIN}/comic/${first.mangaId}`);
+      await this.fetchPage(`${DOMAIN}/comic/${first.mangaId}`);
     } catch (error) {
       if (error instanceof CloudflareError) throw error;
     }
@@ -188,8 +233,9 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
     return SORTING_OPTIONS;
   }
 
-  private readSitePage<T>(url: string, kind: SitePageKind): Promise<T | undefined> {
-    return readSitePage<T>(url, kind, this.cookieStorageInterceptor.cookiesForUrl(url));
+  private async readSitePage<T>(url: string, kind: SitePageKind): Promise<T | undefined> {
+    const html = await this.fetchPage(url);
+    return readSitePage<T>(html, url, kind, this.cookieStorageInterceptor.cookiesForUrl(url));
   }
 
   private getDirectory(): Promise<BrowseSeries[]> {

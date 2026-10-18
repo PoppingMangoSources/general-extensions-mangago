@@ -87,6 +87,9 @@ export type SitePageKind = "catalog" | "chapters" | "pages";
 export const SITE_PAGE_TIMEOUT_MS = 30_000;
 export const SITE_PAGE_SETTLE_MS = 10_000;
 
+// How long the site's own check is given to pass without a tap.
+export const CHALLENGE_TIMEOUT_MS = 30_000;
+
 export const READ_SITE_PAGE = `(kind, settled) => {
   const isObjects = (v, ...keys) =>
     Array.isArray(v) && v.length > 0 && v[0] !== null && typeof v[0] === "object" && keys.every((k) => k in v[0]);

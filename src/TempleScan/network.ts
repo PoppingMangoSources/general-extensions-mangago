@@ -10,6 +10,7 @@ import {
 } from "@paperback/types";
 
 import {
+  CHALLENGE_TIMEOUT_MS,
   DOMAIN,
   READ_SITE_PAGE,
   SITE_PAGE_SETTLE_MS,
@@ -62,21 +63,6 @@ export class TempleScanInterceptor extends PaperbackInterceptor {
         },
       });
     }
-    // The site serves its own Turnstile check in place of a page, with a 200, until a browser has
-    // passed it; the check passes on its own in the app's browser and sends it back to the page.
-    if (
-      /^https:\/\/templetoons\.com\//i.test(request.url) &&
-      !IMAGE_REGEX.test(request.url) &&
-      CHALLENGE_PAGE_REGEX.test(Application.arrayBufferToUTF8String(data))
-    ) {
-      throw new CloudflareError({
-        url: request.url,
-        method: "GET",
-        headers: {
-          "user-agent": await Application.getDefaultUserAgent(),
-        },
-      });
-    }
     return data;
   }
 }
@@ -89,21 +75,86 @@ const assertOk = (url: string, status: number): void => {
   }
 };
 
+// The site serves its own Turnstile check in place of a page, with a 200, until a browser passes it.
+export const isChallengePage = (html: string): boolean => CHALLENGE_PAGE_REGEX.test(html);
+
+// The check page runs Turnstile, which passes on its own in a browser, then posts the result to the
+// site, which sets its pass cookie and moves on. The first same-origin post that succeeds is taken
+// as the pass, and the page is held there so the WebView can hand back the cookie.
+const CHALLENGE_BOOTSTRAP = `(function () {
+  var done;
+  window.__templePass = new Promise(function (resolve) { done = resolve; });
+  setTimeout(function () { done(false); }, ${CHALLENGE_TIMEOUT_MS});
+  var sameOrigin = function (url) {
+    try { return new URL(url, location.href).origin === location.origin; } catch (e) { return false; }
+  };
+  var fetch = window.fetch;
+  window.fetch = function (input, init) {
+    var method = String((init && init.method) || (input && input.method) || "GET").toUpperCase();
+    var url = typeof input === "string" ? input : input && input.url;
+    var request = fetch.apply(this, arguments);
+    if (method === "GET" || !sameOrigin(url)) return request;
+    return request.then(function (response) {
+      if (!response.ok) return response;
+      done(true);
+      return new Promise(function () {});
+    });
+  };
+  var open = XMLHttpRequest.prototype.open;
+  var send = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function (method, url) {
+    this.__method = String(method).toUpperCase();
+    this.__url = url;
+    return open.apply(this, arguments);
+  };
+  XMLHttpRequest.prototype.send = function () {
+    var xhr = this;
+    if (xhr.__method !== "GET" && sameOrigin(xhr.__url)) {
+      xhr.addEventListener("load", function () {
+        if (xhr.status >= 200 && xhr.status < 300) done(true);
+      });
+    }
+    return send.apply(this, arguments);
+  };
+})();`;
+
+// Resolves the cookies of a passed check, or undefined when it did not pass on its own.
+export const passChallenge = async (
+  html: string,
+  url: string,
+  cookies: Cookie[],
+): Promise<Cookie[] | undefined> => {
+  const bootstrap = `<script>${CHALLENGE_BOOTSTRAP}</script>`;
+  const { result, storage } = await Application.executeInWebView({
+    source: {
+      html: /<head[^>]*>/i.test(html)
+        ? html.replace(/<head[^>]*>/i, (head) => `${head}${bootstrap}`)
+        : `${bootstrap}${html}`,
+      baseUrl: url,
+      loadCSS: true,
+      loadImages: false,
+      userAgent: await Application.getDefaultUserAgent(),
+    },
+    inject: "return window.__templePass;",
+    storage: { cookies },
+  });
+  return result === true ? storage.cookies : undefined;
+};
+
 export const fetchHtml = async (url: string): Promise<string> => {
   const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
   assertOk(url, response.status);
   return Application.arrayBufferToUTF8String(buffer);
 };
 
-// The page is fetched here, where a challenge is caught, and then run in a WebView so the site's
-// app hydrates and its state can be read. Resolves undefined when a page settles without the data,
-// as a locked chapter does.
+// The page is run in a WebView so the site's app hydrates and its state can be read. Resolves
+// undefined when a page settles without the data, as a locked chapter does.
 export const readSitePage = async <T>(
+  html: string,
   url: string,
   kind: SitePageKind,
   cookies: Cookie[],
 ): Promise<T | undefined> => {
-  const html = await fetchHtml(url);
   const { result } = await Application.executeInWebView({
     source: {
       html,
