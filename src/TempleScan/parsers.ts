@@ -227,6 +227,49 @@ export const toFeaturedItems = (value: unknown): DiscoverSectionItem[] =>
     };
   });
 
+// The homepage's Latest updates cards list each series' newest chapters, newest first. A card opens
+// its newest free chapter, and a series with only paid chapters there is left out.
+export const parseLatestUpdates = (html: string): DiscoverSectionItem[] => {
+  const $ = cheerio.load(html);
+  const section = $("section")
+    .filter((_, element) => /latest updates/i.test($(element).find("h2").first().text()))
+    .first();
+  return section
+    .find('h3 a[href^="/comic/"]')
+    .toArray()
+    .flatMap((link): DiscoverSectionItem[] => {
+      const card = $(link).closest("article");
+      const mangaId = ($(link).attr("href") ?? "").split("/")[2];
+      const row = card
+        .find('li a[href^="/comic/"]')
+        .toArray()
+        .find(
+          (element) =>
+            !$(element)
+              .find(".sr-only")
+              .toArray()
+              .some((marker) => $(marker).text().trim().toLowerCase() === "premium"),
+        );
+      const chapterId = row ? ($(row).attr("href") ?? "").split("/")[3] : undefined;
+      if (!mangaId || !row || !chapterId) return [];
+      const label = $(row).find(".truncate").clone();
+      label.find(".sr-only").remove();
+      const date = new Date($(row).find("time").attr("datetime") ?? "");
+      return [
+        {
+          type: "chapterUpdatesCarouselItem",
+          mangaId,
+          chapterId,
+          title: Application.decodeHTMLEntities($(link).text().trim()),
+          subtitle: Application.decodeHTMLEntities(label.text().trim()) || undefined,
+          imageUrl: card.find("img").first().attr("src") ?? "",
+          publishDate: isNaN(date.getTime()) ? undefined : date,
+          contentRating: ContentRating.ADULT,
+        },
+      ];
+    });
+};
+
 export const toTrendingSections = (): DiscoverSectionItem[] =>
   TRENDING_RANGES.map((range) => ({
     type: "genresCarouselItem",

@@ -49,6 +49,7 @@ import {
   parseMangaDetails,
   sortSeries,
   toCarouselItem,
+  parseLatestUpdates,
   toFeaturedItems,
   toSearchResultItem,
   toTrendingItems,
@@ -73,6 +74,7 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
   private directoryPromise?: Promise<BrowseSeries[]>;
   // One pass of the site's check serves every page waiting on it.
   private challengePromise?: Promise<boolean>;
+  private homeHtmlPromise?: Promise<string>;
   private homePromise?: Promise<Partial<Record<SitePageKind, unknown>>>;
 
   async initialise(): Promise<void> {
@@ -195,9 +197,9 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
       case SECTIONS.TRENDING:
         return { items: toTrendingSections() };
       case SECTIONS.NEW_SERIES:
-        return this.getDirectorySection("created", metadata);
+        return this.getNewSeriesSection(metadata);
       case SECTIONS.LATEST:
-        return this.getDirectorySection("updated", metadata);
+        return { items: parseLatestUpdates(await this.getHomeHtml()) };
       default:
         return { items: [] };
     }
@@ -255,9 +257,16 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
     return data[kind] as T | undefined;
   }
 
-  // Featured and Trending share the homepage; one read serves both within a refresh.
+  // Featured, Trending and Latest Updates share the homepage; one fetch serves them within a refresh.
+  private getHomeHtml(): Promise<string> {
+    this.homeHtmlPromise ??= this.fetchPage(`${DOMAIN}/`).finally(() => {
+      this.homeHtmlPromise = undefined;
+    });
+    return this.homeHtmlPromise;
+  }
+
   private getHome(): Promise<Partial<Record<SitePageKind, unknown>>> {
-    this.homePromise ??= this.fetchPage(`${DOMAIN}/`)
+    this.homePromise ??= this.getHomeHtml()
       .then((html) =>
         readSitePage(
           html,
@@ -286,12 +295,11 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
     return this.directoryPromise;
   }
 
-  private async getDirectorySection(
-    sort: string,
+  private async getNewSeriesSection(
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     const page = metadata?.page ?? 1;
-    const sorted = sortSeries(await this.getDirectory(), sort);
+    const sorted = sortSeries(await this.getDirectory(), "created");
     return {
       items: sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(toCarouselItem),
       metadata: page * PAGE_SIZE < sorted.length ? { page: page + 1 } : undefined,
