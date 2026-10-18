@@ -48,9 +48,11 @@ import {
   parseChapters,
   parseMangaDetails,
   sortSeries,
-  toFeaturedItem,
   toCarouselItem,
+  toFeaturedItems,
   toSearchResultItem,
+  toTrendingItems,
+  toTrendingSections,
 } from "./parsers";
 import type TempleScanConfig from "./pbconfig";
 
@@ -71,6 +73,7 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
   private directoryPromise?: Promise<BrowseSeries[]>;
   // One pass of the site's check serves every page waiting on it.
   private challengePromise?: Promise<boolean>;
+  private homePromise?: Promise<Partial<Record<SitePageKind, unknown>>>;
 
   async initialise(): Promise<void> {
     this.mainRateLimiter.registerInterceptor();
@@ -170,6 +173,7 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
     const pages = await this.readSitePage<string[]>(
       `${DOMAIN}/comic/${chapter.sourceManga.mangaId}/${chapter.chapterId}`,
       "pages",
+      true,
     );
     if (!pages?.length) {
       throw new Error("Temple Scan: no pages found. The chapter may be locked on the website.");
@@ -186,12 +190,10 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
-      case SECTIONS.POPULAR:
-        return {
-          items: sortSeries(await this.getDirectory(), "views")
-            .slice(0, PAGE_SIZE)
-            .map(toFeaturedItem),
-        };
+      case SECTIONS.FEATURED:
+        return { items: toFeaturedItems((await this.getHome()).featured) };
+      case SECTIONS.TRENDING:
+        return { items: toTrendingSections() };
       case SECTIONS.NEW_SERIES:
         return this.getDirectorySection("created", metadata);
       case SECTIONS.LATEST:
@@ -210,6 +212,9 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
     metadata: PageMetadata | undefined,
     sortingOption?: SortingOption,
   ): Promise<PagedResults<SearchResultItem>> {
+    if (query.metadata?.trending) {
+      return { items: toTrendingItems((await this.getHome()).trending, query.metadata.trending) };
+    }
     const page = metadata?.page ?? 1;
     const title = query.title.trim().toLowerCase();
     const status = query.metadata?.status;
@@ -234,9 +239,38 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
     return SORTING_OPTIONS;
   }
 
-  private async readSitePage<T>(url: string, kind: SitePageKind): Promise<T | undefined> {
+  private async readSitePage<T>(
+    url: string,
+    kind: SitePageKind,
+    settles = false,
+  ): Promise<T | undefined> {
     const html = await this.fetchPage(url);
-    return readSitePage<T>(html, url, kind, this.cookieStorageInterceptor.cookiesForUrl(url));
+    const data = await readSitePage(
+      html,
+      url,
+      [kind],
+      this.cookieStorageInterceptor.cookiesForUrl(url),
+      settles,
+    );
+    return data[kind] as T | undefined;
+  }
+
+  // Featured and Trending share the homepage; one read serves both within a refresh.
+  private getHome(): Promise<Partial<Record<SitePageKind, unknown>>> {
+    this.homePromise ??= this.fetchPage(`${DOMAIN}/`)
+      .then((html) =>
+        readSitePage(
+          html,
+          `${DOMAIN}/`,
+          ["featured", "trending"],
+          this.cookieStorageInterceptor.cookiesForUrl(`${DOMAIN}/`),
+          true,
+        ),
+      )
+      .finally(() => {
+        this.homePromise = undefined;
+      });
+    return this.homePromise;
   }
 
   private getDirectory(): Promise<BrowseSeries[]> {

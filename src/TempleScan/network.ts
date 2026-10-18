@@ -179,14 +179,15 @@ export const fetchHtml = async (url: string): Promise<string> => {
   return Application.arrayBufferToUTF8String(buffer);
 };
 
-// The page is run in a WebView so the site's app hydrates and its state can be read. Resolves
-// undefined when a page settles without the data, as a locked chapter does.
-export const readSitePage = async <T>(
+// The page is run in a WebView so the site's app hydrates and its state can be read. A kind the page
+// does not hold is missing from the result once the page settles, as a locked chapter's images are.
+export const readSitePage = async (
   html: string,
   url: string,
-  kind: SitePageKind,
+  kinds: SitePageKind[],
   cookies: Cookie[],
-): Promise<T | undefined> => {
+  settles = false,
+): Promise<Partial<Record<SitePageKind, unknown>>> => {
   const { result } = await Application.executeInWebView({
     source: {
       html,
@@ -202,7 +203,7 @@ export const readSitePage = async <T>(
         const started = Date.now();
         const poll = () => {
           const elapsed = Date.now() - started;
-          const page = read(${JSON.stringify(kind)}, ${kind === "pages"} && elapsed >= ${SITE_PAGE_SETTLE_MS});
+          const page = read(${JSON.stringify(kinds)}, ${settles} && elapsed >= ${SITE_PAGE_SETTLE_MS});
           if (page) resolve(JSON.stringify(page.data));
           else if (elapsed >= ${SITE_PAGE_TIMEOUT_MS}) resolve(null);
           else setTimeout(poll, 250);
@@ -216,7 +217,7 @@ export const readSitePage = async <T>(
     throw new Error(`Temple Scan: the page did not load its data in time: ${url}`);
   }
   try {
-    return (JSON.parse(result) as T | null) ?? undefined;
+    return JSON.parse(result) as Partial<Record<SitePageKind, unknown>>;
   } catch (error) {
     throw new Error(`Temple Scan: could not read the page data for ${url}`, { cause: error });
   }

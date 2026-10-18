@@ -14,9 +14,12 @@ import * as cheerio from "cheerio";
 import {
   DOMAIN,
   PAID_CHAPTER_SUFFIX,
+  TRENDING_RANGES,
   type BrowseSeries,
   type ComicSeriesLd,
+  type SearchMetadata,
   type SiteChapter,
+  type TrendingRange,
 } from "./models";
 
 // Paperback rejects ids containing characters outside this set.
@@ -170,17 +173,83 @@ export const toCarouselItem = (series: BrowseSeries): DiscoverSectionItem => ({
   contentRating: ContentRating.ADULT,
 });
 
-export const toFeaturedItem = (series: BrowseSeries): DiscoverSectionItem => ({
-  type: "featuredCarouselItem",
-  mangaId: series.series_slug,
-  title: series.title,
-  imageUrl: series.thumbnail ?? "",
-  supertitle: series.badge ?? undefined,
-  infoItems: series.total_views
-    ? [{ symbol: "eye.fill", text: formatCount(series.total_views) }]
-    : undefined,
-  contentRating: ContentRating.ADULT,
-});
+// The site renames some fields with every update; a homepage entry's title and slug are found by
+// their values among the fields it leaves alone.
+const UNRENAMED_FIELDS = new Set([
+  "id",
+  "description",
+  "thumbnail",
+  "badge",
+  "protagonist",
+  "banner",
+  "total_views",
+  "day_views",
+  "week_views",
+  "month_views",
+]);
+const SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+const toHomeEntries = (
+  value: unknown,
+): { slug: string; title: string; fields: Record<string, unknown> }[] =>
+  (Array.isArray(value) ? value : []).flatMap((entry: unknown) => {
+    if (!entry || typeof entry !== "object") return [];
+    const fields = entry as Record<string, unknown>;
+    const strings = Object.entries(fields).flatMap(([key, field]) =>
+      !UNRENAMED_FIELDS.has(key) && typeof field === "string" && field.trim() ? [field.trim()] : [],
+    );
+    const slug =
+      typeof fields.series_slug === "string"
+        ? fields.series_slug
+        : strings.find((field) => SLUG_REGEX.test(field));
+    const title =
+      typeof fields.title === "string"
+        ? fields.title
+        : strings.find((field) => field !== slug && !/^https?:\/\//i.test(field));
+    return slug && title ? [{ slug, title: Application.decodeHTMLEntities(title), fields }] : [];
+  });
+
+const text = (value: unknown): string | undefined =>
+  typeof value === "string" && value.trim() ? value.trim() : undefined;
+
+// The hero carousel shows each series' cut-out character art, as the site's does.
+export const toFeaturedItems = (value: unknown): DiscoverSectionItem[] =>
+  toHomeEntries(value).map(({ slug, title, fields }) => {
+    const views = typeof fields.total_views === "number" ? fields.total_views : 0;
+    return {
+      type: "featuredCarouselItem",
+      mangaId: slug,
+      title,
+      imageUrl: text(fields.protagonist) ?? text(fields.banner) ?? text(fields.thumbnail) ?? "",
+      summary: cleanDescription(text(fields.description) ?? "") || undefined,
+      infoItems: views ? [{ symbol: "eye.fill", text: formatCount(views) }] : undefined,
+      contentRating: ContentRating.ADULT,
+    };
+  });
+
+export const toTrendingSections = (): DiscoverSectionItem[] =>
+  TRENDING_RANGES.map((range) => ({
+    type: "genresCarouselItem",
+    name: range.title,
+    searchQuery: { title: "", metadata: { trending: range.id } satisfies SearchMetadata },
+  }));
+
+export const toTrendingItems = (value: unknown, range: TrendingRange): SearchResultItem[] => {
+  const list = TRENDING_RANGES.find(({ id }) => id === range)?.list ?? "";
+  const lists = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  return toHomeEntries(lists[list]).map(({ slug, title, fields }, index) => {
+    const views = fields[`${range}_views`];
+    return {
+      mangaId: slug,
+      title,
+      imageUrl: text(fields.thumbnail) ?? "",
+      subtitle: [`#${index + 1}`, typeof views === "number" ? `${formatCount(views)} views` : ""]
+        .filter(Boolean)
+        .join(" • "),
+      contentRating: ContentRating.ADULT,
+    };
+  });
+};
 
 export const toSearchResultItem = (series: BrowseSeries): SearchResultItem => ({
   mangaId: series.series_slug,
