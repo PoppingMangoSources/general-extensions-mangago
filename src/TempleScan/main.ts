@@ -38,6 +38,7 @@ import {
 } from "./models";
 import {
   fetchHtml,
+  getUserAgent,
   isChallengePage,
   passChallenge,
   readSitePage,
@@ -110,7 +111,7 @@ class TempleScanExtension implements ExtensionImpl<typeof TempleScanConfig> {
     throw new CloudflareError({
       url,
       method: "GET",
-      headers: { "user-agent": await Application.getDefaultUserAgent() },
+      headers: { "user-agent": await getUserAgent() },
     });
   }
 

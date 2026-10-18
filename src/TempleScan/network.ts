@@ -22,6 +22,36 @@ const CHALLENGE_PAGE_REGEX = /\/app\/challenge\/page-[\w-]+\.js/;
 
 const IMAGE_REGEX = /\/uploads\/|\.(?:avif|gif|jpe?g|png|webp)(?:[?#]|$)/i;
 
+// The app's own user agent leaves out the Safari tokens a real browser sends, and the site answers
+// it with its check page. The same completed agent is used for every request and WebView, so a pass
+// earned in one is accepted by the other.
+const completeMobileSafariUserAgent = (userAgent: string): string => {
+  if (!/\b(?:iPhone|iPad|iPod)\b/.test(userAgent) || /\bSafari\//.test(userAgent)) {
+    return userAgent;
+  }
+  const os = /\bOS (\d+)[_.](\d+)/.exec(userAgent);
+  const version = os ? `${os[1]}.${os[2]}` : "18.0";
+  const withVersion = /\bVersion\//.test(userAgent)
+    ? userAgent
+    : userAgent.replace(/\sMobile\//, ` Version/${version} Mobile/`);
+  return /\bSafari\//.test(withVersion) ? withVersion : `${withVersion} Safari/604.1`;
+};
+
+let userAgentPromise: Promise<string> | undefined;
+
+export const getUserAgent = (): Promise<string> =>
+  (userAgentPromise ??= Application.getDefaultUserAgent().then(completeMobileSafariUserAgent));
+
+// The headers a browser sends when it opens a page, which the site checks for.
+const DOCUMENT_HEADERS = {
+  accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "accept-language": "en-US,en;q=0.9",
+  "sec-fetch-dest": "document",
+  "sec-fetch-mode": "navigate",
+  "sec-fetch-site": "none",
+  "upgrade-insecure-requests": "1",
+} as const;
+
 export class TempleScanInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
     // Some covers live on third-party hosts whose hotlink protection swaps in
@@ -29,6 +59,7 @@ export class TempleScanInterceptor extends PaperbackInterceptor {
     // as referer on its own hosts. Cloudflare blocks requests that carry an
     // Origin header, so never send one.
     const firstParty = /^https:\/\/(?:[a-z0-9-]+\.)*templetoons\.com\//i.test(request.url);
+    const isImage = IMAGE_REGEX.test(request.url);
 
     return {
       ...request,
@@ -36,7 +67,8 @@ export class TempleScanInterceptor extends PaperbackInterceptor {
         ...request.headers,
         ...(firstParty ? { referer: `${DOMAIN}/` } : {}),
         // The image host checks for the headers a browser sends with an image load.
-        ...(IMAGE_REGEX.test(request.url)
+        ...(!isImage && /^https:\/\/templetoons\.com\//i.test(request.url) ? DOCUMENT_HEADERS : {}),
+        ...(isImage
           ? {
               accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
               "sec-fetch-site": "same-site",
@@ -44,7 +76,7 @@ export class TempleScanInterceptor extends PaperbackInterceptor {
               "sec-fetch-dest": "image",
             }
           : {}),
-        "user-agent": await Application.getDefaultUserAgent(),
+        "user-agent": await getUserAgent(),
       },
     };
   }
@@ -59,7 +91,7 @@ export class TempleScanInterceptor extends PaperbackInterceptor {
         url: `${DOMAIN}/`,
         method: "GET",
         headers: {
-          "user-agent": await Application.getDefaultUserAgent(),
+          "user-agent": await getUserAgent(),
         },
       });
     }
@@ -133,7 +165,7 @@ export const passChallenge = async (
       baseUrl: url,
       loadCSS: true,
       loadImages: false,
-      userAgent: await Application.getDefaultUserAgent(),
+      userAgent: await getUserAgent(),
     },
     inject: "return window.__templePass;",
     storage: { cookies },
@@ -161,7 +193,7 @@ export const readSitePage = async <T>(
       baseUrl: url,
       loadCSS: false,
       loadImages: false,
-      userAgent: await Application.getDefaultUserAgent(),
+      userAgent: await getUserAgent(),
     },
     // Serialized in the page, since the WebView writes large numbers in exponent form.
     inject: `
