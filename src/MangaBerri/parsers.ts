@@ -6,7 +6,6 @@ import {
   type Chapter,
   type ChapterDetails,
   type DiscoverSectionItem,
-  type FeaturedCarouselItem,
   type SearchResultItem,
   type SourceManga,
   type Tag,
@@ -15,379 +14,219 @@ import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
 import { getBaseUrl } from "./forms";
-import { HOME_TITLES, MATURE_GENRES, type MangaCard } from "./models";
+import { GENRES, MATURE_GENRES, type MangaCard } from "./models";
 
 // Paperback rejects ids containing characters outside this set.
 const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
 
-const sanitizeId = (value: string): string =>
-  value.toLowerCase().replace(SAFE_ID_REGEX, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 
 const cleanText = (value: string): string =>
   Application.decodeHTMLEntities(value).replace(/\s+/g, " ").trim();
 
-const absoluteUrl = (url: string): string => {
-  if (!url) return "";
-  if (url.startsWith("http")) return url;
+const toAbsoluteUrl = (url: string): string => {
+  if (!url || /^https?:\/\//.test(url)) return url;
   return `${getBaseUrl()}${url.startsWith("/") ? "" : "/"}${url}`;
 };
 
-// Manga links are /<slug>; chapter links are /<slug>/<chapterId> (the leading
-// slash is sometimes dropped). The slug is the manga id, the trailing number
-// the chapter id.
-const SLUG_ONLY_REGEX = /^\/?[^/]+\/?$/;
-const CHAPTER_HREF_REGEX = /^\/?[^/]+\/\d+/;
-
-const slugFromHref = (href: string | undefined): string =>
-  (href ?? "").replace(/^\//, "").split(/[/?#]/)[0] ?? "";
+// Manga links are /title/<slug>, chapter links /read/<slug>/<id>.
+const slugFromHref = (href: string | undefined): string | undefined =>
+  /\/title\/([^/?#]+)/.exec(href ?? "")?.[1];
 
 const chapterIdFromHref = (href: string | undefined): string | undefined =>
-  /\/([0-9]+)\/?(?:[?#]|$)/.exec(href ?? "")?.[1];
+  /\/read\/[^/]+\/(\d+)/.exec(href ?? "")?.[1];
 
-const ratingFrom = (text: string): string | undefined => {
-  const value = /[\d.]+/.exec(text)?.[0];
-  return value && parseFloat(value) > 0 ? value : undefined;
+const formatStatus = (value: string): string | undefined => {
+  const status = value.trim().toLowerCase();
+  return status ? status[0].toUpperCase() + status.slice(1) : undefined;
 };
 
-const chapterNumberFrom = (value: string): number | undefined => {
-  const match = /(\d+(?:\.\d+)?)/.exec(value);
-  return match ? parseFloat(match[1]) : undefined;
+// Chapter rows date themselves "Dec 19, 2025".
+const parseDate = (value: string): Date | undefined => {
+  const match = /([a-z]{3})[a-z]*\s+(\d{1,2}),\s*(\d{4})/i.exec(value);
+  const month = match ? MONTHS.indexOf(match[1].toLowerCase()) : -1;
+  return match && month >= 0
+    ? new Date(Date.UTC(Number(match[3]), month, Number(match[2])))
+    : undefined;
 };
 
-// Update labels are relative ("13 mins ago", "7 days ago"); sum the units back
-// from now and clamp anything ahead of the clock.
-const parseRelativeDate = (value: string): Date | undefined => {
-  const text = value.trim().toLowerCase();
-  if (!text) return undefined;
-  if (text.includes("just now") || text.includes("less than")) return new Date();
-
-  const units: [RegExp, number][] = [
-    [/(\d+)\s*sec/, 1_000],
-    [/(\d+)\s*min/, 60_000],
-    [/(\d+)\s*hour/, 3_600_000],
-    [/(\d+)\s*day/, 86_400_000],
-    [/(\d+)\s*week/, 604_800_000],
-    [/(\d+)\s*month/, 2_629_800_000],
-    [/(\d+)\s*year/, 31_557_600_000],
-  ];
-  let offset = 0;
-  for (const [pattern, factor] of units) {
-    const amount = Number(pattern.exec(text)?.[1] ?? 0);
-    if (amount) offset += amount * factor;
-  }
-  return offset > 0 ? new Date(Date.now() - offset) : undefined;
-};
-
-export const contentRatingForGenres = (genres: string[]): ContentRating => {
-  const normalized = genres.map((genre) => genre.trim().toLowerCase());
-  return normalized.some((genre) => MATURE_GENRES.includes(genre))
+export const contentRatingForGenres = (genres: string[]): ContentRating =>
+  genres.some((genre) => MATURE_GENRES.includes(genre.trim().toLowerCase()))
     ? ContentRating.MATURE
     : ContentRating.EVERYONE;
-};
 
-const coverFrom = (element: cheerio.Cheerio<AnyNode>): string => {
-  const img = element.find("img").first();
-  return absoluteUrl(img.attr("data-src") ?? img.attr("src") ?? "");
-};
-
-// Every card is bare anchors: a cover link, a title link, then a chapter link
-// (/<slug>/<id>). Links are told apart by their href shape.
 const parseCard = (
   $: cheerio.CheerioAPI,
-  item: cheerio.Cheerio<AnyNode>,
+  card: cheerio.Cheerio<AnyNode>,
 ): MangaCard | undefined => {
-  const links = item
-    .find("a[href]")
-    .toArray()
-    .map((element) => $(element));
-  const slugOnly = links.filter((link) => SLUG_ONLY_REGEX.test(link.attr("href") ?? ""));
-  const chapterLink = links.find((link) => CHAPTER_HREF_REGEX.test(link.attr("href") ?? ""));
-
-  const slug = slugFromHref((slugOnly[0] ?? links[0])?.attr("href"));
-  const title = cleanText(slugOnly.find((link) => link.find("img").length === 0)?.text() ?? "");
+  const slug = slugFromHref(card.find('a[href*="/title/"]').first().attr("href"));
+  const title = cleanText(card.find("h3").first().text());
   if (!slug || !title) return undefined;
 
+  // The meta line reads "Action · 370 chapters".
+  const meta = card
+    .find(".card-meta span")
+    .toArray()
+    .map((element) => cleanText($(element).text()));
   return {
     slug,
     title,
-    cover: coverFrom(item),
-    rating: ratingFrom(item.find(".row.align-center span").last().text()),
-    chapterId: chapterIdFromHref(chapterLink?.attr("href")),
-    chapterLabel: chapterLink ? cleanText(chapterLink.text()) || undefined : undefined,
-    genres: [],
+    cover: toAbsoluteUrl(card.find("img").first().attr("src") ?? ""),
+    status: formatStatus(cleanText(card.find(".cover-label").first().text())),
+    genre: meta.find((text) => !/\bchapters?$/i.test(text)),
+    chapters: meta.find((text) => /\bchapters?$/i.test(text)),
   };
 };
 
-// Locate a home section by its heading text, then read every card under it.
-export const parseCarouselSection = ($: cheerio.CheerioAPI, title: string): MangaCard[] =>
-  $(".section-title")
-    .filter((_, element) => cleanText($(element).text()) === title)
-    .first()
-    .closest(".section-container")
-    .find(".manga-item")
-    .toArray()
-    .flatMap((element) => {
-      const card = parseCard($, $(element));
-      return card ? [card] : [];
-    });
+const parseCards = ($: cheerio.CheerioAPI, cards: cheerio.Cheerio<AnyNode>): MangaCard[] =>
+  cards.toArray().flatMap((element) => {
+    const card = parseCard($, $(element));
+    return card ? [card] : [];
+  });
 
-// The Latest Update block is a horizontal grid whose cards carry a numeric
-// rating, the newest chapter, and a relative timestamp.
-export const parseLatestSection = ($: cheerio.CheerioAPI): MangaCard[] =>
-  $(".section-title")
-    .filter((_, element) => cleanText($(element).text()) === HOME_TITLES.LATEST)
-    .first()
-    .closest(".section-container")
-    .find(".manga-horizontal-item")
-    .toArray()
-    .flatMap((element) => {
-      const item = $(element);
-      const links = item
-        .find("a[href]")
-        .toArray()
-        .map((anchor) => $(anchor));
-      const slug = slugFromHref(
-        links.find((link) => SLUG_ONLY_REGEX.test(link.attr("href") ?? ""))?.attr("href"),
-      );
-      const title = cleanText(
-        links
-          .find(
-            (link) =>
-              SLUG_ONLY_REGEX.test(link.attr("href") ?? "") && link.find("img").length === 0,
-          )
-          ?.text() ?? "",
-      );
-      if (!slug || !title) return [];
-
-      // The first row with a chapter link is the latest update; the other
-      // .row.align-center rows hold the star rating and older chapters.
-      const chapterRow = item.find(".row.align-center:has(a.episode)").first();
-      const chapterLink = chapterRow.find("a.episode").first();
-
-      return [
-        {
-          slug,
-          title,
-          cover: coverFrom(item),
-          rating: ratingFrom(item.find(".row.align-center > span").first().text()),
-          chapterId: chapterIdFromHref(chapterLink.attr("href")),
-          chapterLabel: cleanText(chapterLink.text()) || undefined,
-          updatedAt: cleanText(chapterRow.find(".episode-date").first().text()) || undefined,
-          genres: item
-            .find('a[href*="genre.php"]')
-            .toArray()
-            .map((genre) => cleanText($(genre).text()))
-            .filter(Boolean),
-        },
-      ];
-    });
-
-export const parseListingCards = (html: string): MangaCard[] => {
+// The discover page's Popular manga carousel.
+export const parsePopularCards = (html: string): MangaCard[] => {
   const $ = cheerio.load(html);
-  return $(".manga-item")
-    .toArray()
-    .flatMap((element) => {
-      const card = parseCard($, $(element));
-      return card ? [card] : [];
-    });
+  return parseCards($, $("section.popular-manga article.manga-card"));
 };
 
-// Most Viewed leads with the rating; the listing carries no view count, so
-// views live on the details page only.
-export const toFeaturedItems = (cards: MangaCard[]): DiscoverSectionItem[] =>
-  cards.map((card) => {
-    const rating = card.rating ? { symbol: "star.fill" as const, text: card.rating } : undefined;
-    return {
-      type: "featuredCarouselItem",
-      mangaId: card.slug,
-      imageUrl: card.cover,
-      title: card.title,
-      infoItems: (rating ? [rating] : undefined) as FeaturedCarouselItem["infoItems"],
-      contentRating: contentRatingForGenres(card.genres),
-    };
-  });
-
-// Popular Today: chapter number + rating.
-export const toRatedChapterItems = (cards: MangaCard[]): DiscoverSectionItem[] =>
-  cards.map((card) => {
-    const chapNum = card.chapterLabel ? chapterNumberFrom(card.chapterLabel) : undefined;
-    return {
-      type: "simpleCarouselItem",
-      mangaId: card.slug,
-      imageUrl: card.cover,
-      title: card.title,
-      subtitle: [
-        chapNum !== undefined ? `Ch. ${chapNum}` : undefined,
-        card.rating ? `★ ${card.rating}` : undefined,
-      ]
-        .filter(Boolean)
-        .join(" • "),
-      contentRating: contentRatingForGenres(card.genres),
-    };
-  });
-
-// Weekly and the genre carousels lead with the site's own rank number.
-export const toRankedItems = (cards: MangaCard[]): DiscoverSectionItem[] =>
-  cards.map((card, index) => {
-    const chapNum = card.chapterLabel ? chapterNumberFrom(card.chapterLabel) : undefined;
-    return {
-      type: "simpleCarouselItem",
-      mangaId: card.slug,
-      imageUrl: card.cover,
-      title: card.title,
-      subtitle: [`#${index + 1}`, chapNum !== undefined ? `Ch. ${chapNum}` : undefined]
-        .filter(Boolean)
-        .join(" • "),
-      contentRating: contentRatingForGenres(card.genres),
-    };
-  });
-
-export const toLatestItems = (cards: MangaCard[]): DiscoverSectionItem[] =>
-  cards.flatMap((card) => {
-    if (!card.chapterId) return [];
-    const chapNum = card.chapterLabel ? chapterNumberFrom(card.chapterLabel) : undefined;
-    return [
-      {
-        type: "chapterUpdatesCarouselItem",
-        mangaId: card.slug,
-        chapterId: card.chapterId,
-        imageUrl: card.cover,
-        title: card.title,
-        subtitle: [
-          chapNum !== undefined ? `Ch. ${chapNum}` : undefined,
-          card.rating ? `★ ${card.rating}` : undefined,
-        ]
-          .filter(Boolean)
-          .join(" • "),
-        publishDate: card.updatedAt ? parseRelativeDate(card.updatedAt) : undefined,
-        contentRating: contentRatingForGenres(card.genres),
-      },
-    ];
-  });
-
-export const toSearchResultItems = (cards: MangaCard[]): SearchResultItem[] =>
-  cards.map((card) => ({
-    mangaId: card.slug,
-    title: card.title,
-    imageUrl: card.cover,
-    subtitle: card.rating ? `★ ${card.rating}` : undefined,
-    contentRating: contentRatingForGenres(card.genres),
-  }));
-
-// Read a labelled attribute from the details sidebar (Status, Released, …).
-const detailField = ($: cheerio.CheerioAPI, label: string): string =>
-  cleanText(
-    $(".section-status.row, .comic-attrs .column")
+export const parseBrowsePage = (html: string): { cards: MangaCard[]; hasNextPage: boolean } => {
+  const $ = cheerio.load(html);
+  return {
+    cards: parseCards($, $("[data-browse-results] article.manga-card")),
+    hasNextPage: $("nav.pagination a")
       .toArray()
-      .map((element) => $(element))
-      .find((row) => cleanText(row.children().first().text()) === label)
-      ?.children()
-      .last()
-      .text() ?? "",
-  );
+      .some((element) => /next/i.test($(element).text())),
+  };
+};
+
+const cardContentRating = (card: MangaCard): ContentRating =>
+  contentRatingForGenres(card.genre ? [card.genre] : []);
+
+export const toFeaturedItem = (card: MangaCard): DiscoverSectionItem => ({
+  type: "featuredCarouselItem",
+  mangaId: card.slug,
+  imageUrl: card.cover,
+  title: card.title,
+  supertitle: card.genre,
+  summary: card.status,
+  infoItems: card.chapters ? [{ symbol: "book.fill", text: card.chapters }] : undefined,
+  contentRating: cardContentRating(card),
+});
+
+export const toProminentItem = (card: MangaCard): DiscoverSectionItem => ({
+  type: "prominentCarouselItem",
+  mangaId: card.slug,
+  imageUrl: card.cover,
+  title: card.title,
+  subtitle: card.chapters,
+  contentRating: cardContentRating(card),
+});
+
+export const toCarouselItem = (card: MangaCard): DiscoverSectionItem => ({
+  type: "simpleCarouselItem",
+  mangaId: card.slug,
+  imageUrl: card.cover,
+  title: card.title,
+  subtitle: card.chapters,
+  contentRating: cardContentRating(card),
+});
+
+export const toSearchResultItem = (card: MangaCard): SearchResultItem => ({
+  mangaId: card.slug,
+  title: card.title,
+  imageUrl: card.cover,
+  subtitle: card.chapters,
+  contentRating: cardContentRating(card),
+});
+
+// Tags use the genre filter's own ids, so a tapped tag filters the same way.
+const genreTag = (name: string): Tag => ({
+  id:
+    GENRES.find((genre) => genre.title.toLowerCase() === name.toLowerCase())?.id ??
+    name.toLowerCase().replace(SAFE_ID_REGEX, "-"),
+  title: name,
+});
 
 export const parseMangaDetails = (html: string, mangaId: string): SourceManga => {
   const $ = cheerio.load(html);
-
-  const title = cleanText($("h1.story-name").first().text());
-  if (!title) {
-    throw new Error(`No details found for ${mangaId}`);
-  }
-
-  // The inline cover is the real image; og:image is a generic site card.
-  const thumbnailUrl = absoluteUrl($("img.comic-img").first().attr("src") ?? "");
-  const synopsis = cleanText($(".story-desc").first().text());
-  const author = cleanText($('.comic-attrs a[href*="/author/"]').first().text());
-  const status = detailField($, "Status");
-
-  // Secondary titles sit in the header subtitle, separated by semicolons; the
-  // commas inside a romanised title are part of it, so don't split on those.
-  const secondaryTitles = cleanText($(".comic-info-container h2").first().text())
-    .split(";")
-    .map((alias) => alias.trim())
-    .filter((alias) => alias && alias.toLowerCase() !== title.toLowerCase());
+  const detail = $("section.detail").first();
+  const title = cleanText(detail.find("h1").first().text());
+  if (!title) throw new Error(`No details found for ${mangaId}`);
 
   const seen = new Set<string>();
-  const tags: Tag[] = $('.comic-attrs a[href*="genre.php?genre="]')
+  const tags = detail
+    .find(".tags a")
     .toArray()
     .flatMap((element) => {
-      const name = cleanText($(element).text());
-      const id = sanitizeId(name);
-      if (!name || !id || seen.has(id)) return [];
-      seen.add(id);
-      return [{ id, title: name }];
+      const tag = genreTag(cleanText($(element).text()));
+      if (!tag.title || seen.has(tag.id)) return [];
+      seen.add(tag.id);
+      return [tag];
     });
-
-  const ratingText = ratingFrom($(".section-status .row.align-center .text.grey.normal").text());
-  const rating = ratingText ? Math.min(1, Math.max(0, parseFloat(ratingText) / 5)) : undefined;
+  const author = cleanText(detail.find("h1 + p.muted").first().text());
+  const rating = parseFloat($("[data-rating-average]").first().text());
 
   return {
     mangaId,
     mangaInfo: {
       primaryTitle: title,
-      secondaryTitles,
-      thumbnailUrl,
-      synopsis,
+      secondaryTitles: [],
+      thumbnailUrl: toAbsoluteUrl(detail.find("img.detail-cover").first().attr("src") ?? ""),
+      synopsis: cleanText(detail.find("p.synopsis").first().text()),
       author: author || undefined,
-      status: status || undefined,
-      rating,
+      // The eyebrow reads "completed · 38 CHAPTERS".
+      status: formatStatus(cleanText(detail.find(".eyebrow").first().text()).split("·")[0]),
+      rating: rating > 0 ? Math.min(1, rating / 5) : undefined,
       contentRating: contentRatingForGenres(tags.map((tag) => tag.title)),
       tagGroups: tags.length > 0 ? [{ id: "genres", title: "Genres", tags }] : undefined,
-      shareUrl: `${getBaseUrl()}/${mangaId}`,
+      shareUrl: `${getBaseUrl()}/title/${mangaId}`,
     },
   };
 };
 
-export const parseChapterList = (html: string, sourceManga: SourceManga): Chapter[] => {
+// The list holds a Chapters, a Volumes and a RAW tab, each newest first, in that order.
+export const parseChapters = (html: string, sourceManga: SourceManga): Chapter[] => {
   const $ = cheerio.load(html);
-
-  // Each chapter is an anchor to /<slug>/<id> with its number in a child span.
-  const entries = $(".chapters-container a[href]")
-    .toArray()
-    .flatMap((element) => {
-      const chapterId = chapterIdFromHref($(element).attr("href"));
-      return chapterId ? [{ chapterId, label: cleanText($(element).text()) }] : [];
-    });
+  const rows = $(".chapter-list a[data-chapter-group]").toArray();
 
   const seen = new Set<string>();
-  const total = entries.length;
-  const chapters = entries.flatMap((entry, index) => {
-    if (seen.has(entry.chapterId)) return [];
-    seen.add(entry.chapterId);
-    const chapNum = chapterNumberFrom(entry.label) ?? total - index;
+  const chapters = rows.flatMap((element, index): Chapter[] => {
+    const row = $(element);
+    const chapterId = chapterIdFromHref(row.attr("href"));
+    if (!chapterId || seen.has(chapterId)) return [];
+    seen.add(chapterId);
+
+    // Names read "Chapter 202 END", "Chapter Side Story" or "Volume 13".
+    const name = cleanText(row.find("strong").first().text());
+    const chapter = /^chapter\s+(\d+(?:\.\d+)?)?\s*(.*)$/i.exec(name);
+    const volume = /^volume\s+(\d+(?:\.\d+)?)$/i.exec(name)?.[1];
     return [
       {
-        chapterId: entry.chapterId,
+        chapterId,
         sourceManga,
         langCode: "en",
-        chapNum,
-        volume: 0,
-        sortingIndex: total - index,
+        chapNum: chapter?.[1] ? parseFloat(chapter[1]) : 0,
+        title: (chapter ? chapter[2] : volume ? undefined : name) || undefined,
+        volume: volume ? parseFloat(volume) : undefined,
+        version: row.attr("data-chapter-group") === "raw" ? "RAW" : undefined,
+        publishDate: parseDate(row.find("span").first().text()),
+        sortingIndex: rows.length - index,
       },
     ];
   });
 
-  if (chapters.length === 0) {
-    throw new Error(`No chapters found for ${sourceManga.mangaId}`);
-  }
+  if (chapters.length === 0) throw new Error(`No chapters found for ${sourceManga.mangaId}`);
   return chapters;
 };
 
-export const parseReaderPages = (html: string, chapter: Chapter): ChapterDetails => {
+export const parsePages = (html: string, chapter: Chapter): ChapterDetails => {
   const $ = cheerio.load(html);
-
-  const pages = $(".reading-container img")
+  const pages = $("img[data-page-image]")
     .toArray()
-    .map((element) => absoluteUrl($(element).attr("data-src") ?? $(element).attr("src") ?? ""))
-    .filter((url) => url.length > 0);
+    .map((element) => toAbsoluteUrl($(element).attr("src") ?? ""))
+    .filter(Boolean);
 
-  if (pages.length === 0) {
-    throw new Error(`No pages found for chapter ${chapter.chapterId}`);
-  }
-
-  return {
-    id: chapter.chapterId,
-    mangaId: chapter.sourceManga.mangaId,
-    pages: [...new Set(pages)],
-  };
+  if (pages.length === 0) throw new Error(`No pages found for chapter ${chapter.chapterId}`);
+  return { id: chapter.chapterId, mangaId: chapter.sourceManga.mangaId, pages };
 };

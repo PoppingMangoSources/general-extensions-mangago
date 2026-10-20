@@ -3,7 +3,6 @@
 
 import {
   BasicRateLimiter,
-  DiscoverSectionType,
   type AdvancedSearchForm,
   type Chapter,
   type ChapterDetails,
@@ -14,33 +13,31 @@ import {
   type PagedResults,
   type SearchQuery,
   type SearchResultItem,
+  type SortingOption,
   type SourceManga,
 } from "@paperback/types";
-import * as cheerio from "cheerio";
 
 import { getBaseUrl, MangaBerriAdvancedSearchForm, MangaBerriSettingsForm } from "./forms";
 import {
+  DISCOVER_SECTIONS,
   GENRES,
-  HOME_TITLES,
-  RANKED_GENRES,
   SECTIONS,
+  SORTING_OPTIONS,
   type PageMetadata,
   type SearchMetadata,
 } from "./models";
-import { fetchHtml, MangaBerriInterceptor } from "./network";
+import { browseUrl, fetchHtml, MangaBerriInterceptor } from "./network";
 import {
   contentRatingForGenres,
-  parseCarouselSection,
-  parseChapterList,
-  parseLatestSection,
-  parseListingCards,
+  parseBrowsePage,
+  parseChapters,
   parseMangaDetails,
-  parseReaderPages,
-  toFeaturedItems,
-  toLatestItems,
-  toRankedItems,
-  toRatedChapterItems,
-  toSearchResultItems,
+  parsePages,
+  parsePopularCards,
+  toCarouselItem,
+  toFeaturedItem,
+  toProminentItem,
+  toSearchResultItem,
 } from "./parsers";
 import type MangaBerriConfig from "./pbconfig";
 
@@ -52,10 +49,6 @@ export class MangaBerriExtension implements ExtensionImpl<typeof MangaBerriConfi
   });
   private interceptor = new MangaBerriInterceptor("main");
 
-  // The home page feeds three sections; share one in-flight fetch so a refresh
-  // burst is a single request while still refetching on the next refresh.
-  private homePromise?: Promise<cheerio.CheerioAPI>;
-
   async initialise(): Promise<void> {
     this.rateLimiter.registerInterceptor();
     this.interceptor.registerInterceptor();
@@ -66,79 +59,57 @@ export class MangaBerriExtension implements ExtensionImpl<typeof MangaBerriConfi
   }
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
-    return [
-      { id: SECTIONS.MOST_VIEWED, title: "Most Viewed", type: DiscoverSectionType.featured },
-      { id: SECTIONS.WEEKLY, title: "Top Weekly", type: DiscoverSectionType.simpleCarousel },
-      { id: SECTIONS.SHOUNEN, title: "Top Shounen", type: DiscoverSectionType.simpleCarousel },
-      { id: SECTIONS.LATEST, title: "Latest Update", type: DiscoverSectionType.chapterUpdates },
-      { id: SECTIONS.SEINEN, title: "Top Seinen", type: DiscoverSectionType.simpleCarousel },
-      {
-        id: SECTIONS.POPULAR_TODAY,
-        title: "Popular Today",
-        type: DiscoverSectionType.simpleCarousel,
-      },
-      {
-        id: SECTIONS.MANHWA_MANHUA,
-        title: "Top Manhwa/Manhua",
-        type: DiscoverSectionType.simpleCarousel,
-      },
-      { id: SECTIONS.GENRES, title: "Genres", type: DiscoverSectionType.genres },
-    ];
+    return DISCOVER_SECTIONS;
   }
 
   async getDiscoverSectionItems(
     section: DiscoverSection,
-    _metadata: PageMetadata | undefined,
+    metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
-      case SECTIONS.MOST_VIEWED:
-        return {
-          items: toFeaturedItems(
-            parseCarouselSection(await this.getHome(), HOME_TITLES.MOST_VIEWED),
-          ),
-        };
-      case SECTIONS.WEEKLY:
-        return this.getRankedSection(`${getBaseUrl()}/weekly-manga.php`);
-      case SECTIONS.SHOUNEN:
-        return this.getRankedSection(this.genreUrl(RANKED_GENRES.SHOUNEN));
+      case SECTIONS.MOST_READ:
+        return { items: await this.getMostReadSectionItems() };
+      case SECTIONS.POPULAR:
+        return { items: await this.getPopularSectionItems() };
       case SECTIONS.LATEST:
-        return { items: toLatestItems(parseLatestSection(await this.getHome())) };
-      case SECTIONS.SEINEN:
-        return this.getRankedSection(this.genreUrl(RANKED_GENRES.SEINEN));
-      case SECTIONS.POPULAR_TODAY:
-        return {
-          items: toRatedChapterItems(
-            parseCarouselSection(await this.getHome(), HOME_TITLES.POPULAR_TODAY),
-          ),
-        };
-      case SECTIONS.MANHWA_MANHUA:
-        return this.getRankedSection(this.genreUrl(RANKED_GENRES.MANHWA_MANHUA));
+        return this.getLatestSectionItems(metadata);
       case SECTIONS.GENRES:
-        return { items: this.genreChipItems() };
+        return { items: this.getGenreSectionItems() };
       default:
         return { items: [] };
     }
   }
 
-  private async getRankedSection(url: string): Promise<PagedResults<DiscoverSectionItem>> {
-    return { items: toRankedItems(parseListingCards(await fetchHtml(url))) };
+  // The browse page's Most read order.
+  private async getMostReadSectionItems(): Promise<DiscoverSectionItem[]> {
+    const { cards } = parseBrowsePage(await fetchHtml(browseUrl({ sort: "popular" }, 1)));
+    return cards.map(toFeaturedItem);
   }
 
-  // Genre browse keeps the slash in "Manhwa/Manhua" literal (the server expects
-  // it), while spaces in names like "Martial Arts" are still encoded.
-  private genreUrl(name: string): string {
-    return `${getBaseUrl()}/genre.php?genre=${encodeURIComponent(name).replace(/%2F/gi, "/")}`;
+  // The discover page's Popular manga carousel.
+  private async getPopularSectionItems(): Promise<DiscoverSectionItem[]> {
+    return parsePopularCards(await fetchHtml(`${getBaseUrl()}/discover`)).map(toProminentItem);
   }
 
-  private genreChipItems(): DiscoverSectionItem[] {
+  private async getLatestSectionItems(
+    metadata: PageMetadata | undefined,
+  ): Promise<PagedResults<DiscoverSectionItem>> {
+    const page = metadata?.page ?? 1;
+    const { cards, hasNextPage } = parseBrowsePage(
+      await fetchHtml(browseUrl({ sort: "latest" }, page)),
+    );
+    return {
+      items: cards.map(toCarouselItem),
+      metadata: hasNextPage ? { page: page + 1 } : undefined,
+    };
+  }
+
+  private getGenreSectionItems(): DiscoverSectionItem[] {
     return GENRES.map((genre) => ({
       type: "genresCarouselItem",
-      name: genre.value,
-      searchQuery: {
-        title: "",
-        metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
-      },
-      contentRating: contentRatingForGenres([genre.value]),
+      name: genre.title,
+      searchQuery: { title: "", metadata: { genre: genre.id } satisfies SearchMetadata },
+      contentRating: contentRatingForGenres([genre.title]),
     }));
   }
 
@@ -146,86 +117,72 @@ export class MangaBerriExtension implements ExtensionImpl<typeof MangaBerriConfi
     return new MangaBerriAdvancedSearchForm(query);
   }
 
+  async getSortingOptions(_query: SearchQuery<SearchMetadata>): Promise<SortingOption[]> {
+    return SORTING_OPTIONS;
+  }
+
   async getSearchResults(
     query: SearchQuery<SearchMetadata>,
     metadata: PageMetadata | undefined,
+    sortingOption?: SortingOption,
   ): Promise<PagedResults<SearchResultItem>> {
-    const pasted = await this.resolveUrlQuery(query.title ?? "");
-    if (pasted) return pasted;
-
-    const term = (query.title ?? "").trim();
-    const genreId = Object.keys(query.metadata?.genres ?? {})[0];
-    const url = term
-      ? `${getBaseUrl()}/search.php?keyword=${encodeURIComponent(term)}`
-      : genreId
-        ? this.genreUrl(this.genreName(genreId))
-        : `${getBaseUrl()}/home.php`;
+    const pasted = await this.resolveUrlQuery(query.title);
+    if (pasted) return { items: [pasted] };
 
     const page = metadata?.page ?? 1;
-    const seen = new Set(metadata?.seen ?? []);
-    const cards = parseListingCards(await fetchHtml(page > 1 ? `${url}&page=${page}` : url));
-
-    // The pagination markup isn't uniform across these pages, so stop once a
-    // page adds nothing new rather than trusting a page param blindly.
-    const fresh = cards.filter((card) => !seen.has(card.slug));
-    for (const card of fresh) seen.add(card.slug);
-
+    const { cards, hasNextPage } = parseBrowsePage(
+      await fetchHtml(
+        browseUrl(
+          {
+            q: query.title.trim(),
+            genre: GENRES.find((genre) => genre.id === query.metadata?.genre)?.title,
+            status: query.metadata?.status,
+            sort: sortingOption?.id,
+          },
+          page,
+        ),
+      ),
+    );
     return {
-      items: toSearchResultItems(fresh),
-      metadata: fresh.length > 0 ? { page: page + 1, seen: [...seen] } : undefined,
+      items: cards.map(toSearchResultItem),
+      metadata: hasNextPage ? { page: page + 1 } : undefined,
     };
   }
 
-  private genreName(id: string): string {
-    return GENRES.find((genre) => genre.id === id)?.value ?? id;
-  }
-
-  private async resolveUrlQuery(
-    query: string,
-  ): Promise<PagedResults<SearchResultItem> | undefined> {
+  private async resolveUrlQuery(query: string): Promise<SearchResultItem | undefined> {
     const host = getBaseUrl()
       .replace(/^https?:\/\//, "")
       .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const slug = new RegExp(`^https?://(?:www\\.)?${host}/([^/?#]+)/?$`, "i").exec(
+    const slug = new RegExp(`^https?://(?:www\\.)?${host}/title/([^/?#]+)`, "i").exec(
       query.trim(),
     )?.[1];
-    if (!slug || slug.endsWith(".php")) return undefined;
+    if (!slug) return undefined;
 
-    const manga = await this.getMangaDetails(decodeURIComponent(slug));
+    const manga = await this.getMangaDetails(slug);
     return {
-      items: [
-        {
-          mangaId: manga.mangaId,
-          title: manga.mangaInfo.primaryTitle,
-          imageUrl: manga.mangaInfo.thumbnailUrl,
-          contentRating: manga.mangaInfo.contentRating,
-        },
-      ],
+      mangaId: manga.mangaId,
+      title: manga.mangaInfo.primaryTitle,
+      imageUrl: manga.mangaInfo.thumbnailUrl,
+      contentRating: manga.mangaInfo.contentRating,
     };
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
-    return parseMangaDetails(await fetchHtml(`${getBaseUrl()}/${mangaId}`), mangaId);
+    return parseMangaDetails(await fetchHtml(`${getBaseUrl()}/title/${mangaId}`), mangaId);
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
-    return parseChapterList(await fetchHtml(`${getBaseUrl()}/${sourceManga.mangaId}`), sourceManga);
+    return parseChapters(
+      await fetchHtml(`${getBaseUrl()}/title/${sourceManga.mangaId}`),
+      sourceManga,
+    );
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    const html = await fetchHtml(
-      `${getBaseUrl()}/${chapter.sourceManga.mangaId}/${chapter.chapterId}`,
+    return parsePages(
+      await fetchHtml(`${getBaseUrl()}/read/${chapter.sourceManga.mangaId}/${chapter.chapterId}`),
+      chapter,
     );
-    return parseReaderPages(html, chapter);
-  }
-
-  private getHome(): Promise<cheerio.CheerioAPI> {
-    this.homePromise ??= fetchHtml(`${getBaseUrl()}/home.php`)
-      .then((html) => cheerio.load(html))
-      .finally(() => {
-        this.homePromise = undefined;
-      });
-    return this.homePromise;
   }
 }
 
