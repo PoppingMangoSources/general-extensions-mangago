@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-10-20T10:31:40.421Z",
+  "buildTime": "2026-10-20T10:46:32.091Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -176,7 +176,7 @@
     {
       "name": "MangaBerri",
       "description": "Extension that pulls content from mangaberri.com.",
-      "version": "1.0.0-alpha.3",
+      "version": "1.0.0-alpha.4",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
@@ -198,7 +198,7 @@
     {
       "name": "MangaCherri",
       "description": "Extension that pulls content from mangacherri.com.",
-      "version": "1.0.0-alpha.3",
+      "version": "1.0.0-alpha.4",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
