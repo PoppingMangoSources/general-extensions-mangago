@@ -204,18 +204,18 @@ export const parseChapters = (html: string, sourceManga: SourceManga): Chapter[]
     if (!chapterId || seen.has(chapterId)) return [];
     seen.add(chapterId);
 
-    // Names read "Chapter 202 END", "Chapter Side Story" or "Volume 13".
+    // Names read "Chapter 202 END", "Chapter Side Story" or "Volume 13"; a volume keeps its
+    // name as its title.
     const name = cleanText(row.find("strong").first().text());
     const chapter = /^chapter\s+(\d+(?:\.\d+)?)?\s*(.*)$/i.exec(name);
-    const volume = /^volume\s+(\d+(?:\.\d+)?)$/i.exec(name)?.[1];
     return [
       {
         chapterId,
         sourceManga,
         langCode: "en",
         chapNum: chapter?.[1] ? parseFloat(chapter[1]) : 0,
-        title: (chapter ? chapter[2] : volume ? undefined : name) || undefined,
-        volume: volume ? parseFloat(volume) : undefined,
+        title: (chapter ? chapter[2] : name) || undefined,
+        volume: 0,
         version: row.attr("data-chapter-group") === "raw" ? "RAW" : undefined,
         publishDate: parseDate(row.find("span").first().text()),
         sortingIndex: rows.length - index,

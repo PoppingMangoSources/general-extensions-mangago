@@ -267,6 +267,7 @@ export const parseChapters = (html: string, sourceManga: SourceManga): Chapter[]
         langCode: "en",
         chapNum: numbered ? parseFloat(numbered[1]) : (parseChapterNumber(name) ?? 0),
         title: (numbered ? numbered[2] : name) || undefined,
+        volume: 0,
         publishDate: isNaN(date.getTime()) ? undefined : date,
         sortingIndex: rows.length - index,
       },
