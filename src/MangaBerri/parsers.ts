@@ -6,6 +6,7 @@ import {
   type Chapter,
   type ChapterDetails,
   type DiscoverSectionItem,
+  type FeaturedCarouselItem,
   type SearchResultItem,
   type SourceManga,
   type Tag,
@@ -68,13 +69,14 @@ const parseCard = (
     .find(".card-meta span")
     .toArray()
     .map((element) => cleanText($(element).text()));
+  const count = meta.map((text) => /^([\d,]+)\s+chapters?$/i.exec(text)?.[1]).find(Boolean);
   return {
     slug,
     title,
     cover: toAbsoluteUrl(card.find("img").first().attr("src") ?? ""),
     status: formatStatus(cleanText(card.find(".cover-label").first().text())),
     genre: meta.find((text) => !/\bchapters?$/i.test(text)),
-    chapters: meta.find((text) => /\bchapters?$/i.test(text)),
+    chapters: count ? `${count} ${count === "1" ? "Chap" : "Chaps"}` : undefined,
   };
 };
 
@@ -103,16 +105,21 @@ export const parseBrowsePage = (html: string): { cards: MangaCard[]; hasNextPage
 const cardContentRating = (card: MangaCard): ContentRating =>
   contentRatingForGenres(card.genre ? [card.genre] : []);
 
-export const toFeaturedItem = (card: MangaCard): DiscoverSectionItem => ({
-  type: "featuredCarouselItem",
-  mangaId: card.slug,
-  imageUrl: card.cover,
-  title: card.title,
-  supertitle: card.genre,
-  summary: card.status,
-  infoItems: card.chapters ? [{ symbol: "book.fill", text: card.chapters }] : undefined,
-  contentRating: cardContentRating(card),
-});
+export const toFeaturedItem = (card: MangaCard): DiscoverSectionItem => {
+  const infoItems = [
+    ...(card.chapters ? [{ symbol: "books.vertical.fill", text: card.chapters }] : []),
+    ...(card.status ? [{ symbol: "book.fill", text: card.status }] : []),
+  ];
+  return {
+    type: "featuredCarouselItem",
+    mangaId: card.slug,
+    imageUrl: card.cover,
+    title: card.title,
+    supertitle: card.genre,
+    infoItems: (infoItems.length > 0 ? infoItems : undefined) as FeaturedCarouselItem["infoItems"],
+    contentRating: cardContentRating(card),
+  };
+};
 
 export const toProminentItem = (card: MangaCard): DiscoverSectionItem => ({
   type: "prominentCarouselItem",

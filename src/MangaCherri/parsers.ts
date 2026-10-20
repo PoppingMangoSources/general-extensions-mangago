@@ -143,8 +143,8 @@ export const toFeaturedItem = (card: MangaCard): DiscoverSectionItem => {
     mangaId: card.slug,
     imageUrl: card.cover,
     title: card.title,
-    supertitle: card.genres.slice(0, 2).join(" • ") || undefined,
-    summary: card.status,
+    supertitle: card.status,
+    summary: card.genres.slice(0, 2).join(" • ") || undefined,
     infoItems: (infoItems.length > 0 ? infoItems : undefined) as FeaturedCarouselItem["infoItems"],
     contentRating: contentRatingForGenres(card.genres),
   };
