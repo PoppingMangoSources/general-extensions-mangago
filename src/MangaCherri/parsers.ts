@@ -15,400 +15,275 @@ import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
 import { getBaseUrl } from "./forms";
-import { HOME_TITLES, MATURE_GENRES, type MangaCard } from "./models";
-
-// Paperback rejects ids containing characters outside this set.
-const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
-
-const sanitizeId = (value: string): string =>
-  value.toLowerCase().replace(SAFE_ID_REGEX, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+import { MATURE_GENRES, type MangaCard } from "./models";
 
 const cleanText = (value: string): string =>
   Application.decodeHTMLEntities(value).replace(/\s+/g, " ").trim();
 
-const absoluteUrl = (url: string): string => {
-  if (!url) return "";
-  if (url.startsWith("http")) return url;
+const toAbsoluteUrl = (url: string): string => {
+  if (!url || /^https?:\/\//.test(url)) return url;
   return `${getBaseUrl()}${url.startsWith("/") ? "" : "/"}${url}`;
 };
 
-// Manga links are /<slug>; chapter links are /<slug>/<chapterId>. The slug is
-// the manga id, the trailing number is the chapter id.
-const slugFromHref = (href: string | undefined): string =>
-  (href ?? "").replace(/^\//, "").split(/[/?#]/)[0] ?? "";
+// Manga links are /title/<slug>, chapter links /read/<id>.
+const slugFromHref = (href: string | undefined): string | undefined =>
+  /\/title\/([^/?#]+)/.exec(href ?? "")?.[1];
 
 const chapterIdFromHref = (href: string | undefined): string | undefined =>
-  /\/([0-9]+)\/?(?:[?#]|$)/.exec(href ?? "")?.[1];
+  /\/read\/(\d+)/.exec(href ?? "")?.[1];
 
-const ratingFrom = (text: string): string | undefined => {
-  const value = /[\d.]+/.exec(text)?.[0];
+const genreIdFromHref = (href: string | undefined): string | undefined =>
+  /\/genre\/([^/?#]+)/.exec(href ?? "")?.[1];
+
+// Cards print the status in lower case ("ongoing") or as "ONGOING STORY".
+const formatStatus = (value: string): string | undefined => {
+  const status = value
+    .replace(/\bstory\b/i, "")
+    .trim()
+    .toLowerCase();
+  return status ? status[0].toUpperCase() + status.slice(1) : undefined;
+};
+
+// The site shows an unrated title as 0.0.
+const parseRating = (text: string): string | undefined => {
+  const value = /\d+(?:\.\d+)?/.exec(text)?.[0];
   return value && parseFloat(value) > 0 ? value : undefined;
 };
 
-// Views arrive as a raw count; compress to the shortest label that still reads
-// (1.4K, 3.1M) so it fits on a carousel card.
-const formatCount = (text: string): string | undefined => {
-  const count = Number(text.replace(/[^\d]/g, ""));
-  if (!count) return undefined;
-  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
-  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K`;
-  return String(count);
-};
-
-const chapterNumberFrom = (value: string): number | undefined => {
+const parseChapterNumber = (value: string): number | undefined => {
   const match = /(\d+(?:\.\d+)?)/.exec(value);
   return match ? parseFloat(match[1]) : undefined;
 };
 
-// Update labels are relative ("13 hours 49 mins ago", "7 days ago"); sum the
-// units back from now and clamp anything ahead of the clock.
-const parseRelativeDate = (value: string): Date | undefined => {
-  const text = value.trim().toLowerCase();
-  if (!text) return undefined;
-  if (text.includes("just now") || text.includes("less than")) return new Date();
-
-  const units: [RegExp, number][] = [
-    [/(\d+)\s*sec/, 1_000],
-    [/(\d+)\s*min/, 60_000],
-    [/(\d+)\s*hour/, 3_600_000],
-    [/(\d+)\s*day/, 86_400_000],
-    [/(\d+)\s*week/, 604_800_000],
-    [/(\d+)\s*month/, 2_629_800_000],
-    [/(\d+)\s*year/, 31_557_600_000],
-  ];
-  let offset = 0;
-  for (const [pattern, factor] of units) {
-    const amount = Number(pattern.exec(text)?.[1] ?? 0);
-    if (amount) offset += amount * factor;
-  }
-  return offset > 0 ? new Date(Date.now() - offset) : undefined;
+// Card labels carry the chapter's tags ("Ch. 117 END ENG"); a card shows only its number.
+const formatChapterLabel = (label: string | undefined): string | undefined => {
+  if (!label) return undefined;
+  const number = /^Ch\.\s*(\d+(?:\.\d+)?)/i.exec(label)?.[1];
+  return number ? `Ch. ${number}` : label.replace(/^Ch\.\s*VOL\s*/i, "Vol. ");
 };
 
-export const contentRatingForGenres = (genres: string[]): ContentRating => {
-  const normalized = genres.map((genre) => genre.trim().toLowerCase());
-  return normalized.some((genre) => MATURE_GENRES.includes(genre))
+export const contentRatingForGenres = (genres: string[]): ContentRating =>
+  genres.some((genre) => MATURE_GENRES.includes(genre.trim().toLowerCase()))
     ? ContentRating.MATURE
     : ContentRating.EVERYONE;
-};
 
-const coverFrom = (element: cheerio.Cheerio<AnyNode>): string => {
-  const img = element.find("img").first();
-  return absoluteUrl(img.attr("data-src") ?? img.attr("src") ?? "");
-};
-
-// The compact carousel card (Popular Now, Most Popular, Completed Romance) — a
-// cover with a rating badge, a title, and either a chapter link or a view count.
-const parseCarouselCard = (item: cheerio.Cheerio<AnyNode>): MangaCard | undefined => {
-  const slug = slugFromHref(item.find("a.manga-cover-link").first().attr("href"));
-  const title = cleanText(item.find("a.manga-title-link").first().text());
+// Reads a home-page grid card and a catalogue list card alike.
+const parseCard = (
+  $: cheerio.CheerioAPI,
+  card: cheerio.Cheerio<AnyNode>,
+): MangaCard | undefined => {
+  const titleLink = card.find("h3 a, h2 a").first();
+  const slug = slugFromHref(titleLink.attr("href"));
+  const title = cleanText(titleLink.text());
   if (!slug || !title) return undefined;
 
-  const chapterLink = item.find("a.manga-chapter-link").first();
-  const chapterLabel = cleanText(chapterLink.text());
-
+  const chapterLink = card.find("a.latest-chapter, a.cherri-list-card__action").first();
+  const chapterLabel = cleanText(
+    chapterLink.find("span").first().text() || chapterLink.text().replace("→", ""),
+  );
   return {
     slug,
     title,
-    cover: coverFrom(item.find(".manga-live-cover").first()),
-    rating: ratingFrom(item.find(".manga-live-badge").first().text()),
-    views: formatCount(item.find("i.fa-eye").parent().text()),
+    cover: toAbsoluteUrl(card.find("img").first().attr("src") ?? ""),
+    status: formatStatus(cleanText(card.find(".cover-status, small.eyebrow").first().text())),
+    rating: parseRating(
+      card
+        .find(".cherri-card-rating, .cherri-list-card__meta span")
+        .filter((_, element) => $(element).text().includes("★"))
+        .first()
+        .text(),
+    ),
+    genres: card
+      .find(".genre-badges a, .cherri-detail__chips a")
+      .toArray()
+      .map((element) => cleanText($(element).text()))
+      .filter(Boolean),
     chapterId: chapterIdFromHref(chapterLink.attr("href")),
     chapterLabel: chapterLabel || undefined,
-    genres: [],
+    postedAt: card.find("time").first().attr("datetime"),
   };
 };
 
-// Locate a home section by its heading text, then read every card under it.
-const homeSectionCards = (
-  $: cheerio.CheerioAPI,
-  title: string,
-  itemSelector: string,
-  parse: (item: cheerio.Cheerio<AnyNode>) => MangaCard | undefined,
-): MangaCard[] => {
-  const container = $(".section-title")
-    .filter((_, element) => cleanText($(element).text()) === title)
-    .first()
-    .closest(".section-container");
-
-  return container
-    .find(itemSelector)
-    .toArray()
-    .flatMap((element) => {
-      const card = parse($(element));
-      return card ? [card] : [];
-    });
-};
-
-export const parseCarouselSection = ($: cheerio.CheerioAPI, title: string): MangaCard[] =>
-  homeSectionCards($, title, ".manga-item.manga-live-card", parseCarouselCard);
-
-// The Latest Chapter block is a horizontal grid whose cards carry a numeric
-// rating, the newest chapter, and a relative timestamp.
-export const parseLatestSection = ($: cheerio.CheerioAPI): MangaCard[] =>
-  homeSectionCards($, HOME_TITLES.LATEST, ".manga-horizontal-item", (item) => {
-    const slug = slugFromHref(item.find("a.manga-cover-link").first().attr("href"));
-    const title = cleanText(item.find("a.manga-title-link").first().text());
-    if (!slug || !title) return undefined;
-
-    // Each card lists newest-first chapter rows; the first row with a chapter
-    // link is the latest update (other .row.align-center rows hold the rating).
-    const chapterRow = item.find(".row.align-center:has(a.episode)").first();
-    const chapterLink = chapterRow.find("a.episode").first();
-
-    return {
-      slug,
-      title,
-      cover: coverFrom(item.find(".manga-live-cover").first()),
-      rating: ratingFrom(item.find(".row.align-center > span").first().text()),
-      chapterId: chapterIdFromHref(chapterLink.attr("href")),
-      chapterLabel: cleanText(chapterLink.text()) || undefined,
-      updatedAt: cleanText(chapterRow.find(".episode-date").first().text()) || undefined,
-      genres: item
-        .find('a[href*="genre.php"]')
-        .toArray()
-        .map((genre) => cleanText($(genre).text()))
-        .filter(Boolean),
-    };
+const parseCards = ($: cheerio.CheerioAPI, cards: cheerio.Cheerio<AnyNode>): MangaCard[] =>
+  cards.toArray().flatMap((element) => {
+    const card = parseCard($, $(element));
+    return card ? [card] : [];
   });
 
-// Listing pages (weekly, genre, search) drop the carousel's helper classes and
-// lay each card out as bare anchors: a cover link, a title link, then a chapter
-// link (/<slug>/<id>). Links are told apart by their href shape.
-const parseListingCard = (
-  $: cheerio.CheerioAPI,
-  item: cheerio.Cheerio<AnyNode>,
-): MangaCard | undefined => {
-  const links = item
-    .find("a[href]")
-    .toArray()
-    .map((element) => $(element));
-  const slugOnly = links.filter((link) => /^\/[^/]+\/?$/.test(link.attr("href") ?? ""));
-  const chapterLink = links.find((link) => /^\/[^/]+\/\d+/.test(link.attr("href") ?? ""));
+// A home-page section is found by its heading, as the page names it.
+export const parseHomeSection = (html: string, heading: string): MangaCard[] => {
+  const $ = cheerio.load(html);
+  const grid = $(".cherri-section-heading h2")
+    .filter((_, element) => cleanText($(element).text()).toLowerCase() === heading.toLowerCase())
+    .first()
+    .closest(".cherri-section-heading")
+    .nextAll(".cherri-grid")
+    .first();
+  return parseCards($, grid.find("article.manga-card"));
+};
 
-  const slug = slugFromHref((slugOnly[0] ?? links[0])?.attr("href"));
-  const title = cleanText(slugOnly.find((link) => link.find("img").length === 0)?.text() ?? "");
-  if (!slug || !title) return undefined;
-
+export const parseCataloguePage = (html: string): { cards: MangaCard[]; hasNextPage: boolean } => {
+  const $ = cheerio.load(html);
   return {
-    slug,
-    title,
-    cover: coverFrom(item),
-    rating: ratingFrom(item.find(".row.align-center span").last().text()),
-    views: formatCount(item.find("i.fa-eye").parent().text()),
-    chapterId: chapterIdFromHref(chapterLink?.attr("href")),
-    chapterLabel: chapterLink ? cleanText(chapterLink.text()) || undefined : undefined,
-    genres: [],
+    cards: parseCards($, $("article.cherri-list-card")),
+    hasNextPage: $("nav.pager a")
+      .toArray()
+      .some((element) => /next/i.test($(element).text())),
   };
 };
 
-export const parseListingCards = (html: string): MangaCard[] => {
-  const $ = cheerio.load(html);
-  return $(".manga-item")
-    .toArray()
-    .flatMap((element) => {
-      const card = parseListingCard($, $(element));
-      return card ? [card] : [];
-    });
-};
-
-const featuredItem = (card: MangaCard): FeaturedCarouselItem => {
-  const rating = card.rating ? { symbol: "star.fill" as const, text: card.rating } : undefined;
-  const views = card.views ? { symbol: "eye.fill" as const, text: card.views } : undefined;
-  const infoItems = [rating, views].filter((item) => item !== undefined);
-
+export const toFeaturedItem = (card: MangaCard): DiscoverSectionItem => {
+  const chapter = formatChapterLabel(card.chapterLabel);
+  const infoItems = [
+    ...(card.rating ? [{ symbol: "star.fill", text: card.rating }] : []),
+    ...(chapter ? [{ symbol: "book.fill", text: chapter }] : []),
+  ];
   return {
     type: "featuredCarouselItem",
     mangaId: card.slug,
     imageUrl: card.cover,
     title: card.title,
-    supertitle: card.genres[0],
+    supertitle: card.genres.slice(0, 2).join(" • ") || undefined,
+    summary: card.status,
     infoItems: (infoItems.length > 0 ? infoItems : undefined) as FeaturedCarouselItem["infoItems"],
     contentRating: contentRatingForGenres(card.genres),
   };
 };
 
-export const toFeaturedItems = (cards: MangaCard[]): DiscoverSectionItem[] =>
-  cards.map(featuredItem);
+export const toProminentItem = (card: MangaCard): DiscoverSectionItem => ({
+  type: "prominentCarouselItem",
+  mangaId: card.slug,
+  imageUrl: card.cover,
+  title: card.title,
+  subtitle: formatChapterLabel(card.chapterLabel),
+  contentRating: contentRatingForGenres(card.genres),
+});
 
-// Ch. label + rating for the compact carousels (Popular Now, Completed Romance).
-export const toRatedChapterItems = (cards: MangaCard[]): DiscoverSectionItem[] =>
-  cards.map((card) => {
-    const chapNum = card.chapterLabel ? chapterNumberFrom(card.chapterLabel) : undefined;
-    return {
-      type: "simpleCarouselItem",
-      mangaId: card.slug,
-      imageUrl: card.cover,
-      title: card.title,
-      subtitle: [
-        chapNum !== undefined ? `Ch. ${chapNum}` : undefined,
-        card.rating ? `★ ${card.rating}` : undefined,
-      ]
-        .filter(Boolean)
-        .join(" • "),
-      contentRating: contentRatingForGenres(card.genres),
-    };
-  });
+export const toCarouselItem = (card: MangaCard): DiscoverSectionItem => ({
+  type: "simpleCarouselItem",
+  mangaId: card.slug,
+  imageUrl: card.cover,
+  title: card.title,
+  subtitle: formatChapterLabel(card.chapterLabel),
+  contentRating: contentRatingForGenres(card.genres),
+});
 
-// Weekly cards show only the chapter number.
-export const toWeeklyItems = (cards: MangaCard[]): DiscoverSectionItem[] =>
-  cards.map((card) => {
-    const chapNum = card.chapterLabel ? chapterNumberFrom(card.chapterLabel) : undefined;
-    return {
-      type: "simpleCarouselItem",
-      mangaId: card.slug,
-      imageUrl: card.cover,
-      title: card.title,
-      subtitle: chapNum !== undefined ? `Ch. ${chapNum}` : undefined,
-      contentRating: contentRatingForGenres(card.genres),
-    };
-  });
-
-export const toLatestItems = (cards: MangaCard[]): DiscoverSectionItem[] =>
-  cards.flatMap((card) => {
-    if (!card.chapterId) return [];
-    const chapNum = card.chapterLabel ? chapterNumberFrom(card.chapterLabel) : undefined;
-    return [
-      {
-        type: "chapterUpdatesCarouselItem",
-        mangaId: card.slug,
-        chapterId: card.chapterId,
-        imageUrl: card.cover,
-        title: card.title,
-        subtitle: [
-          chapNum !== undefined ? `Ch. ${chapNum}` : undefined,
-          card.rating ? `★ ${card.rating}` : undefined,
+export const toChapterUpdateItems = (cards: MangaCard[]): DiscoverSectionItem[] =>
+  cards.flatMap((card) =>
+    card.chapterId
+      ? [
+          {
+            type: "chapterUpdatesCarouselItem",
+            mangaId: card.slug,
+            chapterId: card.chapterId,
+            imageUrl: card.cover,
+            title: card.title,
+            subtitle: formatChapterLabel(card.chapterLabel),
+            publishDate: card.postedAt ? new Date(card.postedAt) : undefined,
+            contentRating: contentRatingForGenres(card.genres),
+          },
         ]
-          .filter(Boolean)
-          .join(" • "),
-        publishDate: card.updatedAt ? parseRelativeDate(card.updatedAt) : undefined,
-        contentRating: contentRatingForGenres(card.genres),
-      },
-    ];
-  });
-
-export const toSearchResultItems = (cards: MangaCard[]): SearchResultItem[] =>
-  cards.map((card) => ({
-    mangaId: card.slug,
-    title: card.title,
-    imageUrl: card.cover,
-    subtitle: card.rating ? `★ ${card.rating}` : undefined,
-    contentRating: contentRatingForGenres(card.genres),
-  }));
-
-// Read a labelled attribute from the details sidebar (Status, Released, …).
-const detailField = ($: cheerio.CheerioAPI, label: string): string =>
-  cleanText(
-    $(".section-status.row, .comic-attrs .column")
-      .toArray()
-      .map((element) => $(element))
-      .find((row) => cleanText(row.children().first().text()) === label)
-      ?.children()
-      .last()
-      .text() ?? "",
+      : [],
   );
+
+export const toSearchResultItem = (card: MangaCard): SearchResultItem => ({
+  mangaId: card.slug,
+  title: card.title,
+  imageUrl: card.cover,
+  subtitle: formatChapterLabel(card.chapterLabel),
+  contentRating: contentRatingForGenres(card.genres),
+});
 
 export const parseMangaDetails = (html: string, mangaId: string): SourceManga => {
   const $ = cheerio.load(html);
-
-  const title = cleanText($("h1.story-name").first().text());
-  if (!title) {
-    throw new Error(`No details found for ${mangaId}`);
-  }
-
-  // The inline cover is the real image; og:image is a generic site card.
-  const thumbnailUrl = absoluteUrl($("img.comic-img").first().attr("src") ?? "");
-  const synopsis = cleanText($(".story-desc").first().text());
-  const author = cleanText($('.comic-attrs a[href*="/author/"]').first().text());
-  const status = detailField($, "Status");
-
-  // Secondary titles sit in the header subtitle, separated by semicolons; the
-  // commas inside a romanised title are part of it, so don't split on those.
-  const secondaryTitles = cleanText($(".comic-info-container h2").first().text())
-    .split(";")
-    .map((alias) => alias.trim())
-    .filter((alias) => alias && alias.toLowerCase() !== title.toLowerCase());
+  const detail = $(".cherri-detail").first();
+  const title = cleanText(detail.find("h1").first().text());
+  if (!title) throw new Error(`No details found for ${mangaId}`);
 
   const seen = new Set<string>();
-  const tags: Tag[] = $('.comic-attrs a[href*="genre.php?genre="]')
+  const tags: Tag[] = detail
+    .find(".cherri-detail__chips a")
     .toArray()
     .flatMap((element) => {
-      const name = cleanText($(element).text());
-      const id = sanitizeId(name);
-      if (!name || !id || seen.has(id)) return [];
+      const id = genreIdFromHref($(element).attr("href"));
+      if (!id || seen.has(id)) return [];
       seen.add(id);
-      return [{ id, title: name }];
+      return [{ id, title: cleanText($(element).text()) }];
     });
 
-  const ratingText = ratingFrom($(".section-status .row.align-center .text.grey.normal").text());
-  const rating = ratingText ? Math.min(1, Math.max(0, parseFloat(ratingText) / 5)) : undefined;
+  const stat = (label: string): string =>
+    cleanText(
+      detail
+        .find(".cherri-detail__stats > div")
+        .filter((_, element) => cleanText($(element).find("small").text()) === label)
+        .find("strong")
+        .text(),
+    );
+  const rating = parseRating(stat("RATING"));
+  const alternative = cleanText(detail.find(".cherri-detail__alt").first().text());
+  const author = cleanText(detail.find(".cherri-detail__description + p strong").first().text());
 
   return {
     mangaId,
     mangaInfo: {
       primaryTitle: title,
-      secondaryTitles,
-      thumbnailUrl,
-      synopsis,
+      secondaryTitles: alternative ? [alternative] : [],
+      thumbnailUrl: toAbsoluteUrl(
+        detail.find(".cherri-detail__cover img").first().attr("src") ?? "",
+      ),
+      synopsis: cleanText(detail.find(".cherri-detail__description").first().text()),
       author: author || undefined,
-      status: status || undefined,
-      rating,
+      // The eyebrow reads "ROSE LIBRARY · COMPLETED".
+      status: formatStatus(
+        cleanText(detail.find("p.eyebrow").first().text()).split("·").pop() ?? "",
+      ),
+      rating: rating ? Math.min(1, parseFloat(rating) / 5) : undefined,
       contentRating: contentRatingForGenres(tags.map((tag) => tag.title)),
       tagGroups: tags.length > 0 ? [{ id: "genres", title: "Genres", tags }] : undefined,
-      shareUrl: `${getBaseUrl()}/${mangaId}`,
+      shareUrl: `${getBaseUrl()}/title/${mangaId}`,
     },
   };
 };
 
-export const parseChapterList = (html: string, sourceManga: SourceManga): Chapter[] => {
+export const parseChapters = (html: string, sourceManga: SourceManga): Chapter[] => {
   const $ = cheerio.load(html);
-
-  // Each chapter is an anchor to /<slug>/<id> with its number in a child span.
-  const entries = $(".chapters-container a[href]")
-    .toArray()
-    .flatMap((element) => {
-      const chapterId = chapterIdFromHref($(element).attr("href"));
-      return chapterId ? [{ chapterId, label: cleanText($(element).text()) }] : [];
-    });
+  const rows = $("a.cherri-chapter-row").toArray();
 
   const seen = new Set<string>();
-  const total = entries.length;
-  const chapters = entries.flatMap((entry, index) => {
-    if (seen.has(entry.chapterId)) return [];
-    seen.add(entry.chapterId);
-    const chapNum = chapterNumberFrom(entry.label) ?? total - index;
+  const chapters = rows.flatMap((element, index): Chapter[] => {
+    const row = $(element);
+    const chapterId = chapterIdFromHref(row.attr("href"));
+    if (!chapterId || seen.has(chapterId)) return [];
+    seen.add(chapterId);
+
+    // Names read "Chapter 500.5 OMAKE"; whatever follows the number is the chapter's title.
+    const name = cleanText(row.find("strong").first().text());
+    const numbered = /^chapter\s+(\d+(?:\.\d+)?)\s*(.*)$/i.exec(name);
+    const date = new Date(row.find("time").attr("datetime") ?? "");
     return [
       {
-        chapterId: entry.chapterId,
+        chapterId,
         sourceManga,
         langCode: "en",
-        chapNum,
-        volume: 0,
-        sortingIndex: total - index,
+        chapNum: numbered ? parseFloat(numbered[1]) : (parseChapterNumber(name) ?? 0),
+        title: (numbered ? numbered[2] : name) || undefined,
+        publishDate: isNaN(date.getTime()) ? undefined : date,
+        sortingIndex: rows.length - index,
       },
     ];
   });
 
-  if (chapters.length === 0) {
-    throw new Error(`No chapters found for ${sourceManga.mangaId}`);
-  }
+  if (chapters.length === 0) throw new Error(`No chapters found for ${sourceManga.mangaId}`);
   return chapters;
 };
 
-export const parseReaderPages = (html: string, chapter: Chapter): ChapterDetails => {
+export const parsePages = (html: string, chapter: Chapter): ChapterDetails => {
   const $ = cheerio.load(html);
-
-  const pages = $(".reading-container img")
+  const pages = $("#chapter-reader img[data-page]")
     .toArray()
-    .map((element) => absoluteUrl($(element).attr("data-src") ?? $(element).attr("src") ?? ""))
-    .filter((url) => url.length > 0);
+    .map((element) => toAbsoluteUrl($(element).attr("src") ?? ""))
+    .filter(Boolean);
 
-  if (pages.length === 0) {
-    throw new Error(`No pages found for chapter ${chapter.chapterId}`);
-  }
-
-  return {
-    id: chapter.chapterId,
-    mangaId: chapter.sourceManga.mangaId,
-    pages: [...new Set(pages)],
-  };
+  if (pages.length === 0) throw new Error(`No pages found for chapter ${chapter.chapterId}`);
+  return { id: chapter.chapterId, mangaId: chapter.sourceManga.mangaId, pages };
 };

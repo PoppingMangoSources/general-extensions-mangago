@@ -6,12 +6,11 @@ import {
   Form,
   InputRow,
   Section,
-  TriStateSelectRow,
+  SelectRow,
   type SearchQuery,
-  type Tag,
 } from "@paperback/types";
 
-import { DOMAIN, GENRES, type SearchMetadata } from "./models";
+import { DOMAIN, GENRES, STATUS_OPTIONS, type SearchMetadata } from "./models";
 
 const BASE_URL_KEY = "mangacherri.baseUrl";
 
@@ -54,45 +53,60 @@ export class MangaCherriSettingsForm extends Form {
   }
 }
 
+// The catalogue filters on one genre and one status at a time, as its own form does.
 export class MangaCherriAdvancedSearchForm extends AdvancedSearchForm {
-  private genres: Record<string, "included" | "excluded">;
-
-  private readonly genreOptions: Tag[] = GENRES.map((genre) => ({
-    id: genre.id,
-    title: genre.value,
-  }));
+  private genre: string | undefined;
+  private status: string | undefined;
 
   constructor(searchQuery: SearchQuery<SearchMetadata>) {
     super();
-    this.genres = { ...searchQuery.metadata?.genres };
+    this.genre = searchQuery.metadata?.genre;
+    this.status = searchQuery.metadata?.status;
   }
 
   override getSections() {
     return [
-      Section({ id: "genres", footer: "The site browses one genre at a time." }, [
-        TriStateSelectRow("genres", {
-          title: "Genres",
+      Section("filters", [
+        SelectRow("genre", {
+          title: "Genre",
           layout: "flow",
-          value: this.genres,
-          items: this.genreOptions,
-          allowExclusion: false,
-          allowEmptySelection: true,
+          value: this.genre ? [this.genre] : [],
+          items: GENRES,
+          minItemCount: 0,
+          maxItemCount: 1,
           onValueChange: Application.Selector(
             this as MangaCherriAdvancedSearchForm,
-            "handleGenresChange",
+            "handleGenreChange",
+          ),
+        }),
+        SelectRow("status", {
+          title: "Status",
+          layout: "flow",
+          value: this.status ? [this.status] : [],
+          items: STATUS_OPTIONS,
+          minItemCount: 0,
+          maxItemCount: 1,
+          onValueChange: Application.Selector(
+            this as MangaCherriAdvancedSearchForm,
+            "handleStatusChange",
           ),
         }),
       ]),
     ];
   }
 
-  async handleGenresChange(value: Record<string, "included" | "excluded">): Promise<void> {
-    this.genres = value;
+  async handleGenreChange(value: string[]): Promise<void> {
+    this.genre = value[0];
+  }
+
+  async handleStatusChange(value: string[]): Promise<void> {
+    this.status = value[0];
   }
 
   override getSearchQueryMetadata(): SearchMetadata {
-    const result: SearchMetadata = {};
-    if (Object.keys(this.genres).length > 0) result.genres = this.genres;
-    return result;
+    return {
+      ...(this.genre ? { genre: this.genre } : {}),
+      ...(this.status ? { status: this.status } : {}),
+    };
   }
 }

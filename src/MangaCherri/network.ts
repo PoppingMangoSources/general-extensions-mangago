@@ -1,9 +1,10 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import { PaperbackInterceptor, type Request, type Response } from "@paperback/types";
+import { PaperbackInterceptor, URL, type Request, type Response } from "@paperback/types";
 
 import { getBaseUrl } from "./forms";
+import type { CatalogueQuery } from "./models";
 
 // One native lookup for the whole session instead of one per request.
 let userAgentPromise: Promise<string> | undefined;
@@ -49,4 +50,14 @@ export const fetchHtml = async (url: string): Promise<string> => {
   }
 
   return Application.arrayBufferToUTF8String(buffer);
+};
+
+// The catalogue page lists every title, filtered and sorted as its own form asks.
+export const catalogueUrl = (query: CatalogueQuery, page: number): string => {
+  const url = new URL(`${getBaseUrl()}/manga`);
+  for (const [key, value] of Object.entries(query)) {
+    if (value) url.setQueryItem(key, value);
+  }
+  if (page > 1) url.setQueryItem("page", String(page));
+  return url.toString();
 };
