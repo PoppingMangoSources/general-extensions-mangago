@@ -52,7 +52,12 @@ export class ToonkotsuInterceptor extends PaperbackInterceptor {
     response: Response,
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
-    if (response.headers?.["cf-mitigated"] === "challenge") {
+    if (
+      Object.entries(response.headers).some(
+        ([name, value]) =>
+          name.toLowerCase() === "cf-mitigated" && value.toLowerCase() === "challenge",
+      )
+    ) {
       // The API answers in JSON and cannot display the challenge; solving it on the site clears
       // the whole domain.
       throw new CloudflareError({

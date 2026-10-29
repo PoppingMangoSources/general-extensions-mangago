@@ -11,6 +11,7 @@ import {
 export const DOMAIN = "https://toonkotsu.com";
 
 export const PAGE_SIZE = 42;
+export const SERIES_CACHE_TTL_MS = 30_000;
 
 // The reader's signing secret and the build it shipped with. The key endpoint reports the live
 // build, so a mismatch names the cause when the site has rotated the secret.
@@ -27,6 +28,8 @@ export const STATE_KEYS = {
   SHOW_UPLOAD_SIZE: "toonkotsu_show_upload_size",
   SMALLEST_UPLOAD: "toonkotsu_smallest_upload",
   HIDDEN_GROUPS: "toonkotsu_hidden_groups",
+  SERIES: "toonkotsu_series",
+  SERIES_GENERATION: "toonkotsu_series_generation",
 } as const;
 
 export const SECTIONS = {
@@ -307,6 +310,12 @@ export interface LatestResponse {
 export interface SeriesResponse {
   series: Series;
   chapters: ChapterEntry[];
+}
+
+export interface CachedSeries {
+  mangaId: string;
+  expiresAt: number;
+  response: SeriesResponse;
 }
 
 export interface Facet {

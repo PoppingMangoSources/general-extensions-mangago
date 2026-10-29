@@ -43,10 +43,13 @@ import {
   READER_SECRET,
   SECTION_DEFINITIONS,
   SECTIONS,
+  SERIES_CACHE_TTL_MS,
   SORT_OPTIONS,
+  STATE_KEYS,
   STATUS_OPTIONS,
   TYPE_OPTIONS,
   type FacetsResponse,
+  type CachedSeries,
   type LatestResponse,
   type PageMetadata,
   type ReaderKeyResponse,
@@ -54,6 +57,7 @@ import {
   type SearchMetadata,
   type Series,
   type SeriesListResponse,
+  type SeriesResponse,
 } from "./models";
 import {
   fetchBrowse,
@@ -108,6 +112,7 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
   private cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
   private interceptor = new ToonkotsuInterceptor("main");
   private facetsPromise?: Promise<FacetsResponse>;
+  private seriesPromise?: { mangaId: string; generation: number; value: Promise<SeriesResponse> };
   private readerKeyPromise?: Promise<ReaderSession | undefined>;
   private siteSessionPromise?: Promise<unknown>;
   private readerSecretPromise?: Promise<string>;
@@ -128,6 +133,7 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
     _localStorage: Record<string, string>,
   ): Promise<void> {
     this.saveCookies(cookies);
+    this.invalidateSeries();
     this.facetsPromise = undefined;
     this.readerKeyPromise = undefined;
     this.siteSessionPromise = undefined;
@@ -373,12 +379,53 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
-    const [series, facets] = await Promise.all([fetchSeries(mangaId), this.getFacets()]);
+    const [series, facets] = await Promise.all([this.getSeries(mangaId), this.getFacets()]);
     return parseMangaDetails(series, mangaId, facets);
   }
 
+  private getSeries(mangaId: string): Promise<SeriesResponse> {
+    // The full series response serves both details and chapters, even across JS contexts.
+    const cached = Application.getState(STATE_KEYS.SERIES) as CachedSeries | undefined;
+    const generation =
+      (Application.getState(STATE_KEYS.SERIES_GENERATION) as number | undefined) ?? 0;
+    if (cached?.mangaId === mangaId && cached.expiresAt > Date.now()) {
+      return Promise.resolve(cached.response);
+    }
+    if (this.seriesPromise?.mangaId === mangaId && this.seriesPromise.generation === generation) {
+      return this.seriesPromise.value;
+    }
+    const value = fetchSeries(mangaId)
+      .then((response) => {
+        if (
+          this.seriesPromise?.value === value &&
+          ((Application.getState(STATE_KEYS.SERIES_GENERATION) as number | undefined) ?? 0) ===
+            generation
+        ) {
+          Application.setState(
+            { mangaId, response, expiresAt: Date.now() + SERIES_CACHE_TTL_MS },
+            STATE_KEYS.SERIES,
+          );
+        }
+        return response;
+      })
+      .finally(() => {
+        if (this.seriesPromise?.value === value) this.seriesPromise = undefined;
+      });
+    this.seriesPromise = { mangaId, generation, value };
+    return value;
+  }
+
+  private invalidateSeries(): void {
+    // Requests still running in another JS context must not restore invalidated data.
+    const generation =
+      (Application.getState(STATE_KEYS.SERIES_GENERATION) as number | undefined) ?? 0;
+    Application.setState(generation + 1, STATE_KEYS.SERIES_GENERATION);
+    Application.setState(undefined, STATE_KEYS.SERIES);
+    this.seriesPromise = undefined;
+  }
+
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
-    return parseChapters(await fetchSeries(sourceManga.mangaId), sourceManga, {
+    return parseChapters(await this.getSeries(sourceManga.mangaId), sourceManga, {
       mainOnly: getDeduplicateChapters(),
       showSize: getShowUploadSize(),
       smallest: getSmallestUpload(),
@@ -389,8 +436,9 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
   async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
     const [first] = updateManager.getQueuedItems();
     if (!first) return;
+    this.invalidateSeries();
     try {
-      await fetchSeries(first.mangaId);
+      await this.getSeries(first.mangaId);
     } catch (error) {
       if (error instanceof CloudflareError) throw error;
     }

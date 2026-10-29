@@ -359,15 +359,12 @@ const parseChapterSeason = (entry: ChapterEntry): number | undefined => {
   return match ? Number(match[1]) : undefined;
 };
 
-// The site separates volumes/seasons when at least three chapter numbers occur in multiple ones.
-const hasChapterNumberResets = (
-  entries: ChapterEntry[],
-  section: (entry: ChapterEntry) => number | undefined,
-): boolean => {
+// Season labels establish a reset when at least three numbers occur in multiple seasons.
+const hasSeasonNumberResets = (entries: ChapterEntry[]): boolean => {
   const sections = new Map<number, Set<number>>();
   for (const entry of entries) {
     const number = parseChapterNumber(entry.n);
-    const value = section(entry);
+    const value = parseChapterSeason(entry);
     if (number === undefined || value === undefined) continue;
     const values = sections.get(number) ?? new Set<number>();
     values.add(value);
@@ -410,8 +407,7 @@ export const parseChapters = (
     })),
   );
   // Hidden uploads still establish where chapter numbering restarts.
-  const byVolume = hasChapterNumberResets(releases, (entry) => parseChapterNumber(entry.vol));
-  const bySeason = hasChapterNumberResets(releases, parseChapterSeason);
+  const bySeason = hasSeasonNumberResets(releases);
   const firstVisible = new Set<number>();
   const visible = releases.filter((release) => {
     if (hidden.has(parseLabel(release, release.n).group?.toLowerCase() ?? "")) return false;
@@ -422,9 +418,7 @@ export const parseChapters = (
   });
   const chapterKey = (release: (typeof releases)[number]): string =>
     JSON.stringify([
-      byVolume
-        ? (parseChapterNumber(release.vol) ?? release.vol?.toString().trim().toLowerCase())
-        : "",
+      parseChapterNumber(release.vol) ?? release.vol?.toString().trim().toLowerCase() ?? "",
       bySeason ? (parseChapterSeason(release) ?? 1) : "",
       parseChapterNumber(release.n) ?? `id:${release.canonicalId}`,
     ]);
