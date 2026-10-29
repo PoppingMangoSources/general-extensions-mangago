@@ -286,14 +286,8 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
     return { kind: "series", items: data.items, hasNext: hasNextPage(data, page) };
   }
 
-  // Paperback opens on the first option, so the sort the site opens on leads and the rest keep the
-  // site's order. Best Match ranks by the text query, so it is only offered with one.
-  async getSortingOptions(query: SearchQuery<SearchMetadata>): Promise<SortingOption[]> {
-    const typed = Boolean(query.title.trim());
-    const lead = typed ? "relevance" : "lastUploadedChapterAt";
-    return SORT_OPTIONS.filter(({ id }) => typed || id !== "relevance")
-      .sort((a, b) => Number(b.id === lead) - Number(a.id === lead))
-      .map(({ id, label }) => ({ id, label }));
+  async getSortingOptions(): Promise<SortingOption[]> {
+    return SORT_OPTIONS.map(({ id, label }) => ({ id, label }));
   }
 
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
@@ -335,11 +329,11 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
     const genreNames = (state: "included" | "excluded") =>
       genres.filter(([, value]) => value === state).map(([id]) => fromTagId(id));
     // Best Match ranks by the text query, so without one the site's default order applies.
-    const sortId =
-      sortingOption?.id === "relevance" && !title
-        ? "lastUploadedChapterAt"
-        : (sortingOption?.id ?? (title ? "relevance" : "lastUploadedChapterAt"));
-    const sort = SORT_OPTIONS.find(({ id }) => id === sortId)?.value ?? "latest";
+    const sortId = sortingOption?.id ?? "relevance";
+    const sort =
+      sortId === "relevance" && !title
+        ? "latest"
+        : (SORT_OPTIONS.find(({ id }) => id === sortId)?.value ?? "relevance");
     // The site only ever sends whole numbers here, so anything else typed is left out, not sent.
     const whole = (value?: string) => (value && /^\d+$/.test(value) ? Number(value) : undefined);
     const included = genreNames("included");

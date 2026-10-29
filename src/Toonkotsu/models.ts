@@ -96,14 +96,12 @@ export const SECTION_OPTIONS: Tag[] = SECTION_IDS.map((id) => ({
   title: SECTION_DEFINITIONS[id].title,
 }));
 
-// The site's sort menu, in its order and under its names, each with the catalogue token the site's
-// own table sends. It gives ten names to eight orders: Updated and Uploaded Date are one, and View
-// and Follow Count another, and the same pairs pick the same list on the site.
+// Paperback defaults to the first option. The site aliases Updated/Uploaded and View/Follow.
 export const SORT_OPTIONS = [
+  { id: "relevance", label: "Best Match", value: "relevance" },
   { id: "createdAt", label: "Created Date", value: "new" },
   { id: "updatedAt", label: "Updated Date", value: "latest" },
   { id: "lastUploadedChapterAt", label: "Uploaded Date", value: "latest" },
-  { id: "relevance", label: "Best Match", value: "relevance" },
   { id: "title", label: "Title", value: "title" },
   { id: "year", label: "Year", value: "year" },
   { id: "rating", label: "Rating", value: "score" },
