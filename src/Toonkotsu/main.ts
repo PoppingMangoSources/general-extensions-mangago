@@ -27,9 +27,11 @@ import {
   getContentRatings,
   getDeduplicateChapters,
   getHiddenSections,
+  getHiddenGroups,
   getHiddenTags,
   getSectionOrder,
   getShowUploadSize,
+  getSmallestUpload,
   getTypes,
   ToonkotsuSearchForm,
   ToonkotsuSettingsForm,
@@ -379,6 +381,8 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
     return parseChapters(await fetchSeries(sourceManga.mangaId), sourceManga, {
       mainOnly: getDeduplicateChapters(),
       showSize: getShowUploadSize(),
+      smallest: getSmallestUpload(),
+      hiddenGroups: getHiddenGroups(),
     });
   }
 

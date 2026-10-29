@@ -380,16 +380,25 @@ const hasChapterNumberResets = (
 const sizeLabel = (mb: number | null | undefined): string | undefined =>
   mb && mb > 0 ? `${Number(mb.toFixed(mb >= 100 ? 0 : 1))} MB` : undefined;
 
-// Keep a group's best upload of each chapter, its widest and then largest, as the site's chapter
-// list does. With mainOnly only the upload the site lists first is kept; with showSize a group's
-// uploads of different sizes stay apart, each with its size in the title.
+// Size variants stay separate unless the smallest upload is requested or size labels are off.
 export const parseChapters = (
   { chapters }: SeriesResponse,
   sourceManga: SourceManga,
-  { mainOnly, showSize }: { mainOnly: boolean; showSize: boolean },
+  {
+    mainOnly,
+    showSize,
+    smallest,
+    hiddenGroups,
+  }: {
+    mainOnly: boolean;
+    showSize: boolean;
+    smallest: boolean;
+    hiddenGroups: string[];
+  },
 ): Chapter[] => {
+  const hidden = new Set(hiddenGroups.map((name) => name.toLowerCase()));
   const releases = chapters.flatMap((entry, position) =>
-    (mainOnly ? [entry] : [entry, ...(entry.alts ?? [])]).map((release, index) => ({
+    [entry, ...(entry.alts ?? [])].map((release, index) => ({
       ...release,
       n: entry.n,
       vol: entry.vol,
@@ -400,8 +409,17 @@ export const parseChapters = (
       position,
     })),
   );
+  // Hidden uploads still establish where chapter numbering restarts.
   const byVolume = hasChapterNumberResets(releases, (entry) => parseChapterNumber(entry.vol));
   const bySeason = hasChapterNumberResets(releases, parseChapterSeason);
+  const firstVisible = new Set<number>();
+  const visible = releases.filter((release) => {
+    if (hidden.has(parseLabel(release, release.n).group?.toLowerCase() ?? "")) return false;
+    if (!mainOnly || smallest) return true;
+    if (firstVisible.has(release.canonicalId)) return false;
+    firstVisible.add(release.canonicalId);
+    return true;
+  });
   const chapterKey = (release: (typeof releases)[number]): string =>
     JSON.stringify([
       byVolume
@@ -411,23 +429,26 @@ export const parseChapters = (
       parseChapterNumber(release.n) ?? `id:${release.canonicalId}`,
     ]);
   const selected = new Map<string, { release: (typeof releases)[number]; order: number }>();
-  // Prefer complete uploads, then the widest and largest, then catalogue defaults, position and ID.
+  const downloadSize = (release: (typeof releases)[number]): number =>
+    release.mb && release.mb > 0 ? release.mb : Infinity;
+  // Complete uploads win; unknown download sizes cannot beat a known smallest upload.
   const compareReleases = (a: (typeof releases)[number], b: (typeof releases)[number]): number =>
     Number(!!a.partial) - Number(!!b.partial) ||
-    (b.w ?? 0) - (a.w ?? 0) ||
-    (b.mb ?? 0) - (a.mb ?? 0) ||
+    (smallest
+      ? downloadSize(a) - downloadSize(b)
+      : (b.w ?? 0) - (a.w ?? 0) || (b.mb ?? 0) - (a.mb ?? 0)) ||
     Number(b.catalogueDefault) - Number(a.catalogueDefault) ||
     a.position - b.position ||
     a.id - b.id;
-  const complete = new Set(releases.filter((release) => !release.partial).map(chapterKey));
-  for (const release of releases) {
+  const complete = new Set(visible.filter((release) => !release.partial).map(chapterKey));
+  for (const release of visible) {
     const key = chapterKey(release);
     if (release.partial && complete.has(key)) continue;
     const { group } = parseLabel(release, release.n);
     const groupKey = JSON.stringify([
       key,
-      release.group?.slug ?? group?.toLowerCase() ?? "",
-      showSize ? (sizeLabel(release.mb) ?? "") : "",
+      mainOnly ? "" : (release.group?.slug ?? group?.toLowerCase() ?? ""),
+      showSize && !smallest ? (sizeLabel(release.mb) ?? "") : "",
     ]);
     const current = selected.get(groupKey);
     if (!current || compareReleases(release, current.release) < 0) {

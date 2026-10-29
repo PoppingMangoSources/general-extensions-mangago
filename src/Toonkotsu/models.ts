@@ -25,6 +25,8 @@ export const STATE_KEYS = {
   HIDDEN_SECTIONS: "toonkotsu_hidden_sections",
   DEDUPLICATE_CHAPTERS: "toonkotsu_deduplicate_chapters",
   SHOW_UPLOAD_SIZE: "toonkotsu_show_upload_size",
+  SMALLEST_UPLOAD: "toonkotsu_smallest_upload",
+  HIDDEN_GROUPS: "toonkotsu_hidden_groups",
 } as const;
 
 export const SECTIONS = {

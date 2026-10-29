@@ -71,6 +71,12 @@ export const getDeduplicateChapters = (): boolean =>
 export const getShowUploadSize = (): boolean =>
   (Application.getState(STATE_KEYS.SHOW_UPLOAD_SIZE) as boolean | undefined) ?? true;
 
+export const getSmallestUpload = (): boolean =>
+  (Application.getState(STATE_KEYS.SMALLEST_UPLOAD) as boolean | undefined) ?? false;
+
+export const getHiddenGroups = (): string[] =>
+  (Application.getState(STATE_KEYS.HIDDEN_GROUPS) as string[] | undefined) ?? [];
+
 export const getHiddenSections = (): SectionId[] =>
   (Application.getState(STATE_KEYS.HIDDEN_SECTIONS) as SectionId[] | undefined) ?? [];
 
@@ -176,7 +182,7 @@ export class ToonkotsuSettingsForm extends Form {
           id: "chapters",
           header: "Chapter Settings",
           footer:
-            "Deduplicate Chapters lists only the upload the site shows first for each chapter, not one from every group. Upload Size adds each upload's size to its title and lists a group's uploads of different sizes separately; with it off only the group's best upload is listed.",
+            "Smallest Upload keeps the lightest complete upload per group, or per chapter with Deduplicate Chapters. Otherwise, deduplication keeps the site's first visible upload; Upload Size lists different sizes separately, or only the best upload when off. Hidden Groups accepts comma-separated names, ignoring case. Changing uploads may change read status.",
         },
         [
           ToggleRow("deduplicate_chapters", {
@@ -193,6 +199,22 @@ export class ToonkotsuSettingsForm extends Form {
             onValueChange: Application.Selector(
               this as ToonkotsuSettingsForm,
               "handleShowUploadSizeChange",
+            ),
+          }),
+          ToggleRow("smallest_upload", {
+            title: "Smallest Upload",
+            value: getSmallestUpload(),
+            onValueChange: Application.Selector(
+              this as ToonkotsuSettingsForm,
+              "handleSmallestUploadChange",
+            ),
+          }),
+          InputRow("hidden_groups", {
+            title: "Hidden Groups",
+            value: getHiddenGroups().join(", "),
+            onValueChange: Application.Selector(
+              this as ToonkotsuSettingsForm,
+              "handleHiddenGroupsChange",
             ),
           }),
         ],
@@ -219,6 +241,20 @@ export class ToonkotsuSettingsForm extends Form {
 
   async handleShowUploadSizeChange(value: boolean): Promise<void> {
     Application.setState(value, STATE_KEYS.SHOW_UPLOAD_SIZE);
+  }
+
+  async handleSmallestUploadChange(value: boolean): Promise<void> {
+    Application.setState(value, STATE_KEYS.SMALLEST_UPLOAD);
+  }
+
+  async handleHiddenGroupsChange(value: string): Promise<void> {
+    Application.setState(
+      value
+        .split(",")
+        .map((name) => name.trim())
+        .filter(Boolean),
+      STATE_KEYS.HIDDEN_GROUPS,
+    );
   }
 
   async handleContentRatingsChange(value: string[]): Promise<void> {
