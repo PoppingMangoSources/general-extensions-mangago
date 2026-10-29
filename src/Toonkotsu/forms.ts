@@ -416,21 +416,22 @@ export class ToonkotsuSearchForm extends AdvancedSearchForm {
   }
 
   override getSearchQueryMetadata(): SearchMetadata {
-    return {
-      genres: Object.keys(this.genres).length ? this.genres : undefined,
+    const result: SearchMetadata = {
       genreMode: this.genreMode,
       excludeMode: this.excludeMode,
-      demographics: this.demographics.length ? this.demographics : undefined,
-      statuses: this.statuses.length ? this.statuses : undefined,
-      languages: this.languages.length ? this.languages : undefined,
-      ratings: this.ratings.length ? this.ratings : undefined,
-      author: this.author.trim() || undefined,
-      yearFrom: this.yearFrom.trim() || undefined,
-      yearTo: this.yearTo.trim() || undefined,
-      chaptersMin: this.chaptersMin.trim() || undefined,
-      chaptersMax: this.chaptersMax.trim() || undefined,
-      order: this.order === "default" ? undefined : this.order,
-      hasChapters: this.hasChapters || undefined,
     };
+    if (Object.keys(this.genres).length) result.genres = this.genres;
+    if (this.demographics.length) result.demographics = this.demographics;
+    if (this.statuses.length) result.statuses = this.statuses;
+    if (this.languages.length) result.languages = this.languages;
+    if (this.ratings.length) result.ratings = this.ratings;
+    if (this.author.trim()) result.author = this.author.trim();
+    if (this.yearFrom.trim()) result.yearFrom = this.yearFrom.trim();
+    if (this.yearTo.trim()) result.yearTo = this.yearTo.trim();
+    if (this.chaptersMin.trim()) result.chaptersMin = this.chaptersMin.trim();
+    if (this.chaptersMax.trim()) result.chaptersMax = this.chaptersMax.trim();
+    if (this.order !== "default") result.order = this.order;
+    if (this.hasChapters) result.hasChapters = this.hasChapters;
+    return result;
   }
 }
