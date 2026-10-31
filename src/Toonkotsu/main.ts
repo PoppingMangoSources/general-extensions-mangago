@@ -112,6 +112,7 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
   private cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
   private interceptor = new ToonkotsuInterceptor("main");
   private facetsPromise?: Promise<FacetsResponse>;
+  private seriesCache?: CachedSeries;
   private seriesPromise?: { mangaId: string; generation: number; value: Promise<SeriesResponse> };
   private readerKeyPromise?: Promise<ReaderSession | undefined>;
   private siteSessionPromise?: Promise<unknown>;
@@ -384,11 +385,15 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
   }
 
   private getSeries(mangaId: string): Promise<SeriesResponse> {
-    // The full series response serves both details and chapters, even across JS contexts.
-    const cached = Application.getState(STATE_KEYS.SERIES) as CachedSeries | undefined;
+    // Full chapter lists can exceed Paperback's 128 KiB state limit; keep the payload in memory.
+    const cached = this.seriesCache;
     const generation =
       (Application.getState(STATE_KEYS.SERIES_GENERATION) as number | undefined) ?? 0;
-    if (cached?.mangaId === mangaId && cached.expiresAt > Date.now()) {
+    if (
+      cached?.mangaId === mangaId &&
+      cached.generation === generation &&
+      cached.expiresAt > Date.now()
+    ) {
       return Promise.resolve(cached.response);
     }
     if (this.seriesPromise?.mangaId === mangaId && this.seriesPromise.generation === generation) {
@@ -401,10 +406,12 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
           ((Application.getState(STATE_KEYS.SERIES_GENERATION) as number | undefined) ?? 0) ===
             generation
         ) {
-          Application.setState(
-            { mangaId, response, expiresAt: Date.now() + SERIES_CACHE_TTL_MS },
-            STATE_KEYS.SERIES,
-          );
+          this.seriesCache = {
+            mangaId,
+            generation,
+            response,
+            expiresAt: Date.now() + SERIES_CACHE_TTL_MS,
+          };
         }
         return response;
       })
@@ -420,7 +427,7 @@ class ToonkotsuExtension implements ExtensionImpl<typeof ToonkotsuConfig> {
     const generation =
       (Application.getState(STATE_KEYS.SERIES_GENERATION) as number | undefined) ?? 0;
     Application.setState(generation + 1, STATE_KEYS.SERIES_GENERATION);
-    Application.setState(undefined, STATE_KEYS.SERIES);
+    this.seriesCache = undefined;
     this.seriesPromise = undefined;
   }
 

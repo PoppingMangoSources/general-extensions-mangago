@@ -28,7 +28,6 @@ export const STATE_KEYS = {
   SHOW_UPLOAD_SIZE: "toonkotsu_show_upload_size",
   SMALLEST_UPLOAD: "toonkotsu_smallest_upload",
   HIDDEN_GROUPS: "toonkotsu_hidden_groups",
-  SERIES: "toonkotsu_series",
   SERIES_GENERATION: "toonkotsu_series_generation",
 } as const;
 
@@ -314,6 +313,7 @@ export interface SeriesResponse {
 
 export interface CachedSeries {
   mangaId: string;
+  generation: number;
   expiresAt: number;
   response: SeriesResponse;
 }
