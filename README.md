@@ -5,7 +5,7 @@
 <p align="center">
   <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/badge-ios.svg?v=2" alt="iOS / iPadOS" height="28"/>
   <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/badge-version.svg?v=2" alt="Paperback 0.9+" height="28"/>
-  <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/badge-count.svg?v=10" alt="30 sources" height="28"/>
+  <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/badge-count.svg?v=11" alt="28 sources" height="28"/>
 </p>
 
 <p align="center">
@@ -27,13 +27,13 @@
 
 **PoppingMango** is an independent source list for [Paperback](https://paperback.moe) 0.9 covering novels, manga, manhwa, and manhua, maintained by Popmango. Every extension here is written and maintained in this repository, it is not a mirror of any other catalog.
 
-## Temporary sorting diagnostic
+## Toonkotsu chapter numbers
 
 Toonkotsu separates chapter numbers reused across volumes with a decimal volume suffix, such as `1.002` for Volume 2, so Paperback keeps each volume's chapters in the site's order. The lowest volume retains the original chapter number, and uploads of the same chapter stay grouped together.
 
 ## Sources
 
-**30 sources:** 26 manga, manhwa & manhua, and 4 novels, all available from `0.9/test`.
+**28 sources:** 23 manga, manhwa & manhua, and 5 novels, all available from `0.9/test`.
 
 ### Manga, Manhwa & Manhua
 
@@ -57,12 +57,11 @@ Toonkotsu separates chapter numbers reused across volumes with a decimal volume 
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/scansgg.png" width="22" align="top"/> **Scans.GG**              | [scans.gg](https://scans.gg)                       |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/stonescape.png" width="22" align="top"/> **StoneScape**         | [stonescape.xyz](https://stonescape.xyz)           |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/templescan.png" width="22" align="top"/> **Temple Scan**        | [templetoons.com](https://templetoons.com)         |
-| <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Ftest/media/sources/toonkotsu.png" width="22" align="top"/> **Toonkotsu**             | [toonkotsu.com](https://toonkotsu.com)             |
+| <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/toonkotsu.png" width="22" align="top"/> **Toonkotsu**           | [toonkotsu.com](https://toonkotsu.com)             |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/valirscans.png" width="22" align="top"/> **ValirScans**         | [valirscans.org](https://valirscans.org)           |
-| <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Ftest/media/sources/violetscans.png" width="22" align="top"/> **VioletScans**         | [violetscans.org](https://violetscans.org)         |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/vymanga.png" width="22" align="top"/> **VyManga**               | [vymanga.com](https://vymanga.com)                 |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/xcomic.png" width="22" align="top"/> **XCOMIC**                 | [xcomic.me](https://xcomic.me)                     |
-| <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Ftest/media/sources/yaoime.png" width="22" align="top"/> **YaoiMe**                   | [yaoi.me](https://yaoi.me)                         |
+| <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/yaoime.png" width="22" align="top"/> **YaoiMe**                 | [yaoi.me](https://yaoi.me)                         |
 
 ### Novels
 
@@ -72,6 +71,7 @@ Toonkotsu separates chapter numbers reused across volumes with a decimal volume 
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/novelarchive.png" width="22" align="top"/> **NovelArchive** | [novelarchive.cc](https://novelarchive.cc) |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/novelcool.png" width="22" align="top"/> **NovelCool**       | [novelcool.com](https://www.novelcool.com) |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/ranobes.png" width="22" align="top"/> **Ranobes**           | [ranobes.net](https://ranobes.net)         |
+| <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/violetscans.png" width="22" align="top"/> **VioletScans**   | [violetscans.org](https://violetscans.org) |
 
 ## Support
 
