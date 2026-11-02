@@ -3,95 +3,196 @@
 Paperback **0.9** sources (`@paperback/types` and `@paperback/toolchain` `^1.0.0-alpha.92`),
 developed on `0.9/test` and submitted one at a time to
 [inkdex/general-extensions](https://github.com/inkdex/general-extensions), whose maintainers
-review them. Write every source as if it were already that pull request. `CLAUDE.md` imports
-this file; keep instructions here, not in two copies.
+review them. Write every source as if it were already that pull request: lean, plain, and in the
+shape the maintainers merge.
 
-Load the **paperback-extension** skill (`.claude/skills/paperback-extension/`, also at
-`.agents/skills/`) before touching a source. Its `references/standards.md` holds the merge rules
-with the review comment or maintainer commit behind each one.
+`AGENTS.md` and `CLAUDE.md` are identical copies, so every agent reads the full rules directly.
+Edit `AGENTS.md`, then run `node scripts/sync-agent-docs.mjs`; CI and the pre-push hook fail on
+drift. The same script mirrors the skill tree.
 
-## Boundaries
+Before touching a source, load the **paperback-extension** skill:
+[.claude/skills/paperback-extension/SKILL.md](.claude/skills/paperback-extension/SKILL.md)
+(Codex: [.agents/skills/paperback-extension/SKILL.md](.agents/skills/paperback-extension/SKILL.md)).
+Its `references/standards.md` holds every merge rule with the review comment or maintainer commit
+behind it, and `references/platform.md` holds what the 0.9 toolchain and the app actually do.
+`docs/` is a wiki of per-source and operational knowledge; start at [docs/index.md](docs/index.md).
+
+Rules marked **(niclim)** come from the AGENTS.md niclimcy (inkdex maintainer, who has rewritten
+several of our merged PRs) sent us; **(celarye)** from inkdex's lead; **(Seyden)** from the Mana
+developer. Everything else cites its evidence in the skill.
+
+---
+
+## 1. Boundaries
 
 - Keep the official toolchain and its output: `paperback-cli bundle`, `versioning.json`, the
-  generated homepage with its `paperback://` links, `npm run serve`. Our homepage theme
-  (`scripts/theme-homepage.mjs`) restyles that page; it does not replace it.
-- This is the 0.9 `ExtensionImpl` API. 0.8 `Source`/`APIWrapper` code, the `compat/0.8` shim,
-  and other readers' APIs (Aidoku, Mana, Mihon) are references for behaviour, never code to
-  copy.
+  generated homepage with its `paperback://addRepo` and `paperback://installExtensions` links,
+  `npm run serve`. `scripts/theme-homepage.mjs` restyles that page; it never replaces it.
+- This is the 0.9 `ExtensionImpl` API. 0.8 code, the `compat/0.8` shim and other readers' APIs
+  (Aidoku, Mana, Mihon/keiyoushi) are references for behaviour, never code to copy. Porting a
+  keiyoushi source is the last option, not the first (duck and Seyden).
 - A site on a generic theme (Madara, MangaStream/MangaReader, …) belongs in that theme's inkdex
   repository. `KingOfShojo` and `RokariComics` are MangaStream sites kept here pending that
   decision; do not copy their vendored base.
+- The directory name under `src/` is the installed source id (the bundler writes it into
+  `info.json`). Never rename one, and never change saved manga or chapter ids, without a migration
+  decision.
 - Keep a fix inside its source. `src/utils/` is only for code several sources share.
-- Do not rename a source directory or change saved manga or chapter ids without a migration
-  decision. Never commit cookies, tokens, captured account data, `bundles/` or `node_modules/`.
+- Never commit cookies, tokens, captured account data, `bundles/` or `node_modules/`.
 - `scripts/`, `.github/`, `.husky/`, `package.json` and the lockfile change only when that work
   was asked for.
+- No branch name starts with `claude/` (or any agent's name), whatever a tool suggests. Use
+  Conventional Branch names: `feature/<name>`, `bugfix/<name>`, `chore/<topic>`, `docs/<topic>`.
+  The pre-push hook refuses `claude/` branches.
 
-## Layout
+## 2. Layout
 
-| Path                                  | Holds                                                                                                                    |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `src/<Name>/`                         | one source: `main.ts`, `models.ts`, `network.ts`, `parsers.ts`, `forms.ts`, `utils.ts`, `pbconfig.ts`, `static/icon.png` |
-| `src/tests/<Name>.ts`                 | the generated baseline test, unchanged                                                                                   |
-| `scripts/`                            | repository checks and tools (Node, no dependencies); their tests in `scripts/tests/`                                     |
-| `handoff/`                            | briefs for sources that belong in a theme repository                                                                     |
-| `.claude/skills/paperback-extension/` | the workflow skill and its references                                                                                    |
+| Path                                 | Holds                                                                                                                    |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `src/<Name>/`                        | one source: `main.ts`, `models.ts`, `network.ts`, `parsers.ts`, `forms.ts`, `utils.ts`, `pbconfig.ts`, `static/icon.png` |
+| `src/tests/<Name>.ts`                | the generated baseline test, unchanged (what inkdex accepts)                                                             |
+| `test/unit/<Name>.test.ts`           | our offline parser and crypto tests; never part of a submission                                                          |
+| `scripts/`                           | repository checks and tools (Node, no dependencies), tested in `scripts/tests/`                                          |
+| `docs/`                              | the wiki: per-source traps, operations, history                                                                          |
+| `handoff/`                           | briefs for sources that belong in a theme repository                                                                     |
+| `.claude/skills/`, `.agents/skills/` | the workflow skill, two identical physical copies                                                                        |
 
-## Rules that fail review most often
+## 3. How a source is written
 
-Full list, with evidence, in `references/standards.md`.
+Condensed from niclim's guide; `references/standards.md` has the full list with evidence.
 
-- Verify the live contract first: endpoints, field paths, pagination signal, real chapter ids,
-  filter values in the site's casing. A reference client is not the schema.
-- Follow the newest merged example of each feature: `node scripts/upstream-usage.mjs <Name>`.
-- `main.ts` is the class only; constants in `models.ts`, defined once; every request in
-  `network.ts` through `Application.scheduleRequest`.
-- One request per Discover section; never a detail request per card. Pagination from the API's
-  own signal.
-- No wrappers, single-use constants, dead code, `any`, `console`, decorative or narrating
-  comments, or catches that hide failures. Cloudflare is detected once, in `interceptResponse`.
-- Every exposed filter is wired; tags round-trip into search; ids are sanitised with the
-  canonical `SAFE_ID_REGEX` and self-sufficient.
-- `src/tests/<Name>.ts` is exactly the generated baseline. Every change bumps
-  `1.0.0-alpha.N`. The README lists the source.
+**Files (niclim).** `main.ts` holds the `ExtensionImpl` class and the exported instance, nothing
+else. `models.ts`: shared types, interfaces and constants. `network.ts`: fetch functions, API calls
+and the interceptor. `parsers.ts`: HTML and JSON parsing. `forms.ts` (or `forms/search.ts` and
+`forms/settings.ts` once it grows). `utils.ts` only for heavy machinery: descramblers, decryptors,
+ciphers. `pbconfig.ts`, `static/icon.png`. A canonical file may become a directory; no other
+top-level names. Very large sources use `implementations/<feature>/` plus `services/network.ts`.
 
-## Commands
+**Function-based design (niclim).** Parsers and API logic are free exported arrow functions
+(`parseX`, `buildX`, `toX`); file-local helpers are `const` arrows. Classes only where the
+framework needs them: the `ExtensionImpl` and the `PaperbackInterceptor` (and SDK form
+subclasses). No `Api` class for plain GETs: plain fetch helpers plus URL builders. No classes of
+static methods that call free functions, and never "so much code to do so little" (celarye).
 
-Use Node 24 (CI does; `PATH=/opt/node24/bin:$PATH` in the cloud sandbox) and `npm ci`.
+**Utils scope (niclim).** Thin filter, format or picker helpers fold into `parsers.ts` or their
+call site. Filter and settings-store logic never goes in `utils`.
+
+**Aggressive simplification (niclim).** Delete dead code. Inline single-use constants and any
+function whose body only renames, adds `?? default`, reads a property or delegates one call. Fold
+single-use guards into what they guard. Collapse wrappers of wrappers. Return new objects rather
+than mutating inputs. No base classes for sharing small helpers: free functions taking the
+instance (`saveSetting(form, key, value)`). Do not replicate a site's confusing behaviour just
+because the site does it (niclim on #264).
+
+**Parsers and models (niclim).** One generic list parser (`parseMangaList`) returning a generic
+item shape; the section handler switches on item type and maps at the call site. Shared shapes and
+`UPPER_SNAKE` constants live in `models.ts`, each defined once. No legacy-migration loops in new
+sources.
+
+**Ids stay small and self-sufficient.** An id carries what a later call needs, not side channels in
+`additionalInfo` (niclim), and nothing more: the app stores the manga id on every chapter, so a
+full URL as an id is repeated thousands of times in the reader's database (Seyden). Use the site's
+shortest stable key (slug or numeric id) and rebuild URLs from it; keep a mirror host in the id
+only when the site really serves a title from varying hosts. Sanitise with the canonical
+`SAFE_ID_REGEX`: the app rejects other characters in every id field, tags and form rows included.
+
+**State and caching (niclim).** No `try/catch` around non-throwing SDK calls. No in-memory `Map`
+caches for short-lived data. Lists that change: a plain `fetchX()` with no catch, memoised as
+`await (this.genresPromise ??= fetchGenres())`, reset in `cloudflareBypassCompleted`. Lists that do
+not change: a constant. No TTL or timestamp machinery, no second cache over app state.
+
+**HTML and types (niclim).** `$: cheerio.CheerioAPI`; selections `cheerio.Cheerio<AnyNode>`
+(`import type { AnyNode } from "domhandler"`); never `Cheerio<any>`, never `any`, no random casts.
+Verify selectors against the live DOM before unifying or removing them.
+
+**Comments and naming (niclim).** Terse, non-obvious why only, preferably one line. No dividers,
+empty docblocks or narration. Clear, grammatical names.
+
+## 4. Platform facts that break sources
+
+`npm test` runs the bundle in a Node VM; the source ships to JavaScriptCore behind a Swift bridge.
+Read `references/platform.md` before touching any of these:
+
+- No timers on the device: `Application.sleep(seconds)`.
+- `crypto.subtle` exists on the device but only for SHA digests, HMAC, AES-GCM/CBC, HKDF/PBKDF2.
+  The test VM hands sources Node's full WebCrypto, so AES-CTR passes `npm test` and fails on the
+  phone (Toonkotsu does CTR in TypeScript and tests it in `test/unit`).
+- `Metadata` (search and section paging, form results) crosses as a raw value: a key set to
+  `undefined` crashes the app. Omit the key.
+- An object request body is encoded by Swift and turns `0` into `false`: send
+  `JSON.stringify(body)`.
+- Every id-typed field is charset-checked on the device; tests never check it.
+- `MangaInfo.rating` renders as a percentage of a 0..1 value.
+- The test runner skips a source with no test file, ignores Discover and settings, and exits 0 on
+  failure. Read its report (`scripts/check-tests.mjs`).
+
+## 5. Workflow
+
+1. **Place it**: unique site, not a theme; if inkdex already has it, start from upstream's copy.
+2. **Recon**: live responses for every endpoint, field, filter value and pagination signal.
+3. **Find the merged pattern**: `node scripts/upstream-usage.mjs <Name>` (or `--feature <regex>`),
+   read the newest example, match its shape.
+4. **Build** in the order models, network, parsers, main, forms, pbconfig;
+   `npm run new-source -- <Name> <https://site>` scaffolds a new one.
+5. **Verify**: `scripts/review-source.sh <Name>`, then read `references/review.md` against the diff,
+   then the app on a device for anything only it shows.
+6. **Record**: a trap you found goes into the source's wiki page in the same change.
+7. **Submit**: `scripts/pr-branch.sh` builds the inkdex branch; draft the PR text for the person.
+
+## 6. Commands
+
+Use Node 24 (`engines` in the toolchain; `PATH=/opt/node24/bin:$PATH` in the cloud sandbox).
 
 ```sh
-npm run conformance                       # tsc, oxlint --deny-warnings, oxfmt --check (also the pre-push hook)
-npm run check -- --base origin/0.9/test   # source rules on changed sources, including the version bump
+npm ci
+npm run conformance                       # tsc, oxlint --deny-warnings, oxfmt --check
+npm run check -- --base origin/0.9/test   # source rules on changed sources, version bump included
 npm run test:scripts                      # tests for scripts/
-npm test -- <Name> && node scripts/check-tests.mjs <Name>   # live default tests; the CLI alone exits 0 on failure
-scripts/review-source.sh <Name>           # all of the above for one source, plus the checklist; records a review stamp
-node scripts/upstream-usage.mjs <Name>    # how merged inkdex sources implement what this source does
+npm run test:unit                         # offline parser/crypto tests in test/unit
+npm run check:docs                        # AGENTS/CLAUDE and skill copies identical
+npm test -- <Name> && npm run test:check -- <Name>   # live default tests and their real result
+npm run bundle && npm run check:bundle    # bundle and verify the published layout
+scripts/review-source.sh <Name>           # all of the above for one source; records a review stamp
+node scripts/upstream-usage.mjs <Name>    # how merged inkdex sources do what this source does
 npm run dev                               # serve to a phone on the same network
-scripts/pr-branch.sh <Name> -m "<subject>" --assisted-by <Agent:model>   # build the inkdex submission branch
+npm run logcat -- --ip <phone-ip>         # stream device logs (port 27015)
+scripts/pr-branch.sh <Name> -m "<subject>" --assisted-by "<Tool>:<model>"
 scripts/sync-upstream.sh                  # merge new inkdex 0.9/stable commits into our 0.9/stable
 ```
 
 Format one source with `npx oxfmt src/<Name>`; `npm run format` touches every file. oxfmt also
-formats Markdown, so run it on edited docs. Never Prettier.
+formats Markdown. Never Prettier.
 
-## Done means verified
+## 7. Done means verified
 
-Before calling a source change done: `scripts/review-source.sh <Name>` passes, and
-`references/review.md` has been read against the diff. Report offline gates, live tests from
-this machine, and device results separately, with the source version, title and chapter
-exercised. A blocked site or an unreachable device is unverified, never a pass; say what would
-settle it. In Claude Code the Stop hook enforces the review stamp.
+A source change is done when `scripts/review-source.sh <Name>` passes and `references/review.md`
+has been read against the diff. Report three results separately: offline gates, live tests from
+this machine, and the app on a device, with the source version, title and chapter exercised. A
+blocked site, a failing network or an unreachable device is unverified, never a pass; say what
+would settle it. In Claude Code the Stop hook enforces the review stamp.
 
-## Versions, commits and branches
+## 8. Versions, commits and branches
 
-- Every push that changes a source bumps its `version` (`1.0.0-alpha.N` → `alpha.N+1`). A new
-  source starts at `1.0.0-alpha.1`.
+- Every push that changes a source bumps its `version` (`1.0.0-alpha.N` to `alpha.N+1`); a new
+  source starts at `1.0.0-alpha.1`. The app never installs a lower version.
+- Commit type is the change's highest semver impact: `feat`/`refactor` over `fix` over `chore`
+  (celarye), `type(Scope): summary` with the source as scope (`feat: Add <Name>` for a new one).
 - Commits here are authored and committed by
-  `Popmango Extensions <297959108+PoppingMangoSources@users.noreply.github.com>`, unsigned,
-  `type(Scope): summary` with the source as scope, and a one- or two-sentence body. No issue
-  numbers or links in messages. Do not name third parties in code or docs.
-- Submission commits to inkdex additionally carry `Assisted-by: <Agent>:<model>` when AI
-  assisted, as its PR template requires; `scripts/pr-branch.sh` adds it.
+  `Popmango Extensions <297959108+PoppingMangoSources@users.noreply.github.com>`, unsigned, with
+  a one- or two-sentence body, no issue numbers or links.
+- Submission commits to inkdex that an agent helped with end with one trailer naming each tool and
+  model, space-separated: `Assisted-by: ClaudeCode:<model> Codex:<model>` (niclim on #192).
+  `scripts/pr-branch.sh` adds it. Never merge `0.9/stable` into a submission branch; rebase.
 - `0.9/test` is the working branch and what the repository page serves. `0.9/stable` mirrors
   inkdex's `0.9/stable` plus our README and theme; update it only with `scripts/sync-upstream.sh`.
 - Do not open or comment on pull requests unless asked; draft the text for the person.
+
+## 9. How a rule gets in
+
+A review comment, a maintainer rewrite, or a device finding becomes a row in
+`references/evidence.md` and a rule in `references/standards.md` in the same commit as the fix.
+If it can be detected offline, add it to `scripts/check-sources.mjs` with a failing and a passing
+test, then calibrate it over merged code
+(`node scripts/check-sources.mjs --calibrate --root <inkdex clone>`). A rule that a recent
+maintainer-approved source breaks is too broad: narrow it or make it a note. When evidence
+contradicts a rule, fix the rule in the same commit and say where it was wrong.

@@ -14,9 +14,13 @@ our Aidoku fork: sources mature here on `0.9/test`, then go upstream one per pul
 ## Building the branch
 
 ```sh
-PATH=/opt/node24/bin:$PATH scripts/pr-branch.sh <Name> -m "feat: Add <Name>" --assisted-by "<Agent>:<model>"
-PATH=/opt/node24/bin:$PATH scripts/pr-branch.sh <Name> -m "fix(<Name>): <summary>" --assisted-by "<Agent>:<model>" --push
+PATH=/opt/node24/bin:$PATH scripts/pr-branch.sh <Name> -m "feat: Add <Name>" --assisted-by "ClaudeCode:<model>"
+PATH=/opt/node24/bin:$PATH scripts/pr-branch.sh <Name> -m "fix(<Name>): <summary>" --assisted-by "ClaudeCode:<model> Codex:<model>" --push
 ```
+
+`--assisted-by` takes every tool that helped, each `Tool:model`, space-separated; the script
+writes one `Assisted-by:` trailer at the end of the message, the format niclim asked for on #192.
+Use `--no-ai` only when no agent touched the change.
 
 It creates a worktree on `upstream/0.9/stable`, copies only `src/<Name>/` and
 `src/tests/<Name>.ts` from `--from` (default `HEAD`), sets the version (a new source
@@ -46,7 +50,10 @@ if the version is wrong.
 - Each comment gets a change or a reasoned reply. Fix on `0.9/test` first (with a bump there),
   then rebuild or add a commit to the submission branch; push with `--force-with-lease`.
 - Fetch the branch first: maintainers push to contributors' branches (niclimcy pushed
-  `c064615` onto `feature/allmanga`). Their commit is the fix to copy back to `0.9/test`.
+  `c064615` onto `feature/allmanga` and rewrote HiveToons in place). Their commit is the fix to
+  copy back to `0.9/test`; read it as a review (`evidence.md` lists what each rewrite removed).
+- Keep the branch linear: rebase on `upstream/0.9/stable`, never merge it in (#156). A maintainer
+  may offer to squash.
 - Add each new review comment to `evidence.md`, and its rule to `standards.md` (and to
   `check-sources.mjs` if it can be detected offline) in the same commit as the fix.
 
