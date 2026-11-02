@@ -65,7 +65,20 @@ export const RULES = {
   "rethrow-string": "F",
   "empty-catch": "F",
   "device-global": "F",
+  // kodama found no timers on the device, yet merged Mangago paces reads with setTimeout: verify.
+  timer: "N",
+  "static-class": "F",
+  "pbconfig-name": "F",
+  "pbconfig-capabilities": "F",
   "raw-fetch": "F",
+  // The toolchain's test VM labels TextDecoder/TextEncoder "provided by the app", but no device
+  // probe confirms it and merged sources use Application.arrayBufferToUTF8String.
+  "text-codec": "N",
+  // A production crash in kodama's repository; no merged inkdex source does it.
+  "metadata-undefined": "F",
+  "object-body": "N",
+  "empty-state": "N",
+  "item-cast": "N",
   "safe-id-regex": "F",
   // Deprecated in the types, yet niclimcy's own MangaFire (October 2026) still passes `options`
   // and flag emoji in its language picker, so these are notes until a review asks.
@@ -300,6 +313,24 @@ export function checkSource(root, name, { base } = {}) {
         `language "${language}" must be a lowercase IETF tag or "multi"`,
       );
     }
+    const displayName = config.match(/\bname:\s*["'`]([^"'`]*)["'`]/)?.[1];
+    if (displayName !== undefined && /\s/.test(displayName)) {
+      add(
+        "pbconfig-name",
+        configFile,
+        undefined,
+        `name "${displayName}" has spaces: inkdex names have none and match the directory (celarye, #186)`,
+      );
+    }
+    const capabilities = config.match(/\bcapabilities:\s*([^\n]*)/)?.[1];
+    if (capabilities !== undefined && !capabilities.trimStart().startsWith("[")) {
+      add(
+        "pbconfig-capabilities",
+        configFile,
+        undefined,
+        "capabilities must be an array of SourceIntents (#230)",
+      );
+    }
     if (base) {
       const changed = git(
         root,
@@ -437,13 +468,94 @@ export function checkSource(root, name, { base } = {}) {
         );
       }
     }
-    // crypto.subtle itself is allowed: merged Mangago and AllManga use it; constructing SubtleCrypto throws.
-    for (const m of matches(code, /\bnew\s+(TextDecoder|TextEncoder|Array|SubtleCrypto)\s*\(/)) {
+    // crypto.subtle exists on the device (bridged); constructing SubtleCrypto throws.
+    for (const m of matches(code, /\bnew\s+(Array|SubtleCrypto)\s*\(/)) {
       add(
         "device-global",
         file,
         at(m.index),
-        `${m[0].trim()} is not a device global (or is banned by lint): use the Application.* helper or Array.from`,
+        `${m[0].trim()} fails lint or on the device: use Array.from or the global crypto.subtle`,
+      );
+    }
+    for (const m of matches(code, /\bnew\s+(TextDecoder|TextEncoder)\s*\(/)) {
+      add(
+        "text-codec",
+        file,
+        at(m.index),
+        "prefer Application.arrayBufferToUTF8String; a TextDecoder on the device is unverified",
+      );
+    }
+    for (const m of matches(code, /(?<![\w.$])(setTimeout|setInterval|setImmediate)\s*\(/)) {
+      add(
+        "timer",
+        file,
+        at(m.index),
+        `${m[1]} was absent on a device (kodama) though merged Mangago calls it: prefer Application.sleep(seconds) or the limiter, and verify on a device`,
+      );
+    }
+    for (const m of matches(code, /\bclass\s+(\w+)\s*\{/)) {
+      const body = code.slice(m.index + m[0].length, code.indexOf("\n}", m.index));
+      if (
+        /\bstatic\b/.test(body) &&
+        !/^\s+(?!static\b)(private\s+|public\s+|protected\s+|readonly\s+|async\s+)*\w+\s*[(=:]/m.test(
+          body,
+        )
+      ) {
+        add(
+          "static-class",
+          file,
+          at(m.index),
+          `class ${m[1]} only holds static members: use free functions (celarye)`,
+        );
+      }
+    }
+    // Decoded structs (Chapter, SearchResultItem) and `metadata: undefined` (end of paging, used by
+    // 20 merged sources) are fine; an undefined value inside a Metadata object crashes the bridge.
+    const metadataSpans = [
+      ...matches(code, /\bgetSearchQueryMetadata\s*\([^)]*\)[^{]*\{/),
+      ...matches(code, /\bmetadata\??:\s*\{/),
+    ].map((m) => {
+      let depth = 0;
+      let end = m.index + m[0].length - 1;
+      for (; end < code.length; end++) {
+        if (code[end] === "{") depth++;
+        else if (code[end] === "}" && --depth === 0) break;
+      }
+      return [m.index, end];
+    });
+    // `key: undefined`, `key: x || undefined`, `key: x ?? undefined`, `key: c ? x : undefined`.
+    for (const m of matches(code, /:\s*[^,;{}\n]*\bundefined\b/)) {
+      if (metadataSpans.some(([start, end]) => m.index > start && m.index < end)) {
+        add(
+          "metadata-undefined",
+          file,
+          at(m.index),
+          "Metadata crosses the bridge raw and an undefined value crashes the app: omit the key",
+        );
+      }
+    }
+    for (const m of matches(code, /\bbody:\s*\{/)) {
+      add(
+        "object-body",
+        file,
+        at(m.index),
+        "the bridge encodes object bodies and turns 0 into false: send JSON.stringify(body)",
+      );
+    }
+    for (const m of matches(text, /\bsetState\(\s*["'`]{2}\s*,/)) {
+      add(
+        "empty-state",
+        file,
+        at(m.index),
+        'clear a setting with setState(undefined, key), not "" (celarye, #196)',
+      );
+    }
+    for (const m of matches(code, /\bas\s+DiscoverSectionItem\b/)) {
+      add(
+        "item-cast",
+        file,
+        at(m.index),
+        "build the exact DiscoverSectionItem variant; a cast hides fields the app ignores",
       );
     }
     for (const m of matches(
@@ -574,6 +686,15 @@ export function changedSources(root, base) {
     if (parts[0] !== "src") continue;
     const candidate = parts[1] === "tests" ? parts[2]?.replace(/\.ts$/, "") : parts[1];
     if (candidate && all.has(candidate)) changed.add(candidate);
+  }
+  // A change to shared code is a change to every source that imports it.
+  if (names.some((name) => name.startsWith("src/utils/"))) {
+    for (const source of all) {
+      const files = walk(path.join(root, "src", source)).filter((file) => file.endsWith(".ts"));
+      if (files.some((file) => /from\s+["'](\.\.\/)+utils\//.test(fs.readFileSync(file, "utf8")))) {
+        changed.add(source);
+      }
+    }
   }
   return [...changed].sort((a, b) => a.localeCompare(b));
 }

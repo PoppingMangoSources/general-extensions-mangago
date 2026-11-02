@@ -38,6 +38,9 @@ step "types" npm run --silent tsc
 step "lint" npx oxlint --type-aware --deny-warnings "src/$NAME" "src/tests/$NAME.ts"
 step "format" npx oxfmt --check "src/$NAME" "src/tests/$NAME.ts"
 step "source rules (base $BASE)" node scripts/check-sources.mjs --base "$MERGE_BASE" "$NAME"
+if [ -f "test/unit/$NAME.test.ts" ]; then
+  step "unit tests" node --import ./scripts/ts-resolve.mjs --test "test/unit/$NAME.test.ts"
+fi
 echo
 echo "== merged patterns (read each feature's newest example before keeping a different shape)"
 node scripts/upstream-usage.mjs "$NAME" || true

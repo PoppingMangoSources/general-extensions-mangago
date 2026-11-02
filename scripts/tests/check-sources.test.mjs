@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { checkSource, splitSource } from "../check-sources.mjs";
+import { changedSources, checkSource, splitSource } from "../check-sources.mjs";
 
 const HEADER = "/* SPDX-License-Identifier: GPL-3.0-or-later */\n/* Copyright © 2026 Inkdex */\n";
 const PNG = Buffer.concat([
@@ -134,15 +134,15 @@ void test("an empty catch fails unless a comment says why", () => {
   );
 });
 
-void test("browser-only globals fail, crypto.subtle passes", () => {
-  assert.ok(rules(withFile("const t = new TextDecoder().decode(b);\n")).includes("device-global"));
+void test("new Array and new SubtleCrypto fail, crypto.subtle passes", () => {
+  assert.ok(rules(withFile("const c = new SubtleCrypto();\n")).includes("device-global"));
   assert.ok(rules(withFile("const a = new Array(3);\n")).includes("device-global"));
   assert.ok(
     !rules(withFile("const d = await crypto.subtle.digest('SHA-256', b);\n")).includes(
       "device-global",
     ),
   );
-  assert.ok(!rules(withFile('const s = "new TextDecoder()";\n')).includes("device-global"));
+  assert.ok(!rules(withFile('const s = "new Array(3)";\n')).includes("device-global"));
 });
 
 void test("a raw fetch fails, a fetch helper passes", () => {
@@ -251,4 +251,99 @@ void test("a changed source without a version bump fails against a base", () => 
     `${HEADER}export default { version: "1.0.0-alpha.2", language: "en" };\n`,
   );
   assert.ok(!checkSource(root, "Demo", { base: "HEAD" }).some((f) => f.rule === "version-bump"));
+});
+
+void test("an undefined value inside Metadata fails; ending paging with metadata undefined passes", () => {
+  const form = (body) => withFile(`class F { getSearchQueryMetadata() { return { ${body} }; } }\n`);
+  assert.ok(rules(form("status: this.status || undefined")).includes("metadata-undefined"));
+  assert.ok(rules(form("genres: g.length ? g : undefined")).includes("metadata-undefined"));
+  assert.ok(
+    rules(withFile("const r = { items, metadata: { page: next ?? undefined } };\n")).includes(
+      "metadata-undefined",
+    ),
+  );
+  assert.ok(
+    !rules(withFile("const r = { items, metadata: hasMore ? { page } : undefined };\n")).includes(
+      "metadata-undefined",
+    ),
+  );
+  assert.ok(
+    !rules(withFile("const c = { chapterId, title: t || undefined };\n")).includes(
+      "metadata-undefined",
+    ),
+  );
+});
+
+void test("timers, object bodies, empty-string state, item casts and text codecs are notes", () => {
+  const notes = (body) =>
+    checkSource(withFile(body), "Demo")
+      .filter((f) => f.level === "N")
+      .map((f) => f.rule);
+  assert.ok(notes("await new Promise((r) => setTimeout(r, 10));\n").includes("timer"));
+  assert.ok(
+    notes("scheduleRequest({ url, method: 'POST', body: { page: 0 } });\n").includes("object-body"),
+  );
+  assert.ok(
+    !notes(
+      "scheduleRequest({ url, method: 'POST', body: JSON.stringify({ page: 0 }) });\n",
+    ).includes("object-body"),
+  );
+  assert.ok(notes('Application.setState("", KEY);\n').includes("empty-state"));
+  assert.ok(notes("const i = x as DiscoverSectionItem;\n").includes("item-cast"));
+  assert.ok(notes("const t = new TextDecoder().decode(b);\n").includes("text-codec"));
+});
+
+void test("a class of only static members fails; an interceptor with instance members passes", () => {
+  assert.ok(
+    rules(withFile("export class Api {\n  static get(u: string) { return u; }\n}\n")).includes(
+      "static-class",
+    ),
+  );
+  assert.ok(
+    !rules(
+      withFile(
+        "export class Demo extends PaperbackInterceptor {\n  async interceptRequest(r) { return r; }\n}\n",
+      ),
+    ).includes("static-class"),
+  );
+});
+
+void test("a pbconfig name with spaces and non-array capabilities fail", () => {
+  const config = (body) =>
+    makeRepo({
+      "src/Demo/pbconfig.ts": `${HEADER}export default { version: "1.0.0-alpha.1", ${body} };\n`,
+    });
+  assert.ok(rules(config('name: "Punk Records",')).includes("pbconfig-name"));
+  assert.ok(!rules(config('name: "PunkRecords",')).includes("pbconfig-name"));
+  assert.ok(
+    rules(
+      config(
+        "capabilities: SourceIntents.CHAPTER_PROVIDING | SourceIntents.SEARCH_RESULT_PROVIDING,",
+      ),
+    ).includes("pbconfig-capabilities"),
+  );
+  assert.ok(
+    !rules(config("capabilities: [SourceIntents.CHAPTER_PROVIDING],")).includes(
+      "pbconfig-capabilities",
+    ),
+  );
+});
+
+void test("a change to src/utils selects the sources that import it", () => {
+  const root = makeRepo({
+    "src/Other/pbconfig.ts": "x\n",
+    "src/Other/main.ts": "x\n",
+    "src/Demo/parsers.ts": `${HEADER}import { getState } from "../utils/state";\n`,
+  });
+  const run = (...args) =>
+    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], {
+      cwd: root,
+      stdio: "ignore",
+    });
+  run("init", "-q");
+  run("add", ".");
+  run("commit", "-qm", "base");
+  fs.mkdirSync(path.join(root, "src/utils"), { recursive: true });
+  fs.writeFileSync(path.join(root, "src/utils/state.ts"), "export const getState = 1;\n");
+  assert.deepEqual(changedSources(root, "HEAD"), ["Demo"]);
 });

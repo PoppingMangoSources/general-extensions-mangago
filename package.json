@@ -17,7 +17,11 @@
     "test": "paperback-cli test --noConsole --output ./bundles/tests.json",
     "test:check": "node scripts/check-tests.mjs",
     "test:scripts": "node --test scripts/tests/*.test.mjs",
+    "test:unit": "node --import ./scripts/ts-resolve.mjs --test \"test/unit/**/*.test.ts\"",
     "check": "node scripts/check-sources.mjs",
+    "check:docs": "node scripts/sync-agent-docs.mjs --check",
+    "check:bundle": "node scripts/check-bundle.mjs",
+    "new-source": "node scripts/new-source.mjs",
     "prepare": "husky"
   },
   "devDependencies": {
