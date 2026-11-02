@@ -1,0 +1,58 @@
+name: Source Checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  rules:
+    name: Source Rules
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Branch
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install Dependencies
+        run: npm ci
+      - name: Script Tests
+        run: npm run test:scripts
+      - name: Rules For Changed Sources
+        id: changed
+        run: |
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -z "$base" ] || ! git cat-file -e "$base" 2>/dev/null || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            base=$(git rev-parse HEAD~1)
+          fi
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          node scripts/check-sources.mjs --base "$base"
+      # A report, not a gate: the tests call the live site, so a red step can be the site.
+      - name: Live Tests For Changed Sources
+        continue-on-error: true
+        run: |
+          names=$(node --input-type=module -e "import { changedSources } from './scripts/check-sources.mjs'; console.log(changedSources(process.cwd(), '${{ steps.changed.outputs.base }}').join(' '))")
+          [ -n "$names" ] || { echo "No source changed."; exit 0; }
+          for name in $names; do npm test --silent -- "$name" > /dev/null || true; node scripts/check-tests.mjs "$name" || failed=1; done
+          [ -z "${failed:-}" ] || { echo "::warning::Live tests failed; read whether it is the site or the source."; exit 1; }
+      - name: Backlog Summary
+        if: always()
+        run: |
+          {
+            echo '### Source rule backlog'
+            echo '```'
+            node scripts/check-sources.mjs --calibrate
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

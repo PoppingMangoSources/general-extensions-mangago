@@ -1,1 +1,4 @@
 npm run conformance
+npm run --silent test:scripts
+git fetch --quiet origin 0.9/test 2>/dev/null || true
+node scripts/check-sources.mjs --base "$(git merge-base HEAD origin/0.9/test 2>/dev/null || echo HEAD)"

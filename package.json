@@ -15,6 +15,9 @@
     "dev": "paperback-cli serve --watch",
     "logcat": "paperback-cli logcat",
     "test": "paperback-cli test --noConsole --output ./bundles/tests.json",
+    "test:check": "node scripts/check-tests.mjs",
+    "test:scripts": "node --test scripts/tests/*.test.mjs",
+    "check": "node scripts/check-sources.mjs",
     "prepare": "husky"
   },
   "devDependencies": {
