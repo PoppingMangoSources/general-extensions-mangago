@@ -1,18 +1,41 @@
 {
-  "buildTime": "2026-10-25T15:43:37.245Z",
+  "buildTime": "2026-11-02T09:37:28.046Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
   },
   "repository": {
     "name": "General Extensions (0.9)",
-    "description": "Novels, manga, manhwa & manhua for Paperback 0.9 — maintained by Popmango."
+    "description": "Paperback extensions for websites with unique, non-generic themes. Maintained by Inkdex."
   },
   "sources": [
     {
+      "name": "AllManga",
+      "description": "Extension that pulls content from allmanga.to.",
+      "version": "1.0.0-alpha.4",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "MATURE",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "AllManga"
+    },
+    {
       "name": "Atsumaru",
       "description": "Extension that pulls content from atsu.moe.",
-      "version": "1.0.0-alpha.23",
+      "version": "1.0.0-alpha.25",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "SAFE",
@@ -32,12 +55,34 @@
       "id": "Atsumaru"
     },
     {
-      "name": "Comix",
-      "description": "Extension that pulls content from Comix.to.",
-      "version": "1.0.0-alpha.42",
+      "name": "FlameComics",
+      "description": "Extension that pulls content from FlameComics.xyz.",
+      "version": "1.0.0-alpha.2",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "SAFE",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Guillaume Favier",
+          "github": "https://github.com/Guillaume-favier"
+        }
+      ],
+      "id": "FlameComics"
+    },
+    {
+      "name": "HiveToons",
+      "description": "Extension that pulls content from hivetoons.org.",
+      "version": "1.0.0-alpha.3",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "MATURE",
       "capabilities": [
         1,
         16,
@@ -48,11 +93,38 @@
       "badges": [],
       "developers": [
         {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "HiveToons"
+    },
+    {
+      "name": "LNori",
+      "description": "Extension that pulls content from LNori.",
+      "version": "1.0.0-alpha.2",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "SAFE",
+      "capabilities": [
+        4,
+        64,
+        1
+      ],
+      "badges": [
+        {
+          "label": "Novel",
+          "textColor": "#ffffff",
+          "backgroundColor": "#3baf4b"
+        }
+      ],
+      "developers": [
+        {
           "name": "Catta1997",
           "github": "https://github.com/Catta1997"
         }
       ],
-      "id": "Comix"
+      "id": "LNori"
     },
     {
       "name": "MangaDemon",
@@ -103,7 +175,7 @@
     {
       "name": "MangaDot",
       "description": "Extension that pulls content from MangaDot.net",
-      "version": "1.0.0-alpha.3",
+      "version": "1.0.0-alpha.6",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "SAFE",
@@ -126,7 +198,7 @@
     {
       "name": "MangaFire",
       "description": "Extension that pulls content from mangafire.to.",
-      "version": "1.0.0-alpha.14",
+      "version": "1.0.0-alpha.24",
       "icon": "icon.png",
       "language": "multi",
       "contentRating": "SAFE",
@@ -134,7 +206,8 @@
         4,
         64,
         1,
-        32
+        32,
+        16
       ],
       "badges": [],
       "developers": [
@@ -232,9 +305,32 @@
       "id": "MangaTaro"
     },
     {
+      "name": "Mangago",
+      "description": "Extension that pulls content from mangago.me.",
+      "version": "1.0.0-alpha.1",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "ADULT",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "Mangago"
+    },
+    {
       "name": "Mangapill",
       "description": "Extension that pulls content from mangapill.com.",
-      "version": "1.0.0-alpha.11",
+      "version": "1.0.0-alpha.12",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "SAFE",
@@ -255,7 +351,7 @@
     {
       "name": "Mgeko",
       "description": "Extension that pulls content from mgeko.cc.",
-      "version": "1.0.0-alpha.28",
+      "version": "1.0.0-alpha.29",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "SAFE",
@@ -301,7 +397,7 @@
     {
       "name": "QiScans",
       "description": "Extension that pulls content from qimanhwa.com.",
-      "version": "1.0.0-alpha.14",
+      "version": "1.0.0-alpha.15",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "SAFE",
@@ -318,6 +414,27 @@
         }
       ],
       "id": "QiScans"
+    },
+    {
+      "name": "Roliascan",
+      "description": "Extension that pulls content from roliascan.com.",
+      "version": "1.0.0-alpha.1",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "MATURE",
+      "capabilities": [
+        4,
+        64,
+        1,
+        16
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Saw_6"
+        }
+      ],
+      "id": "Roliascan"
     },
     {
       "name": "RoyalRoad",
@@ -345,7 +462,7 @@
     {
       "name": "Webtoon",
       "description": "Extension that pulls content from webtoons.com.",
-      "version": "1.0.0-alpha.17",
+      "version": "1.0.0-alpha.18",
       "icon": "icon.png",
       "language": "multi",
       "contentRating": "SAFE",
@@ -367,7 +484,7 @@
     {
       "name": "WeebCentral",
       "description": "Extension that pulls content from weebcentral.com.",
-      "version": "1.0.0-alpha.22",
+      "version": "1.0.0-alpha.25",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "SAFE",

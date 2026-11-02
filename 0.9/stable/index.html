@@ -2,11 +2,10 @@
 <html lang="en">
   <head>
     <meta name="robots" content="noindex" />
-    <meta name="description" content="Novels, manga, manhwa & manhua for Paperback 0.9 — maintained by Popmango." />
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2264%22%20height%3D%2264%22%20viewBox%3D%220%200%2064%2064%22%3E%3Ccircle%20cx%3D%2232%22%20cy%3D%2232%22%20r%3D%2232%22%20fill%3D%22%23ffe3ee%22%2F%3E%3Cellipse%20cx%3D%2232%22%20cy%3D%2235%22%20rx%3D%2215%22%20ry%3D%2219%22%20fill%3D%22%23ff9f52%22%2F%3E%3Cpath%20d%3D%22M33%2014%20q3%20-6%209%20-8%22%20fill%3D%22none%22%20stroke%3D%22%238fb648%22%20stroke-width%3D%224%22%20stroke-linecap%3D%22round%22%2F%3E%3Ccircle%20cx%3D%2250%22%20cy%3D%2214%22%20r%3D%225%22%20fill%3D%22%23f277a8%22%2F%3E%3C%2Fsvg%3E" />
-    <title>General Extensions (0.9)</title>
+    <link rel="icon" href="https://paperback.moe/pb-logo.svg" />
+    <title>Loading...</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -18,109 +17,6 @@
       defer
       src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"
     ></script>
-
-    <style>
-      /* One palette drives every rule below, so a colour is changed in a single
-         place rather than hunted through the sheet. */
-      :root {
-        --pm-bg: #17101f;
-        --pm-surface: #241729;
-        --pm-surface-2: #2b1c33;
-        --pm-surface-hover: #33203c;
-        --pm-border: #3d2545;
-        --pm-ink: #fbeaf4;
-        --pm-ink-soft: #bda3c0;
-        --pm-ink-faint: #9b83a2;
-        --pm-rose: #ff5f9e;
-        --pm-rose-deep: #d63a78;
-        --pm-mango: #ffa45c;
-        /* The pastel run the readme art and the install button share. */
-        --pm-pastel: linear-gradient(100deg, #ffdcea 0%, #ffbbd5 34%, #ffcda8 70%, #ffc17e 100%);
-        --pm-on-pastel: #33162a;
-      }
-
-      html {
-        /* The colour matters as much as the gradient: Safari paints the status
-           bar and the overscroll area from the root's background COLOUR, and a
-           gradient alone leaves it nothing to resolve, so those strips come out
-           white. Setting the first stop as the colour makes them continuous
-           with the top of the page. */
-        background-color: var(--pm-bg) !important;
-        background-image: linear-gradient(180deg, #1d1327 0%, #17101f 58%, #1b1124 100%) !important;
-        background-repeat: no-repeat !important;
-        min-height: 100%;
-        overflow-y: scroll;
-      }
-      body {
-        background: transparent !important;
-        color: var(--pm-ink) !important;
-        min-height: 100vh;
-        scrollbar-gutter: stable;
-      }
-      ::selection { background: rgba(255, 95, 158, 0.3); color: var(--pm-ink); }
-      a { color: var(--pm-rose); }
-
-      /* Bright against the dark page, and the same run the artwork uses. */
-      h1 {
-        background: var(--pm-pastel);
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent !important;
-      }
-
-      /* Both install buttons carry the pastel gradient with dark text on it,
-         matching the add button in the readme. On a dark page that reads far
-         better than white-on-saturated, which cannot clear 3:1 at the warm end
-         of this run. */
-      .addToPaperbackButton,
-      .bg-\[\#c9376b\] {
-        background: var(--pm-pastel) !important;
-        border-bottom-color: rgba(23, 16, 31, 0.35) !important;
-        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4) !important;
-        color: var(--pm-on-pastel) !important;
-        font-weight: 700;
-      }
-      .hover\:bg-\[\#f47fb2\]:hover {
-        background: linear-gradient(100deg, #ffe7f1 0%, #ffc9de 34%, #ffd9bb 70%, #ffcd96 100%) !important;
-      }
-      .bg-\[\#c9376b\] svg { color: var(--pm-on-pastel) !important; }
-
-      .bg-zinc-700 { background-color: var(--pm-surface-2) !important; }
-      .hover\:bg-zinc-600:hover { background-color: var(--pm-surface-hover) !important; }
-      .bg-gray-500 { background-color: var(--pm-border) !important; }
-      .border-zinc-700 { border-color: var(--pm-border) !important; }
-      .text-gray-100, .text-gray-200, .text-gray-300 { color: var(--pm-ink) !important; }
-      .text-gray-400 { color: var(--pm-ink-soft) !important; }
-      .placeholder-gray-400::placeholder { color: var(--pm-ink-faint) !important; }
-
-      /* Source cards: a lifted surface with a rose edge on hover, rather than a
-         flat block. */
-      .bg-zinc-800 {
-        background: linear-gradient(165deg, var(--pm-surface-2) 0%, var(--pm-surface) 100%) !important;
-      }
-      .bg-zinc-800.rounded-lg { border: 1px solid var(--pm-border) !important; }
-      .bg-zinc-800.rounded-lg:hover {
-        background: linear-gradient(165deg, var(--pm-surface-hover) 0%, var(--pm-surface-2) 100%) !important;
-        border-color: var(--pm-rose) !important;
-      }
-      .shadow-lg { box-shadow: 0 10px 26px rgba(0, 0, 0, 0.38) !important; }
-
-      /* Badge chips are filled from each extension's own colour and drawn at a
-         quarter opacity when unselected, so only the label is set here — light,
-         which holds against both the dim unselected tint and the full fill. */
-      .font-medium.transition-all { color: var(--pm-ink) !important; }
-
-      /* bg-red-500 backs both the ADULT pill and the error panel, and those
-         carry different label colours, so the pill is matched on the pair.
-         The pills are translucent so they tint the card they sit on instead of
-         covering it with a second opaque block. */
-      .bg-red-500 { background-color: var(--pm-rose-deep) !important; }
-      .text-red-500 { color: var(--pm-rose-deep) !important; }
-      .bg-red-500.text-red-100 { background-color: rgba(255, 95, 158, 0.2) !important; color: #ffb3cf !important; }
-      .bg-yellow-500.text-yellow-900 { background-color: rgba(255, 164, 92, 0.2) !important; color: #ffd79a !important; }
-      .bg-green-500.text-green-100 { background-color: rgba(122, 200, 140, 0.2) !important; color: #a8e0c0 !important; }
-      .border-red-700 { border-color: rgba(23, 16, 31, 0.35) !important; }
-    </style>
   </head>
 
   <body
@@ -136,12 +32,12 @@
             background:
               radial-gradient(
                 circle at 30% 30%,
-                rgba(255, 255, 255, 0.6) 0%,
+                rgba(84, 120, 219, 0.4) 0%,
                 transparent 70%
               ),
               radial-gradient(
                 circle at 70% 70%,
-                rgba(255, 255, 255, 0.35) 0%,
+                rgba(246, 75, 75, 0.4) 0%,
                 transparent 70%
               );
             filter: blur(25px);
@@ -150,7 +46,7 @@
         <div class="relative z-10">
           <img
             class="md:max-h-32 max-h-20 rounded-lg"
-            src="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%20viewBox%3D%220%200%20128%20128%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23ffdcea%22%2F%3E%3Cstop%20offset%3D%220.42%22%20stop-color%3D%22%23ffbbd5%22%2F%3E%3Cstop%20offset%3D%220.76%22%20stop-color%3D%22%23ffcda8%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23ffc17e%22%2F%3E%3C%2FlinearGradient%3E%3ClinearGradient%20id%3D%22m%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23ffc98a%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23ffa45c%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20rx%3D%2230%22%20fill%3D%22url(%23g)%22%2F%3E%3Ccircle%20cx%3D%2238%22%20cy%3D%2228%22%20r%3D%2211%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.55%22%2F%3E%3Ccircle%20cx%3D%2234%22%20cy%3D%2224%22%20r%3D%223.5%22%20fill%3D%22%23ffffff%22%2F%3E%3Ccircle%20cx%3D%22100%22%20cy%3D%2298%22%20r%3D%2215%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.4%22%2F%3E%3Ccircle%20cx%3D%22103%22%20cy%3D%2234%22%20r%3D%226%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.5%22%2F%3E%3Cg%20transform%3D%22translate(64%2C74)%20rotate(-16)%22%3E%3Cellipse%20cx%3D%220%22%20cy%3D%224%22%20rx%3D%2223%22%20ry%3D%2229%22%20fill%3D%22url(%23m)%22%2F%3E%3Cellipse%20cx%3D%22-7%22%20cy%3D%22-3%22%20rx%3D%227%22%20ry%3D%2211%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.38%22%2F%3E%3Ccircle%20cx%3D%22-9%22%20cy%3D%2215%22%20r%3D%223.5%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.5%22%2F%3E%3Cpath%20d%3D%22M1%2C-22%20C3%2C-30%206%2C-35%2011%2C-38%22%20fill%3D%22none%22%20stroke%3D%22%23a8d48c%22%20stroke-width%3D%224.5%22%20stroke-linecap%3D%22round%22%2F%3E%3Cellipse%20cx%3D%2218%22%20cy%3D%22-36%22%20rx%3D%2210%22%20ry%3D%225%22%20fill%3D%22%23bde3a4%22%20transform%3D%22rotate(24%2018%20-36)%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E"
+            src="https://paperback.moe/pb-logo.svg"
             alt="Repository logo"
           />
         </div>
@@ -168,7 +64,7 @@
         ></p>
 
         <a
-          class="addToPaperbackButton inline-block leading-7 mt-4 mx-1 py-2 px-4 text-white bg-[#c9376b] border-b border-red-700 rounded-full transition-colors duration-100 hover:bg-[#e0517f] hover:cursor-pointer"
+          class="addToPaperbackButton inline-block leading-7 mt-4 mx-1 py-2 px-4 text-white bg-[#f64b4b] border-b border-red-700 rounded-full transition-colors duration-100 hover:bg-[#f46565] hover:cursor-pointer"
           @click="addToPaperback()"
           x-show="repository"
         >
@@ -205,7 +101,7 @@
               id="source-search"
               x-model="searchTerm"
               placeholder="Search sources..."
-              class="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#c9376b]"
+              class="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#5478db]"
             />
           </div>
 
@@ -258,7 +154,7 @@
               <div
                 @click="toggleSource(source.id)"
                 class="bg-zinc-800 rounded-lg shadow-lg overflow-hidden hover:cursor-pointer transition-all duration-200 relative"
-                :class="selectedSources.has(source.id) ? 'ring-2 ring-[#c9376b]' : ''"
+                :class="selectedSources.has(source.id) ? 'ring-2 ring-[#5478db]' : ''"
                 @keydown.enter="toggleSource(source.id)"
                 tabindex="0"
               >
@@ -317,7 +213,7 @@
                     <div class="text-gray-400 text-sm flex items-center mt-2">
                       <span
                         x-show="selectedSources.has(source.id)"
-                        class="text-[#c9376b] text-xs"
+                        class="text-[#5478db] text-xs"
                         >• Selected</span
                       >
                     </div>
@@ -378,7 +274,7 @@
                     </div>
                     <span
                       x-show="selectedSources.has(source.id)"
-                      class="text-[#c9376b] text-xs block mt-2"
+                      class="text-[#5478db] text-xs block mt-2"
                       >• Selected</span
                     >
                   </div>
@@ -442,7 +338,7 @@
     >
       <button
         @click="installSelectedSources()"
-        class="py-3 px-6 bg-[#c9376b] text-white rounded-full hover:bg-[#e0517f] transition-colors duration-100 shadow-lg hover:cursor-pointer flex items-center space-x-2"
+        class="py-3 px-6 bg-[#f64b4b] text-white rounded-full hover:bg-[#f46565] transition-colors duration-100 shadow-lg hover:cursor-pointer flex items-center space-x-2"
       >
         <span>Install</span>
         <span
