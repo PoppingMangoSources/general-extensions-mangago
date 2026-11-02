@@ -10,15 +10,16 @@ exported from `main.ts` and declared in `pbconfig.ts`. Sources here are meant to
 `inkdex/general-extensions`, so they are written to its maintainers' standards from the start.
 `AGENTS.md` holds the boundaries and commands; this skill is the order of work.
 
-| Read                       | When                                                             |
-| -------------------------- | ---------------------------------------------------------------- |
-| `references/standards.md`  | always, before writing code: the merge rules with their evidence |
-| `references/recon.md`      | before writing a selector, field name or filter value            |
-| `references/platform.md`   | for any SDK, toolchain, test-runner or device question           |
-| `references/review.md`     | before calling work done                                         |
-| `references/testing.md`    | before claiming anything works                                   |
-| `references/submission.md` | when a source goes to inkdex, or a review comes back             |
-| `references/evidence.md`   | when a rule seems wrong, or a new review comment arrives         |
+| Read                        | When                                                               |
+| --------------------------- | ------------------------------------------------------------------ |
+| `references/standards.md`   | always, before writing code: the merge rules with their evidence   |
+| `references/conventions.md` | the full detail behind each rule: locks, Cloudflare, forms, themes |
+| `references/recon.md`       | before writing a selector, field name or filter value              |
+| `references/platform.md`    | for any SDK, toolchain, test-runner or device question             |
+| `references/review.md`      | before calling work done                                           |
+| `references/testing.md`     | before claiming anything works                                     |
+| `references/submission.md`  | when a source goes to inkdex, or a review comes back               |
+| `references/evidence.md`    | when a rule seems wrong, or a new review comment arrives           |
 
 ## 1. Place it
 

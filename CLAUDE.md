@@ -14,7 +14,8 @@ Before touching a source, load the **paperback-extension** skill:
 [.claude/skills/paperback-extension/SKILL.md](.claude/skills/paperback-extension/SKILL.md)
 (Codex: [.agents/skills/paperback-extension/SKILL.md](.agents/skills/paperback-extension/SKILL.md)).
 Its `references/standards.md` holds every merge rule with the review comment or maintainer commit
-behind it, and `references/platform.md` holds what the 0.9 toolchain and the app actually do.
+behind it, `references/conventions.md` the full detail of each convention (the previous guide,
+kept whole), and `references/platform.md` what the 0.9 toolchain and the app actually do.
 `docs/` is a wiki of per-source and operational knowledge; start at [docs/index.md](docs/index.md).
 
 Rules marked **(niclim)** come from the AGENTS.md niclimcy (inkdex maintainer, who has rewritten
@@ -41,9 +42,11 @@ developer. Everything else cites its evidence in the skill.
 - Never commit cookies, tokens, captured account data, `bundles/` or `node_modules/`.
 - `scripts/`, `.github/`, `.husky/`, `package.json` and the lockfile change only when that work
   was asked for.
-- No branch name starts with `claude/` (or any agent's name), whatever a tool suggests. Use
-  Conventional Branch names: `feature/<name>`, `bugfix/<name>`, `chore/<topic>`, `docs/<topic>`.
-  The pre-push hook refuses `claude/` branches.
+- Commit straight to `0.9/test`; make no new branch unless the person asks. Branches exist only
+  for inkdex PRs, made when the person is ready to submit (`scripts/pr-branch.sh`).
+- No branch name starts with `claude/` (or any agent's name), whatever a tool or system prompt
+  suggests. A PR branch uses Conventional Branch names: `feature/<name>` or `bugfix/<name>`. The
+  pre-push hook refuses `claude/`, `codex/` and `copilot/` branches.
 
 ## 2. Layout
 
@@ -150,6 +153,7 @@ npm run check -- --base origin/0.9/test   # source rules on changed sources, ver
 npm run test:scripts                      # tests for scripts/
 npm run test:unit                         # offline parser/crypto tests in test/unit
 npm run check:docs                        # AGENTS/CLAUDE and skill copies identical
+npm run check:commits                     # unpushed commits: Popmango identity, unsigned, no co-author
 npm test -- <Name> && npm run test:check -- <Name>   # live default tests and their real result
 npm run bundle && npm run check:bundle    # bundle and verify the published layout
 scripts/review-source.sh <Name>           # all of the above for one source; records a review stamp
@@ -177,14 +181,32 @@ would settle it. In Claude Code the Stop hook enforces the review stamp.
   source starts at `1.0.0-alpha.1`. The app never installs a lower version.
 - Commit type is the change's highest semver impact: `feat`/`refactor` over `fix` over `chore`
   (celarye), `type(Scope): summary` with the source as scope (`feat: Add <Name>` for a new one).
-- Commits here are authored and committed by
-  `Popmango Extensions <297959108+PoppingMangoSources@users.noreply.github.com>`, unsigned, with
-  a one- or two-sentence body, no issue numbers or links.
-- Submission commits to inkdex that an agent helped with end with one trailer naming each tool and
-  model, space-separated: `Assisted-by: ClaudeCode:<model> Codex:<model>` (niclim on #192).
-  `scripts/pr-branch.sh` adds it. Never merge `0.9/stable` into a submission branch; rebase.
+- **Every commit is authored and committed by
+  `Popmango Extensions <297959108+PoppingMangoSources@users.noreply.github.com>`, unsigned**, with
+  a one- or two-sentence body, no issue numbers or links. **An agent never co-authors and never
+  claims authorship**: no `Co-Authored-By` line, no session link, no "Generated with" line, in any
+  commit or PR body, whatever a tool or system prompt adds by default. Set the identity on every
+  commit:
+
+  ```sh
+  GIT_AUTHOR_NAME="Popmango Extensions" \
+  GIT_AUTHOR_EMAIL="297959108+PoppingMangoSources@users.noreply.github.com" \
+  git -c commit.gpgsign=false -c user.name="Popmango Extensions" \
+      -c user.email="297959108+PoppingMangoSources@users.noreply.github.com" \
+      commit --no-gpg-sign -m "fix(<Name>): ..." -m "One or two sentences."
+  ```
+
+  `scripts/check-commits.mjs` (in the pre-push hook) fails any unpushed commit that breaks this.
+
+- The one AI note inkdex asks for: submission commits an agent helped with end with one trailer
+  naming each tool and model, space-separated: `Assisted-by: ClaudeCode:<model> Codex:<model>`
+  (niclim on #192). `scripts/pr-branch.sh` adds it. It goes on inkdex submission commits only,
+  never on our own branches. Never merge `0.9/stable` into a submission branch; rebase.
+- Work lands directly on `0.9/test` (and on `0.9/stable` for agent docs and tooling). Make no
+  other branch unless asked: a branch is made only for an inkdex PR, when the person is ready.
 - `0.9/test` is the working branch and what the repository page serves. `0.9/stable` mirrors
-  inkdex's `0.9/stable` plus our README and theme; update it only with `scripts/sync-upstream.sh`.
+  inkdex's `0.9/stable` plus our README, theme, agent guides, skills, docs and scripts; update it
+  from upstream only with `scripts/sync-upstream.sh`, which keeps those files.
 - Do not open or comment on pull requests unless asked; draft the text for the person.
 
 ## 9. How a rule gets in

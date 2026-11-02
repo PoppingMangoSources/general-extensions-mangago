@@ -21,6 +21,7 @@
     "check": "node scripts/check-sources.mjs",
     "check:docs": "node scripts/sync-agent-docs.mjs --check",
     "check:bundle": "node scripts/check-bundle.mjs",
+    "check:commits": "node scripts/check-commits.mjs",
     "new-source": "node scripts/new-source.mjs",
     "prepare": "husky"
   },

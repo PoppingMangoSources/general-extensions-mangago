@@ -27,8 +27,10 @@ It creates a worktree on `upstream/0.9/stable`, copies only `src/<Name>/` and
 `1.0.0-alpha.1`; an upstream one upstream's alpha + 1), adds the README entry in alphabetical
 order, then runs upstream's own `npm ci` and `conformance`, our source rules, the live tests
 through `check-tests.mjs`, and `check-submission.mjs`. The branch is `feature/<name>` for a new
-source and `bugfix/<name>` for an upstream one. It commits as Popmango Extensions with the
-`Assisted-by` trailer and pushes only with `--push`. It never opens a PR.
+source and `bugfix/<name>` for an upstream one, made only when the person is ready to submit. It
+commits as Popmango Extensions, unsigned, with the `Assisted-by` trailer and nothing else: never
+a `Co-Authored-By`, session link or "Generated with" line in the commit or the PR text. It pushes
+only with `--push` and never opens a PR.
 
 `check-submission.mjs` fails if any commit (not only the final diff) touches a file outside the
 source, its test and its README line, if a commit is a merge or not a Conventional Commit, or
