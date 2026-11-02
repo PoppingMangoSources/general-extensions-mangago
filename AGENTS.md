@@ -148,6 +148,7 @@ Use Node 24 (`engines` in the toolchain; `PATH=/opt/node24/bin:$PATH` in the clo
 
 ```sh
 npm ci
+npm run validate -- --base origin/0.9/test # complete offline gate, also run before publishing
 npm run conformance                       # tsc, oxlint --deny-warnings, oxfmt --check
 npm run check -- --base origin/0.9/test   # source rules on changed sources, version bump included
 npm run test:scripts                      # tests for scripts/
@@ -196,7 +197,13 @@ would settle it. In Claude Code the Stop hook enforces the review stamp.
       commit --no-gpg-sign -m "fix(<Name>): ..." -m "One or two sentences."
   ```
 
-  `scripts/check-commits.mjs` (in the pre-push hook) fails any unpushed commit that breaks this.
+  `scripts/check-commits.mjs` checks proposed messages and exact push/CI commit ranges.
+  `npm ci`, `npm run hooks` and the session-start hook configure the owner identity, unsigned
+  commits and hooks. Attribution and session links are disabled in `.claude/settings.json`.
+  `npm run validate` runs the existing offline gates in pre-push, CI and deployment;
+  there is no fallback to HEAD when the comparison base cannot be read.
+  Never reduce preview sizes or drop features to mask a performance regression; compare the
+  previously working revision and measure the changed path first.
 
 - The one AI note inkdex asks for: submission commits an agent helped with end with one trailer
   naming each tool and model, space-separated: `Assisted-by: ClaudeCode:<model> Codex:<model>`

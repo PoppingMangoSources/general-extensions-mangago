@@ -1,0 +1,7 @@
+# actionlint 1.7.12 has stale v3 metadata: the action's current action.yml accepts
+# client-id and marks app-id optional/deprecated. Limit the exceptions to these two checks.
+paths:
+  .github/workflows/registry-management.yaml:
+    ignore:
+      - 'missing input "app-id" which is required by action "actions/create-github-app-token@v3"'
+      - 'input "client-id" is not defined in action "actions/create-github-app-token@v3"'

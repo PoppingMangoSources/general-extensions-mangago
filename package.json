@@ -23,7 +23,9 @@
     "check:bundle": "node scripts/check-bundle.mjs",
     "check:commits": "node scripts/check-commits.mjs",
     "new-source": "node scripts/new-source.mjs",
-    "prepare": "husky"
+    "prepare": "node scripts/setup-git.mjs",
+    "validate": "node scripts/validate.mjs",
+    "hooks": "node scripts/setup-git.mjs"
   },
   "devDependencies": {
     "@paperback/toolchain": "^1.0.0-alpha.92",
