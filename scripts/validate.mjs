@@ -37,7 +37,7 @@ try {
       throw new Error("Commit the changes before validating the exact push snapshot");
   } else if (mode === "--base" && argument) {
     base = argument;
-    run(process.execPath, ["scripts/check-commits.mjs"]);
+    run(process.execPath, ["scripts/check-commits.mjs", `${base}..HEAD`]);
   } else if (!mode) {
     run(process.execPath, ["scripts/check-commits.mjs"]);
   } else throw new Error("Usage: validate.mjs [--base REF | --event | --pre-push]");

@@ -66,6 +66,15 @@ void test("CI validates already-pushed commits on every merge parent", (t) => {
   );
   assert.equal(result.status, 1);
   assert.match(result.stderr, /attribution/);
+  fs.mkdirSync(path.join(cwd, "scripts"));
+  for (const file of ["validate.mjs", "check-commits.mjs"])
+    fs.copyFileSync(path.join(root, "scripts", file), path.join(cwd, "scripts", file));
+  const manual = spawnSync(process.execPath, ["scripts/validate.mjs", "--base", base], {
+    cwd,
+    encoding: "utf8",
+  });
+  assert.equal(manual.status, 1);
+  assert.match(manual.stderr, /attribution/);
 });
 
 void test("automatic setup enables unsigned owner commits and rejects a co-author at commit time", (t) => {
