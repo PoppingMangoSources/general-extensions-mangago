@@ -1,78 +1,69 @@
 ---
 name: paperback-extension
-description: Create, refactor or review a Paperback 0.9 source (extension) in this repo. Use when adding a comic/manga/novel site as a source, scaffolding a new extension, fixing or extending an existing one, preparing a source for an inkdex pull request, or reviewing a source diff.
+description: Create, fix, port, review or submit a Paperback 0.9 source (extension) in this repository so it meets inkdex/general-extensions merge standards. Use when adding a manga, comic or novel site as a source, changing or porting an existing one, reviewing a source diff, answering inkdex review comments, preparing an inkdex pull request, or syncing with upstream.
 ---
 
-# Building Paperback 0.9 sources
+# Paperback 0.9 sources for inkdex
 
-A source is a TypeScript class implementing `ExtensionImpl<typeof Config>` from
-`@paperback/types`, exported as an instance from `main.ts`. `pbconfig.ts` declares which
-capabilities it provides, and the compiler holds the class to them.
+A source is a class implementing `ExtensionImpl<typeof Config>` from `@paperback/types`,
+exported from `main.ts` and declared in `pbconfig.ts`. Sources here are meant to merge into
+`inkdex/general-extensions`, so they are written to its maintainers' standards from the start.
+`AGENTS.md` holds the boundaries and commands; this skill is the order of work.
 
-**`CLAUDE.md` at the repo root is the authoritative guide** — ten numbered sections covering
-file organization, discover/search/pagination, Cloudflare, caching, ids, `pbconfig`, theme
-placement and commits. It wins over anything here. This skill is the order to do things in,
-plus the SDK facts and review patterns that sit underneath those rules.
+| Read                       | When                                                                     |
+| -------------------------- | ------------------------------------------------------------------------ |
+| `references/standards.md`  | always, before writing code: the merge rules with their evidence         |
+| `references/recon.md`      | before writing a selector, field name or filter value                    |
+| `references/sdk.md`        | for any `@paperback/types` shape, capability, form or toolchain question |
+| `references/review.md`     | before calling work done                                                 |
+| `references/testing.md`    | before claiming anything works                                           |
+| `references/submission.md` | when a source goes to inkdex, or a review comes back                     |
+| `references/evidence.md`   | when a rule seems wrong, or a new review comment arrives                 |
 
-Work in four phases. Each depends on facts the previous one established.
+## 1. Place it
 
-## Phase 0 — Does this source belong here?
+A site on a generic theme (Madara, MangaStream/MangaReader, …) belongs in that theme's inkdex
+repository, not here. If upstream already has the source, start from upstream's copy:
+`git diff upstream/0.9/stable HEAD -- src/<Name>` and keep the maintainer's changes.
 
-Before writing anything, check the site against the recognized generic themes. A Madara site
-belongs in `inkdex/madara-extensions`; a MangaStream site in `inkdex/mangastream-extensions`.
-A bespoke reimplementation of a themed site in this repo is a rejection, not a review comment.
-See `CLAUDE.md` §8, and `handoff/` for briefs on sources already identified as misplaced.
+## 2. Recon
 
-## Phase 1 — Recon
+Confirm against live responses, per `recon.md`: each endpoint, field path or selector, the
+pagination signal, the real chapter id, access flags, and every filter value's exact casing. A
+reference implementation tells you endpoints, not the schema. When the sandbox cannot reach the
+site, say which facts are unconfirmed rather than copying them.
 
-Never write a selector or a field name from memory, and never trust a reference
-implementation's field list. Read `references/recon.md` and confirm, against real responses:
-the endpoint for each capability, the pagination signal, the id that identifies a chapter,
-and the exact spelling and casing of every filter value.
+## 3. Find the merged pattern
 
-The cost of skipping this is not a bug you find in review — it is a source that compiles,
-passes the gate, and returns nothing.
+```sh
+node scripts/upstream-usage.mjs <Name>              # who upstream does what this source does
+node scripts/upstream-usage.mjs --feature '<regex>' # who upstream does what you are about to add
+```
 
-### Porting from another app's implementation
+Read the newest example of each feature (recent maintainer rewrites come first) and match its
+shape: file placement, naming, fetch helper, memo promise, form wiring. Diverge only for a
+reason the site forces, and say it in the PR.
 
-Most sources here have a working counterpart elsewhere. Two rules:
+## 4. Build
 
-- **Port the whole capability set.** Every discover section, filter, setting and sort. A
-  capability dropped in the port is one the reader loses, and nobody notices until they
-  go looking for it.
-- **The reference tells you the endpoints; it does not tell you the schema.** Field
-  selections differ between implementations, and a field one client does not select may
-  still exist. Confirm against a live response before copying or removing one.
+Order that avoids rework: `models.ts` → `network.ts` → `parsers.ts` → `main.ts` → `forms` →
+`pbconfig.ts`, then `npx paperback-cli test --generate <Name>` for a new source. Port every
+capability the site or the reference has: sections, filters with exclusions, sorts, settings.
+Keep each rule in `standards.md`; the ones marked **[check]** fail the gate.
 
-## Phase 2 — Build
+## 5. Verify
 
-Follow the canonical file set in `CLAUDE.md` §2. `references/api.md` carries the
-`@paperback/types` surface that the guide assumes but does not spell out — the shapes, the
-current form API, and the places where the types constrain what looks like a free choice.
+```sh
+PATH=/opt/node24/bin:$PATH scripts/review-source.sh <Name>
+```
 
-Order that avoids rework: `models.ts` (types and constants) → `network.ts` (interceptor and
-fetch helpers) → `parsers.ts` (mappers) → `main.ts` (handlers) → `forms/` → `pbconfig.ts`.
+Types, lint, format, the source rules against `origin/0.9/test` (including the version bump),
+the merged-pattern report, live tests read from their report, and the checklist from
+`review.md` to read against the diff. It records a stamp; the Claude Code Stop hook will not
+let a turn end while a changed source fails its rules or lacks a passing review of its current
+files. A failure that is the site or the network is reported as unverified, never as a pass.
 
-## Phase 3 — Self-review
+## 6. Ship
 
-Read `references/review.md` and walk it before calling the work done. It is the checklist
-distilled from what maintainers actually send back: request-cost problems, id round-trips,
-filters that silently match nothing, and defaults that hide content the user asked for.
-
-Reviewing someone else's diff is the same checklist, plus `CLAUDE.md` §9's review list.
-
-## Phase 4 — Ship
-
-`references/release.md` has the gate, the versioning rule and the commit rules. Short version:
-`npm run conformance` must pass (it is also the pre-push hook), `src/tests/<Name>.ts` contains
-nothing but `registerDefaultTests`, and the source version bumps on every change.
-
-## What this environment cannot do
-
-Most source sites are unreachable from the sandbox's egress proxy, and `npm run test` hits
-the live site. A green `conformance` run says the code compiles, lints and is formatted — it
-says nothing about whether the source works. Anything that depends on a live response has to
-be confirmed in the app, on a device, via `npm run dev`.
-
-When a claim cannot be checked here, say so and name what would settle it. Do not edit
-working code on an inference you could not test.
+Commit on `0.9/test` as Popmango Extensions with a bumped version. For inkdex, build the branch
+with `scripts/pr-branch.sh` (`submission.md`) and draft the PR text for the person to post.

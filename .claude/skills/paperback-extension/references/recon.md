@@ -1,6 +1,6 @@
 # Recon
 
-Establish the live contract before writing code. `CLAUDE.md` §1 states the rule; this is the
+Establish the live contract before writing code. `AGENTS.md` states the rule; this is the
 method.
 
 Work through five targets. For each, write down the exact URL, the selector or JSON path for
@@ -14,7 +14,7 @@ paginate.
 
 Record: the endpoint per section, the page-size parameter, and whether the listing payload
 already carries the fields your cards need. That last one decides whether you can build the
-section in one request, and §3 of the guide forbids the alternative.
+section in one request, and `standards.md` §5 forbids the alternative.
 
 ## 2. Search and filters
 
@@ -52,8 +52,9 @@ total plus a URL template exists. If it does, generate the list — do not walk 
 
 ## Recording what you could not verify
 
-The sandbox cannot reach most source sites. When a field or endpoint could not be confirmed
-live, say so explicitly rather than treating a reference implementation's selection as proof.
+The sandbox reaches some source sites and not others (try `curl -sI <url>` or the live tests
+first). When a field or endpoint could not be confirmed live, say so explicitly rather than
+treating a reference implementation's selection as proof.
 
 Two failure shapes worth naming:
 
