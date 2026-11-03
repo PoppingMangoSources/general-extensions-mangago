@@ -13,7 +13,7 @@ import {
 } from "@paperback/types";
 import * as cheerio from "cheerio";
 
-import { getBaseUrl, getShowEditionInTitle } from "./forms/settings";
+import { getBaseUrl, getShowEditionInTitle, getMergeEditions } from "./forms/settings";
 import {
   CONTENT_RATING_GENRES,
   CONTENT_RATING_OPTIONS,
@@ -28,6 +28,7 @@ import {
   type ComicData,
   type ComicNode,
   type ContentPreferenceRating,
+  type EditionChapters,
   type LatestUploadsResult,
   type RankedMetric,
   type XComicPreferences,
@@ -212,9 +213,11 @@ const displayTitle = (comic: ComicData): string => {
   const suffix = bracketedTeam(trimmed);
   // An importer marker in the name is noise on a shelf, not part of the work's title.
   const name = Application.decodeHTMLEntities(
-    suffix && isMachineTag(suffix) ? trimmed.slice(0, trimmed.lastIndexOf("[")).trimEnd() : trimmed,
+    suffix && (isMachineTag(suffix) || getMergeEditions())
+      ? trimmed.slice(0, trimmed.lastIndexOf("[")).trimEnd()
+      : trimmed,
   );
-  if (!getShowEditionInTitle()) return name;
+  if (getMergeEditions() || !getShowEditionInTitle()) return name;
   const edition = editionLabel(comic);
   return edition && !name.includes(edition) ? `${name} (${edition})` : name;
 };
@@ -554,14 +557,20 @@ export const toSourceManga = (node: ComicNode, mangaId = sanitizeId(node.data.id
   };
 };
 
-export const toChapter = (data: ChapterData, sourceManga: SourceManga): Chapter => {
+export const toChapter = (
+  data: ChapterData,
+  sourceManga: SourceManga,
+  edition?: ComicData,
+): Chapter => {
   const title = [data.dname?.trim(), data.title?.trim()]
     .filter((value): value is string => Boolean(value))
     .filter((value, index, values) => index === 0 || value !== values[0])
     .map((value) => Application.decodeHTMLEntities(value))
     .join(": ");
   // The edition's own team names the upload; srcName is only the aggregator it came through.
-  const team = sourceManga.mangaInfo.additionalInfo?.[EDITION_TEAM_KEY];
+  const team = edition
+    ? editionLabel(edition)
+    : sourceManga.mangaInfo.additionalInfo?.[EDITION_TEAM_KEY];
   const sourceName = data.srcName?.trim();
   const profileNames = nodeNames(data.profileNodes);
   const scanlators =
@@ -574,7 +583,8 @@ export const toChapter = (data: ChapterData, sourceManga: SourceManga): Chapter 
           : nodeNames(data.groupNodes);
   const uploaderName = data.userNode?.data?.name?.trim();
   const uploader = uploaderName ? Application.decodeHTMLEntities(uploaderName) : undefined;
-  const language = sourceManga.mangaInfo.additionalInfo?.[TRANSLATED_LANGUAGE_KEY];
+  const language =
+    edition?.translatedLanguage ?? sourceManga.mangaInfo.additionalInfo?.[TRANSLATED_LANGUAGE_KEY];
   const languageCode =
     typeof language === "string"
       ? (LANGUAGE_OPTIONS.find(({ title }) => title === language)?.id ?? language)
@@ -589,12 +599,68 @@ export const toChapter = (data: ChapterData, sourceManga: SourceManga): Chapter 
     chapterId: toChapterId(data),
     sourceManga,
     chapNum: chapterNumber(data) ?? 0,
-    volume: 0,
+    volume: data.volNum ?? 0,
     title: title || undefined,
     langCode,
     publishDate: dateFromTimestamp(data.dateModify ?? data.dateCreate ?? data.datePublic),
     version: scanlators.join(", ") || uploader || undefined,
   };
+};
+
+export const toMergedEditions = (node: ComicNode, languages: string[]): ComicData[] => [
+  node.data,
+  ...(node.data.work?.comicNodes ?? []).flatMap((edition) => {
+    const data = edition?.data;
+    return data &&
+      data.id !== node.data.id &&
+      data.isPublic !== false &&
+      (!data.dbStatus || data.dbStatus === "normal") &&
+      data.chaps_normal !== 0 &&
+      (!data.translatedLanguage || languages.includes(data.translatedLanguage))
+      ? [data]
+      : [];
+  }),
+];
+
+export const parseChapterLists = (
+  lists: EditionChapters[],
+  sourceManga: SourceManga,
+  deduplicate: boolean,
+): Chapter[] => {
+  const owners = new Map<string, number>();
+  const teams = new Map<string, string>();
+  const seen = new Set<string>();
+  const chapters: Chapter[] = [];
+  for (const [index, list] of lists.entries()) {
+    for (const data of list.chapters) {
+      if (data.dbStatus && data.dbStatus !== "normal") continue;
+      const chapter = toChapter(data, sourceManga, list.edition);
+      if (seen.has(chapter.chapterId)) continue;
+      seen.add(chapter.chapterId);
+      if (chapter.version) {
+        const team = chapter.version.trim().toLowerCase();
+        chapter.version = teams.get(team) ?? chapter.version;
+        teams.set(team, chapter.version);
+        if (
+          deduplicate &&
+          list.edition &&
+          editionLabel(list.edition) &&
+          chapterNumber(data) != null
+        ) {
+          const key = JSON.stringify([team, chapter.langCode, chapter.volume, chapter.chapNum]);
+          const owner = owners.get(key);
+          if (owner != null && owner !== index) continue;
+          owners.set(key, index);
+        }
+      }
+      chapters.push(chapter);
+    }
+  }
+  return chapters.sort(
+    (left, right) =>
+      right.chapNum - left.chapNum ||
+      (right.publishDate?.getTime() ?? 0) - (left.publishDate?.getTime() ?? 0),
+  );
 };
 
 export const parseChapterDetails = (

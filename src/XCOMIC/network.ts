@@ -12,6 +12,9 @@ import {
 import { getBaseUrl, getPreferences, getSelectedBaseUrl, setActiveBaseUrl } from "./forms/settings";
 import {
   CHAPTERS_QUERY,
+  CHAPTERS_FULL_QUERY,
+  CHAPTER_FULL_PAGE_SIZE,
+  EDITIONS_QUERY,
   CHAPTER_PAGES_QUERY,
   COMIC_QUERY,
   LATEST_UPLOADS_QUERY,
@@ -192,9 +195,21 @@ export const fetchComic = (id: string): Promise<ComicNodeResponse> =>
 export const fetchTitleNode = (id: string): Promise<TitleNodeResponse> =>
   fetchGraphQL<TitleNodeResponse>(TITLE_NODE_QUERY, { id });
 
-export const fetchChapters = (comicId: string, page: number): Promise<ChapterListResponse> =>
-  fetchGraphQL<ChapterListResponse>(CHAPTERS_QUERY, {
-    select: { comic_id: comicId, page, size: CHAPTER_PAGE_SIZE, sortby: "chapter_desc" },
+export const fetchEditions = (id: string): Promise<ComicNodeResponse> =>
+  fetchGraphQL<ComicNodeResponse>(EDITIONS_QUERY, { id });
+
+export const fetchChapters = (
+  comicId: string,
+  page: number,
+  deduplicate: boolean,
+): Promise<ChapterListResponse> =>
+  fetchGraphQL<ChapterListResponse>(deduplicate ? CHAPTERS_QUERY : CHAPTERS_FULL_QUERY, {
+    select: {
+      comic_id: comicId,
+      page,
+      size: deduplicate ? CHAPTER_PAGE_SIZE : CHAPTER_FULL_PAGE_SIZE,
+      sortby: "chapter_desc",
+    },
   });
 
 export const fetchChapterPages = (id: string): Promise<ChapterPagesResponse> =>

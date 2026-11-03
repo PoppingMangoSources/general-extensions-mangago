@@ -20,6 +20,7 @@ export const PAGE_SIZE = 48;
 // Upper bound on latest-upload pages walked when filtering empties a page.
 export const MAX_LATEST_REQUESTS = 10;
 export const CHAPTER_PAGE_SIZE = 1000;
+export const CHAPTER_FULL_PAGE_SIZE = 600;
 export const RECENTLY_ADDED_SIZE = 50;
 export const RANDOM_AMOUNT = 12;
 
@@ -212,19 +213,40 @@ query get_comicNode($id: ID!) {
 
 // paging exposes "total pages page init size skip limit prev next" — verified against the
 // site's own paging fragment. Other clients select next/total instead; pages is not a typo.
-export const CHAPTERS_QUERY = `
-query get_comic_chapterList_uniqList($select: Select_Comic_ChapterList_UniqList) {
-  get_comic_chapterList_uniqList(select: $select) {
-    paging { pages }
+const CHAPTER_FIELDS = `
+    paging { pages total next }
     items {
       data {
-        id dbStatus serial chaNum
+        id dbStatus serial chaNum volNum
         dname title urlPath
         dateCreate dateModify datePublic
         srcName
         profileNodes { data { name } }
         userNode { data { name } }
         groupNodes { data { name } }
+      }
+    }
+`;
+
+export const CHAPTERS_QUERY = `
+query get_comic_chapterList_uniqList($select: Select_Comic_ChapterList_UniqList) {
+  chapterList: get_comic_chapterList_uniqList(select: $select) {${CHAPTER_FIELDS}}
+}
+`;
+
+export const CHAPTERS_FULL_QUERY = `
+query get_comic_chapterList_fullList($select: Select_Comic_ChapterList) {
+  chapterList: get_comic_chapterList_fullList(select: $select) {${CHAPTER_FIELDS}}
+}
+`;
+
+export const EDITIONS_QUERY = `
+query get_comicNode($id: ID!) {
+  get_comicNode(id: $id) {
+    data {
+      id name subName translatedLanguage
+      work: title_titleNode {
+        comicNodes { data { id name subName translatedLanguage chaps_normal dbStatus isPublic } }
       }
     }
   }
@@ -315,6 +337,8 @@ export const STATE_KEYS = {
   EXCLUDED_GENRES: "xcomic_excluded_genres",
   EXCLUDED_FORMATS: "xcomic_excluded_formats",
   LETTER_MATCHING: "xcomic_letter_matching",
+  MERGE_EDITIONS: "xcomic_merge_editions",
+  DEDUPLICATE_CHAPTERS: "xcomic_deduplicate_chapters",
   ORIGINAL_LANGUAGES: "xcomic_original_languages",
   SHOW_EDITION_IN_TITLE: "xcomic_show_edition_in_title",
   TRANSLATED_LANGUAGES: "xcomic_languages",
@@ -818,6 +842,7 @@ export interface ChapterData {
   dbStatus?: string | null;
   serial?: number | null;
   chaNum?: number | null;
+  volNum?: number | null;
   dname?: string | null;
   title?: string | null;
   urlPath?: string | null;
@@ -847,6 +872,9 @@ export interface LatestUploadsResult {
 export interface ComicData {
   id: string;
   name: string;
+  dbStatus?: string | null;
+  isPublic?: boolean | null;
+  work?: { comicNodes?: Array<ComicNode | null> | null } | null;
   // The edition/team label the site hangs off a comic when a title has several.
   subName?: string | null;
   altNames?: string[] | null;
@@ -892,6 +920,11 @@ export interface ComicNode {
   comicNodes?: Array<ComicNode | null> | null;
 }
 
+export interface EditionChapters {
+  edition?: ComicData;
+  chapters: ChapterData[];
+}
+
 export interface TitleRandomResponse {
   get_title_randomList?: ComicNode[] | null;
 }
@@ -928,12 +961,12 @@ export interface TitleNodeResponse {
 }
 
 interface ChapterListResult {
-  paging?: { pages?: number | null } | null;
+  paging?: { pages?: number | null; total?: number | null; next?: number | null } | null;
   items?: ChapterNode[] | null;
 }
 
 export interface ChapterListResponse {
-  get_comic_chapterList_uniqList?: ChapterListResult | null;
+  chapterList?: ChapterListResult | null;
 }
 
 export interface ChapterPagesResponse {

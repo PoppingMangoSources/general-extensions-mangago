@@ -26,6 +26,8 @@ import { XComicAdvancedSearchForm } from "./forms/search";
 import {
   XComicSettingsForm,
   getLetterMatching,
+  getMergeEditions,
+  getDeduplicateChapters,
   getPreferences,
   getVisibleSections,
 } from "./forms/settings";
@@ -39,6 +41,8 @@ import {
   SORTING_OPTIONS,
   type BrowseSelect,
   type ComicNode,
+  type ChapterData,
+  type EditionChapters,
   type PageMetadata,
   type RankedMetric,
   type SearchMetadata,
@@ -49,6 +53,7 @@ import {
   fetchChapterPages,
   fetchChapters,
   fetchComic,
+  fetchEditions,
   fetchLatestUploads,
   fetchRecentlyAdded,
   fetchTitleNode,
@@ -59,7 +64,8 @@ import {
 import {
   isComicAllowed,
   parseChapterDetails,
-  toChapter,
+  parseChapterLists,
+  toMergedEditions,
   toDiscoverItems,
   toLatestUploadNodes,
   toPreferredTitleSource,
@@ -300,7 +306,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     const nextPage = response.get_title_browse_pager?.next;
     // A search names one work, so every edition of it is the choice on offer. Sorting or
     // filtering with no term is browsing, and the site lists one row per title there.
-    const expandEditions = word.trim().length > 0;
+    const expandEditions = word.trim().length > 0 && !getMergeEditions();
     return {
       nodes: (response.get_title_browse_items ?? [])
         .flatMap((node) => {
@@ -423,30 +429,50 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
-    const first = await fetchChapters(sourceManga.mangaId, 1);
-    const firstResult = first.get_comic_chapterList_uniqList;
-    if (!firstResult) return [];
-    const pageCount = firstResult.paging?.pages ?? 1;
-    const responses = [
-      first,
-      ...(await Promise.all(
-        Array.from({ length: pageCount - 1 }, (_, index) =>
-          fetchChapters(sourceManga.mangaId, index + 2),
-        ),
-      )),
-    ];
-    return responses.flatMap((response) =>
-      (response.get_comic_chapterList_uniqList?.items ?? [])
-        .filter((item) => item.data.dbStatus === "normal")
-        .map((item) => toChapter(item.data, sourceManga)),
-    );
+    const deduplicate = getDeduplicateChapters();
+    if (!getMergeEditions())
+      return parseChapterLists(
+        [{ chapters: await this.getEditionChapters(sourceManga.mangaId, deduplicate) }],
+        sourceManga,
+        deduplicate,
+      );
+    const node = (await fetchEditions(sourceManga.mangaId)).get_comicNode;
+    if (!node) throw new Error(`Manga not found: ${sourceManga.mangaId}`);
+    const editions = toMergedEditions(node, getPreferences().translatedLanguages);
+    const lists: EditionChapters[] = [];
+    for (let index = 0; index < editions.length; index += 3) {
+      lists.push(
+        ...(await Promise.all(
+          editions.slice(index, index + 3).map(async (edition) => ({
+            edition,
+            chapters: await this.getEditionChapters(edition.id, deduplicate),
+          })),
+        )),
+      );
+    }
+    return parseChapterLists(lists, sourceManga, deduplicate);
+  }
+
+  private async getEditionChapters(id: string, deduplicate: boolean): Promise<ChapterData[]> {
+    const first = (await fetchChapters(id, 1, deduplicate)).chapterList;
+    if (!first) throw new Error(`XCOMIC returned no chapter list for ${id}.`);
+    const chapters = (first.items ?? []).map((item) => item.data);
+    for (let page = 2; page <= (first.paging?.pages ?? 1); page++) {
+      const result = (await fetchChapters(id, page, deduplicate)).chapterList;
+      chapters.push(...(result?.items ?? []).map((item) => item.data));
+    }
+    if (chapters.length < (first.paging?.total ?? chapters.length))
+      throw new Error(
+        `XCOMIC sent ${chapters.length} of ${first.paging?.total} chapters; refresh to try again.`,
+      );
+    return chapters;
   }
 
   async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
     const [first] = updateManager.getQueuedItems();
     if (!first) return;
     try {
-      await fetchChapters(first.mangaId, 1);
+      await fetchChapters(first.mangaId, 1, getDeduplicateChapters());
     } catch (error) {
       if (error instanceof CloudflareError) throw error;
     }

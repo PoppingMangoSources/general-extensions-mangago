@@ -54,6 +54,12 @@ export const setActiveBaseUrl = (value: string): void => {
 export const getShowEditionInTitle = (): boolean =>
   (Application.getState(STATE_KEYS.SHOW_EDITION_IN_TITLE) as boolean | undefined) ?? true;
 
+export const getMergeEditions = (): boolean =>
+  (Application.getState(STATE_KEYS.MERGE_EDITIONS) as boolean | undefined) ?? false;
+
+export const getDeduplicateChapters = (): boolean =>
+  (Application.getState(STATE_KEYS.DEDUPLICATE_CHAPTERS) as boolean | undefined) ?? true;
+
 // Defaults off: the site marks this the slower of its two ways of matching a term.
 export const getLetterMatching = (): boolean =>
   (Application.getState(STATE_KEYS.LETTER_MATCHING) as boolean | undefined) ?? false;
@@ -135,6 +141,8 @@ export class XComicSettingsForm extends Form {
   private originalLanguages: string[];
   private translatedLanguages: string[];
   private showEditionInTitle: boolean;
+  private mergeEditions = getMergeEditions();
+  private deduplicateChapters = getDeduplicateChapters();
   private letterMatching: boolean;
   private visibleSections: SectionId[];
 
@@ -290,6 +298,31 @@ export class XComicSettingsForm extends Form {
       ),
       Section(
         {
+          id: "chapters",
+          footer:
+            "Merging loads an additional chapter list for each edition in your selected languages. Deduplication removes repeat uploads while keeping different teams as separate versions.",
+        },
+        [
+          ToggleRow("merge_editions", {
+            title: "Merge editions",
+            value: this.mergeEditions,
+            onValueChange: Application.Selector(
+              this as XComicSettingsForm,
+              "handleMergeEditionsChange",
+            ),
+          }),
+          ToggleRow("deduplicate_chapters", {
+            title: "Deduplicate chapters",
+            value: this.deduplicateChapters,
+            onValueChange: Application.Selector(
+              this as XComicSettingsForm,
+              "handleDeduplicateChaptersChange",
+            ),
+          }),
+        ],
+      ),
+      Section(
+        {
           id: "search",
           footer:
             "The site's other way of matching a search term, which it marks as the slower of the two.",
@@ -361,6 +394,16 @@ export class XComicSettingsForm extends Form {
   async handleShowEditionInTitleChange(value: boolean): Promise<void> {
     this.showEditionInTitle = value;
     saveSetting(this, STATE_KEYS.SHOW_EDITION_IN_TITLE, value);
+  }
+
+  async handleMergeEditionsChange(value: boolean): Promise<void> {
+    this.mergeEditions = value;
+    saveSetting(this, STATE_KEYS.MERGE_EDITIONS, value);
+  }
+
+  async handleDeduplicateChaptersChange(value: boolean): Promise<void> {
+    this.deduplicateChapters = value;
+    saveSetting(this, STATE_KEYS.DEDUPLICATE_CHAPTERS, value);
   }
 
   async handleLetterMatchingChange(value: boolean): Promise<void> {
