@@ -139,5 +139,4 @@ export interface TagOption {
 
 export interface PageMetadata extends JSONObject {
   offset?: number;
-  novelOffset?: number;
 }

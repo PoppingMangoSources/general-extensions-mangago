@@ -11,12 +11,7 @@ import {
 } from "@paperback/types";
 
 import type { ChikariImplementation } from "../../main";
-import {
-  fetchNovelDetails,
-  fetchNovels,
-  fetchSeries,
-  fetchSeriesDetails,
-} from "../../services/network";
+import { fetchNovelDetails, fetchSeries, fetchSeriesDetails } from "../../services/network";
 import { getPreferences } from "../settings-form-providing/main";
 import { PAGE_SIZE, type PageMetadata, type SeriesType, type SortId } from "../shared/models";
 import { ChikariAdvancedSearchForm } from "./forms";
@@ -70,18 +65,15 @@ export class SearchProvider {
     ];
     const minimum = Number(searchMetadata.minChapters);
     const selectedTypes = (searchMetadata.types ?? DEFAULT_SEARCH_TYPES) as SeriesType[];
-    const comicTypes = selectedTypes.filter((type) => type !== "novel");
-    const includeNovels = selectedTypes.includes("novel");
-    const includeComics = comicTypes.length > 0;
-    const limit = includeComics && includeNovels ? Math.floor(PAGE_SIZE / 2) : PAGE_SIZE;
-    const comicOffset = metadata?.offset ?? 0;
-    const novelOffset = metadata?.novelOffset ?? 0;
-    const options = {
+    const offset = metadata?.offset ?? 0;
+    const data = await fetchSeries({
       adult: preferences.adult,
+      contentRatings: preferences.contentRatings,
       excludedGenres,
       excludedTags,
       genres: includedGenres,
-      limit,
+      limit: PAGE_SIZE,
+      offset,
       minChapters:
         searchMetadata.minChapters && Number.isFinite(minimum) ? Math.max(0, minimum) : undefined,
       period: searchMetadata.period,
@@ -89,37 +81,14 @@ export class SearchProvider {
       sort: searchMetadata.sort ?? (sortingOption?.id as SortId | undefined) ?? "popular",
       statuses: searchMetadata.statuses,
       tags: includedTags,
+      types: selectedTypes,
       years: searchMetadata.year ? [searchMetadata.year] : [],
-    };
-    const [comicData, novelData] = await Promise.all([
-      includeComics
-        ? fetchSeries({
-            ...options,
-            contentRatings: preferences.contentRatings,
-            offset: comicOffset,
-            types: comicTypes,
-          })
-        : undefined,
-      includeNovels ? fetchNovels({ ...options, offset: novelOffset }) : undefined,
-    ]);
-
-    const nextComicOffset = comicOffset + (comicData?.items.length ?? 0);
-    const nextNovelOffset = novelOffset + (novelData?.items.length ?? 0);
-    const hasMoreComics = Boolean(
-      comicData && comicData.items.length > 0 && nextComicOffset < comicData.total,
-    );
-    const hasMoreNovels = Boolean(
-      novelData && novelData.items.length > 0 && nextNovelOffset < novelData.total,
-    );
+    });
+    const nextOffset = offset + data.items.length;
     return {
-      items: [
-        ...(comicData?.items.map((series) => toSearchResultItem(series, "comic")) ?? []),
-        ...(novelData?.items.map((series) => toSearchResultItem(series, "novel")) ?? []),
-      ],
+      items: data.items.map((series) => toSearchResultItem(series)),
       metadata:
-        hasMoreComics || hasMoreNovels
-          ? { offset: nextComicOffset, novelOffset: nextNovelOffset }
-          : undefined,
+        data.items.length > 0 && nextOffset < data.total ? { offset: nextOffset } : undefined,
     };
   }
 

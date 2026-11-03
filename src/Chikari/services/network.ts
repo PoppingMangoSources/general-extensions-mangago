@@ -129,20 +129,15 @@ const addPreferences = (url: URL, preferences: ChikariPreferences): URL => {
 export const fetchHome = async (preferences: ChikariPreferences): Promise<HomeResponse> =>
   fetchApi<HomeResponse>(addPreferences(apiUrl("home"), preferences).toString());
 
-export const fetchNovelHome = async (adult: boolean): Promise<HomeResponse> =>
-  fetchApi<HomeResponse>(novelApiUrl("home").setQueryItem("adult", String(adult)).toString());
-
 export const fetchGenres = async (adult: boolean): Promise<GenreOption[]> =>
-  fetchApi<GenreOption[]>(apiUrl("genres").setQueryItem("adult", String(adult)).toString());
-
-export const fetchNovelGenres = async (adult: boolean): Promise<GenreOption[]> =>
-  fetchApi<GenreOption[]>(novelApiUrl("genres").setQueryItem("adult", String(adult)).toString());
+  fetchApi<GenreOption[]>(
+    apiUrl("genres").setQueryItem("adult", String(adult)).setQueryItem("novels", "true").toString(),
+  );
 
 export const fetchTags = async (adult: boolean): Promise<TagOption[]> =>
-  fetchApi<TagOption[]>(apiUrl("tags").setQueryItem("adult", String(adult)).toString());
-
-export const fetchNovelTags = async (adult: boolean): Promise<TagOption[]> =>
-  fetchApi<TagOption[]>(novelApiUrl("tags").setQueryItem("adult", String(adult)).toString());
+  fetchApi<TagOption[]>(
+    apiUrl("tags").setQueryItem("adult", String(adult)).setQueryItem("novels", "true").toString(),
+  );
 
 export interface SeriesQueryOptions {
   contentRatings: ChikariPreferences["contentRatings"];
@@ -191,34 +186,6 @@ const buildSeriesUrl = (options: SeriesQueryOptions): string => {
 
 export const fetchSeries = async (options: SeriesQueryOptions): Promise<SeriesListResponse> =>
   fetchApi<SeriesListResponse>(buildSeriesUrl(options));
-
-export type NovelQueryOptions = Omit<SeriesQueryOptions, "contentRatings" | "types">;
-
-const buildNovelUrl = (options: NovelQueryOptions): string => {
-  const url = novelApiUrl()
-    .setQueryItem("sort", options.sort)
-    .setQueryItem("adult", String(options.adult))
-    .setQueryItem("limit", String(options.limit ?? PAGE_SIZE))
-    .setQueryItem("offset", String(options.offset));
-
-  if (options.query) url.setQueryItem("q", options.query);
-  if (options.genres.length > 0) url.setQueryItem("genre", options.genres);
-  if (options.excludedGenres.length > 0) {
-    url.setQueryItem("genre_exclude", options.excludedGenres);
-  }
-  if (options.tags.length > 0) url.setQueryItem("tag", options.tags);
-  if (options.excludedTags.length > 0) url.setQueryItem("tag_exclude", options.excludedTags);
-  if (options.statuses.length > 0) url.setQueryItem("status", options.statuses);
-  if (options.years.length > 0) url.setQueryItem("year", options.years);
-  if (options.minChapters !== undefined) {
-    url.setQueryItem("min_chapters", String(options.minChapters));
-  }
-  if (options.period) url.setQueryItem("period", options.period);
-  return url.toString();
-};
-
-export const fetchNovels = async (options: NovelQueryOptions): Promise<SeriesListResponse> =>
-  fetchApi<SeriesListResponse>(buildNovelUrl(options));
 
 export const fetchSeriesDetails = async (slug: string): Promise<SeriesDetails> =>
   fetchApi<SeriesDetails>(apiUrl("series", slug).toString());
