@@ -14,3 +14,5 @@
   password locks documented, with live mirror reading and outage tests.
 - 2026-11-03: XCOMIC edition merging and deduplication compared against Aidoku, Keiyoushi and
   Mana, with complete-list and stable-id regression coverage and live merged chapter reading.
+- 2026-11-03: XCOMIC per-card merge-setting reads replaced with a per-page snapshot after a
+  Discover slowdown report; added merged-chapter edition/team inclusion and exclusion filters.

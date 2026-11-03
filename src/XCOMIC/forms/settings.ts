@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import { Form, Section, SelectRow, ToggleRow } from "@paperback/types";
+import { Form, InputRow, Section, SelectRow, ToggleRow } from "@paperback/types";
 
 import {
   CONTENT_RATING_OPTIONS,
@@ -25,6 +25,8 @@ import {
   type SectionId,
   type SeriesType,
   type XComicPreferences,
+  type TitlePreferences,
+  type EditionFilters,
 } from "../models";
 
 const MIRROR_IDS = new Set(MIRRORS.map((mirror) => mirror.id));
@@ -59,6 +61,25 @@ export const getMergeEditions = (): boolean =>
 
 export const getDeduplicateChapters = (): boolean =>
   (Application.getState(STATE_KEYS.DEDUPLICATE_CHAPTERS) as boolean | undefined) ?? true;
+
+export const getTitlePreferences = (): TitlePreferences => ({
+  mergeEditions: getMergeEditions(),
+  showEditionInTitle: getShowEditionInTitle(),
+});
+
+const getEditionNames = (key: string): string[] => [
+  ...new Set(
+    ((Application.getState(key) as string | undefined) ?? "")
+      .split(/[,\n]/)
+      .map((name) => name.trim().toLowerCase())
+      .filter(Boolean),
+  ),
+];
+
+export const getEditionFilters = (): EditionFilters => ({
+  included: getEditionNames(STATE_KEYS.INCLUDED_EDITIONS),
+  excluded: getEditionNames(STATE_KEYS.EXCLUDED_EDITIONS),
+});
 
 // Defaults off: the site marks this the slower of its two ways of matching a term.
 export const getLetterMatching = (): boolean =>
@@ -143,6 +164,10 @@ export class XComicSettingsForm extends Form {
   private showEditionInTitle: boolean;
   private mergeEditions = getMergeEditions();
   private deduplicateChapters = getDeduplicateChapters();
+  private includedEditions =
+    (Application.getState(STATE_KEYS.INCLUDED_EDITIONS) as string | undefined) ?? "";
+  private excludedEditions =
+    (Application.getState(STATE_KEYS.EXCLUDED_EDITIONS) as string | undefined) ?? "";
   private letterMatching: boolean;
   private visibleSections: SectionId[];
 
@@ -323,6 +348,31 @@ export class XComicSettingsForm extends Form {
       ),
       Section(
         {
+          id: "edition_filters",
+          footer:
+            "Applies only while Merge editions is enabled. Enter exact team names or edition IDs, separated by commas or newlines. Leave Include empty for all editions; Exclude takes priority. These filters do not change Discover or search.",
+        },
+        [
+          InputRow("included_editions", {
+            title: "Include editions/teams",
+            value: this.includedEditions,
+            onValueChange: Application.Selector(
+              this as XComicSettingsForm,
+              "handleIncludedEditionsChange",
+            ),
+          }),
+          InputRow("excluded_editions", {
+            title: "Exclude editions/teams",
+            value: this.excludedEditions,
+            onValueChange: Application.Selector(
+              this as XComicSettingsForm,
+              "handleExcludedEditionsChange",
+            ),
+          }),
+        ],
+      ),
+      Section(
+        {
           id: "search",
           footer:
             "The site's other way of matching a search term, which it marks as the slower of the two.",
@@ -404,6 +454,16 @@ export class XComicSettingsForm extends Form {
   async handleDeduplicateChaptersChange(value: boolean): Promise<void> {
     this.deduplicateChapters = value;
     saveSetting(this, STATE_KEYS.DEDUPLICATE_CHAPTERS, value);
+  }
+
+  async handleIncludedEditionsChange(value: string): Promise<void> {
+    this.includedEditions = value;
+    Application.setState(value, STATE_KEYS.INCLUDED_EDITIONS);
+  }
+
+  async handleExcludedEditionsChange(value: string): Promise<void> {
+    this.excludedEditions = value;
+    Application.setState(value, STATE_KEYS.EXCLUDED_EDITIONS);
   }
 
   async handleLetterMatchingChange(value: boolean): Promise<void> {

@@ -339,6 +339,8 @@ export const STATE_KEYS = {
   LETTER_MATCHING: "xcomic_letter_matching",
   MERGE_EDITIONS: "xcomic_merge_editions",
   DEDUPLICATE_CHAPTERS: "xcomic_deduplicate_chapters",
+  INCLUDED_EDITIONS: "xcomic_included_editions",
+  EXCLUDED_EDITIONS: "xcomic_excluded_editions",
   ORIGINAL_LANGUAGES: "xcomic_original_languages",
   SHOW_EDITION_IN_TITLE: "xcomic_show_edition_in_title",
   TRANSLATED_LANGUAGES: "xcomic_languages",
@@ -384,6 +386,16 @@ export interface XComicPreferences {
   originalLanguages: string[];
   translatedLanguages: string[];
   types: SeriesType[];
+}
+
+export interface TitlePreferences {
+  mergeEditions: boolean;
+  showEditionInTitle: boolean;
+}
+
+export interface EditionFilters {
+  included: string[];
+  excluded: string[];
 }
 
 export type RankedMetric = "top" | "follows" | "reviews" | "comments" | "chapters";

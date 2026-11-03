@@ -28,6 +28,8 @@ import {
   getLetterMatching,
   getMergeEditions,
   getDeduplicateChapters,
+  getTitlePreferences,
+  getEditionFilters,
   getPreferences,
   getVisibleSections,
 } from "./forms/settings";
@@ -66,6 +68,7 @@ import {
   parseChapterDetails,
   parseChapterLists,
   toMergedEditions,
+  filterEditions,
   toDiscoverItems,
   toLatestUploadNodes,
   toPreferredTitleSource,
@@ -288,8 +291,9 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     const sortBy = sortingOption?.id ?? "field_score";
     const page = metadata?.page ?? 1;
     const result = await this.getTitleSearchPage(page, sortBy, title, query.metadata);
+    const titlePreferences = getTitlePreferences();
     return {
-      items: result.nodes.map((node) => toSearchResultItem(node)),
+      items: result.nodes.map((node) => toSearchResultItem(node, titlePreferences)),
       metadata: result.nextPage != null ? { page: result.nextPage } : undefined,
     };
   }
@@ -438,7 +442,14 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
       );
     const node = (await fetchEditions(sourceManga.mangaId)).get_comicNode;
     if (!node) throw new Error(`Manga not found: ${sourceManga.mangaId}`);
-    const editions = toMergedEditions(node, getPreferences().translatedLanguages);
+    const editions = filterEditions(
+      toMergedEditions(node, getPreferences().translatedLanguages),
+      getEditionFilters(),
+    );
+    if (!editions.length)
+      throw new Error(
+        "No editions match your team filters. Check Include and Exclude in the source settings.",
+      );
     const lists: EditionChapters[] = [];
     for (let index = 0; index < editions.length; index += 3) {
       lists.push(

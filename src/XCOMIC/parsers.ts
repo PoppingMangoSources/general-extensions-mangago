@@ -13,7 +13,7 @@ import {
 } from "@paperback/types";
 import * as cheerio from "cheerio";
 
-import { getBaseUrl, getShowEditionInTitle, getMergeEditions } from "./forms/settings";
+import { getBaseUrl, getTitlePreferences } from "./forms/settings";
 import {
   CONTENT_RATING_GENRES,
   CONTENT_RATING_OPTIONS,
@@ -29,9 +29,11 @@ import {
   type ComicNode,
   type ContentPreferenceRating,
   type EditionChapters,
+  type EditionFilters,
   type LatestUploadsResult,
   type RankedMetric,
   type XComicPreferences,
+  type TitlePreferences,
 } from "./models";
 
 const PORNOGRAPHIC_GENRES = new Set<string>(CONTENT_RATING_GENRES.pornographic);
@@ -208,16 +210,16 @@ const editionLabel = (comic: ComicData): string | undefined => {
   return team && !isMachineTag(team) ? Application.decodeHTMLEntities(team) : undefined;
 };
 
-const displayTitle = (comic: ComicData): string => {
+const displayTitle = (comic: ComicData, preferences: TitlePreferences): string => {
   const trimmed = comic.name.trimEnd();
   const suffix = bracketedTeam(trimmed);
   // An importer marker in the name is noise on a shelf, not part of the work's title.
   const name = Application.decodeHTMLEntities(
-    suffix && (isMachineTag(suffix) || getMergeEditions())
+    suffix && (isMachineTag(suffix) || preferences.mergeEditions)
       ? trimmed.slice(0, trimmed.lastIndexOf("[")).trimEnd()
       : trimmed,
   );
-  if (getMergeEditions() || !getShowEditionInTitle()) return name;
+  if (preferences.mergeEditions || !preferences.showEditionInTitle) return name;
   const edition = editionLabel(comic);
   return edition && !name.includes(edition) ? `${name} (${edition})` : name;
 };
@@ -240,10 +242,10 @@ const statusLabel = (value?: string | null): string => {
   return STATUS_LABELS[key] ?? titleCase(key);
 };
 
-const baseCard = (node: ComicNode) => {
+const baseCard = (node: ComicNode, preferences: TitlePreferences) => {
   return {
     mangaId: sanitizeId(node.data.id),
-    title: displayTitle(node.data),
+    title: displayTitle(node.data, preferences),
     imageUrl: toAbsoluteUrl(node.data.urlCover ?? node.data.remoteCoverUrl),
     contentRating: toContentRating(node.data),
   };
@@ -262,8 +264,11 @@ const cardSubtitle = (comic: ComicData): string | undefined =>
     .filter((value): value is string => Boolean(value))
     .join(" • ") || undefined;
 
-export const toSearchResultItem = (node: ComicNode): SearchResultItem => ({
-  ...baseCard(node),
+export const toSearchResultItem = (
+  node: ComicNode,
+  preferences = getTitlePreferences(),
+): SearchResultItem => ({
+  ...baseCard(node, preferences),
   subtitle: cardSubtitle(node.data),
 });
 
@@ -336,21 +341,23 @@ type CarouselItemType =
 export const toDiscoverItems = (
   nodes: ComicNode[],
   type: CarouselItemType,
+  preferences = getTitlePreferences(),
 ): DiscoverSectionItem[] =>
   nodes
-    .map((node) => toDiscoverItem(node, type))
+    .map((node) => toDiscoverItem(node, type, preferences))
     .filter((item): item is DiscoverSectionItem => item !== undefined);
 
 const toDiscoverItem = (
   node: ComicNode,
   type: CarouselItemType,
+  preferences: TitlePreferences,
 ): DiscoverSectionItem | undefined => {
   const chapter = node.data.chapterNodes_last?.[0]?.data;
   if (type === "chapterUpdatesCarouselItem") {
     if (!chapter?.id) return undefined;
     return {
       type,
-      ...baseCard(node),
+      ...baseCard(node, preferences),
       chapterId: toChapterId(chapter),
       subtitle: cardSubtitle(node.data),
       publishDate: dateFromTimestamp(
@@ -358,7 +365,7 @@ const toDiscoverItem = (
       ),
     };
   }
-  return { type, ...baseCard(node), subtitle: cardSubtitle(node.data) };
+  return { type, ...baseCard(node, preferences), subtitle: cardSubtitle(node.data) };
 };
 
 const formatMetricCount = (value: number, label: string): string =>
@@ -383,12 +390,13 @@ const rankedMetricInfo = (
 export const toRankedDiscoverItems = (
   nodes: ComicNode[],
   metric: RankedMetric,
+  preferences = getTitlePreferences(),
 ): DiscoverSectionItem[] =>
   nodes.map((node) => {
     if (metric === "follows") {
       return {
         type: "prominentCarouselItem",
-        ...baseCard(node),
+        ...baseCard(node, preferences),
         subtitle:
           typeof node.data.follows === "number"
             ? `♥ ${formatMetricCount(node.data.follows, "Follows")}`
@@ -418,7 +426,7 @@ export const toRankedDiscoverItems = (
             : undefined;
       return {
         type: "featuredCarouselItem",
-        ...baseCard(node),
+        ...baseCard(node, preferences),
         supertitle: originalTitleForCard(node.data),
         summary: stripHtml(node.data.summary?.html ?? node.data.description) || undefined,
         infoItems,
@@ -427,7 +435,7 @@ export const toRankedDiscoverItems = (
 
     return {
       type: "simpleCarouselItem",
-      ...baseCard(node),
+      ...baseCard(node, preferences),
       subtitle:
         typeof node.data.totalChapters === "number"
           ? formatMetricCount(node.data.totalChapters, "Chapters")
@@ -479,7 +487,11 @@ const formatDateYmd = (value: ComicData["originalPubFrom"]): string | undefined 
     .join("-");
 };
 
-export const toSourceManga = (node: ComicNode, mangaId = sanitizeId(node.data.id)): SourceManga => {
+export const toSourceManga = (
+  node: ComicNode,
+  mangaId = sanitizeId(node.data.id),
+  preferences = getTitlePreferences(),
+): SourceManga => {
   const comic = node.data;
   const authorNames = nodeNames(comic.authorNodes);
   const artistNames = nodeNames(comic.artistNodes);
@@ -508,7 +520,7 @@ export const toSourceManga = (node: ComicNode, mangaId = sanitizeId(node.data.id
   return {
     mangaId,
     mangaInfo: {
-      primaryTitle: displayTitle(comic),
+      primaryTitle: displayTitle(comic, preferences),
       secondaryTitles: (comic.altNames ?? []).map((title) => Application.decodeHTMLEntities(title)),
       thumbnailUrl: cover,
       synopsis: stripHtml(comic.summary?.html ?? comic.description),
@@ -621,6 +633,15 @@ export const toMergedEditions = (node: ComicNode, languages: string[]): ComicDat
       : [];
   }),
 ];
+
+export const filterEditions = (editions: ComicData[], filters: EditionFilters): ComicData[] =>
+  editions.filter((edition) => {
+    const names = [edition.id.toLowerCase(), editionLabel(edition)?.trim().toLowerCase()];
+    return (
+      (!filters.included.length || names.some((name) => name && filters.included.includes(name))) &&
+      !names.some((name) => name && filters.excluded.includes(name))
+    );
+  });
 
 export const parseChapterLists = (
   lists: EditionChapters[],

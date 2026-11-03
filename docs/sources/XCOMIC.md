@@ -58,11 +58,32 @@ their entries even when that importer label matches.
 
 ## Further parity work
 
-Edition inclusion/exclusion and grouping controls from Mana could be added separately. The
-Aidoku/Mana title-level author, artist and description fallbacks are also worth considering
+Source settings now expose Include and Exclude editions/teams as comma- or newline-separated
+names or edition ids. Matching is exact and case-insensitive; blank Include allows every
+otherwise eligible edition and Exclude wins conflicts. These filters apply only to merged
+chapter lists; editing them does not reload Discover. Filter before requesting the lists, including the opened edition if explicitly
+excluded. If nothing matches, throw a useful error instead of returning an apparently complete
+empty refresh. An unnamed edition can be selected by id; importer labels are not team names.
+
+Grouping controls from Mana could be added separately. The Aidoku/Mana title-level author,
+artist and description fallbacks are also worth considering
 when a comic edition lacks metadata; request those fields in the same GraphQL response.
 Do not copy reader-specific caches, title-key migrations or unsupported reading-direction
 fields into Paperback.
+
+## Discover settings-read regression
+
+The edition-controls change added merge-mode reads inside the title formatter for every card.
+An identical 48-card fixture required 48 settings reads before that change, then 96 reads for
+plain titles and 144 for names carrying a team suffix. These are native calls on a phone;
+Node timing alone does not capture their cost.
+
+Read title preferences once per card batch and pass the snapshot through the mappers.
+The same fixture now needs two reads for 48 cards, with the same output for each setting.
+Search also snapshots once per page. Discover's queries, number of cards and hero sizes remain
+unchanged, and edition/team filters never run on its path. Regression tests assert the fixed
+read count and that Discover makes no chapter-list or sibling-edition requests. Device load
+time still requires verification.
 
 ## Verification
 
