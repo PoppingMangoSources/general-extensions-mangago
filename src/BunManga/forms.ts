@@ -16,9 +16,17 @@ import {
   ADULT_OPTIONS,
   GENRE_MATCH_OPTIONS,
   STATUS_OPTIONS,
+  DOMAIN,
+  MIRRORS,
+  STATE_KEYS,
   type SearchMetadata,
   type TriState,
 } from "./models";
+
+export const getBaseUrl = (): string => {
+  const value = Application.getState(STATE_KEYS.ACTIVE_BASE_URL);
+  return typeof value === "string" && MIRRORS.includes(value) ? value : DOMAIN;
+};
 
 export class BunMangaAdvancedSearchForm extends AdvancedSearchForm {
   private genres: TriState;

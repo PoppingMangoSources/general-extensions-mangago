@@ -17,7 +17,8 @@ import {
 import type * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
-import { DOMAIN, type ListingChapter, type MangaListItem } from "./models";
+import { getBaseUrl } from "./forms";
+import { type ListingChapter, type MangaListItem } from "./models";
 
 // Paperback rejects ids containing characters outside this set.
 const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
@@ -56,7 +57,7 @@ const toAbsoluteUrl = (value?: string | null): string => {
   if (!url) return "";
   if (url.startsWith("//")) return `https:${url}`;
   if (/^https?:\/\//i.test(url)) return url.replace(/^http:\/\//i, "https://");
-  return new URL(DOMAIN).setPath(url).toString();
+  return new URL(getBaseUrl()).setPath(url).toString();
 };
 
 const imageUrlFrom = (image: cheerio.Cheerio<AnyNode>): string => {
@@ -190,7 +191,7 @@ export const parseMangaList = ($: cheerio.CheerioAPI): MangaListItem[] => {
 export const parsePopular = ($: cheerio.CheerioAPI): MangaListItem[] =>
   $(".widget-manga-popular-slider")
     .filter((_, element) =>
-      /^popular$/i.test(cleanText($(element).find(".heading").first().text())),
+      /^(?:popular|top daily)$/i.test(cleanText($(element).find(".heading").first().text())),
     )
     .first()
     .find(".slider__item")
@@ -220,6 +221,7 @@ export const parseTopDaily = ($: cheerio.CheerioAPI): MangaListItem[] => {
       /^top daily$/i.test(cleanText($(element).find(".heading").first().text())),
     )
     .first();
+  if (!widget.length) return parsePopular($);
   return widget
     .find(".popular-item-wrap")
     .toArray()
@@ -283,16 +285,6 @@ export const parseGenreTags = ($: cheerio.CheerioAPI): Tag[] => {
   return tags;
 };
 
-export const parseLoadMoreQueryVars = ($: cheerio.CheerioAPI): string | undefined => {
-  for (const element of $("script").toArray()) {
-    const match = $(element)
-      .text()
-      .match(/var\s+__madara_query_vars\s*=\s*(\{[^\n;]+\})\s*;/);
-    if (match) return match[1];
-  }
-  return undefined;
-};
-
 export const parseTotalResults = ($: cheerio.CheerioAPI): number | undefined => {
   const match = cleanText($(".search-wrap .c-blog__heading h1").first().text()).match(
     /([\d,]+)\s+results?/i,
@@ -302,7 +294,8 @@ export const parseTotalResults = ($: cheerio.CheerioAPI): number | undefined => 
   return Number.isFinite(total) ? total : undefined;
 };
 
-export const hasLoadMore = ($: cheerio.CheerioAPI): boolean => $("#navigation-ajax").length > 0;
+export const hasLoadMore = ($: cheerio.CheerioAPI): boolean =>
+  $("#navigation-ajax, .wp-pagenavi a.nextpostslink").length > 0;
 
 export const toFeaturedItem = (item: MangaListItem): FeaturedCarouselItem => {
   const infoItems: { symbol: string; text: string }[] = [];
@@ -438,7 +431,7 @@ export const parseMangaDetails = ($: cheerio.CheerioAPI, mangaId: string): Sourc
       rating: Number.isFinite(rawRating) ? Math.min(1, Math.max(0, rawRating / 5)) : undefined,
       contentRating: contentRatingForGenres(genreTitles),
       tagGroups,
-      shareUrl: `${DOMAIN}/manga/${mangaId}/`,
+      shareUrl: `${getBaseUrl()}/manga/${mangaId}/`,
     },
   };
 };

@@ -4,7 +4,26 @@
 import type { ContentRating, JSONObject, SortingOption, Tag } from "@paperback/types";
 
 export const DOMAIN = "https://bunmanga.com";
+export const MIRRORS = [DOMAIN, "https://manhuahot.com"];
+export const STATE_KEYS = { ACTIVE_BASE_URL: "bunmanga_active_base_url" } as const;
 export const PAGE_SIZE = 12;
+export const MIRROR_PAGE_SIZE = 10;
+export const MIRROR_GENRES: Record<string, string> = {
+  adventure: "adventure-1",
+  comedy: "comedy-1",
+  drama: "drama-1",
+  fantasy: "fantasy-1",
+  historical: "historical-1",
+  manga: "mangas",
+  manhua: "manhuas",
+  manhwa: "manhwas",
+  romance: "romances",
+  "school-life": "school-life-s",
+  "shounen-ai": "shounen-ai-s",
+  "soft-yaoi": "soft-yaoi-s",
+  webtoon: "webtoon-s",
+  yaoi: "yaoi-s",
+};
 
 export const SECTIONS = {
   POPULAR: "popular",
@@ -49,8 +68,6 @@ export type TriState = Record<string, "included" | "excluded">;
 
 export interface PageMetadata extends JSONObject {
   page: number;
-  queryVars?: string;
-  total?: number;
 }
 
 export interface SearchMetadata extends JSONObject {

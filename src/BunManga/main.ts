@@ -23,9 +23,11 @@ import {
   type UpdateManager,
 } from "@paperback/types";
 
-import { BunMangaAdvancedSearchForm } from "./forms";
+import { BunMangaAdvancedSearchForm, getBaseUrl } from "./forms";
 import {
   PAGE_SIZE,
+  MIRROR_PAGE_SIZE,
+  DOMAIN,
   SECTIONS,
   SORT_OPTIONS,
   type MangaListItem,
@@ -34,11 +36,9 @@ import {
   type SearchRequest,
 } from "./models";
 import {
-  buildSearchUrl,
   BunMangaInterceptor,
   fetchChapterList,
   fetchHomePage,
-  fetchLoadMorePage,
   fetchMangaPage,
   fetchReaderPage,
   fetchSearchPage,
@@ -50,7 +50,6 @@ import {
   parseChapters,
   parseGenreTags,
   parseLatestUpdates,
-  parseLoadMoreQueryVars,
   parseMangaDetails,
   parseMangaId,
   parseMangaList,
@@ -79,6 +78,7 @@ class BunMangaExtension implements ExtensionImpl<typeof BunMangaConfig> {
   private interceptor = new BunMangaInterceptor("main");
   private homePromise?: ReturnType<typeof fetchHomePage>;
   private genresPromise?: Promise<Tag[]>;
+  private genresOrigin?: string;
 
   async initialise(): Promise<void> {
     this.rateLimiter.registerInterceptor();
@@ -184,6 +184,10 @@ class BunMangaExtension implements ExtensionImpl<typeof BunMangaConfig> {
   }
 
   private getGenres(): Promise<Tag[]> {
+    if (this.genresOrigin !== getBaseUrl()) {
+      this.genresOrigin = getBaseUrl();
+      this.genresPromise = undefined;
+    }
     return (this.genresPromise ??= fetchSearchPage({ sortBy: "relevance" }).then(parseGenreTags));
   }
 
@@ -192,29 +196,17 @@ class BunMangaExtension implements ExtensionImpl<typeof BunMangaConfig> {
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<MangaListItem>> {
     const page = metadata?.page ?? 1;
-    const document =
-      page === 1
-        ? await fetchSearchPage(request)
-        : metadata?.queryVars
-          ? await fetchLoadMorePage(page - 1, metadata.queryVars, buildSearchUrl(request))
-          : undefined;
-    if (!document) return { items: [] };
+    const document = await fetchSearchPage(request, page);
 
     const items = parseMangaList(document);
-    const queryVars = metadata?.queryVars ?? parseLoadMoreQueryVars(document);
-    const total = metadata?.total ?? parseTotalResults(document);
+    const total = parseTotalResults(document);
+    const pageSize = getBaseUrl() === DOMAIN ? PAGE_SIZE : MIRROR_PAGE_SIZE;
     const more =
-      queryVars != null &&
-      items.length > 0 &&
-      (total != null
-        ? page * PAGE_SIZE < total
-        : page === 1
-          ? hasLoadMore(document)
-          : items.length === PAGE_SIZE);
+      items.length > 0 && (total != null ? page * pageSize < total : hasLoadMore(document));
 
     return {
       items,
-      metadata: more ? { page: page + 1, queryVars, ...(total != null && { total }) } : undefined,
+      metadata: more ? { page: page + 1 } : undefined,
     };
   }
 
@@ -291,7 +283,9 @@ class BunMangaExtension implements ExtensionImpl<typeof BunMangaConfig> {
   private async resolveUrlQuery(
     query: string,
   ): Promise<PagedResults<SearchResultItem> | undefined> {
-    const url = query.trim().match(/^https?:\/\/(?:www\.)?bunmanga\.com\/manga\/[^/?#]+\/?$/i)?.[0];
+    const url = query
+      .trim()
+      .match(/^https?:\/\/(?:www\.)?(?:bunmanga|manhuahot)\.com\/manga\/[^/?#]+\/?$/i)?.[0];
     const mangaId = parseMangaId(url);
     if (!mangaId) return undefined;
     try {

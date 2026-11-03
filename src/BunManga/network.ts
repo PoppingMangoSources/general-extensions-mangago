@@ -10,20 +10,30 @@ import {
 } from "@paperback/types";
 import * as cheerio from "cheerio";
 
-import { DOMAIN, type SearchRequest } from "./models";
+import { getBaseUrl } from "./forms";
+import { DOMAIN, MIRRORS, MIRROR_GENRES, STATE_KEYS, type SearchRequest } from "./models";
 
 const IMAGE_EXTENSION_REGEX = /\.(avif|gif|jpe?g|jxl|png|svg|webp)(\/|\?|#|$)/i;
+
+const getUserAgent = async (): Promise<string> => {
+  const agent = await Application.getDefaultUserAgent();
+  if (!/\b(?:iPhone|iPad|iPod)\b/.test(agent) || /\bSafari\//.test(agent)) return agent;
+  const os = /\bOS (\d+)[_.](\d+)/.exec(agent);
+  const version = os ? `${os[1]}.${os[2]}` : "18.0";
+  return `${/\bVersion\//.test(agent) ? agent : agent.replace(/\sMobile\//, ` Version/${version} Mobile/`)} Safari/604.1`;
+};
 
 export class BunMangaInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
     const isImage = IMAGE_EXTENSION_REGEX.test(request.url);
+    const origin = MIRRORS.find((mirror) => request.url.startsWith(`${mirror}/`)) ?? getBaseUrl();
     return {
       ...request,
       headers: {
         ...request.headers,
-        referer: request.headers?.referer ?? `${DOMAIN}/`,
-        origin: DOMAIN,
-        "user-agent": await Application.getDefaultUserAgent(),
+        referer: request.headers?.referer ?? `${origin}/`,
+        origin,
+        "user-agent": await getUserAgent(),
         accept:
           request.headers?.accept ??
           (isImage
@@ -43,96 +53,89 @@ export class BunMangaInterceptor extends PaperbackInterceptor {
     response: Response,
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
-    const contentType = response.headers?.["content-type"] ?? "";
+    const headers = Object.fromEntries(
+      Object.entries(response.headers ?? {}).map(([key, value]) => [key.toLowerCase(), value]),
+    );
+    const contentType = headers["content-type"] ?? "";
     const body = contentType.includes("text/html") ? Application.arrayBufferToUTF8String(data) : "";
     if (
-      response.headers?.["cf-mitigated"] === "challenge" ||
+      headers["cf-mitigated"] === "challenge" ||
       (response.status === 403 && /(?:Just a moment|cf-chl-|_cf_chl_opt|g-recaptcha)/i.test(body))
     ) {
       throw new CloudflareError({
-        url: request.url,
-        method: request.method ?? "GET",
-        headers: { "user-agent": await Application.getDefaultUserAgent() },
+        url: `${MIRRORS.find((mirror) => request.url.startsWith(`${mirror}/`)) ?? getBaseUrl()}/`,
+        method: "GET",
+        headers: { "user-agent": await getUserAgent() },
       });
     }
     return data;
   }
 }
 
-const fetchText = async (url: string): Promise<string> => {
-  const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
-  if (response.status === 404) throw new Error(`Content not found: ${url}`);
-  if (response.status < 200 || response.status >= 300) {
-    throw new Error(`Request failed with status ${response.status}: ${url}`);
+const fetchText = async (request: Request): Promise<string> => {
+  const requestedOrigin = MIRRORS.find((mirror) => request.url.startsWith(`${mirror}/`));
+  if (!requestedOrigin) throw new Error("Unsupported BunManga request host.");
+  const origins = [...new Set([getBaseUrl(), requestedOrigin, ...MIRRORS])];
+  let lastError: unknown;
+  let challenge: CloudflareError | undefined;
+  for (const origin of origins) {
+    const url = new URL(request.url.replace(requestedOrigin, origin));
+    const genreMap =
+      origin === DOMAIN
+        ? Object.fromEntries(Object.entries(MIRROR_GENRES).map(([bun, mirror]) => [mirror, bun]))
+        : MIRROR_GENRES;
+    const genres = url.queryItems?.["genre[]"];
+    if (genres)
+      url.setQueryItem(
+        "genre[]",
+        (Array.isArray(genres) ? genres : [genres]).map((genre) => genreMap[genre] ?? genre),
+      );
+    let result: Awaited<ReturnType<typeof Application.scheduleRequest>>;
+    try {
+      result = await Application.scheduleRequest({
+        ...request,
+        url: url.toString(),
+        headers: {
+          ...request.headers,
+          ...(request.headers?.referer
+            ? { referer: request.headers.referer.replace(requestedOrigin, origin) }
+            : {}),
+        },
+      });
+    } catch (error: unknown) {
+      if (error instanceof CloudflareError) challenge ??= error;
+      lastError = error;
+      continue;
+    }
+    const [response, buffer] = result;
+    const body = Application.arrayBufferToUTF8String(buffer);
+    if (response.status === 403 && cheerio.load(body)(".mhcl-lock-box").length) {
+      throw new Error(
+        "This chapter is password protected on the website. Unlock it there before reading.",
+      );
+    }
+    if (response.status === 200) {
+      Application.setState(origin, STATE_KEYS.ACTIVE_BASE_URL);
+      return body;
+    }
+    lastError = new Error(`Request failed with status ${response.status}: ${url.toString()}`);
+    if (
+      ![403, 404, 408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524].includes(response.status)
+    )
+      throw lastError;
   }
-  return Application.arrayBufferToUTF8String(buffer);
-};
-
-const postText = async (url: string, body: string, referer: string): Promise<string> => {
-  const [response, buffer] = await Application.scheduleRequest({
-    url,
-    method: "POST",
-    headers: {
-      "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
-      referer,
-      "x-requested-with": "XMLHttpRequest",
-    },
-    body,
-  });
-  if (response.status < 200 || response.status >= 300) {
-    throw new Error(`Request failed with status ${response.status}: ${url}`);
-  }
-  return Application.arrayBufferToUTF8String(buffer);
+  throw challenge ?? lastError ?? new Error("BunManga and ManhuaHot are unavailable.");
 };
 
 const fetchDocument = async (url: string): Promise<cheerio.CheerioAPI> =>
-  cheerio.load(await fetchText(url));
+  cheerio.load(await fetchText({ url, method: "GET" }));
 
-const toFormValue = (value: string): string => encodeURIComponent(value).replace(/%20/g, "+");
-
-const appendFormValues = (entries: string[], key: string, value: unknown): void => {
-  if (value == null) return;
-  if (Array.isArray(value)) {
-    value.forEach((item, index) => appendFormValues(entries, `${key}[${index}]`, item));
-    return;
-  }
-  if (typeof value === "object") {
-    for (const [childKey, childValue] of Object.entries(value)) {
-      appendFormValues(entries, `${key}[${childKey}]`, childValue);
-    }
-    return;
-  }
-  if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
-    return;
-  }
-  entries.push(`${toFormValue(key)}=${toFormValue(String(value))}`);
-};
-
-const loadMoreBody = (page: number, queryVars: string): string => {
-  let variables: unknown;
-  try {
-    variables = JSON.parse(queryVars);
-  } catch (error: unknown) {
-    throw new Error("Unable to parse BunManga pagination metadata.", { cause: error });
-  }
-  if (!variables || typeof variables !== "object" || Array.isArray(variables)) {
-    throw new Error("Invalid BunManga pagination metadata.");
-  }
-
-  const entries = [
-    `action=${toFormValue("madara_load_more")}`,
-    `page=${page}`,
-    `template=${toFormValue("madara-core/content/content-search")}`,
-  ];
-  appendFormValues(entries, "vars", variables);
-  return entries.join("&");
-};
-
-export const buildSearchUrl = (request: SearchRequest): string => {
-  const url = new URL(request.title ? DOMAIN : `${DOMAIN}/?s`).setQueryItem(
+export const buildSearchUrl = (request: SearchRequest, page = 1): string => {
+  const url = new URL(request.title ? `${getBaseUrl()}/` : `${getBaseUrl()}/?s`).setQueryItem(
     "post_type",
     "wp-manga",
   );
+  if (page > 1) url.setPath(`/page/${page}/`);
   if (request.title) url.setQueryItem("s", request.title);
   if (request.sortBy && request.sortBy !== "relevance") {
     url.setQueryItem("m_orderby", request.sortBy);
@@ -147,39 +150,49 @@ export const buildSearchUrl = (request: SearchRequest): string => {
   return url.toString();
 };
 
-export const fetchHomePage = (): Promise<cheerio.CheerioAPI> => fetchDocument(`${DOMAIN}/`);
+export const fetchHomePage = (): Promise<cheerio.CheerioAPI> => fetchDocument(`${getBaseUrl()}/`);
 
-export const fetchSearchPage = (request: SearchRequest): Promise<cheerio.CheerioAPI> =>
-  fetchDocument(buildSearchUrl(request));
-
-export const fetchLoadMorePage = async (
-  page: number,
-  queryVars: string,
-  referer: string,
-): Promise<cheerio.CheerioAPI> =>
-  cheerio.load(
-    await postText(`${DOMAIN}/wp-admin/admin-ajax.php`, loadMoreBody(page, queryVars), referer),
-  );
+export const fetchSearchPage = (request: SearchRequest, page = 1): Promise<cheerio.CheerioAPI> =>
+  fetchDocument(buildSearchUrl(request, page));
 
 export const fetchMangaPage = (mangaId: string): Promise<cheerio.CheerioAPI> =>
-  fetchDocument(new URL(DOMAIN).addPathComponent("manga").addPathComponent(mangaId).toString());
+  fetchDocument(
+    new URL(getBaseUrl())
+      .addPathComponent("manga")
+      .addPathComponent(mangaId)
+      .addPathComponent("")
+      .toString(),
+  );
 
 export const fetchChapterList = async (mangaId: string): Promise<cheerio.CheerioAPI> => {
-  const url = new URL(DOMAIN)
+  const url = new URL(getBaseUrl())
     .addPathComponent("manga")
     .addPathComponent(mangaId)
     .addPathComponent("ajax")
     .addPathComponent("chapters")
+    .addPathComponent("")
     .toString();
-  return cheerio.load(await postText(url, "", `${DOMAIN}/manga/${mangaId}/`));
+  return cheerio.load(
+    await fetchText({
+      url,
+      method: "POST",
+      body: "",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+        referer: `${getBaseUrl()}/manga/${mangaId}/`,
+        "x-requested-with": "XMLHttpRequest",
+      },
+    }),
+  );
 };
 
 export const fetchReaderPage = (mangaId: string, chapterId: string): Promise<cheerio.CheerioAPI> =>
   fetchDocument(
-    new URL(DOMAIN)
+    new URL(getBaseUrl())
       .addPathComponent("manga")
       .addPathComponent(mangaId)
       .addPathComponent(chapterId)
+      .addPathComponent("")
       .setQueryItem("style", "list")
       .toString(),
   );
