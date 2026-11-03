@@ -8,3 +8,5 @@
   reader routes and migration regression coverage, verified against public responses and captures.
 - 2026-11-03: Chikari scanlator versions, seeded Random and Complete & Bingeable sections added;
   documented the explicit-scan fallback guard and section-visibility migration.
+- 2026-11-03: Chikari novel reader corrected to preserve inline HTML emphasis while serializing
+  valid XHTML, verified against This Game Is Too Realistic chapter 1600 on the site and API.

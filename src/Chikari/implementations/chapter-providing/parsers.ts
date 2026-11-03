@@ -2,6 +2,7 @@
 /* Copyright © 2026 Inkdex */
 
 import type { Chapter, ChapterDetails, SourceManga } from "@paperback/types";
+import * as cheerio from "cheerio";
 
 import {
   SAFE_ID_REGEX,
@@ -61,14 +62,6 @@ export const parseChapterDetails = (
   };
 };
 
-const escapeXhtml = (value: string): string =>
-  value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-
 export const parseNovelChapterDetails = (
   response: NovelChapterDetailsResponse,
   chapter: Chapter,
@@ -81,10 +74,13 @@ export const parseNovelChapterDetails = (
   if (!content) {
     throw new Error(`No novel content was returned for chapter ${chapter.chapterId}.`);
   }
-  const body = content
+  const paragraphs = content
     .split(/\n{2,}/)
-    .map((paragraph) => `<p>${escapeXhtml(paragraph).replace(/\n/g, "<br />")}</p>`)
+    .map((paragraph) => `<p>${paragraph.replace(/\n/g, "<br />")}</p>`)
     .join("");
+  const $ = cheerio.load(paragraphs, null, false);
+  $("script, style, iframe, form").remove();
+  const body = $.html({ xml: true });
 
   return {
     type: "html",

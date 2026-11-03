@@ -35,10 +35,19 @@ The persisted novel id remains `novel:<slug>`; comic ids remain plain slugs. Def
 remain the site's number or `oneshot`. The unified listing does not require a library migration.
 
 Novel chapter lists use `items`, `total`, `limit` and `offset`; keep paging until the reported
-total is collected. The reader supplies plain `body` text and `locked` / `lock_reason`; render
-unlocked text as escaped XHTML, and retain the access error for a locked chapter. The public
+total is collected. The reader supplies `body` text with inline HTML and `locked` / `lock_reason`;
+serialize unlocked content as XHTML and retain the access error for a locked chapter. The public
 Shadow Slave chapter 1 returned an unlocked body during verification; no captured text or
 account data is stored here.
+
+The body mixes newline-separated paragraphs with real `<i>`, `<b>` and other HTML emphasis,
+so escaping the entire body renders the tags as literal text. Wrap the paragraphs, parse the
+fragment through Cheerio and serialize with `xml: true`, preserving emphasis while escaping
+text and closing void elements for Readium. Remove scripts, styles, iframes and forms. Verified
+on 2026-11-03 against the site's rendered HTML and public API for This Game Is Too Realistic,
+chapter id `1600` (site title Chapter 784.1): its final paragraph is italicized on the website.
+The generated XHTML passed strict libxml2 validation; all 42 paragraph texts and four italic
+elements matched the site's rendered article. Rendering in Paperback still needs a device check.
 
 Trending periods are encoded in `sort` as `trending-day`, `trending-week` and
 `trending-month`. Direct probes on 2026-11-03 returned different daily and monthly rankings;
@@ -81,7 +90,8 @@ does not re-enable previously hidden novel sections.
 
 `test/unit/Chikari.test.ts` covers mixed search ids and order, novel ranking chips, one-offset
 paging, filtered novel home rows, shared taxonomy, the separate reader routes, chapter
-pagination and locked/empty/XHTML reader handling. It also checks scanlator ids, version labels,
+pagination and locked/empty/XHTML reader handling, including nested bold/italic formatting,
+entities and line breaks. It also checks scanlator ids, version labels,
 dates, selected reader requests and fallback rejection; seeded Random search/Discover paging,
 refresh, empty results, list filters and section visibility migration. `src/tests/Chikari.ts`
 stays the generated SDK baseline; deeper Discover and novel coverage belongs in the unit suite

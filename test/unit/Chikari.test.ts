@@ -7,6 +7,7 @@ import { registerHooks, stripTypeScriptTypes } from "node:module";
 import test, { type TestContext } from "node:test";
 
 import { ContentRating, type Request } from "@paperback/types";
+import * as cheerio from "cheerio";
 
 import {
   parseChapters,
@@ -241,7 +242,7 @@ void test("novel details, paginated chapters and reading keep their separate rou
   assert.ok(requests.every((url) => url.pathname.startsWith("/api/novels/shared-slug")));
 });
 
-void test("novel XHTML escapes text and refuses locked or empty chapters", () => {
+void test("novel XHTML preserves emphasis, escapes text and refuses locked or empty chapters", () => {
   const manga = parseMangaDetails(
     {
       ...item("novel"),
@@ -266,7 +267,7 @@ void test("novel XHTML escapes text and refuses locked or empty chapters", () =>
   if (result.type !== "html") throw new Error("Expected novel XHTML");
   assert.equal(
     result.html,
-    '<html xmlns="http://www.w3.org/1999/xhtml"><head></head><body><p>A &amp; B &lt; C<br />line</p><p>Next.</p></body></html>',
+    '<html xmlns="http://www.w3.org/1999/xhtml"><head></head><body><p>A &amp; B &lt; C<br/>line</p><p>Next.</p></body></html>',
   );
   assert.throws(
     () =>
@@ -284,6 +285,25 @@ void test("novel XHTML escapes text and refuses locked or empty chapters", () =>
     medium: "novel",
     slug: "shared-slug",
   });
+  const formatted = parseNovelChapterDetails(
+    {
+      body: "<i>Dream on!</i>\n\n<b>Bold & brave</b> and <strong>strong <em>emphasis</em></strong>.\nA & B < C &nbsp;<br>End.",
+      locked: false,
+      lock_reason: "",
+    },
+    chapter,
+  );
+  assert.equal(formatted.type, "html");
+  if (formatted.type !== "html") throw new Error("Expected novel XHTML");
+  const $ = cheerio.load(formatted.html, { xml: true });
+  assert.equal($("p").length, 2);
+  assert.equal($("p i").text(), "Dream on!");
+  assert.equal($("p b").text(), "Bold & brave");
+  assert.equal($("strong em").text(), "emphasis");
+  assert.ok($("p").eq(1).text().includes("A & B < C"));
+  assert.equal($("br").length, 2);
+  assert.ok(!formatted.html.includes("&lt;i&gt;Dream on!"));
+  assert.ok(!formatted.html.includes("&nbsp;"));
 });
 
 void test("scanlator versions keep default chapter ids and open only the requested scan", async (t) => {
