@@ -3,18 +3,20 @@
 
 import type { Chapter, ChapterDetails, SourceManga } from "@paperback/types";
 
-import type {
-  ChapterDetailsResponse,
-  ChapterItem,
-  NovelChapterDetailsResponse,
+import {
+  SAFE_ID_REGEX,
+  type ChapterDetailsResponse,
+  type ChapterItem,
+  type NovelChapterDetailsResponse,
 } from "../shared/models";
-import { chapterTitle, chapterToken } from "../shared/parsers";
+import { chapterTitle, chapterToken, decodeMangaId } from "../shared/parsers";
 
-export const parseChapters = (chapters: ChapterItem[], sourceManga: SourceManga): Chapter[] =>
-  chapters.map((chapter, index) => {
+export const parseChapters = (chapters: ChapterItem[], sourceManga: SourceManga): Chapter[] => {
+  const { medium } = decodeMangaId(sourceManga.mangaId);
+  return chapters.flatMap((chapter, index) => {
     const publishDate = new Date(chapter.created_at);
     const volume = Number(chapter.volume);
-    return {
+    const automatic: Chapter = {
       chapterId: chapterToken(chapter.number),
       sourceManga,
       langCode: chapter.lang || "en",
@@ -23,8 +25,27 @@ export const parseChapters = (chapters: ChapterItem[], sourceManga: SourceManga)
       volume: Number.isFinite(volume) && volume > 0 ? volume : 0,
       publishDate: Number.isNaN(publishDate.getTime()) ? undefined : publishDate,
       sortingIndex: index,
+      version: medium === "comic" ? "Automatic" : undefined,
     };
+    if (medium === "novel") return [automatic];
+    return [
+      automatic,
+      ...(chapter.scans ?? []).map((scan) => {
+        const scanId = encodeURIComponent(scan.slug).replace(
+          SAFE_ID_REGEX,
+          (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+        );
+        const scanDate = new Date(scan.created_at);
+        return {
+          ...automatic,
+          chapterId: `${automatic.chapterId}@${scanId}`,
+          version: scan.name,
+          publishDate: Number.isNaN(scanDate.getTime()) ? automatic.publishDate : scanDate,
+        };
+      }),
+    ];
   });
+};
 
 export const parseChapterDetails = (
   response: ChapterDetailsResponse,

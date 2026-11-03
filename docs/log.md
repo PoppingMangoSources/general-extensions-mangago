@@ -6,3 +6,5 @@
   shared validation before publishing and Stop-hook error handling; verified at `f3d531a`.
 - 2026-11-03: Chikari page added for the unified listing/home/taxonomy API, separate novel
   reader routes and migration regression coverage, verified against public responses and captures.
+- 2026-11-03: Chikari scanlator versions, seeded Random and Complete & Bingeable sections added;
+  documented the explicit-scan fallback guard and section-visibility migration.

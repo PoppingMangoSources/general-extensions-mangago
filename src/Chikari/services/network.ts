@@ -150,6 +150,7 @@ export interface SeriesQueryOptions {
   offset: number;
   period?: Period;
   query?: string;
+  seed?: string;
   sort: SortId;
   statuses: SeriesStatus[];
   tags: string[];
@@ -168,6 +169,7 @@ const buildSeriesUrl = (options: SeriesQueryOptions): string => {
     .setQueryItem("offset", String(options.offset));
 
   if (options.query) url.setQueryItem("q", options.query);
+  if (options.seed) url.setQueryItem("seed", options.seed);
   if (options.types.length > 0) url.setQueryItem("type", options.types);
   if (options.genres.length > 0) url.setQueryItem("genre", options.genres);
   if (options.excludedGenres.length > 0) {
@@ -226,8 +228,19 @@ export const fetchNovelChapters = async (slug: string): Promise<ChapterListRespo
 export const fetchChapterDetails = async (
   slug: string,
   chapterId: string,
-): Promise<ChapterDetailsResponse> =>
-  fetchApi<ChapterDetailsResponse>(apiUrl("series", slug, "chapters", chapterId).toString());
+): Promise<ChapterDetailsResponse> => {
+  const [number = "", scanId] = chapterId.split("@");
+  const scan = scanId ? decodeURIComponent(scanId) : undefined;
+  const url = apiUrl("series", slug, "chapters", number);
+  if (scan) url.setQueryItem("scan", scan);
+  const response = await fetchApi<ChapterDetailsResponse>(url.toString());
+  if (scan && (response.scan_fallback || response.scan !== scan)) {
+    throw new Error(
+      "The selected scanlator is unavailable for this chapter. Choose another version.",
+    );
+  }
+  return response;
+};
 
 export const fetchNovelChapterDetails = async (
   slug: string,

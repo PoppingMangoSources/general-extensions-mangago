@@ -66,6 +66,11 @@ export class SearchProvider {
     const minimum = Number(searchMetadata.minChapters);
     const selectedTypes = (searchMetadata.types ?? DEFAULT_SEARCH_TYPES) as SeriesType[];
     const offset = metadata?.offset ?? 0;
+    const sort = searchMetadata.sort ?? (sortingOption?.id as SortId | undefined) ?? "popular";
+    const seed =
+      sort === "random"
+        ? (metadata?.seed ?? String(Math.floor(Math.random() * 2147483647) + 1))
+        : undefined;
     const data = await fetchSeries({
       adult: preferences.adult,
       contentRatings: preferences.contentRatings,
@@ -78,7 +83,8 @@ export class SearchProvider {
         searchMetadata.minChapters && Number.isFinite(minimum) ? Math.max(0, minimum) : undefined,
       period: searchMetadata.period,
       query: query.title.trim() || undefined,
-      sort: searchMetadata.sort ?? (sortingOption?.id as SortId | undefined) ?? "popular",
+      sort,
+      seed,
       statuses: searchMetadata.statuses,
       tags: includedTags,
       types: selectedTypes,
@@ -88,7 +94,9 @@ export class SearchProvider {
     return {
       items: data.items.map((series) => toSearchResultItem(series)),
       metadata:
-        data.items.length > 0 && nextOffset < data.total ? { offset: nextOffset } : undefined,
+        data.items.length > 0 && nextOffset < data.total
+          ? { offset: nextOffset, ...(seed ? { seed } : {}) }
+          : undefined,
     };
   }
 

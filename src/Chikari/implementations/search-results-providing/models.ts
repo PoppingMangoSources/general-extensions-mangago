@@ -27,6 +27,8 @@ export const SORT_OPTIONS: SortingOption[] = [
   { id: "updated", label: "Recently Updated" },
   { id: "added", label: "Recently Added" },
   { id: "most_bookmarked", label: "Most Bookmarked" },
+  { id: "random", label: "Random" },
+  { id: "bingeable", label: "Complete & Bingeable" },
 ];
 
 export const TYPE_OPTIONS: Array<{ id: SeriesType; title: string }> = [

@@ -67,7 +67,12 @@ export const getVisibleSections = (): SectionId[] => {
   const schemaVersion =
     (Application.getState(STATE_KEYS.SECTIONS_VERSION) as number | undefined) ?? 1;
   if (stored && schemaVersion < SECTION_SCHEMA_VERSION) {
-    for (const id of NOVEL_SECTION_IDS) {
+    const additions = [
+      ...(schemaVersion < 2 ? NOVEL_SECTION_IDS : []),
+      SECTIONS.RANDOM,
+      SECTIONS.BINGEABLE,
+    ];
+    for (const id of additions) {
       if (!visible.includes(id)) visible.push(id);
     }
     Application.setState(visible, STATE_KEYS.VISIBLE_SECTIONS);

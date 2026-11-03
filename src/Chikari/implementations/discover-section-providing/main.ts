@@ -1,12 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import type {
-  DiscoverSection,
-  DiscoverSectionItem,
-  Metadata,
-  PagedResults,
-} from "@paperback/types";
+import type { DiscoverSection, DiscoverSectionItem, PagedResults } from "@paperback/types";
 
 import type { ChikariImplementation } from "../../main";
 import {
@@ -14,6 +9,7 @@ import {
   getSectionOrder,
   getVisibleSections,
 } from "../settings-form-providing/main";
+import type { PageMetadata } from "../shared/models";
 import {
   BOOKMARK_PERIOD_FILTERS,
   PERIOD_FILTERS,
@@ -41,7 +37,7 @@ export class DiscoverProvider {
   async getDiscoverSectionItems(
     this: ChikariImplementation,
     section: DiscoverSection,
-    _metadata?: Metadata,
+    metadata?: PageMetadata,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
       case SECTIONS.FEATURED:
@@ -64,6 +60,30 @@ export class DiscoverProvider {
         return this.getPopularSection();
       case SECTIONS.TOP_RATED:
         return this.getTopRatedSection();
+      case SECTIONS.RANDOM:
+      case SECTIONS.BINGEABLE: {
+        const result = await this.getSearchResults(
+          {
+            title: "",
+            metadata: {
+              sort: section.id === SECTIONS.RANDOM ? "random" : "bingeable",
+              types: [...getPreferences().types, "novel"],
+            },
+          },
+          metadata,
+        );
+        return {
+          ...result,
+          items: result.items.map((item) => ({
+            type: "simpleCarouselItem",
+            mangaId: item.mangaId,
+            title: item.title,
+            imageUrl: item.imageUrl,
+            subtitle: item.subtitle,
+            contentRating: item.contentRating,
+          })),
+        };
+      }
       default:
         return { items: [] };
     }

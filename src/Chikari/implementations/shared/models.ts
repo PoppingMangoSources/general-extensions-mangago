@@ -29,7 +29,15 @@ export type Medium = "comic" | "novel";
 export type Period = "day" | "week" | "month" | "all";
 export type SeriesStatus = "releasing" | "completed" | "hiatus" | "cancelled" | "upcoming";
 export type SeriesType = "manga" | "manhwa" | "manhua" | "oel" | "novel";
-export type SortId = "popular" | "top_rated" | "trending" | "updated" | "added" | "most_bookmarked";
+export type SortId =
+  | "popular"
+  | "top_rated"
+  | "trending"
+  | "updated"
+  | "added"
+  | "most_bookmarked"
+  | "random"
+  | "bingeable";
 
 export interface ChikariPreferences {
   adult: boolean;
@@ -90,6 +98,7 @@ export interface ChapterItem {
   title: string;
   lang: string;
   created_at: string;
+  scans?: Array<{ slug: string; name: string; created_at: string }>;
 }
 
 export interface SeriesDetails {
@@ -118,6 +127,8 @@ export interface ChapterListResponse {
 
 export interface ChapterDetailsResponse {
   pages: string[];
+  scan?: string | null;
+  scan_fallback?: boolean;
 }
 
 export interface NovelChapterDetailsResponse {
@@ -139,4 +150,5 @@ export interface TagOption {
 
 export interface PageMetadata extends JSONObject {
   offset?: number;
+  seed?: string;
 }

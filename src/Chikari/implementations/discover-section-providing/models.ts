@@ -16,11 +16,13 @@ export const SECTIONS = {
   MOST_BOOKMARKED_NOVELS: "most-bookmarked-novels",
   POPULAR: "popular",
   TOP_RATED: "top-rated",
+  RANDOM: "random",
+  BINGEABLE: "bingeable",
 } as const;
 
 export type SectionId = (typeof SECTIONS)[keyof typeof SECTIONS];
 
-export const SECTION_SCHEMA_VERSION = 2;
+export const SECTION_SCHEMA_VERSION = 3;
 
 export const NOVEL_SECTION_IDS: SectionId[] = [
   SECTIONS.TRENDING_NOVELS,
@@ -79,6 +81,16 @@ export const SECTION_DEFINITIONS: Record<SectionId, DiscoverSection> = {
     title: "Top Rated by Type",
     type: DiscoverSectionType.genres,
   },
+  [SECTIONS.RANDOM]: {
+    id: SECTIONS.RANDOM,
+    title: "Random",
+    type: DiscoverSectionType.simpleCarousel,
+  },
+  [SECTIONS.BINGEABLE]: {
+    id: SECTIONS.BINGEABLE,
+    title: "Complete & Bingeable",
+    type: DiscoverSectionType.simpleCarousel,
+  },
 };
 
 export const SECTION_OPTIONS: Array<{ id: SectionId; title: string }> = [
@@ -92,6 +104,8 @@ export const SECTION_OPTIONS: Array<{ id: SectionId; title: string }> = [
   { id: SECTIONS.MOST_BOOKMARKED_NOVELS, title: "Most Bookmarked Novels" },
   { id: SECTIONS.POPULAR, title: "Popular by Type" },
   { id: SECTIONS.TOP_RATED, title: "Top Rated by Type" },
+  { id: SECTIONS.RANDOM, title: "Random" },
+  { id: SECTIONS.BINGEABLE, title: "Complete & Bingeable" },
 ];
 
 export const PERIOD_FILTERS: Array<{ id: Period; title: string }> = [

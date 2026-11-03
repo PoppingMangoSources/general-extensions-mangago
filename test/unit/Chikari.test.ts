@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { registerHooks, stripTypeScriptTypes } from "node:module";
 import test, { type TestContext } from "node:test";
 
-import type { Request } from "@paperback/types";
+import { ContentRating, type Request } from "@paperback/types";
 
 import {
   parseChapters,
@@ -17,6 +17,7 @@ import { DEFAULT_SEARCH_TYPES } from "../../src/Chikari/implementations/search-r
 import {
   DOMAIN,
   STATE_KEYS,
+  SAFE_ID_REGEX,
   type SeriesItem,
 } from "../../src/Chikari/implementations/shared/models";
 import { decodeMangaId, encodeMangaId } from "../../src/Chikari/implementations/shared/parsers";
@@ -41,6 +42,7 @@ registerHooks({
     return nextLoad(url, context);
   },
 });
+
 Object.defineProperty(globalThis, "Application", {
   configurable: true,
   value: { getState: () => undefined },
@@ -282,4 +284,160 @@ void test("novel XHTML escapes text and refuses locked or empty chapters", () =>
     medium: "novel",
     slug: "shared-slug",
   });
+});
+
+void test("scanlator versions keep default chapter ids and open only the requested scan", async (t) => {
+  let fallback = false;
+  const requests = mockApi(t, (url) => {
+    if (url.pathname.endsWith("/chapters"))
+      return {
+        total: 3,
+        items: [0, 1.5, null].map((number) => ({
+          number,
+          title: "A title",
+          volume: "",
+          lang: "en",
+          created_at: "2026-07-04T06:52:42Z",
+          scans:
+            number === null
+              ? []
+              : [
+                  { slug: "asura", name: "Asura", created_at: "2026-10-23T21:10:26Z" },
+                  { slug: "official", name: "Official", created_at: "2026-10-29T04:53:27Z" },
+                ],
+        })),
+      };
+    if (url.pathname.endsWith("/chapters/1.5"))
+      return {
+        pages: [`https://images.test/${url.searchParams.get("scan") ?? "default"}.webp`],
+        scan: fallback ? "asura" : url.searchParams.get("scan"),
+        scan_fallback: fallback,
+      };
+    return undefined;
+  });
+  const manga = {
+    mangaId: "omniscient-reader",
+    mangaInfo: {
+      primaryTitle: "Omniscient Reader",
+      secondaryTitles: [],
+      thumbnailUrl: "",
+      synopsis: "",
+      contentRating: ContentRating.EVERYONE,
+    },
+  };
+  const chapters = await Chikari.getChapters(manga);
+  assert.deepEqual(
+    chapters.map((chapter) => chapter.chapterId),
+    ["0", "0@asura", "0@official", "1.5", "1.5@asura", "1.5@official", "oneshot"],
+  );
+  assert.deepEqual(
+    chapters.map((chapter) => chapter.version),
+    ["Automatic", "Asura", "Official", "Automatic", "Asura", "Official", "Automatic"],
+  );
+  assert.deepEqual(
+    chapters.map((chapter) => chapter.chapNum),
+    [0, 0, 0, 1.5, 1.5, 1.5, 3],
+  );
+  assert.ok(chapters.every((chapter) => !chapter.chapterId.match(SAFE_ID_REGEX)));
+  assert.equal(chapters[5].publishDate?.toISOString(), "2026-10-29T04:53:27.000Z");
+  assert.equal(requests.length, 1);
+  const official = await Chikari.getChapterDetails(chapters[5]);
+  assert.ok("pages" in official);
+  assert.deepEqual(official.pages, ["https://images.test/official.webp"]);
+  assert.equal(official.id, "1.5@official");
+  assert.equal(requests.at(-1)?.searchParams.get("scan"), "official");
+  const automatic = await Chikari.getChapterDetails(chapters[3]);
+  assert.ok("pages" in automatic);
+  assert.deepEqual(automatic.pages, ["https://images.test/default.webp"]);
+  assert.equal(requests.at(-1)?.searchParams.has("scan"), false);
+  fallback = true;
+  await assert.rejects(Chikari.getChapterDetails(chapters[5]), /scanlator.*unavailable/i);
+});
+
+void test("Random and Complete & Bingeable page with preferences and stable random seeds", async (t) => {
+  let nextRandom = 0.1;
+  t.mock.method(Math, "random", () => {
+    nextRandom += 0.1;
+    return nextRandom;
+  });
+  const requests = mockApi(
+    t,
+    (url) =>
+      url.pathname === "/api/series"
+        ? {
+            items: [item("comic"), item("novel")],
+            total: 4,
+          }
+        : undefined,
+    {
+      [STATE_KEYS.CONTENT_TYPES]: ["manga", "novel"],
+      [STATE_KEYS.EXCLUDED_GENRES]: ["hentai"],
+      [STATE_KEYS.EXCLUDED_TAGS]: ["42"],
+      [STATE_KEYS.VISIBLE_SECTIONS]: ["featured"],
+      [STATE_KEYS.SECTIONS_VERSION]: 2,
+    },
+  );
+  const sections = await Chikari.getDiscoverSections();
+  assert.deepEqual(
+    sections.map((section) => section.id),
+    ["featured", "random", "bingeable"],
+  );
+  const random = sections.find((section) => section.id === "random");
+  const bingeable = sections.find((section) => section.id === "bingeable");
+  assert.ok(random && bingeable);
+  const first = await Chikari.getDiscoverSectionItems(random);
+  assert.deepEqual(
+    first.items.map((entry) => entry.type),
+    ["simpleCarouselItem", "simpleCarouselItem"],
+  );
+  assert.ok(first.metadata && typeof first.metadata === "object" && !Array.isArray(first.metadata));
+  assert.ok(first.metadata.seed);
+  assert.equal(first.metadata.offset, 2);
+  const second = await Chikari.getDiscoverSectionItems(random, first.metadata);
+  assert.equal(second.metadata, undefined);
+  assert.equal(requests[0].searchParams.get("seed"), requests[1].searchParams.get("seed"));
+  assert.equal(requests[1].searchParams.get("offset"), "2");
+  assert.deepEqual(
+    first.items.map((entry) => ("mangaId" in entry ? entry.mangaId : "")),
+    ["shared-slug", "novel:shared-slug"],
+  );
+  const complete = await Chikari.getDiscoverSectionItems(bingeable);
+  assert.deepEqual(complete.metadata, { offset: 2 });
+  assert.equal(requests.at(-1)?.searchParams.get("sort"), "bingeable");
+  assert.equal(requests.at(-1)?.searchParams.has("seed"), false);
+  assert.ok(requests.every((url) => url.searchParams.getAll("type").join() === "manga,novel"));
+  assert.ok(requests.every((url) => url.searchParams.get("content_rating") === "safe,suggestive"));
+  assert.ok(requests.every((url) => url.searchParams.get("genre_exclude") === "hentai"));
+  assert.ok(requests.every((url) => url.searchParams.get("tag_exclude") === "42"));
+  assert.equal(requests.length, 3);
+  const refreshed = await Chikari.getDiscoverSectionItems(random);
+  assert.notDeepEqual(refreshed.metadata, first.metadata);
+  assert.equal(requests.at(-1)?.searchParams.get("offset"), "0");
+  Application.setState(["featured"], STATE_KEYS.VISIBLE_SECTIONS);
+  assert.deepEqual(
+    (await Chikari.getDiscoverSections()).map((section) => section.id),
+    ["featured"],
+  );
+});
+
+void test("Random search sorting retains its seed and empty bingeable results stop paging", async (t) => {
+  const requests = mockApi(t, (url) =>
+    url.searchParams.get("sort") === "random"
+      ? { items: [item("novel")], total: 2 }
+      : { items: [], total: 0 },
+  );
+  const first = await Chikari.getSearchResults({ title: "" }, undefined, {
+    id: "random",
+    label: "Random",
+  });
+  assert.ok(first.metadata && typeof first.metadata === "object" && !Array.isArray(first.metadata));
+  await Chikari.getSearchResults({ title: "" }, first.metadata, { id: "random", label: "Random" });
+  assert.equal(requests[0].searchParams.get("seed"), requests[1].searchParams.get("seed"));
+  const empty = await Chikari.getSearchResults(
+    { title: "", metadata: { types: ["novel"], sort: "bingeable" } },
+    undefined,
+  );
+  assert.deepEqual(empty, { items: [], metadata: undefined });
+  assert.equal(requests.at(-1)?.searchParams.get("type"), "novel");
+  assert.equal(requests.at(-1)?.searchParams.has("seed"), false);
 });
