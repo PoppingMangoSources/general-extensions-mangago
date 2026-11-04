@@ -75,3 +75,16 @@ actually use that contract. The new formatters make no additional network reques
 Calibration found no empty-image literal findings across 22 merged reference sources.
 Submission packaging includes the shared listing formatter when the submitted source imports
 it, so the source remains buildable when copied out of the working branch.
+
+## Branch parity and historical attribution, 2026-11-04
+
+Shared guidance and enforcement belong on both branches. Attribution settings alone do not
+rewrite older messages: the stable sync commit retained a co-author/session footer despite
+later owner-only commits. Historical cleanup recreates that merge and its descendants with
+unchanged trees and the same upstream parent, then advances the branch with an expected-head
+lease. Imported upstream commits retain their original authors.
+
+Stable now carries the working branch's session setup, commit-msg/pre-push hooks, owner-only
+commit checks, shared validation and publication workflows. Future upstream syncs preserve
+`.github` as well as guides, skills, hooks and scripts, and restore our npm commands even when
+upstream defines commands with the same names. Regression coverage exercises that merge path.

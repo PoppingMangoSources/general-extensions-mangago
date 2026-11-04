@@ -22,3 +22,6 @@
   LikeManga's final release archived on the existing dead-sources branch.
 - 2026-11-04: Chapter-first, two-fact listing subtitles and compact hero metrics standardized
   for MGRead, Swarm and Chikari; YaoiMe coverless cards and sparse search metadata corrected.
+- 2026-11-04: Complete attribution settings, hooks, checks, workflows and wiki synchronized
+  between working and stable branches. Historical stable sync attribution removed while
+  preserving its source tree and upstream merge parent; future syncs retain validation workflows.

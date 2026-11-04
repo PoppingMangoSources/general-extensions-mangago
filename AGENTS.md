@@ -235,6 +235,11 @@ would settle it. In Claude Code the Stop hook enforces the review stamp.
   from upstream only with `scripts/sync-upstream.sh`, which keeps those files.
 - Do not open or comment on pull requests unless asked; draft the text for the person.
 
+Shared guidance, attribution settings, hooks, validation scripts and their workflows must be
+updated on both `0.9/test` and `0.9/stable`. Verify the published files on both branches and
+report their commit ids. A history cleanup must preserve source trees and merge parents while
+removing attribution trailers; verify the rewritten commit metadata before publishing it.
+
 ## 9. How a rule gets in
 
 A review comment, a maintainer rewrite, or a device finding becomes a row in

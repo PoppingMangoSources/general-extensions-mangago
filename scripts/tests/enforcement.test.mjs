@@ -111,3 +111,11 @@ void test("automatic setup enables unsigned owner commits and rejects a co-autho
   );
   assert.equal(accepted.status, 0, accepted.stderr);
 });
+
+void test("formatter commits use the owner identity and remain unsigned", () => {
+  const workflow = fs.readFileSync(path.join(root, ".github/workflows/format.yml"), "utf8");
+  assert.ok(workflow.includes(`git config user.name "${NAME}"`));
+  assert.ok(workflow.includes(`git config user.email "${EMAIL}"`));
+  assert.match(workflow, /commit\.gpgsign=false commit --no-gpg-sign/);
+  assert.doesNotMatch(workflow, /github-actions\[bot\]/);
+});
