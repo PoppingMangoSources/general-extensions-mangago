@@ -1,149 +1,237 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-import { type CookieStorageInterceptor } from "@paperback/types";
-import * as cheerio from "cheerio";
+import { type BasicRateLimiter, type CookieStorageInterceptor } from "@paperback/types";
 
-import { DOMAIN, VRF_CHAPTER_CACHE_KEY, VRF_SEARCH_CACHE_KEY } from "../models";
+import { getLanguages } from "../forms/settings";
+import { CHAPTER_PAGE_LIMIT, DOMAIN } from "../models";
 import { cacheGet, cacheSet } from "./cache";
+
+const VRF_CACHE_KEY = "mangafire_vrf_cache";
 
 interface CaptureOptions {
   triggerUrl: string;
   matcher: string;
-  trigger?: string;
   cookieInterceptor: CookieStorageInterceptor;
-  timeoutMs?: number;
+  rateLimiter?: BasicRateLimiter;
+  apiPath?: string;
+  apiParams?: Record<string, unknown>;
 }
 
-async function captureVrfUrl(opts: CaptureOptions): Promise<string> {
-  const { triggerUrl, matcher, trigger = "", cookieInterceptor, timeoutMs = 15000 } = opts;
+const toFullUrl = (url: string) =>
+  url.startsWith("http") ? url : `${DOMAIN}${url.startsWith("/") ? "" : "/"}${url}`;
 
-  const [response, buffer] = await Application.scheduleRequest({
-    url: triggerUrl,
-    method: "GET",
-  });
+function cacheCapturedUrl(url: string, targetMangaId?: string): void {
+  const fullUrl = toFullUrl(url);
+  const hid = fullUrl.match(/\/titles\/([^/?]+)/)?.[1];
+  if (!hid) return;
 
+  const mangaId = targetMangaId ?? hid;
+
+  if (fullUrl.includes("/chapters")) {
+    const lang = fullUrl.match(/[?&]language=([^&]+)/)?.[1];
+    const page = fullUrl.match(/[?&]page=([^&]+)/)?.[1] ?? "1";
+    if (lang) {
+      cacheSet(VRF_CACHE_KEY, `${DOMAIN}/manga/${mangaId}?lang=${lang}&page=${page}`, fullUrl);
+    }
+  } else {
+    cacheSet(VRF_CACHE_KEY, `${DOMAIN}/manga/${mangaId}?type=details`, fullUrl);
+  }
+}
+
+let cachedHomeHtml: string | null = null;
+
+async function getHomeHtml(): Promise<string> {
+  if (cachedHomeHtml) return cachedHomeHtml;
+
+  const pageUrl = `${DOMAIN}/home`;
+  const [response, buffer] = await Application.scheduleRequest({ url: pageUrl, method: "GET" });
   if (response.status >= 400) {
-    throw new Error(`Failed to fetch ${triggerUrl}: HTTP ${response.status}`);
+    throw new Error(`Failed to fetch ${pageUrl}: HTTP ${response.status}`);
   }
 
-  let html = Application.arrayBufferToUTF8String(buffer);
-  html = html.replace(/(["'])\/\/([a-zA-Z0-9.-]+)/g, "$1https://$2");
+  cachedHomeHtml = Application.arrayBufferToUTF8String(buffer).replace(
+    /(["'])\/\/([a-zA-Z0-9.-]+)/g,
+    "$1https://$2",
+  );
+  return cachedHomeHtml;
+}
+
+export async function getVrfUrl(opts: CaptureOptions): Promise<string> {
+  const { triggerUrl, matcher, cookieInterceptor, rateLimiter, apiPath, apiParams } = opts;
+
+  const cached = cacheGet(VRF_CACHE_KEY, triggerUrl);
+  if (cached) {
+    return cached;
+  }
+
+  const pageUrl = triggerUrl.startsWith("http") ? triggerUrl : `${DOMAIN}/home`;
+  const html = await getHomeHtml();
+
+  const targetMangaId = triggerUrl.match(/\/manga\/([^/?]+)/)?.[1];
+  const selectedLanguages = getLanguages();
+  const pageLimit = CHAPTER_PAGE_LIMIT;
 
   const hookSource = `
-    (function() {
-      const re = new RegExp(${JSON.stringify(matcher)});
-      let resolveFn, rejectFn;
-      window.__vrfCapture = new Promise(function(resolve, reject) {
+    (function () {
+      let resolveFn;
+      window.__vrfCapture = new Promise((resolve) => {
         resolveFn = resolve;
-        rejectFn = reject;
       });
-      const timer = setTimeout(function() {
-        rejectFn(new Error("vrf capture timeout"));
-      }, ${timeoutMs});
-      function check(url) {
-        if (typeof url === "string" && re.test(url)) {
-          clearTimeout(timer);
-          resolveFn(url);
-          return true;
+
+      const capturedMap = {};
+      const targetRegex = new RegExp(${JSON.stringify(matcher)});
+      let matchedUrl = null;
+
+      const innerTimer = setTimeout(() => {
+        if (!matchedUrl) {
+          resolveFn(JSON.stringify({ matched: "", all: Object.keys(capturedMap) }));
         }
-        return false;
+      }, 10000);
+
+      function checkUrl(url) {
+        if (typeof url === "string" && url.includes("/api/")) {
+          capturedMap[url] = true;
+          if (targetRegex.test(url) && !matchedUrl) {
+            matchedUrl = url;
+            clearTimeout(innerTimer);
+            setTimeout(() => {
+              resolveFn(
+                JSON.stringify({
+                  matched: matchedUrl,
+                  all: Object.keys(capturedMap),
+                }),
+              );
+            }, 200);
+          }
+        }
       }
-      const origOpen = XMLHttpRequest.prototype.open;
-      XMLHttpRequest.prototype.open = function(method, url) {
-        check(url);
-        return origOpen.apply(this, arguments);
+
+      Object.defineProperty(Object.prototype, "interceptors", {
+        configurable: true,
+        get() {
+          return this._interceptors;
+        },
+        set(val) {
+          this._interceptors = val;
+          if (this?.get && this?.post) {
+            window.__siteAxios = this;
+          }
+        },
+      });
+
+      const targetPath = ${JSON.stringify(apiPath || null)};
+      const targetParams = ${JSON.stringify(apiParams || null)};
+      const languages = ${JSON.stringify(selectedLanguages)};
+      const limit = ${pageLimit};
+
+      if (targetPath) {
+        let attempts = 0;
+        const interval = setInterval(() => {
+          attempts++;
+          if (window.__siteAxios) {
+            clearInterval(interval);
+            try {
+              window.__siteAxios.get(targetPath, { params: targetParams || {} });
+              if (targetPath.match(/\\/titles\\/[^/]+$/)) {
+                for (const lang of languages) {
+                  window.__siteAxios.get(targetPath + "/chapters", {
+                    params: {
+                      language: lang,
+                      sort: "number",
+                      order: "desc",
+                      page: 1,
+                      limit: limit,
+                    },
+                  });
+                }
+              }
+            } catch (e) {
+            }
+          } else if (attempts > 100) {
+            clearInterval(interval);
+          }
+        }, 50);
+      }
+
+      const originalOpen = XMLHttpRequest.prototype.open;
+      const originalSend = XMLHttpRequest.prototype.send;
+
+      XMLHttpRequest.prototype.open = function (method, url) {
+        checkUrl(url);
+        if (typeof url === "string" && url.includes("/api/")) {
+          this._blocked = true;
+        }
+        return originalOpen.apply(this, arguments);
       };
-      if (typeof window.fetch === "function") {
-        const origFetch = window.fetch;
-        window.fetch = function(input, init) {
-          const u = typeof input === "string" ? input : (input && input.url) || "";
-          check(u);
-          return origFetch.apply(this, arguments);
+
+      XMLHttpRequest.prototype.send = function () {
+        if (this._blocked) {
+          return;
+        }
+        return originalSend.apply(this, arguments);
+      };
+
+      if (window.fetch) {
+        const originalFetch = window.fetch;
+        window.fetch = function (input, init) {
+          const urlStr = typeof input === "string" ? input : input?.url;
+          checkUrl(urlStr);
+          if (typeof urlStr === "string" && urlStr.includes("/api/")) {
+            return Promise.resolve(new Response(JSON.stringify({})));
+          }
+          return originalFetch.apply(this, arguments);
         };
       }
     })();
   `;
 
-  const $ = cheerio.load(html);
-  if ($("head").length === 0) $("html").prepend("<head></head>");
-  $("head").prepend(`<script>${hookSource}</script>`);
-  html = $.html();
+  const scriptTag = `<script>${hookSource}</script>`;
+  const fullHtml = html.includes("<head>")
+    ? html.replace("<head>", `<head>${scriptTag}`)
+    : `${scriptTag}${html}`;
 
-  const cookies = cookieInterceptor.cookiesForUrl(triggerUrl);
-
-  const inject = `
-    ${trigger}
-    return window.__vrfCapture;
-  `;
+  if (rateLimiter) {
+    await rateLimiter.interceptRequest({ url: pageUrl, method: "GET" });
+  }
 
   const result = await Application.executeInWebView({
     source: {
-      html,
-      baseUrl: `${DOMAIN}/`,
+      html: fullHtml,
+      baseUrl: pageUrl,
       loadCSS: false,
       loadImages: false,
+      userAgent: await Application.getDefaultUserAgent(),
     },
-    inject,
-    storage: { cookies },
-    captureConsoleLog: false,
+    inject: "return window.__vrfCapture;",
+    storage: { cookies: cookieInterceptor.cookiesForUrl(pageUrl) },
   });
 
-  if (typeof result.result !== "string") {
-    throw new Error(`Unexpected vrf capture result: ${JSON.stringify(result.result)}`);
+  const rawResult = result.result;
+  if (typeof rawResult !== "string") {
+    throw new Error(`Unexpected vrf capture result: ${JSON.stringify(rawResult)}`);
   }
 
-  return result.result;
-}
+  let payload: { matched: string; all: string[] };
+  try {
+    payload = JSON.parse(rawResult);
+  } catch {
+    payload = { matched: rawResult, all: [rawResult] };
+  }
 
-export async function getSearchVrfUrl(
-  query: string,
-  cookieInterceptor: CookieStorageInterceptor,
-): Promise<string> {
-  const cached = cacheGet(VRF_SEARCH_CACHE_KEY, query);
-  if (cached) return cached;
+  for (const rawUrl of payload.all ?? []) {
+    cacheCapturedUrl(rawUrl, targetMangaId);
+  }
 
-  const trigger = `
-    $(function() {
-      setInterval(() => {
-        $(".search-inner input[name=keyword]").val(${JSON.stringify(query)}).trigger("keyup");
-      }, 1000);
-    });
-  `;
+  if (!payload.matched) {
+    throw new Error(`VRF capture timed out matching ${matcher}`);
+  }
 
-  const captured = await captureVrfUrl({
-    triggerUrl: `${DOMAIN}/home`,
-    matcher: "ajax/manga/search\\?",
-    trigger,
-    cookieInterceptor,
-  });
+  const matchedPath = payload.matched.startsWith("/") ? payload.matched : `/${payload.matched}`;
+  const matchedFullUrl = payload.matched.startsWith("http")
+    ? payload.matched
+    : `${DOMAIN}${matchedPath}`;
 
-  cacheSet(VRF_SEARCH_CACHE_KEY, query, captured);
-  return captured;
-}
-
-export async function getChapterPagesVrfUrl(
-  chapterUrlPath: string,
-  cookieInterceptor: CookieStorageInterceptor,
-): Promise<string> {
-  const cached = cacheGet(VRF_CHAPTER_CACHE_KEY, chapterUrlPath);
-  if (cached) return cached;
-
-  const triggerUrl = chapterUrlPath.startsWith("http")
-    ? chapterUrlPath
-    : `${DOMAIN}${chapterUrlPath.startsWith("/") ? "" : "/"}${chapterUrlPath}`;
-
-  const captured = await captureVrfUrl({
-    triggerUrl,
-    matcher: "/ajax/read/(chapter|volume)[/?]",
-    cookieInterceptor,
-  });
-
-  cacheSet(VRF_CHAPTER_CACHE_KEY, chapterUrlPath, captured);
-  return captured;
-}
-
-export function extractVrf(url: string): string {
-  const match = url.match(/[?&]vrf=([^&]+)/);
-  return match ? decodeURIComponent(match[1]) : "";
+  cacheSet(VRF_CACHE_KEY, triggerUrl, matchedFullUrl);
+  return matchedFullUrl;
 }

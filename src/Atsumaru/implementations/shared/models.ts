@@ -2,26 +2,58 @@
 /* Copyright © 2026 Inkdex */
 
 export const DOMAIN = "https://atsu.moe";
+export const DOMAIN_CDN = "https://cdn.atsu.moe";
+export const HOME_PAGE_SIZE = 20;
+export const HOME_SECTION_METADATA_ID = "atsumaru-home-section";
 
-export interface AtsuHomePageResponse {
-  homePage: {
-    sections: AtsuSection[];
-  };
+export type HomeEndpoint =
+  | "bingeWorthy"
+  | "genreSpotlight"
+  | "hiddenGems"
+  | "hotArrivals"
+  | "hotUpdates"
+  | "mostBookmarked"
+  | "mostPolarizing"
+  | "mostTalkedAbout"
+  | "popular"
+  | "recentlyAdded"
+  | "recentlyUpdated"
+  | "rising"
+  | "topRated";
+
+export type HomeTimeframe = "daily" | "weekly" | "monthly" | "all";
+
+export enum AtsuContentRating {
+  Safe = "Safe",
+  Suggestive = "Suggestive",
+  Erotica = "Erotica",
+  Pornographic = "Pornographic",
 }
 
-export interface AtsuSection {
-  key: string;
-  layout: string;
-  title?: string;
-  seeMoreHref?: string;
-  items?: AtsuMangaItem[];
+export enum AtsuComicType {
+  Manga = "Manga",
+  Manhwa = "Manwha", // API spelling
+  Manhua = "Manhua",
+  OEL = "OEL",
 }
+
+export enum AtsuMedium {
+  Comic = "Comic",
+  Novel = "Novel",
+}
+
+export type AtsuContentType = AtsuComicType | AtsuMedium.Novel;
 
 export interface AtsuMangaItem {
   id: string;
   image: string;
+  isAdult: boolean;
+  smallImage?: string;
+  mediumImage?: string;
   title: string;
-  type: string;
+  type: AtsuComicType;
+  medium: AtsuMedium;
+  mbContentRating?: AtsuContentRating | null;
 }
 
 export interface AtsuInfiniteResponse {
@@ -42,13 +74,18 @@ export interface AtsuMangaDetails {
   poster: {
     id: string;
     image: string;
+    smallImage?: string;
+    mediumImage?: string;
   };
   title: string;
-  type: string;
+  type: AtsuComicType;
+  medium: AtsuMedium;
+  mbContentRating?: AtsuContentRating | null;
   otherNames: string[];
   synopsis: string;
   status: string;
   totalChapterCount: number;
+  isAdult: boolean;
 }
 
 export interface AtsuTag {
@@ -80,6 +117,18 @@ export interface AtsuReadChapterResponse {
   };
 }
 
+export interface AtsuReadNovelChapterResponse {
+  readNovelChapter: {
+    id: string;
+    title: string;
+    number: number;
+    scanlationMangaId: string;
+    paragraphs: string[];
+    wordCount: number;
+    paragraphComments: Record<string, number>;
+  };
+}
+
 export interface AtsuPage {
   id: string;
   image: string;
@@ -97,6 +146,9 @@ export interface AtsuSearchDocument {
   posterSmall?: string;
   posterMedium?: string;
   type: string;
+  medium: AtsuMedium;
+  isAdult: boolean;
+  mbContentRating?: AtsuContentRating | null;
 }
 
 export interface AtsuSearchHit {

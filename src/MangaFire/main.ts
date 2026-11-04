@@ -20,45 +20,39 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
+  type Tag,
 } from "@paperback/types";
-import * as cheerio from "cheerio";
 
-import { getLanguages, MangaFireAdvancedSearchForm, MangaFireSettingsForm } from "./forms";
+import { MangaFireAdvancedSearchForm } from "./forms/search";
+import { getLanguages, getContentRatings, MangaFireSettingsForm } from "./forms/settings";
 import {
+  CHAPTER_PAGE_LIMIT,
   DOMAIN,
-  SEARCH_DETAILS_CACHE_KEY,
+  GENRES,
+  SORTS,
+  THEMES,
+  TYPES,
+  type ApiList,
+  type ChapterItem,
+  type ChapterPages,
   type PageMetadata,
-  type PageResponse,
-  type Result,
-  type SearchDetails,
   type SearchMetadata,
+  type TitleDetails,
+  type TitleItem,
 } from "./models";
-import { MangaFireInterceptor } from "./network";
-import {
-  hasNextPage,
-  parseChapterDetails,
-  parseChapters,
-  parseJson,
-  parseMangaDetails,
-  parseNewMangaSection,
-  parsePopularSection,
-  parseSearch,
-  parseSearchDetails,
-  parseUpdatedSection,
-  popularHasNextPage,
-} from "./parsers";
+import { fetchApi, MangaFireInterceptor } from "./network";
+import { parseChapters, parseHid, parseMangaDetails, parseMangaList } from "./parsers";
 import type MangaFireConfig from "./pbconfig";
-import { cacheGet, cacheSet } from "./utils/cache";
-import { extractVrf, getChapterPagesVrfUrl, getSearchVrfUrl } from "./utils/webView";
+import { getVrfUrl } from "./utils/webView";
 
-export class MangaFireExtension implements ExtensionImpl<typeof MangaFireConfig> {
-  requestManager = new MangaFireInterceptor("requestManager");
-  cookieStorageInterceptor = new CookieStorageInterceptor({
+class MangaFireExtension implements ExtensionImpl<typeof MangaFireConfig> {
+  private requestManager = new MangaFireInterceptor("requestManager");
+  private cookieStorageInterceptor = new CookieStorageInterceptor({
     storage: "stateManager",
   });
-  globalRateLimiter = new BasicRateLimiter("rateLimiter", {
-    numberOfRequests: 10,
-    bufferInterval: 1,
+  private globalRateLimiter = new BasicRateLimiter("rateLimiter", {
+    numberOfRequests: 20,
+    bufferInterval: 5,
     ignoreImages: true,
   });
 
@@ -66,6 +60,16 @@ export class MangaFireExtension implements ExtensionImpl<typeof MangaFireConfig>
     this.cookieStorageInterceptor.registerInterceptor();
     this.requestManager.registerInterceptor();
     this.globalRateLimiter.registerInterceptor();
+  }
+
+  async cloudflareBypassCompleted(
+    _request: Request,
+    cookies: Cookie[],
+    _localStorage: Record<string, string>,
+  ): Promise<void> {
+    for (const cookie of cookies) {
+      if (/^_{0,2}cf/.test(cookie.name)) this.cookieStorageInterceptor.setCookie(cookie);
+    }
   }
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
@@ -78,17 +82,12 @@ export class MangaFireExtension implements ExtensionImpl<typeof MangaFireConfig>
       {
         id: "updated_section",
         title: "Recently Updated",
-        type: DiscoverSectionType.chapterUpdates,
+        type: DiscoverSectionType.simpleCarousel,
       },
       {
         id: "new_manga_section",
         title: "New Manga",
         type: DiscoverSectionType.simpleCarousel,
-      },
-      {
-        id: "languages_section",
-        title: "Languages",
-        type: DiscoverSectionType.genres,
       },
       {
         id: "types_section",
@@ -100,11 +99,12 @@ export class MangaFireExtension implements ExtensionImpl<typeof MangaFireConfig>
         title: "Genres",
         type: DiscoverSectionType.genres,
       },
+      {
+        id: "themes_section",
+        title: "Themes",
+        type: DiscoverSectionType.genres,
+      },
     ];
-  }
-
-  async getSettingsForm(): Promise<Form> {
-    return new MangaFireSettingsForm();
   }
 
   async getDiscoverSectionItems(
@@ -113,334 +113,252 @@ export class MangaFireExtension implements ExtensionImpl<typeof MangaFireConfig>
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
       case "popular_section":
-        return this.getPopularSectionItems(metadata);
+        return this.getMangaListSection(metadata, "views_30d", "featuredCarouselItem");
       case "updated_section":
-        return this.getUpdatedSectionItems(metadata);
+        return this.getMangaListSection(metadata, "chapter_updated_at", "simpleCarouselItem");
       case "new_manga_section":
-        return this.getNewMangaSectionItems(metadata);
+        return this.getMangaListSection(metadata, "created_at", "simpleCarouselItem");
       case "types_section":
-        return this.getTypesSection();
+        return this.getGenresSection(TYPES, (id) => ({ types: [id] }));
       case "genres_section":
-        return this.getFilterSection();
-      case "languages_section":
-        return this.getLanguagesSection();
+        return this.getGenresSection(GENRES, (id) => ({ genres: { [id]: "included" } }));
+      case "themes_section":
+        return this.getGenresSection(THEMES, (id) => ({ themes: [id] }));
       default:
         return { items: [] };
     }
   }
 
-  async saveCloudflareBypassCookies(cookies: Cookie[]): Promise<void> {
-    for (const cookie of cookies) {
-      if (
-        cookie.name.startsWith("cf") ||
-        cookie.name.startsWith("_cf") ||
-        cookie.name.startsWith("__cf")
-      ) {
-        this.cookieStorageInterceptor.setCookie(cookie);
-      }
-    }
+  private async getMangaListSection(
+    metadata: PageMetadata | undefined,
+    orderKey: string,
+    itemType: "featuredCarouselItem" | "simpleCarouselItem",
+  ): Promise<PagedResults<DiscoverSectionItem>> {
+    const page = metadata?.page ?? 1;
+
+    const triggerUrl = new URL(DOMAIN)
+      .addPathComponent("browse")
+      .setQueryItem("sort", `${orderKey}:desc`)
+      .setQueryItem("page", page.toString())
+      .toString();
+
+    const apiUrl = await getVrfUrl({
+      triggerUrl,
+      matcher: "/api/titles\\?",
+      cookieInterceptor: this.cookieStorageInterceptor,
+      rateLimiter: this.globalRateLimiter,
+    });
+    const data = await fetchApi<ApiList<TitleItem>>(apiUrl);
+
+    const items = parseMangaList(data.items).map(
+      ({ subtitle, updatedAt, rank, metadata: _, ...item }): DiscoverSectionItem =>
+        itemType === "featuredCarouselItem"
+          ? {
+              type: itemType,
+              ...item,
+              supertitle: rank ? `Rank #${rank}` : undefined,
+              infoItems:
+                subtitle && updatedAt
+                  ? [
+                      { symbol: "book.fill", text: subtitle },
+                      { symbol: "clock.fill", text: updatedAt },
+                    ]
+                  : subtitle
+                    ? [{ symbol: "book.fill", text: subtitle }]
+                    : undefined,
+            }
+          : {
+              type: itemType,
+              ...item,
+              subtitle: [subtitle, updatedAt].filter(Boolean).join(" • ") || undefined,
+            },
+    );
+
+    return {
+      items,
+      metadata: data.meta?.hasNext ? { page: page + 1 } : undefined,
+    };
   }
 
-  private async getSearchDetails(): Promise<SearchDetails | undefined> {
-    const cached = cacheGet(SEARCH_DETAILS_CACHE_KEY, "default");
-    if (cached) return JSON.parse(cached) as SearchDetails;
-
-    const vrf = extractVrf(await getSearchVrfUrl("aa", this.cookieStorageInterceptor));
-    const request = {
-      url: `${DOMAIN}/filter?keyword=aa&vrf=${vrf}`,
-      method: "GET",
+  private async getGenresSection(
+    options: Tag[],
+    toMetadata: (id: string) => SearchMetadata,
+  ): Promise<PagedResults<DiscoverSectionItem>> {
+    return {
+      items: options.map((option) => ({
+        type: "genresCarouselItem",
+        searchQuery: {
+          title: "",
+          metadata: toMetadata(option.id),
+        },
+        name: option.title,
+      })),
     };
+  }
 
-    const $ = await this.fetchCheerio(request);
-    const details = parseSearchDetails($);
-    cacheSet(SEARCH_DETAILS_CACHE_KEY, "default", JSON.stringify(details));
-    return details;
+  async getSettingsForm(): Promise<Form> {
+    return new MangaFireSettingsForm();
   }
 
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
-    return new MangaFireAdvancedSearchForm(query, await this.getSearchDetails());
+    return new MangaFireAdvancedSearchForm(query);
   }
 
   async getSortingOptions(): Promise<SortingOption[]> {
-    const searchDetails = await this.getSearchDetails();
-    return searchDetails?.sorts ?? [];
+    return SORTS;
   }
 
-  // Example: https://mangafire.to/filter?keyword=one%20piece&page=1&genre_mode=and&type[]=manhwa&genre[]=action&status[]=releasing&sort=most_relevance
-  // Multple Genres: https://mangafire.to/filter?keyword=one+piece&type%5B%5D=manga&genre%5B%5D=1&genre%5B%5D=31&genre_mode=and&status%5B%5D=releasing&sort=most_relevance
-  // No Genre: https://mangafire.to/filter?keyword=one+piece&type%5B%5D=manga&genre_mode=and&status%5B%5D=releasing&sort=most_relevance
-  // With pages: https://mangafire.to/filter?page=2&keyword=one%20piece
-  // ALL: https://mangafire.to/filter?keyword=one+peice&sort=recently_updated
-  // Exclude: https://mangafire.to/filter?keyword=&genre%5B%5D=-9&sort=recently_updated
+  // e.g. /api/titles?keyword=one+piece&types=manga&genres_in=1,2&genres_ex=9&genres_mode=and&statuses=releasing&order[relevance]=desc&page=2
   async getSearchResults(
     query: SearchQuery<SearchMetadata>,
-    metadata: { page?: number } | undefined,
+    metadata: PageMetadata | undefined,
     sortingOption?: SortingOption,
   ): Promise<PagedResults<SearchResultItem>> {
     const page = metadata?.page ?? 1;
-    const searchUrl = new URL(DOMAIN)
-      .addPathComponent("filter")
-      .setQueryItem("keyword", query.title)
-      .setQueryItem("page", page.toString());
+    const url = new URL(DOMAIN).addPathComponent("browse").setQueryItem("page", page.toString());
 
-    if (query.metadata?.genreMode) {
-      searchUrl.setQueryItem("genre_mode", "and");
-    }
-
-    if (query.title.trim()) {
-      const vrf = extractVrf(await getSearchVrfUrl(query.title, this.cookieStorageInterceptor));
-      searchUrl.setQueryItem("vrf", vrf);
-    }
+    if (query.title.trim()) url.setQueryItem("keyword", query.title.trim());
 
     const meta = query.metadata ?? {};
-    const { type, genres, status, language, year, length } = meta;
 
-    if (type) {
-      searchUrl.setQueryItem("type[]", type);
+    const genresIn: string[] = [];
+    const genresEx: string[] = [];
+    for (const [id, value] of Object.entries(meta.genres ?? {})) {
+      (value === "excluded" ? genresEx : genresIn).push(id);
+    }
+    if (genresIn.length > 0) url.setQueryItem("genres_in", genresIn.join(","));
+    if (genresEx.length > 0) url.setQueryItem("genres_ex", genresEx.join(","));
+    if (genresIn.length > 0 && !(meta.genreMode ?? true)) url.setQueryItem("genres_mode", "or");
+
+    const arrayFilters = {
+      types: meta.types,
+      theme_ids: meta.themes,
+      demographics: meta.demographics,
+      statuses: meta.statuses,
+    };
+    for (const [key, value] of Object.entries(arrayFilters)) {
+      if (value?.length) url.setQueryItem(key, value.join(","));
     }
 
-    if (genres) {
-      const genreValues = Object.entries(genres).flatMap(([id, value]) => {
-        if (value === "included") return [id];
-        if (value === "excluded") return [`-${id}`];
-        return [];
-      });
-      if (genreValues.length > 0) {
-        searchUrl.setQueryItem("genre[]", genreValues);
-      }
+    let content_ratings: string =
+      meta.content_ratings && meta.content_ratings.length > 0
+        ? meta.content_ratings.join(",")
+        : getContentRatings().join(",");
+
+    url.setQueryItem("content_rating", content_ratings);
+
+    const valueFilters = {
+      year_from: meta.yearFrom,
+      year_to: meta.yearTo,
+      min_chap: meta.minChapters,
+    };
+    for (const [key, value] of Object.entries(valueFilters)) {
+      if (value?.trim()) url.setQueryItem(key, value.trim());
     }
 
-    if (status) {
-      searchUrl.setQueryItem("status[]", status);
-    }
+    const [orderKey, direction] = (sortingOption?.id ?? "relevance:desc").split(":");
+    url.setQueryItem("sort", `${orderKey}:${direction}`);
 
-    if (language) {
-      searchUrl.setQueryItem("language[]", language);
-    }
-
-    if (year) {
-      searchUrl.setQueryItem("year[]", year);
-    }
-
-    if (length) {
-      searchUrl.setQueryItem("length[]", length);
-    }
-
-    if (sortingOption) {
-      searchUrl.setQueryItem("sort", sortingOption.id);
-    }
-
-    const request = { url: searchUrl.toString(), method: "GET" };
-
-    const $ = await this.fetchCheerio(request);
-    const searchResults = parseSearch($);
+    const apiUrl = await getVrfUrl({
+      triggerUrl: url.toString(),
+      matcher: "/api/titles\\?",
+      cookieInterceptor: this.cookieStorageInterceptor,
+      rateLimiter: this.globalRateLimiter,
+    });
+    const data = await fetchApi<ApiList<TitleItem>>(apiUrl);
 
     return {
-      items: searchResults,
-      metadata: hasNextPage($) ? { page: page + 1 } : undefined,
+      items: parseMangaList(data.items),
+      metadata: data.meta?.hasNext ? { page: page + 1 } : undefined,
     };
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
-    const searchDetails = await this.getSearchDetails();
-    const request = {
-      url: new URL(DOMAIN).addPathComponent("manga").addPathComponent(mangaId).toString(),
-      method: "GET",
-    };
+    const hid = parseHid(mangaId);
+    const triggerUrl = new URL(DOMAIN)
+      .addPathComponent("manga")
+      .addPathComponent(mangaId)
+      .setQueryItem("type", "details")
+      .toString();
 
-    const $ = await this.fetchCheerio(request);
-    return parseMangaDetails($, mangaId, searchDetails);
+    const apiUrl = await getVrfUrl({
+      triggerUrl,
+      matcher: `/api/titles/${hid}`,
+      cookieInterceptor: this.cookieStorageInterceptor,
+      rateLimiter: this.globalRateLimiter,
+      apiPath: `/titles/${hid}`,
+    });
+
+    const data = await fetchApi<{ data: TitleDetails }>(apiUrl);
+
+    return parseMangaDetails(data.data, mangaId);
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
-    const mangaId = sourceManga.mangaId.split(".").pop();
-    if (!mangaId) throw new Error(`Invalid manga ID format: ${sourceManga.mangaId}`);
-
-    const languages = getLanguages();
-
     const chapters: Chapter[] = [];
-    for (const langCode of languages) {
-      const mangaRequest: Request = {
-        url: new URL(DOMAIN)
-          .addPathComponent("ajax")
+    const hid = parseHid(sourceManga.mangaId);
+
+    for (const langCode of getLanguages()) {
+      let page = 1;
+      let lastPage = 1;
+
+      do {
+        const triggerUrl = new URL(DOMAIN)
           .addPathComponent("manga")
-          .addPathComponent(mangaId)
-          .addPathComponent("chapter")
-          .addPathComponent(langCode)
-          .toString(),
-        method: "GET",
-      };
+          .addPathComponent(sourceManga.mangaId)
+          .setQueryItem("lang", langCode)
+          .setQueryItem("page", page.toString())
+          .toString();
 
-      const [_, mangaBuffer] = await Application.scheduleRequest(mangaRequest);
+        const apiUrl = await getVrfUrl({
+          triggerUrl,
+          matcher: `/api/titles/${hid}/chapters`,
+          cookieInterceptor: this.cookieStorageInterceptor,
+          rateLimiter: this.globalRateLimiter,
+          apiPath: `/titles/${hid}/chapters`,
+          apiParams: {
+            language: langCode,
+            sort: "number",
+            order: "desc",
+            page,
+            limit: CHAPTER_PAGE_LIMIT,
+          },
+        });
 
-      const mangaJson = parseJson<Result>(
-        Application.arrayBufferToUTF8String(mangaBuffer),
-        `chapters for language ${langCode}`,
-      );
+        const data = await fetchApi<ApiList<ChapterItem>>(apiUrl);
+        chapters.push(...parseChapters(data.items, sourceManga, langCode));
 
-      const mangaHtml =
-        typeof mangaJson.result === "string" ? mangaJson.result : mangaJson.result.html || "";
-
-      if (!mangaHtml) continue;
-
-      const $manga = cheerio.load(mangaHtml);
-      chapters.push(...parseChapters($manga, sourceManga, langCode));
+        lastPage = data.meta?.lastPage ?? 1;
+        page++;
+      } while (page <= lastPage);
     }
 
     return chapters;
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
-    const url = await getChapterPagesVrfUrl(chapter.chapterId, this.cookieStorageInterceptor);
+    const triggerUrl = new URL(DOMAIN)
+      .addPathComponent("read")
+      .addPathComponent(chapter.sourceManga.mangaId)
+      .addPathComponent(chapter.langCode)
+      .addPathComponent(`chapter-${chapter.chapNum}`)
+      .toString();
 
-    const request: Request = { url, method: "GET" };
-
-    const [_, buffer] = await Application.scheduleRequest(request);
-    const json = parseJson<PageResponse>(
-      Application.arrayBufferToUTF8String(buffer),
-      "chapter details",
-    );
-
-    return parseChapterDetails(json, chapter);
-  }
-
-  // Example: https://mangafire.to/filter?keyword=&language[]=en&sort=recently_updated&page=1
-  async getUpdatedSectionItems(
-    metadata: PageMetadata | undefined,
-  ): Promise<PagedResults<DiscoverSectionItem>> {
-    const page = metadata?.page ?? 1;
-    const collectedIds = metadata?.collectedIds ?? [];
-    const language = getLanguages();
-
-    const request = {
-      url: new URL(DOMAIN)
-        .addPathComponent("filter")
-        .setQueryItem("keyword", "")
-        .setQueryItem("language[]", language)
-        .setQueryItem("sort", "recently_updated")
-        .setQueryItem("page", page.toString())
-        .toString(),
-      method: "GET",
-    };
-
-    const $ = await this.fetchCheerio(request);
-    const parsedItems = parseUpdatedSection($);
-    const items = parsedItems.filter((item) => !collectedIds.includes(item.mangaId));
-    collectedIds.push(...items.map((item) => item.mangaId));
-
-    return {
-      items: items,
-      metadata: hasNextPage($) ? { page: page + 1, collectedIds } : undefined,
-    };
-  }
-
-  async getPopularSectionItems(
-    metadata: PageMetadata | undefined,
-  ): Promise<PagedResults<DiscoverSectionItem>> {
-    const page = metadata?.page ?? 1;
-    const collectedIds = metadata?.collectedIds ?? [];
-    const language = getLanguages();
-
-    const request = {
-      url: new URL(DOMAIN)
-        .addPathComponent("filter")
-        .setQueryItem("keyword", "")
-        .setQueryItem("language[]", language)
-        .setQueryItem("sort", "most_viewed")
-        .setQueryItem("page", page.toString())
-        .toString(),
-      method: "GET",
-    };
-
-    const $ = await this.fetchCheerio(request);
-    const parsedItems = parsePopularSection($);
-    const items = parsedItems.filter((item) => !collectedIds.includes(item.mangaId));
-    collectedIds.push(...items.map((item) => item.mangaId));
-
-    return {
-      items: items,
-      metadata: popularHasNextPage($) ? { page: page + 1, collectedIds } : undefined,
-    };
-  }
-
-  async getNewMangaSectionItems(
-    metadata: PageMetadata | undefined,
-  ): Promise<PagedResults<DiscoverSectionItem>> {
-    const page = metadata?.page ?? 1;
-    const collectedIds = metadata?.collectedIds ?? [];
-
-    const request = {
-      url: new URL(DOMAIN).addPathComponent("added").toString(),
-      method: "GET",
-    };
-
-    const $ = await this.fetchCheerio(request);
-    const parsedItems = parseNewMangaSection($);
-    const items = parsedItems.filter((item) => !collectedIds.includes(item.mangaId));
-    collectedIds.push(...items.map((item) => item.mangaId));
-
-    return {
-      items: items,
-      metadata: hasNextPage($) ? { page: page + 1, collectedIds } : undefined,
-    };
-  }
-
-  async getTypesSection(): Promise<PagedResults<DiscoverSectionItem>> {
-    const searchDetails = await this.getSearchDetails();
-    const types = searchDetails?.types || [];
-
-    return {
-      items: types.map((type) => ({
-        type: "genresCarouselItem",
-        searchQuery: {
-          title: "",
-          metadata: { type: type.id } satisfies SearchMetadata,
-        },
-        name: type.label,
-      })),
-    };
-  }
-
-  async getFilterSection(): Promise<PagedResults<DiscoverSectionItem>> {
-    const searchDetails = await this.getSearchDetails();
-    const genres = searchDetails?.genres ?? [];
-
-    return {
-      items: genres.map((genre) => ({
-        type: "genresCarouselItem",
-        searchQuery: {
-          title: "",
-          metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
-        },
-        name: genre.label,
-      })),
-    };
-  }
-
-  async getLanguagesSection(): Promise<PagedResults<DiscoverSectionItem>> {
-    const searchDetails = await this.getSearchDetails();
-    const languages = searchDetails?.languages || [];
-
-    return {
-      items: languages.map((lang) => ({
-        type: "genresCarouselItem",
-        searchQuery: {
-          title: "",
-          metadata: { language: lang.id } satisfies SearchMetadata,
-        },
-        name: lang.label,
-      })),
-    };
-  }
-
-  async fetchCheerio(request: Request): Promise<cheerio.CheerioAPI> {
-    const [_, data] = await Application.scheduleRequest(request);
-    return cheerio.load(Application.arrayBufferToUTF8String(data), {
-      xml: {
-        xmlMode: false,
-        // decodeEntities: false,
-      },
+    const apiUrl = await getVrfUrl({
+      triggerUrl,
+      matcher: `/api/chapters/${chapter.chapterId}`,
+      cookieInterceptor: this.cookieStorageInterceptor,
+      rateLimiter: this.globalRateLimiter,
+      apiPath: `/chapters/${chapter.chapterId}`,
     });
+
+    const data = await fetchApi<{ data: ChapterPages }>(apiUrl);
+
+    return {
+      mangaId: chapter.sourceManga.mangaId,
+      id: chapter.chapterId,
+      pages: data.data.pages.map((page) => page.url),
+    };
   }
 }
 

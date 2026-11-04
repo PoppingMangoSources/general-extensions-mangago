@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
-const CACHE_MAX_ENTRIES = 20;
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const CACHE_MAX_ENTRIES = 50;
+const CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 interface CacheEntry {
   value: string;
@@ -23,10 +23,6 @@ export function cacheGet(stateKey: string, key: string): string | undefined {
     return undefined;
   }
   return entry.value;
-}
-
-export function cacheClear(stateKey: string): void {
-  Application.setState(undefined, stateKey);
 }
 
 export function cacheSet(stateKey: string, key: string, value: string): void {

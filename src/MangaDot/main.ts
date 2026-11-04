@@ -19,6 +19,7 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
+  type UpdateManager,
 } from "@paperback/types";
 
 import MangaDotAdvancedSearchForm from "./forms/search";
@@ -129,6 +130,16 @@ export class MangaDotExtension implements ExtensionImpl<typeof MangaDotConfig> {
     return getDiscoverySectionsOrder()
       .map((key) => allSections[key.id])
       .filter(Boolean);
+  }
+
+  async processTitlesForUpdates(
+    updateManager: UpdateManager,
+    _lastUpdateDate?: Date,
+  ): Promise<void> {
+    const manga = updateManager.getQueuedItems();
+    if (manga.length > 0) {
+      await this.api.getMangaData(manga[0].mangaId);
+    }
   }
 
   async getDiscoverSectionItems(

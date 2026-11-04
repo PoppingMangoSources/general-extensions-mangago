@@ -14,6 +14,7 @@ import {
   type ExtensionImpl,
   type Form,
   type PagedResults,
+  type Request,
   type SearchQuery,
   type SearchResultItem,
   type SourceManga,
@@ -56,8 +57,8 @@ import WeebCentralConfig from "./pbconfig";
 
 export class WeebCentralExtension implements ExtensionImpl<typeof WeebCentralConfig> {
   globalRateLimiter = new BasicRateLimiter("ratelimiter", {
-    numberOfRequests: 10,
-    bufferInterval: 0.5,
+    numberOfRequests: 1,
+    bufferInterval: 1,
     ignoreImages: true,
   });
 
@@ -256,7 +257,11 @@ export class WeebCentralExtension implements ExtensionImpl<typeof WeebCentralCon
     return new WeebCentralAdvancedSearchForm(searchQuery, tags);
   }
 
-  async saveCloudflareBypassCookies(cookies: Cookie[]): Promise<void> {
+  async cloudflareBypassCompleted(
+    _request: Request,
+    cookies: Cookie[],
+    _localStorage: Record<string, string>,
+  ): Promise<void> {
     for (const cookie of cookies) {
       if (
         cookie.name.startsWith("cf") ||

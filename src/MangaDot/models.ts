@@ -62,6 +62,21 @@ export const ORIGIN: Tag[] = [
   },
 ];
 
+export const ADULT_FILTER = [
+  {
+    id: "0",
+    title: "No",
+  },
+  {
+    id: "1",
+    title: "Yes",
+  },
+  {
+    id: "both",
+    title: "Both",
+  },
+];
+
 export interface MangaData extends MangaSectionItem {
   genres: string[];
   date_added: string;
@@ -87,6 +102,7 @@ export interface MangaSectionItem {
   avg_rating: number | null;
   rating_count: number;
   last_chapter_date: string;
+  latest_chapter_number: string | null;
   is_blurworthy: number;
 }
 

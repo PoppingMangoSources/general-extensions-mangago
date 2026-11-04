@@ -4,373 +4,101 @@
 import {
   ContentRating,
   type Chapter,
-  type ChapterDetails,
-  type ChapterUpdatesCarouselItem,
-  type FeaturedCarouselItem,
   type SearchResultItem,
-  type SimpleCarouselItem,
   type SourceManga,
   type TagSection,
 } from "@paperback/types";
-import { type CheerioAPI } from "cheerio";
 
-import { DOMAIN, type PageResponse, type SearchDetails, type SearchOption } from "./models";
+import {
+  ADULT_GENRES,
+  DOMAIN,
+  MATURE_GENRES,
+  STATUS_MAP,
+  type ChapterItem,
+  type TitleDetails,
+  type TitleItem,
+} from "./models";
 
-const parseDropdownOptions = (
-  $: CheerioAPI,
-  selector: string,
-  requireId: boolean = true,
-): SearchOption[] => {
-  const options: SearchOption[] = [];
-  $(selector).each((_, element) => {
-    const id = $(element).find("input").attr("value") ?? "";
-    const label = $(element).find("label").text().trim();
-    if (label && (!requireId || id)) {
-      options.push({ id, label });
-    }
-  });
-  return options;
-};
+export type MangaListItem = SearchResultItem & { updatedAt?: string; rank?: number };
 
-export const parseSearchDetails = ($: CheerioAPI): SearchDetails => {
-  return {
-    types: parseDropdownOptions(
-      $,
-      ".dropdown:has(button .value[data-placeholder='Type']) .dropdown-menu.noclose.c1 li",
-      false,
-    ),
-    genres: parseDropdownOptions($, ".genres li"),
-    status: parseDropdownOptions(
-      $,
-      ".dropdown:has(button .value[data-placeholder='Status']) .dropdown-menu.noclose.c1 li",
-    ),
-    languages: parseDropdownOptions(
-      $,
-      ".dropdown:has(button .value[data-placeholder='Language']) .dropdown-menu.noclose.c1 li",
-    ),
-    years: parseDropdownOptions(
-      $,
-      ".dropdown:has(button .value[data-placeholder='Year']) .dropdown-menu.noclose.md.c3 li",
-    ),
-    lengths: parseDropdownOptions(
-      $,
-      ".dropdown:has(button .value[data-placeholder='Length']) .dropdown-menu.noclose.c1 li",
-    ),
-    sorts: parseDropdownOptions(
-      $,
-      ".dropdown:has(button .value[data-placeholder='Sort by']) .dropdown-menu.noclose.c1 li",
-    ),
-  };
-};
+export const parseMangaList = (items: TitleItem[]): MangaListItem[] =>
+  items.map((item) => ({
+    mangaId: item.hid,
+    title: item.title,
+    imageUrl: posterUrl(item),
+    subtitle: item.latestChapter ? `Ch. ${item.latestChapter}` : undefined,
+    updatedAt: item.chapterUpdatedAt,
+    rank: item.rank,
+    contentRating: ContentRating.EVERYONE, // List items do not include genres
+  }));
 
-export const parseSearch = ($: CheerioAPI): SearchResultItem[] => {
-  const searchResults: SearchResultItem[] = [];
+const posterUrl = (item: TitleItem): string =>
+  item.poster?.large ??
+  item.poster?.medium ??
+  item.poster?.small ??
+  "https://placehold.co/300x420/14161c/6b7080/png/?text=No+Poster";
 
-  $(".original.card-lg .unit .inner").each((_, element) => {
-    const unit = $(element);
-    const infoLink = unit.find(".info > a");
-    const title = infoLink.text().trim();
-    const image = unit.find("img").attr("src") || "";
-    const mangaId = infoLink.attr("href")?.replace("/manga/", "") || "";
-    const latestChapter = unit
-      .find(".content[data-name='chap'] a")
-      .first()
-      .find("span")
-      .first()
-      .text()
-      .trim();
-    const latestChapterMatch = latestChapter.match(/Chap (\d+)/);
-    const subtitle = latestChapterMatch ? `Ch. ${latestChapterMatch[1]}` : undefined;
+export const parseMangaDetails = (details: TitleDetails, mangaId: string): SourceManga => {
+  const genres = details.genres ?? [];
+  const tagGroups: TagSection[] = [
+    { key: "genres", items: genres },
+    { key: "themes", items: details.themes ?? [] },
+  ]
+    .filter(({ items }) => items.length > 0)
+    .map(({ key, items }) => ({
+      id: key,
+      title: key[0].toUpperCase() + key.slice(1),
+      tags: items.map((tag) => ({ id: tag.id.toString(), title: tag.title })),
+    }));
 
-    if (!title || !mangaId) {
-      return;
-    }
-
-    searchResults.push({
-      mangaId,
-      imageUrl: image,
-      title,
-      subtitle,
-      contentRating: ContentRating.EVERYONE, // Site does not provide content rating
-    });
-  });
-
-  return searchResults;
-};
-
-export const hasNextPage = ($: CheerioAPI): boolean => {
-  return !!$(".page-item.active + .page-item .page-link").length;
-};
-
-export const parseMangaDetails = (
-  $: CheerioAPI,
-  mangaId: string,
-  searchDetails?: SearchDetails,
-): SourceManga => {
-  const title = $(".manga-detail .info h1").text().trim();
-  const altTitles = [$(".manga-detail .info h6").text().trim()].filter((t) => t);
-  const image = $(".manga-detail .poster img").attr("src") || "";
-  const description =
-    $("#synopsis .modal-content").text().trim() ||
-    $(".manga-detail .info .description").text().trim();
-  const authors: string[] = [];
-  $("#info-rating .meta div").each((_, element) => {
-    const label = $(element).find("span").first().text().trim();
-    if (label === "Author:") {
-      $(element)
-        .find("a")
-        .each((_, authorElement) => {
-          authors.push($(authorElement).text().trim());
-        });
-    }
-  });
-  const status = $(".manga-detail .info p").last().text().trim() || "Unknown";
-
-  const tags: TagSection[] = [];
-  const genres: string[] = [];
-  let rating = 0;
-
-  $("#info-rating .meta div").each((_, element) => {
-    const label = $(element).find("span").first().text().trim();
-    if (label === "Genres:") {
-      $(element)
-        .find("a")
-        .each((_, genreElement) => {
-          genres.push($(genreElement).text().trim());
-        });
-    }
-  });
-
-  const ratingValue = $("#info-rating .score .live-score").text().trim();
-  if (ratingValue) {
-    rating = parseFloat(ratingValue) / 10;
-  }
-
-  if (genres.length > 0) {
-    const genreIdByLabel = new Map(
-      (searchDetails?.genres ?? []).map((genre) => [genre.label.toLowerCase(), genre.id]),
-    );
-    tags.push({
-      id: "genres",
-      title: "Genres",
-      tags: genres.map((genre) => ({
-        id: genreIdByLabel.get(genre.toLowerCase()) ?? genre,
-        title: genre,
-      })),
-    });
-  }
+  const contentRating = genres.some((genre) => ADULT_GENRES.has(genre.title))
+    ? ContentRating.ADULT
+    : genres.some((genre) => MATURE_GENRES.has(genre.title))
+      ? ContentRating.MATURE
+      : ContentRating.EVERYONE;
 
   return {
-    mangaId: mangaId,
+    mangaId,
     mangaInfo: {
-      primaryTitle: title,
-      secondaryTitles: altTitles,
-      thumbnailUrl: image,
-      synopsis: description,
-      rating: rating,
-      contentRating: ContentRating.EVERYONE, // Site does not provide content rating
-      status: status,
-      tagGroups: tags,
-      shareUrl: `${DOMAIN}/manga/${mangaId}`,
+      primaryTitle: details.title,
+      secondaryTitles: details.altTitles ?? [],
+      thumbnailUrl: posterUrl(details),
+      synopsis: details.synopsisHtml ? stripHtml(details.synopsisHtml) : "",
+      author: details.authors?.map((author) => author.title).join(", ") || undefined,
+      artist: details.artists?.map((artist) => artist.title).join(", ") || undefined,
+      rating: details.rating ? details.rating / 10 : 0,
+      contentRating,
+      status: STATUS_MAP[details.status ?? ""] ?? "Unknown",
+      tagGroups,
+      shareUrl: `${DOMAIN}/title/${mangaId}`,
     },
   };
 };
 
 export const parseChapters = (
-  $: CheerioAPI,
+  items: ChapterItem[],
   sourceManga: SourceManga,
   langCode: string,
-): Chapter[] => {
-  const chapters: Chapter[] = [];
-  $("li").each((_, el) => {
-    const li = $(el);
-    const chapterNumber = li.attr("data-number");
-    if (!chapterNumber) return;
+): Chapter[] =>
+  items.map((item) => ({
+    chapterId: item.id.toString(),
+    title: item.name || undefined,
+    sourceManga,
+    chapNum: item.number,
+    publishDate: item.createdAt ? new Date(item.createdAt * 1000) : undefined,
+    volume: 0, // Site does not provide volume information
+    langCode,
+  }));
 
-    const link = li.find("a");
-    const href = link.attr("href");
-    if (!href) return;
+const stripHtml = (html: string): string =>
+  Application.decodeHTMLEntities(
+    html
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .trim(),
+  );
 
-    const chapterUrlPath = href.startsWith("http") ? href.replace(/^https?:\/\/[^/]+/, "") : href;
-
-    const dateText = li.find("span").last().text().trim();
-    const title =
-      link.find("span").first().text().trim().split(`${chapterNumber}:`)[1]?.trim() || undefined;
-
-    chapters.push({
-      chapterId: chapterUrlPath,
-      title: title,
-      sourceManga,
-      chapNum: parseFloat(chapterNumber ?? "0"),
-      publishDate: new Date(convertToISO8601(dateText)),
-      volume: 0, // Site does not provide volume information
-      langCode,
-    });
-  });
-  return chapters;
+// The manga ID is the title's "hid". Legacy IDs were "slug.hid", so take the part after the dot.
+export const parseHid = (mangaId: string): string => {
+  return mangaId.split(".").pop() ?? mangaId;
 };
-
-export const parseChapterDetails = (json: PageResponse, chapter: Chapter): ChapterDetails => {
-  const pages = json.result.images.map((value) => value[0]);
-  return {
-    mangaId: chapter.sourceManga.mangaId,
-    id: chapter.chapterId,
-    pages: pages,
-  };
-};
-
-export const parseUpdatedSection = ($: CheerioAPI): ChapterUpdatesCarouselItem[] => {
-  const items: ChapterUpdatesCarouselItem[] = [];
-
-  $(".unit .inner").each((_, element) => {
-    const unit = $(element);
-    const infoLink = unit.find(".info > a").last();
-    const title = infoLink.text().trim();
-    const image = unit.find(".poster img").attr("src") || "";
-    const mangaId = infoLink.attr("href")?.replace("/manga/", "") || "";
-    const latestChapter = unit.find(".content[data-name='chap']").find("a").eq(0).text().trim();
-    const latestChapterMatch = latestChapter.match(/Chap (\d+)/);
-    const subtitle = latestChapterMatch ? `Ch. ${latestChapterMatch[1]}` : undefined;
-
-    const chapterLink = unit.find(".content[data-name='chap'] a").first();
-    const chapterHref = chapterLink.attr("href") || "";
-    const chapterId = chapterHref.startsWith("http")
-      ? chapterHref.replace(/^https?:\/\/[^/]+/, "")
-      : chapterHref;
-
-    if (title && mangaId) {
-      items.push({
-        type: "chapterUpdatesCarouselItem",
-        mangaId: mangaId,
-        chapterId: chapterId,
-        imageUrl: image,
-        title: title,
-        subtitle: subtitle,
-        contentRating: ContentRating.EVERYONE, // Site does not provide content rating
-      });
-    }
-  });
-
-  return items;
-};
-
-export const parsePopularSection = ($: CheerioAPI): FeaturedCarouselItem[] => {
-  const items: FeaturedCarouselItem[] = [];
-
-  $(".unit .inner").each((_, element) => {
-    const unit = $(element);
-    const infoLink = unit.find(".info > a").last();
-    const title = infoLink.text().trim();
-    const image = unit.find(".poster img").attr("src") || "";
-    const mangaId = infoLink.attr("href")?.replace("/manga/", "") || "";
-
-    const latestChapter = unit
-      .find(".content[data-name='chap'] a")
-      .filter((_, el) => $(el).find("b").text() === "EN")
-      .first()
-      .find("span")
-      .first()
-      .text()
-      .trim();
-
-    const chapterMatch = latestChapter.match(/Chap (\d+)/);
-    const supertitle = chapterMatch ? `Ch. ${chapterMatch[1]}` : "";
-
-    if (title && mangaId) {
-      items.push({
-        type: "featuredCarouselItem",
-        mangaId: mangaId,
-        imageUrl: image,
-        title: title,
-        supertitle: supertitle,
-        contentRating: ContentRating.EVERYONE, // Site does not provide content rating
-      });
-    }
-  });
-
-  return items;
-};
-
-export const popularHasNextPage = ($: CheerioAPI): boolean => {
-  return !!$(".hpage .r").length;
-};
-
-export const parseNewMangaSection = ($: CheerioAPI): SimpleCarouselItem[] => {
-  const items: SimpleCarouselItem[] = [];
-
-  $(".unit .inner").each((_, element) => {
-    const unit = $(element);
-    const infoLink = unit.find(".info > a").last();
-    const title = infoLink.text().trim();
-    const image = unit.find(".poster img").attr("src") || "";
-    const mangaId = infoLink.attr("href")?.replace("/manga/", "") || "";
-
-    const latestChapter = unit
-      .find(".content[data-name='chap'] a")
-      .first()
-      .find("span")
-      .first()
-      .text()
-      .trim();
-    const latestChapterMatch = latestChapter.match(/Chap (\d+)/);
-    const subtitle = latestChapterMatch ? `Ch. ${latestChapterMatch[1]}` : undefined;
-
-    if (title && mangaId) {
-      items.push({
-        mangaId,
-        imageUrl: image,
-        title: title,
-        subtitle: subtitle,
-        contentRating: ContentRating.EVERYONE, // Site does not provide content rating
-        type: "simpleCarouselItem",
-      });
-    }
-  });
-
-  return items;
-};
-
-function convertToISO8601(dateText: string): string {
-  const now = new Date();
-
-  if (!dateText?.trim()) return now.toISOString();
-
-  if (/^yesterday$/i.test(dateText)) {
-    now.setDate(now.getDate() - 1);
-    return now.toISOString();
-  }
-
-  const relativeMatch = dateText.match(/(\d+)\s+(second|minute|hour|day)s?\s+ago/i);
-  if (relativeMatch) {
-    const [_, value, unit] = relativeMatch;
-    const parsedValue = parseInt(value, 10);
-    switch (unit.toLowerCase()) {
-      case "second":
-        now.setSeconds(now.getSeconds() - parsedValue);
-        break;
-      case "minute":
-        now.setMinutes(now.getMinutes() - parsedValue);
-        break;
-      case "hour":
-        now.setHours(now.getHours() - parsedValue);
-        break;
-      case "day":
-        now.setDate(now.getDate() - parsedValue);
-        break;
-    }
-    return now.toISOString();
-  }
-
-  const parsedDate = new Date(dateText);
-  return isNaN(parsedDate.getTime()) ? now.toISOString() : parsedDate.toISOString();
-}
-
-export function parseJson<T>(raw: string, context: string): T {
-  try {
-    return JSON.parse(raw) as T;
-  } catch (error) {
-    throw new Error(`Failed to parse ${context}`, {
-      cause: error,
-    });
-  }
-}

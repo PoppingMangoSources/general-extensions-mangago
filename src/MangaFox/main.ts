@@ -1,11 +1,14 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Copyright © 2026 Inkdex */
 
+// oxlint-disable no-eval
+
 // TODO:
 // - Add the English name to the title view
 // - Add additional info to the title view
 // - Make getChapterDetails only return new chapters
 // - Fix exclude search
+// - Remove eval usage
 
 import {
   BasicRateLimiter,
@@ -111,7 +114,11 @@ export class MangaFoxExtension implements ExtensionImpl<typeof MangaFoxConfig> {
     }
   }
 
-  async saveCloudflareBypassCookies(cookies: Cookie[]): Promise<void> {
+  async cloudflareBypassCompleted(
+    _request: Request,
+    cookies: Cookie[],
+    _localStorage: Record<string, string>,
+  ): Promise<void> {
     for (const cookie of cookies) {
       if (
         cookie.name.startsWith("cf") ||
