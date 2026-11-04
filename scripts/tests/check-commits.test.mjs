@@ -19,7 +19,10 @@ const good = {
 
 void test("a Popmango commit with an Assisted-by trailer passes", () => {
   assert.deepEqual(
-    checkCommit({ ...good, message: `${good.message}\nAssisted-by: ClaudeCode:x\n` }),
+    checkCommit(
+      { ...good, message: `${good.message}\nAssisted-by: ClaudeCode:x\n` },
+      { allowAssisted: true },
+    ),
     [],
   );
 });
@@ -71,4 +74,16 @@ void test("readCommits reads identity and message from a real repository", () =>
   assert.equal(commits.length, 2);
   assert.deepEqual(checkCommit(commits[1]), []);
   assert.ok(checkCommit(commits[0]).some((p) => p.includes("attribution")));
+});
+
+void test("own branches reject Assisted-by and non-Claude attribution", () => {
+  for (const line of [
+    "Assisted-by: Tool:model",
+    "Generated with Codex",
+    "Agent-Session: example",
+    "Signed-off-by: Example <x@y.invalid>",
+    "https://example.com/session/123",
+  ]) {
+    assert.ok(checkCommit({ ...good, message: `${good.message}\n${line}` }).length > 0, line);
+  }
 });

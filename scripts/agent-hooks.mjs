@@ -144,12 +144,19 @@ function stampReview(name, status) {
 function main(argv) {
   const [command, ...rest] = argv;
   if (command === "pre-edit" || command === "stop") {
-    // A broken hook must never block an edit or the end of a turn.
+    // Informational edit reminders can fail open; failed Stop validation must be visible.
     try {
       const input = fs.readFileSync(0, "utf8");
       (command === "pre-edit" ? preEdit : stop)(input ? JSON.parse(input) : {});
     } catch (error) {
       console.error(`agent-hooks ${command}: ${String(error)}`);
+      if (command === "stop")
+        console.log(
+          JSON.stringify({
+            decision: "block",
+            reason: `Workflow validation could not run: ${String(error)}`,
+          }),
+        );
     }
     return 0;
   }

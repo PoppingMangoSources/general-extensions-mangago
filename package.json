@@ -5,17 +5,16 @@
   "type": "module",
   "scripts": {
     "tsc": "tsc",
-    "lint": "oxlint --type-aware --fix",
-    "lint:check": "oxlint --type-aware --deny-warnings",
-    "format": "oxfmt .",
-    "format:check": "oxfmt --check .",
+    "lint": "oxlint --type-aware --fix --ignore-pattern 'bundles/**'",
+    "lint:check": "oxlint --type-aware --deny-warnings --ignore-pattern 'bundles/**'",
+    "format": "oxfmt . '!bundles/**'",
+    "format:check": "oxfmt --check . '!bundles/**'",
     "conformance": "npm run tsc && npm run lint:check && npm run format:check",
     "bundle": "paperback-cli bundle",
     "serve": "paperback-cli serve",
     "dev": "paperback-cli serve --watch",
     "logcat": "paperback-cli logcat",
     "test": "paperback-cli test --noConsole --output ./bundles/tests.json",
-    "prepare": "husky",
     "test:check": "node scripts/check-tests.mjs",
     "test:scripts": "node --test scripts/tests/*.test.mjs",
     "test:unit": "node --import ./scripts/ts-resolve.mjs --test \"test/unit/**/*.test.ts\"",
@@ -23,7 +22,10 @@
     "check:docs": "node scripts/sync-agent-docs.mjs --check",
     "check:bundle": "node scripts/check-bundle.mjs",
     "check:commits": "node scripts/check-commits.mjs",
-    "new-source": "node scripts/new-source.mjs"
+    "new-source": "node scripts/new-source.mjs",
+    "prepare": "node scripts/setup-git.mjs",
+    "validate": "node scripts/validate.mjs",
+    "hooks": "node scripts/setup-git.mjs"
   },
   "devDependencies": {
     "@paperback/toolchain": "^1.0.0-alpha.92",

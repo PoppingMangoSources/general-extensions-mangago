@@ -1,0 +1,63 @@
+name: Source Checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  rules:
+    name: Source Rules
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Branch
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install Dependencies
+        run: npm ci
+      - name: Validate Offline Gates
+        run: npm run validate -- --event
+      - name: Changed Source Base
+        id: changed
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          base="$BASE_SHA"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            base="origin/0.9/test"
+          fi
+          git cat-file -e "$base^{commit}"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+      # A report, not a gate: the tests call the live site, so a red step can be the site.
+      - name: Live Tests For Changed Sources
+        continue-on-error: true
+        env:
+          BASE_SHA: ${{ steps.changed.outputs.base }}
+        run: |
+          names=$(node --input-type=module -e "import { changedSources } from './scripts/check-sources.mjs'; console.log(changedSources(process.cwd(), process.env.BASE_SHA).join(' '))")
+          [ -n "$names" ] || { echo "No source changed."; exit 0; }
+          for name in $names; do npm test --silent -- "$name" > /dev/null || true; node scripts/check-tests.mjs "$name" || failed=1; done
+          [ -z "${failed:-}" ] || { echo "::warning::Live tests failed; read whether it is the site or the source."; exit 1; }
+      - name: Backlog Summary
+        if: always()
+        run: |
+          {
+            echo '### Source rule backlog'
+            echo '```'
+            node scripts/check-sources.mjs --calibrate
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: docker://rhysd/actionlint:1.7.12
