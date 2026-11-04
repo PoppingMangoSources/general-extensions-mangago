@@ -20,6 +20,7 @@ import {
   type SortingOption,
   type SourceManga,
   type Tag,
+  type UpdateManager,
 } from "@paperback/types";
 
 import { LikeMangaAdvancedSearchForm } from "./forms";
@@ -340,6 +341,16 @@ class LikeMangaExtension implements ExtensionImpl<typeof LikeMangaConfig> {
           )
         : [];
     return parseChapters(document, fragments, sourceManga);
+  }
+
+  async processTitlesForUpdates(updateManager: UpdateManager): Promise<void> {
+    const [first] = updateManager.getQueuedItems();
+    if (!first) return;
+    try {
+      await fetchContentPage(first.mangaId);
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+    }
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
