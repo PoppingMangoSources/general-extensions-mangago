@@ -79,3 +79,12 @@ the same commit as the fix, and change the rule if the comment contradicts it.
 - Merged code disagrees with three written rules, so the checker only notes them: `SelectRow`
   `options` (11 sources, MangaFire in October 2026), emoji (HiveToons, MangaFire), and `function`
   declarations in parsers (Mangago, AllManga).
+
+## Owner presentation feedback, 2026-11-04
+
+Device screenshots showed crowded search/Discover subtitles and redundant metric labels.
+The owner requested a two-fact maximum outside hero carousels, chapter-first ordering,
+chapter plus type for mixed catalogs, and compact icon-only hero metrics. A YaoiMe Latest
+card without a site cover returned an empty URL and the native bridge rejected the entire
+row (`items[28].imageUrl`). Live markup confirmed an inline text placeholder for that card;
+the site's PNG app icon provides an absolute image fallback without another detail request.

@@ -12,7 +12,7 @@ verified_at: pending
 
 # MGRead
 
-New source id `MGRead`, version `1.0.0-alpha.1`. LikeManga's final released implementation
+New source id `MGRead`, version `1.0.0-alpha.2`. LikeManga's final released implementation
 is preserved on `0.9/dead-sources`; this source starts a separate library namespace.
 
 ## Discover and filters
@@ -62,3 +62,15 @@ Six baseline live tests and three extended feed/form/filter checks passed. The l
 reader check loaded all 3,865 Martial Peak chapters and chapter 3862's 12 images, with the
 first image returning HTTP 200. Ten offline regression tests passed. Native iOS layout and
 reader presentation require a device check; server tests do not establish visual rendering.
+
+## Listing presentation, 2026-11-04
+
+Ordinary Discover/update/search subtitles now contain at most two facts, with the actual latest
+chapter first. Mixed catalogs prefer type as the second fact; ratings or views are used when
+appropriate and available. Known totals use `N Chs`, never a fabricated latest chapter.
+Hero view counts are compact numbers without repeating their icon's meaning. All formatting
+uses existing listing fields and adds no per-title network requests. Regression tests assert
+actual outputs, missing fields, chapter zero and latest-versus-total distinctions.
+
+The formatting revision passed 11 source regression tests and a live presentation check
+across all Discover feeds and period chips. The default six live source tests also passed.

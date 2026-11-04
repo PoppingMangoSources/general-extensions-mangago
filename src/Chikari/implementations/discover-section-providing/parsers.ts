@@ -3,6 +3,7 @@
 
 import type { DiscoverSectionItem } from "@paperback/types";
 
+import { formatListingSubtitle } from "../../../utils/listings";
 import type {
   HomeResponse,
   HomeRow,
@@ -14,7 +15,6 @@ import type {
 import {
   chapterToken,
   encodeMangaId,
-  formatChapterNumber,
   formatCoverUrl,
   formatRating,
   formatSeriesStatus,
@@ -42,7 +42,7 @@ export const toFeaturedItem = (series: SeriesItem): DiscoverSectionItem => {
     imageUrl: formatCoverUrl(series.cover_url, 600),
     title: series.title,
     supertitle: formatSeriesType(series.type),
-    summary: `${formatSeriesStatus(series.status)} • ${series.chapter_count} chapters`,
+    summary: `${formatSeriesStatus(series.status)} • ${series.chapter_count} Chs`,
     infoItems: rating
       ? [
           { symbol: "star.fill", text: rating.replace("★ ", "") },
@@ -58,12 +58,10 @@ export const toRecentlyUpdatedItem = (
   medium: Medium = "comic",
 ): DiscoverSectionItem | undefined => {
   if (series.latest_chapter == null) return undefined;
-  const subtitle = [
-    `Ch. ${formatChapterNumber(series.latest_chapter)}`,
-    formatRating(series.rating),
-  ]
-    .filter((value): value is string => Boolean(value))
-    .join(" • ");
+  const subtitle = formatListingSubtitle({
+    chapter: series.latest_chapter,
+    type: formatSeriesType(series.type, medium),
+  });
   const date = series.last_chapter_at ? new Date(series.last_chapter_at) : undefined;
   return {
     type: "chapterUpdatesCarouselItem",

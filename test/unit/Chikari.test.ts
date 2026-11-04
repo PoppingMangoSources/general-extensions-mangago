@@ -461,3 +461,24 @@ void test("Random search sorting retains its seed and empty bingeable results st
   assert.equal(requests.at(-1)?.searchParams.get("type"), "novel");
   assert.equal(requests.at(-1)?.searchParams.has("seed"), false);
 });
+
+void test("comic and novel listings show actual chapters before type, without extra subtitle metrics", async (t) => {
+  mockApi(t, () => ({}));
+  const { toSearchResultItem } =
+    await import("../../src/Chikari/implementations/search-results-providing/parsers");
+  const { toRecentlyUpdatedItem, toFeaturedItem } =
+    await import("../../src/Chikari/implementations/discover-section-providing/parsers");
+  assert.equal(toSearchResultItem(item("comic")).subtitle, "Ch. 2 • Manga");
+  assert.equal(toSearchResultItem(item("novel")).subtitle, "Ch. 2 • Novel");
+  assert.equal(
+    toSearchResultItem({ ...item("comic"), latest_chapter: null }).subtitle,
+    "2 Chs • Manga",
+  );
+  const update = toRecentlyUpdatedItem({ ...item("comic"), latest_chapter: 0 });
+  assert.ok(update && "subtitle" in update);
+  if (update && "subtitle" in update) assert.equal(update.subtitle, "Ch. 0 • Manga");
+  const hero = toFeaturedItem({ ...item("comic"), views: 67300000 });
+  assert.ok("infoItems" in hero);
+  if ("infoItems" in hero)
+    assert.equal(hero.infoItems?.find((x) => x.symbol === "eye.fill")?.text, "67.3M");
+});

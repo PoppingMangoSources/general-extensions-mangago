@@ -17,6 +17,7 @@ import {
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
+import { formatListingSubtitle } from "../utils/listings";
 import { DOMAIN, type ChapterGroup, type MangaCard, type SearchMetadata } from "./models";
 
 const SAFE_ID = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
@@ -66,7 +67,7 @@ const parseChapterId = (value?: string | null): string => {
 
 const absoluteUrl = (value?: string | null, cover = false): string => {
   let path = Application.decodeHTMLEntities(value ?? "").trim();
-  if (!path) return "";
+  if (!path) return cover ? `${DOMAIN}/apple-icon.png` : "";
   if (path.startsWith("//")) path = `https:${path}`;
   if (!/^https?:\/\//i.test(path)) path = `${DOMAIN}${path.startsWith("/") ? "" : "/"}${path}`;
   if (cover && path.includes("/i/c/")) return `${path.replace(/\?.*$/, "")}?w=720`;
@@ -116,6 +117,7 @@ const parseCard = ($: cheerio.CheerioAPI, node: AnyNode): MangaCard | undefined 
   const typeName = cleanText(
     facts
       .children("span")
+      .add(element.find(".card-trail span"))
       .filter((_, item) => /^(?:Manga|Manhwa|Manhua|OEL|Novel|Other)$/i.test($(item).text().trim()))
       .first()
       .text(),
@@ -191,10 +193,12 @@ export const parseBrowseCards = ($: cheerio.CheerioAPI): MangaCard[] => {
   return cards;
 };
 
-const cardSubtitle = (card: MangaCard): string | undefined => {
-  const parts = [card.chapter, card.rating ? `★ ${card.rating}` : undefined].filter(Boolean);
-  return parts.length ? parts.join(" • ") : undefined;
-};
+const cardSubtitle = (card: MangaCard): string | undefined =>
+  formatListingSubtitle({
+    chapter: card.chapter?.replace(/^Ch\.\s*/, ""),
+    type: card.typeName,
+    rating: card.rating,
+  });
 
 export const toFeaturedItem = (card: MangaCard, bookmarked = false): FeaturedCarouselItem => {
   const infoItems: { symbol: string; text: string }[] = [];
@@ -247,7 +251,7 @@ export const toLatestItem = (card: MangaCard): ChapterUpdatesCarouselItem | unde
 export const toSearchResult = (card: MangaCard): SearchResultItem => ({
   mangaId: card.mangaId,
   title: card.title,
-  subtitle: [card.chapter, card.typeName].filter(Boolean).join(" • ") || undefined,
+  subtitle: cardSubtitle(card),
   imageUrl: card.imageUrl,
   contentRating: toContentRating(card.contentRating),
 });

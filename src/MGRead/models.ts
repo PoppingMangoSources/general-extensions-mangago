@@ -90,6 +90,7 @@ export interface MangaListItem {
   title: string;
   cover: string;
   genres: string[];
+  type?: string;
   rating?: number;
   views?: string;
   follows?: string;
@@ -113,6 +114,7 @@ export interface ChapterListResponse {
   current_page: number;
 }
 export interface SearchItem {
+  type?: string;
   post_type?: string;
   title: string;
   url: string;

@@ -51,9 +51,9 @@ export const formatRating = (rating: number | null): string | undefined =>
   rating == null || !Number.isFinite(rating) ? undefined : `★ ${rating.toFixed(1)}`;
 
 export const formatViews = (views: number): string => {
-  if (views >= 1_000_000) return `${(views / 1_000_000).toFixed(1).replace(/\.0$/, "")}M views`;
-  if (views >= 1_000) return `${(views / 1_000).toFixed(1).replace(/\.0$/, "")}K views`;
-  return `${views} views`;
+  if (views >= 1_000_000) return `${(views / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (views >= 1_000) return `${(views / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
+  return `${views}`;
 };
 
 export const formatChapterNumber = (number: number | null): string =>

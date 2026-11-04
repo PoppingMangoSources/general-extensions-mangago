@@ -63,3 +63,15 @@ The pinned actionlint release has stale input metadata for `actions/create-githu
 Its official action definition accepts `client-id`; `.github/actionlint.yaml` suppresses only
 the two resulting input diagnostics in `registry-management.yaml`. Other diagnostics still
 fail workflow validation.
+
+## Presentation and cover URLs, 2026-11-04
+
+`empty-image-url` rejects literal empty `imageUrl`/`thumbnailUrl` properties. Computed values
+still need runtime coverage: YaoiMe's live coverless card reproduced a whole-row native crash.
+`test/unit/Listings.test.ts` checks the shared two-fact subtitle contract, chapter zero,
+latest-versus-total labels and compact metrics. Per-source regression tests verify the mappers
+actually use that contract. The new formatters make no additional network requests.
+
+Calibration found no empty-image literal findings across 22 merged reference sources.
+Submission packaging includes the shared listing formatter when the submitted source imports
+it, so the source remains buildable when copied out of the working branch.

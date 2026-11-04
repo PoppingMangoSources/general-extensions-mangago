@@ -186,3 +186,15 @@ src/tests/<Name>.ts   the generated baseline, unchanged [check]
 - A new source, removal, rename or domain change updates the README list (#185). **[check]**
 - Keep the branch linear: never merge `0.9/stable` into it (#156 "Why did you merge stable into
   dev? no"); rebase, and expect a maintainer to squash or push to it.
+
+## Local listing presentation
+
+Owner preference, 2026-11-04: keep ordinary Discover/update/search subtitles to two facts at
+most. Latest chapter comes first (`Ch. 23`); a known total is `23 Chs`, never `Ch. 23`.
+For mixed comic/novel catalogs, prefer chapter plus type; otherwise chapter plus `★ rating`,
+then chapter alone. Views/follows can occupy the second slot when more useful information is
+absent. Hero carousels can use additional native fields; a metric icon needs only a compact
+number, with no repeated `views`/`reads` label. Rankings stay in hero supertitles.
+Use listing data only, with no per-title enrichment requests. Test exact outputs and missing
+fields. Coverless site cards still need a valid absolute image URL before crossing the bridge;
+use a verified site image or omit only the affected card. Empty literal URLs fail the checker.

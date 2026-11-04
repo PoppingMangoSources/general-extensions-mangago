@@ -3,13 +3,12 @@
 
 import type { SearchResultItem } from "@paperback/types";
 
+import { formatListingSubtitle } from "../../../utils/listings";
 import type { Medium, SeriesDetails, SeriesItem } from "../shared/models";
 import {
   encodeMangaId,
   formatCoverUrl,
-  formatRating,
   formatSeriesType,
-  formatViews,
   toContentRating,
 } from "../shared/parsers";
 import type { TriState } from "./models";
@@ -26,13 +25,11 @@ export const toSearchResultItem = (
   series: SeriesItem,
   medium: Medium = series.medium === "novel" ? "novel" : "comic",
 ): SearchResultItem => {
-  const subtitle = [
-    formatSeriesType(series.type, medium),
-    formatRating(series.rating),
-    formatViews(series.views),
-  ]
-    .filter((value): value is string => Boolean(value))
-    .join(" • ");
+  const subtitle = formatListingSubtitle({
+    chapter: series.latest_chapter,
+    chapterCount: series.chapter_count,
+    type: formatSeriesType(series.type, medium),
+  });
   return {
     mangaId: encodeMangaId(series.slug, medium),
     title: series.title,
@@ -46,13 +43,10 @@ export const detailsToSearchResultItem = (
   series: SeriesDetails,
   medium: Medium = series.medium === "novel" ? "novel" : "comic",
 ): SearchResultItem => {
-  const subtitle = [
-    formatSeriesType(series.type, medium),
-    formatRating(series.rating),
-    formatViews(series.views),
-  ]
-    .filter((value): value is string => Boolean(value))
-    .join(" • ");
+  const subtitle = formatListingSubtitle({
+    chapterCount: series.chapter_count,
+    type: formatSeriesType(series.type, medium),
+  });
   return {
     mangaId: encodeMangaId(series.slug, medium),
     title: series.title,

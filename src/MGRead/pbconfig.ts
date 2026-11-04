@@ -5,7 +5,7 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "MGRead",
   description: "Extension that pulls content from mgread.io.",
-  version: "1.0.0-alpha.1",
+  version: "1.0.0-alpha.2",
   icon: "icon.png",
   language: "en",
   contentRating: ContentRating.ADULT,

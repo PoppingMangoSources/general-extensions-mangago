@@ -12,7 +12,7 @@ verified_at: pending
 
 # Swarm
 
-New source id `Swarm`, version `1.0.0-alpha.1`. Public site and API responses checked
+New source id `Swarm`, version `1.0.0-alpha.2`. Public site and API responses checked
 2026-11-04. The icon is the site's own `/logo.png`.
 
 ## Discover
@@ -70,3 +70,15 @@ Villain To Kill returned 2,328 uploads and chapter 374's 16 images, with the fir
 returning HTTP 200. A novel with 378 chapters opened chapter 378 as XHTML. Nine offline
 regression tests passed. Some individual uploads return the site's placeholder and require
 choosing another version. Native iOS layout and reader rendering still require a device check.
+
+## Listing presentation, 2026-11-04
+
+Ordinary Discover/update/search subtitles now contain at most two facts, with the actual latest
+chapter first. Mixed catalogs prefer type as the second fact; ratings or views are used when
+appropriate and available. Known totals use `N Chs`, never a fabricated latest chapter.
+Hero view counts are compact numbers without repeating their icon's meaning. All formatting
+uses existing listing fields and adds no per-title network requests. Regression tests assert
+actual outputs, missing fields, chapter zero and latest-versus-total distinctions.
+
+The formatting revision passed 10 source regression tests and a live presentation check
+across all Discover feeds and period chips. The default six live source tests also passed.

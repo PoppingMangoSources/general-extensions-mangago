@@ -304,3 +304,23 @@ void test("Swarm rejects its missing-upload placeholder instead of returning a b
     { id: "one", mangaId: "a-work", pages: ["https://cash.swarm.ws/real.webp"] },
   );
 });
+
+void test("Swarm search and ordinary cards use two facts without rank or repeated metric labels", async (t) => {
+  mock(t, () => ({}));
+  const { toSearchItem } = await import("../../src/Swarm/parsers");
+  assert.equal(
+    toSearchItem({
+      id: "1",
+      title: "Work",
+      latestChapterNumber: 0,
+      chapterCount: 22,
+      type: "Manhwa",
+      views: 67300000,
+    }).subtitle,
+    "Ch. 0 • Manhwa",
+  );
+  assert.equal(
+    toSearchItem({ id: 1, slug: "novel", title: "Novel", _count: { chapters: 23 } }).subtitle,
+    "23 Chs • Novel",
+  );
+});

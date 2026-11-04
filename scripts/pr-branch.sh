@@ -61,7 +61,11 @@ git worktree add --quiet -B "$BRANCH" "$WORKTREE" upstream/0.9/stable
 
 cd "$WORKTREE"
 rm -rf "src/$NAME"
-git -C "$ROOT" archive "$FROM" "src/$NAME" "src/tests/$NAME.ts" | tar -x -C "$WORKTREE"
+SHARED_FILES=()
+if git -C "$ROOT" grep -q 'utils/listings' "$FROM" -- "src/$NAME"; then
+  SHARED_FILES=(src/utils/listings.ts)
+fi
+git -C "$ROOT" archive "$FROM" "src/$NAME" "src/tests/$NAME.ts" "${SHARED_FILES[@]}" | tar -x -C "$WORKTREE"
 sed -i -E "s/(version: *\")[^\"]+(\")/\1$VERSION\2/" "src/$NAME/pbconfig.ts"
 
 if ! grep -q "\[$NAME\]" README.md; then
@@ -88,7 +92,7 @@ node "$ROOT/scripts/check-tests.mjs" --report bundles/tests.json "$NAME" || {
   exit 1
 }
 
-git add -A "src/$NAME" "src/tests/$NAME.ts" README.md
+git add -A "src/$NAME" "src/tests/$NAME.ts" README.md "${SHARED_FILES[@]}"
 BODY=()
 [ -n "$TRAILER" ] && BODY=(-m "$TRAILER")
 GIT_AUTHOR_NAME="Popmango Extensions" GIT_AUTHOR_EMAIL="297959108+PoppingMangoSources@users.noreply.github.com" \

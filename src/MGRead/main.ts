@@ -15,6 +15,7 @@ import {
   type DiscoverSectionItem,
   type ExtensionImpl,
   type Form,
+  type FeaturedCarouselItem,
   type PagedResults,
   type Request,
   type SearchQuery,
@@ -25,6 +26,7 @@ import {
 } from "@paperback/types";
 import * as cheerio from "cheerio";
 
+import { formatCount } from "../utils/listings";
 import { MGReadAdvancedSearchForm } from "./forms/search";
 import { getPreferences, MGReadSettingsForm } from "./forms/settings";
 import {
@@ -49,6 +51,7 @@ import {
   MGReadInterceptor,
 } from "./network";
 import {
+  listingSubtitle,
   hasNextPage,
   isLocked,
   parseChapterPages,
@@ -139,13 +142,6 @@ class MGReadExtension implements ExtensionImpl<typeof MGReadConfig> {
     const preferences = getPreferences();
     const allowed = await applyContentFilters(raw, preferences);
     const items = allowed.flatMap((item): DiscoverSectionItem[] => {
-      const summary = [
-        item.rating ? `${item.rating}/5` : "",
-        item.latest?.number !== undefined ? `Ch. ${item.latest.number}` : "",
-        item.follows && section.id === SECTIONS.FOLLOWS ? `${item.follows} follows` : "",
-      ]
-        .filter(Boolean)
-        .join(" · ");
       const base = {
         mangaId: item.id,
         title: item.title,
@@ -153,25 +149,35 @@ class MGReadExtension implements ExtensionImpl<typeof MGReadConfig> {
         contentRating: item.contentRating,
       };
       if (section.id === SECTIONS.POPULAR) {
-        const info:
-          | [{ symbol: string; text: string }]
-          | [{ symbol: string; text: string }, { symbol: string; text: string }]
-          | undefined =
-          item.views && summary
+        const views = formatCount(item.views);
+        const chapter =
+          item.latest?.number !== undefined
+            ? `Ch. ${item.latest.number}`
+            : item.chapterCount !== undefined
+              ? `${item.chapterCount} Chs`
+              : undefined;
+        const rating = item.rating ? String(item.rating) : undefined;
+        const info: FeaturedCarouselItem["infoItems"] =
+          views && rating
             ? [
-                { symbol: "eye.fill", text: `${item.views} views` },
-                { symbol: "star.fill", text: summary },
+                { symbol: "eye.fill", text: views },
+                { symbol: "star.fill", text: rating },
               ]
-            : item.views
-              ? [{ symbol: "eye.fill", text: `${item.views} views` }]
-              : summary
-                ? [{ symbol: "star.fill", text: summary }]
+            : views
+              ? [{ symbol: "eye.fill", text: views }]
+              : rating
+                ? [{ symbol: "star.fill", text: rating }]
                 : undefined;
         return [
           {
             ...base,
             type: "featuredCarouselItem",
-            supertitle: `#${(page - 1) * PAGE_SIZE + raw.findIndex((original) => original.id === item.id) + 1}`,
+            supertitle: [
+              `#${(page - 1) * PAGE_SIZE + raw.findIndex((original) => original.id === item.id) + 1}`,
+              chapter,
+            ]
+              .filter(Boolean)
+              .join(" • "),
             summary: item.summary,
             infoItems: info,
           },
@@ -184,8 +190,7 @@ class MGReadExtension implements ExtensionImpl<typeof MGReadConfig> {
                 ...base,
                 type: "chapterUpdatesCarouselItem",
                 chapterId: item.latest.id,
-                subtitle:
-                  item.latest.number === undefined ? undefined : `Ch. ${item.latest.number}`,
+                subtitle: listingSubtitle(item),
                 publishDate: item.latest.date,
               },
             ]
@@ -194,7 +199,7 @@ class MGReadExtension implements ExtensionImpl<typeof MGReadConfig> {
         {
           ...base,
           type: section.id === SECTIONS.RATED ? "prominentCarouselItem" : "simpleCarouselItem",
-          subtitle: summary || undefined,
+          subtitle: listingSubtitle(item),
         },
       ];
     });
@@ -255,16 +260,7 @@ class MGReadExtension implements ExtensionImpl<typeof MGReadConfig> {
         title: item.title,
         imageUrl: item.cover,
         contentRating: item.contentRating,
-        subtitle:
-          [
-            meta.topWindow
-              ? `#${(page - 1) * PAGE_SIZE + items.findIndex((raw) => raw.id === item.id) + 1}`
-              : "",
-            item.latest?.number !== undefined ? `Ch. ${item.latest.number}` : "",
-            item.views ? `${item.views} views` : "",
-          ]
-            .filter(Boolean)
-            .join(" · ") || undefined,
+        subtitle: listingSubtitle(item),
       })),
       ...(next ? { metadata: { page: page + 1 } } : {}),
     };

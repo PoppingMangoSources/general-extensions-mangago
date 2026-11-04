@@ -304,3 +304,21 @@ void test("MGRead protected reader decrypts current grants and legacy salted cha
     assert.equal(result, html);
   }
 });
+
+void test("MGRead subtitles keep the chapter before rating and hero metrics have no extra words", async (t) => {
+  mock(t, () => card());
+  const { listingSubtitle } = await import("../../src/MGRead/parsers");
+  const item = parseMangaList(cheerio.load(card()))[0];
+  assert.equal(listingSubtitle(item), "Ch. 12 • ★ 4.8");
+  const sections = await MGRead.getDiscoverSections(),
+    row = await MGRead.getDiscoverSectionItems(sections[0], undefined),
+    hero = row.items[0];
+  assert.ok("infoItems" in hero);
+  if ("infoItems" in hero)
+    assert.deepEqual(hero.infoItems, [
+      { symbol: "eye.fill", text: "17.2K" },
+      { symbol: "star.fill", text: "4.8" },
+    ]);
+  const results = await MGRead.getSearchResults({ title: "" }, undefined);
+  assert.equal(results.items[0].subtitle, "Ch. 12 • ★ 4.8");
+});

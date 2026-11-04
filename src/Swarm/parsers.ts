@@ -11,6 +11,7 @@ import {
 } from "@paperback/types";
 import * as cheerio from "cheerio";
 
+import { formatListingSubtitle } from "../utils/listings";
 import {
   DOMAIN,
   type ComicPage,
@@ -120,20 +121,21 @@ export const chapterLabel = (manga: SwarmManga): string | undefined => {
   return number !== undefined && number !== null
     ? `Ch. ${number}`
     : manga.chapterCount || manga.chapter_count
-      ? `${manga.chapterCount ?? manga.chapter_count} chapters`
+      ? `${manga.chapterCount ?? manga.chapter_count} Chs`
       : manga._count
-        ? `${manga._count.chapters} chapters`
+        ? `${manga._count.chapters} Chs`
         : undefined;
 };
-export const toSearchItem = (manga: SwarmManga, rank?: number): SearchResultItem => ({
+export const toSearchItem = (manga: SwarmManga): SearchResultItem => ({
   mangaId: idOf(manga),
   title: titleOf(manga),
   imageUrl: coverOf(manga),
   contentRating: ratingFor(manga),
-  subtitle:
-    [rank ? `#${rank}` : "", chapterLabel(manga), manga.views ? `${manga.views} views` : ""]
-      .filter(Boolean)
-      .join(" · ") || undefined,
+  subtitle: formatListingSubtitle({
+    chapter: manga.latestChapterNumber ?? manga.latestChapter ?? manga.chapter ?? manga.number,
+    chapterCount: manga.chapterCount ?? manga.chapter_count ?? manga._count?.chapters,
+    type: manga.slug ? "Novel" : manga.type || "Comic",
+  }),
 });
 export const parseMangaDetails = (manga: SwarmManga, id: string): SourceManga => {
   const novel = decodeURIComponent(id).startsWith("novel/");

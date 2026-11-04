@@ -111,6 +111,25 @@ Verify selectors against the live DOM before unifying or removing them.
 **Comments and naming (niclim).** Terse, non-obvious why only, preferably one line. No dividers,
 empty docblocks or narration. Clear, grammatical names.
 
+### Listing presentation
+
+- Ordinary cards, update rows and search results show at most two subtitle facts. Put the latest
+  chapter first (`Ch. 23`), including chapter zero. If only a total is known, use `23 Chs` and
+  never label that total as the latest chapter.
+- For mixed comic/novel sources prefer chapter plus type (`Ch. 23 • Novel` or
+  `Ch. 23 • Manhwa`). Otherwise prefer chapter plus rating (`Ch. 23 • ★ 8.9`), then chapter
+  alone. Views or follows may be the second fact when useful and rating/type is unavailable.
+- Hero carousels may show additional facts through their native fields. Metric symbols supply
+  the label: `eye.fill` + `67.3M`, never `67.3M views` or `reads`. Keep ranking in the hero's
+  supertitle, not in ordinary subtitles. Compact large view/follow counts.
+- Use fields already present in the listing. Never fetch each title's details just to decorate
+  a subtitle, and never invent missing chapter numbers, ratings or types.
+- Every returned image URL must be a non-empty absolute HTTP(S) URL. If a site renders a
+  coverless card, use a verified site image fallback or omit that individual card.
+- Regression tests must assert actual subtitle strings, two-fact limits, chapter zero,
+  missing fields, latest-versus-total semantics, and valid cover URLs. The shared formatter in
+  `src/utils/listings.ts` implements this presentation policy for sources that use it.
+
 ## 4. Platform facts that break sources
 
 `npm test` runs the bundle in a Node VM; the source ships to JavaScriptCore behind a Swift bridge.

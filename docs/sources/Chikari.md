@@ -2,7 +2,7 @@
 title: Chikari
 type: subsystem
 created: 2026-11-03
-updated: 2026-11-03
+updated: 2026-11-04
 sources:
   - code: src/Chikari/services/network.ts
   - code: src/Chikari/main.ts
@@ -96,3 +96,15 @@ dates, selected reader requests and fallback rejection; seeded Random search/Dis
 refresh, empty results, list filters and section visibility migration. `src/tests/Chikari.ts`
 stays the generated SDK baseline; deeper Discover and novel coverage belongs in the unit suite
 and live probes. Device chapter-version selection and carousel rendering remain unverified.
+
+## Listing presentation, 2026-11-04
+
+Ordinary Discover/update/search subtitles now contain at most two facts, with the actual latest
+chapter first. Mixed catalogs prefer type as the second fact; ratings or views are used when
+appropriate and available. Known totals use `N Chs`, never a fabricated latest chapter.
+Hero view counts are compact numbers without repeating their icon's meaning. All formatting
+uses existing listing fields and adds no per-title network requests. Regression tests assert
+actual outputs, missing fields, chapter zero and latest-versus-total distinctions.
+
+The formatting revision passed ten source regression tests, six baseline live tests and a live
+Discover/chip/search presentation check. Native app appearance remains a device check.

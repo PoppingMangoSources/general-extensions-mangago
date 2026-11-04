@@ -591,27 +591,31 @@ export class YaoiMeAdvancedSearchForm extends AdvancedSearchForm {
   }
 
   override getSearchQueryMetadata(): SearchMetadata {
-    return {
-      anime: this.anime || undefined,
-      artist: this.artist || undefined,
-      author: this.author || undefined,
-      demographics: this.demographics.length ? this.demographics : undefined,
-      genres: Object.keys(this.genres).length ? this.genres : undefined,
-      languages: this.languages.length ? this.languages : undefined,
-      licensed: this.licensed || undefined,
-      maxChapters: this.maxChapters || undefined,
-      maxRating: this.maxRating || undefined,
-      minChapters: this.minChapters || undefined,
-      minPages: this.minPages || undefined,
-      minRating: this.minRating || undefined,
-      publisher: this.publisher || undefined,
-      ratings: this.ratings.length ? this.ratings : undefined,
-      statuses: this.statuses.length ? this.statuses : undefined,
-      tags: Object.keys(this.tags).length ? this.tags : undefined,
-      types: this.types.length ? this.types : undefined,
-      updatedWithin: this.updatedWithin || undefined,
-      yearFrom: this.yearFrom || undefined,
-      yearTo: this.yearTo || undefined,
-    };
+    return Object.fromEntries(
+      Object.entries({
+        anime: this.anime,
+        artist: this.artist,
+        author: this.author,
+        demographics: this.demographics,
+        genres: this.genres,
+        languages: this.languages,
+        licensed: this.licensed,
+        maxChapters: this.maxChapters,
+        maxRating: this.maxRating,
+        minChapters: this.minChapters,
+        minPages: this.minPages,
+        minRating: this.minRating,
+        publisher: this.publisher,
+        ratings: this.ratings,
+        statuses: this.statuses,
+        tags: this.tags,
+        types: this.types,
+        updatedWithin: this.updatedWithin,
+        yearFrom: this.yearFrom,
+        yearTo: this.yearTo,
+      }).filter(([, value]) =>
+        typeof value === "object" ? Object.keys(value).length > 0 : Boolean(value),
+      ),
+    );
   }
 }

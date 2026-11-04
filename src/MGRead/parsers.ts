@@ -12,6 +12,7 @@ import {
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
+import { formatListingSubtitle } from "../utils/listings";
 import {
   DOMAIN,
   type MangaListItem,
@@ -247,5 +248,16 @@ export const parseSearchItems = (items: SearchItem[]): MangaListItem[] =>
       title: text(cheerio.load(item.title).text()),
       cover: item.thumbnail ?? item.thumb ?? item.image ?? "",
       genres: [],
+      ...(item.type ? { type: item.type } : {}),
       contentRating: ContentRating.EVERYONE,
     }));
+
+export const listingSubtitle = (item: MangaListItem): string | undefined =>
+  formatListingSubtitle({
+    chapter: item.latest?.number,
+    chapterCount: item.chapterCount,
+    type: item.type,
+    rating: item.rating,
+    views: item.views,
+    follows: item.follows,
+  });

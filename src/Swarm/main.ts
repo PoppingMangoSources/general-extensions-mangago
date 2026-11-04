@@ -24,6 +24,7 @@ import {
   type Tag,
 } from "@paperback/types";
 
+import { formatCount } from "../utils/listings";
 import { SwarmAdvancedSearchForm } from "./forms/search";
 import { getPreferences, SwarmSettingsForm } from "./forms/settings";
 import {
@@ -216,7 +217,7 @@ class SwarmExtension implements ExtensionImpl<typeof SwarmConfig> {
           contentRating: ratingFor(manga),
         };
         if (section.id === SECTIONS.POPULAR) {
-          const views = manga.readCount ?? manga.views,
+          const views = formatCount(manga.readCount ?? manga.views),
             chapters = chapterLabel(manga);
           return [
             {
@@ -227,11 +228,11 @@ class SwarmExtension implements ExtensionImpl<typeof SwarmConfig> {
               infoItems:
                 views && chapters
                   ? [
-                      { symbol: "eye.fill", text: `${views} views` },
+                      { symbol: "eye.fill", text: views },
                       { symbol: "book.fill", text: chapters },
                     ]
                   : views
-                    ? [{ symbol: "eye.fill", text: `${views} views` }]
+                    ? [{ symbol: "eye.fill", text: views }]
                     : chapters
                       ? [{ symbol: "book.fill", text: chapters }]
                       : undefined,
@@ -245,7 +246,7 @@ class SwarmExtension implements ExtensionImpl<typeof SwarmConfig> {
                   ...base,
                   type: "chapterUpdatesCarouselItem",
                   chapterId: manga.chapter_id,
-                  subtitle: chapterLabel(manga),
+                  subtitle: toSearchItem(manga).subtitle,
                   publishDate: parseDate(manga.released ?? manga.updatedAt),
                 },
               ]
@@ -254,7 +255,7 @@ class SwarmExtension implements ExtensionImpl<typeof SwarmConfig> {
           {
             ...base,
             type: section.id === SECTIONS.RANDOM ? "prominentCarouselItem" : "simpleCarouselItem",
-            subtitle: chapterLabel(manga),
+            subtitle: toSearchItem(manga).subtitle,
           },
         ];
       });
@@ -314,14 +315,7 @@ class SwarmExtension implements ExtensionImpl<typeof SwarmConfig> {
     const effective = { ...preferences, content: meta.content?.[0] ?? preferences.content };
     const items = result.data
       .filter((manga) => isAllowed(manga, effective))
-      .map((manga) =>
-        toSearchItem(
-          manga,
-          meta.feed
-            ? (page - 1) * PAGE_SIZE + result.data.findIndex((raw) => raw.id === manga.id) + 1
-            : undefined,
-        ),
-      );
+      .map((manga) => toSearchItem(manga));
     const more =
       result.hasMore ??
       (result.data.length > 0 && (result.total ?? 0) > (page - 1) * PAGE_SIZE + result.data.length);
