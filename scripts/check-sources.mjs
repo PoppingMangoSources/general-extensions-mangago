@@ -76,6 +76,7 @@ export const RULES = {
   "text-codec": "N",
   // A production crash in kodama's repository; no merged inkdex source does it.
   "metadata-undefined": "F",
+  "empty-image-url": "F",
   "object-body": "N",
   "empty-state": "N",
   "item-cast": "N",
@@ -416,6 +417,15 @@ export function checkSource(root, name, { base } = {}) {
         1,
         "missing the `/* SPDX-License-Identifier: GPL-3.0-or-later */` + copyright header",
       );
+    }
+    for (const m of matches(code, /\b(?:imageUrl|thumbnailUrl)\s*:/)) {
+      if (/^[^:]+:\s*(["'`])\1/.test(text.slice(m.index)))
+        add(
+          "empty-image-url",
+          file,
+          at(m.index),
+          "the native bridge rejects empty image URLs: use an absolute site fallback or omit the card",
+        );
     }
     for (const m of matches(code, /\bconsole\.(log|error|warn|info|debug)\s*\(/))
       add(

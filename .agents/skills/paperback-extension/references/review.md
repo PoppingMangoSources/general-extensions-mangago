@@ -26,6 +26,11 @@ from the code or a live response is unverified: say so.
 - **Every id field is sanitised** (manga, chapter, tags, section ids, form rows).
 - **Rating is 0..1, volume is set, titles carry no leading chapter number.**
 
+- **Ordinary subtitles contain at most two facts, latest chapter first when present.**
+- **Mixed catalogs prefer chapter plus type; known totals use `N Chs`.**
+- **Hero icons have compact numbers without repeated metric labels.**
+- **Every returned cover is an absolute HTTP(S) URL, including coverless site cards.**
+
 ## Ids
 
 - **Ids are the shortest stable site key**, never a full URL, and carry what later calls need.

@@ -347,3 +347,14 @@ void test("a change to src/utils selects the sources that import it", () => {
   fs.writeFileSync(path.join(root, "src/utils/state.ts"), "export const getState = 1;\n");
   assert.deepEqual(changedSources(root, "HEAD"), ["Demo"]);
 });
+
+void test("empty cover literals fail, while real URLs, computed fallbacks and script strings pass", () => {
+  assert.ok(rules(withFile('const item = {imageUrl: ""};')).includes("empty-image-url"));
+  assert.ok(rules(withFile("const item = {thumbnailUrl: ''};")).includes("empty-image-url"));
+  for (const code of [
+    'const item={imageUrl:"https://demo.example/icon.png"};',
+    'const item={imageUrl: cover || DOMAIN + "/icon.png"};',
+    "const script='const item={imageUrl:\"\"}';",
+  ])
+    assert.ok(!rules(withFile(code)).includes("empty-image-url"));
+});
