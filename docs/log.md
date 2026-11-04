@@ -25,3 +25,6 @@
 - 2026-11-04: Complete attribution settings, hooks, checks, workflows and wiki synchronized
   between working and stable branches. Historical stable sync attribution removed while
   preserving its source tree and upstream merge parent; future syncs retain validation workflows.
+- 2026-11-04: Swarm totals changed to full Chapters/type labels with canonical type casing;
+  unknown generic labels omitted. One per uploader is now the default, selecting by site rank
+  then numbered copy while preserving explicit settings and separate languages.

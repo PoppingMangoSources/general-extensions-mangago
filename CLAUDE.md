@@ -122,6 +122,10 @@ empty docblocks or narration. Clear, grammatical names.
 - Hero carousels may show additional facts through their native fields. Metric symbols supply
   the label: `eye.fill` + `67.3M`, never `67.3M views` or `reads`. Keep ranking in the hero's
   supertitle, not in ordinary subtitles. Compact large view/follow counts.
+- Display specific types with consistent capitalization. Swarm uses `68 Chapters | Manhwa`
+  for a known total and `Ch. 68 | Manhwa` for a latest chapter number. Generic `Comic`/`Other`
+  labels are omitted when a specific type is unavailable; never infer a type from the title
+  or displayed translation language.
 - Use fields already present in the listing. Never fetch each title's details just to decorate
   a subtitle, and never invent missing chapter numbers, ratings or types.
 - Every returned image URL must be a non-empty absolute HTTP(S) URL. If a site renders a

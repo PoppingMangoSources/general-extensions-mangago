@@ -12,7 +12,7 @@ verified_at: pending
 
 # Swarm
 
-New source id `Swarm`, version `1.0.0-alpha.2`. Public site and API responses checked
+New source id `Swarm`, version `1.0.0-alpha.3`. Public site and API responses checked
 2026-11-04. The icon is the site's own `/logo.png`.
 
 ## Discover
@@ -82,3 +82,29 @@ actual outputs, missing fields, chapter zero and latest-versus-total distinction
 
 The formatting revision passed 10 source regression tests and a live presentation check
 across all Discover feeds and period chips. The default six live source tests also passed.
+
+## Type labels and chapter defaults, 2026-11-04
+
+Totals now use `68 Chapters | Manhwa`; latest numbers remain `Ch. 68 | Manhwa`.
+Case-insensitive canonical type labels prefer `type`, then an explicit format in `demographic`,
+genres or tags. Novel catalog records are known novels. Generic Comic/Other labels are omitted,
+not promoted into a guessed Manga/Manhwa/Manhua type. The search API's `latest_chapter_number`
+spelling is also supported. No per-title metadata lookups are added.
+
+Live checks found no type fields in `/api/latest` or the homepage's inline latest rows. The
+bulk `/api/manga/latest-chapters?mangaIds=...` endpoint supplies only latest numbers, not types.
+Soul Land V's followed/search records have only `Comic`, empty genres/tags and no classification
+metadata. These cards therefore show their chapter fact alone until the site supplies a type.
+
+The chapter-list default is now One per uploader. Explicitly saved All uploads/One per chapter
+choices remain unchanged. Numbered source copies such as `official2` belong to `official`.
+Within each language/chapter/uploader, select the lowest site rank letter, with unranked copies
+last; ties use the lowest copy suffix, with an unsuffixed name counting as copy 1. Keep the real
+winning upload id and original uploader label. One per chapter additionally honors preferred
+uploaders first. Blocking an uploader name blocks its numbered copies; an exact numbered name
+can block only that copy. All uploads continues to expose every allowed upload.
+
+This revision passed 13 offline source tests and all six baseline live tests. The captured
+Villain to the Rescue response contains 694 English uploads; One per uploader keeps 573,
+with the selected upload ids verified against the original response. Native iOS presentation
+and settings interaction remain unverified without a device.

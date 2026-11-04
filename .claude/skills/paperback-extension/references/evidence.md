@@ -88,3 +88,9 @@ chapter plus type for mixed catalogs, and compact icon-only hero metrics. A Yaoi
 card without a site cover returned an empty URL and the native bridge rejected the entire
 row (`items[28].imageUrl`). Live markup confirmed an inline text placeholder for that card;
 the site's PNG app icon provides an absolute image fallback without another detail request.
+
+Swarm device screenshots, 2026-11-04: raw lower-case `manhwa`/`manhua` labels and a fabricated
+`Comic` fallback appeared in listing subtitles. Live latest responses omit all type fields;
+Soul Land V's listing record supplies only `Comic` with no specific type. Type normalization
+now uses explicit format metadata where available and omits unknown generic labels. The owner
+requested full `N Chapters | Type` labels for totals and One per uploader as the default.
