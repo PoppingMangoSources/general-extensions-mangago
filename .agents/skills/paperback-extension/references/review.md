@@ -27,7 +27,7 @@ from the code or a live response is unverified: say so.
 - **Rating is 0..1, volume is set, titles carry no leading chapter number.**
 
 - **Ordinary subtitles contain at most two facts, latest chapter first when present.**
-- **Mixed catalogs prefer chapter plus type; known totals use `N Chs`.**
+- **Mixed catalogs prefer chapter plus type; known totals use `N Chs` (Swarm: `N Chapters | Type`).**
 - **Hero icons have compact numbers without repeated metric labels.**
 - **Every returned cover is an absolute HTTP(S) URL, including coverless site cards.**
 

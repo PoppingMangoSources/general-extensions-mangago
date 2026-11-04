@@ -317,10 +317,98 @@ void test("Swarm search and ordinary cards use two facts without rank or repeate
       type: "Manhwa",
       views: 67300000,
     }).subtitle,
-    "Ch. 0 • Manhwa",
+    "Ch. 0 | Manhwa",
   );
   assert.equal(
     toSearchItem({ id: 1, slug: "novel", title: "Novel", _count: { chapters: 23 } }).subtitle,
-    "23 Chs • Novel",
+    "23 Chapters | Novel",
   );
+});
+
+void test("Swarm capitalizes specific types and omits unknown generic labels", async (t) => {
+  mock(t, () => ({}));
+  const { toSearchItem } = await import("../../src/Swarm/parsers");
+  assert.equal(
+    toSearchItem({ id: "jinx", title: "Jinx", type: "manhwa", chapterCount: 68 }).subtitle,
+    "68 Chapters | Manhwa",
+  );
+  assert.equal(
+    toSearchItem({ id: "villain", title: "Villain", type: "manhua", chapterCount: 788 }).subtitle,
+    "788 Chapters | Manhua",
+  );
+  assert.equal(
+    toSearchItem({
+      id: "meta",
+      title: "Meta",
+      type: "Comic",
+      demographic: "MANHUA",
+      chapterCount: 143,
+    }).subtitle,
+    "143 Chapters | Manhua",
+  );
+  assert.equal(
+    toSearchItem({
+      id: "tag",
+      title: "Tagged",
+      type: "other",
+      genres: ["Action", "Manhwa"],
+      chapter_count: 0,
+    }).subtitle,
+    "0 Chapters | Manhwa",
+  );
+  assert.equal(toSearchItem({ id: "latest", title: "Latest", chapter: "472" }).subtitle, "Ch. 472");
+  assert.equal(
+    toSearchItem({ id: "latest", title: "Latest", type: "Comic", chapter: "472" }).subtitle,
+    "Ch. 472",
+  );
+  assert.equal(
+    toSearchItem({ id: "search", title: "Search", type: "manga", latest_chapter_number: 4 })
+      .subtitle,
+    "Ch. 4 | Manga",
+  );
+  assert.equal(
+    toSearchItem({ id: "unknown", title: "Unknown", type: "Other" }).subtitle,
+    undefined,
+  );
+});
+
+void test("Swarm defaults to one per uploader and preserves explicitly saved choices", async (t) => {
+  const { state } = mock(t, () => ({}));
+  const { getPreferences } = await import("../../src/Swarm/forms/settings");
+  assert.equal(getPreferences().chapterMode, "group");
+  state[STATE_KEYS.CHAPTER_MODE] = "all";
+  assert.equal(getPreferences().chapterMode, "all");
+  const form = new SwarmSettingsForm();
+  await form.handleMode([]);
+  assert.equal(getPreferences().chapterMode, "group");
+});
+
+void test("Swarm uploader dedup picks site rank, then copy number, without losing other languages", () => {
+  const entries = [
+    chapter("unknown", "4", { source_name: "official", rank: undefined }),
+    chapter("b", "4", { source_name: "official", rank: "b" }),
+    chapter("a-copy3", "4", { source_name: "official3", rank: "a" }),
+    chapter("a-copy2", "4", { source_name: "official2", rank: "a" }),
+    chapter("a", "4", { source_name: "official", rank: "a" }),
+    chapter("other", "4", { source_name: "mangadex", rank: "b" }),
+    chapter("spanish", "4", { source_name: "official", rank: "a", lang: "es" }),
+  ];
+  const prefs = { ...defaults, chapterMode: "group", languages: ["en", "es"] };
+  assert.deepEqual(
+    parseChapters(entries, manga, prefs).map((c) => c.chapterId),
+    ["a", "spanish", "other"],
+  );
+  assert.deepEqual(
+    parseChapters(entries, manga, { ...prefs, blocked: ["official"] }).map((c) => c.chapterId),
+    ["other"],
+  );
+  assert.equal(
+    parseChapters(entries, manga, {
+      ...defaults,
+      chapterMode: "chapter",
+      preferred: ["mangadex"],
+    })[0].chapterId,
+    "other",
+  );
+  assert.equal(parseChapters(entries, manga, { ...defaults, chapterMode: "all" }).length, 6);
 });

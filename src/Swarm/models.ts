@@ -4,6 +4,15 @@
 import type { JSONObject, SortingOption, Tag } from "@paperback/types";
 export const DOMAIN = "https://swarm.ws";
 export const PAGE_SIZE = 50;
+export const TYPE_LABELS: Record<string, string> = {
+  manga: "Manga",
+  manhwa: "Manhwa",
+  manhua: "Manhua",
+  novel: "Novel",
+  oel: "OEL",
+  doujinshi: "Doujinshi",
+  artbook: "Artbook",
+};
 export const SECTIONS = {
   POPULAR: "popular",
   FOLLOWED: "followed",
@@ -144,6 +153,7 @@ export interface SwarmManga {
   chapterCount?: number;
   chapter_count?: number;
   latestChapterNumber?: number | string | null;
+  latest_chapter_number?: number | string | null;
   latestChapter?: string;
   chapter?: string;
   number?: string;
@@ -162,7 +172,7 @@ export interface SwarmChapter {
   number: string | number;
   lang?: string;
   title?: string;
-  rank?: string;
+  rank?: string | null;
   source_name?: string;
   source?: string;
   scan_group?: string;

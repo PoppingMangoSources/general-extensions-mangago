@@ -198,3 +198,8 @@ number, with no repeated `views`/`reads` label. Rankings stay in hero supertitle
 Use listing data only, with no per-title enrichment requests. Test exact outputs and missing
 fields. Coverless site cards still need a valid absolute image URL before crossing the bridge;
 use a verified site image or omit only the affected card. Empty literal URLs fail the checker.
+
+Owner clarification, 2026-11-04: Swarm totals use `N Chapters | Type`; latest chapter numbers
+remain `Ch. N | Type`. Capitalize Manga/Manhwa/Manhua consistently. Use specific type fields
+before generic labels; omit Comic/Other when a specific classification is absent. Do not infer
+a type from the title or translated language, and do not fetch each title just for a label.

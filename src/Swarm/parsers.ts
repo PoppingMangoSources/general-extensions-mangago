@@ -11,9 +11,9 @@ import {
 } from "@paperback/types";
 import * as cheerio from "cheerio";
 
-import { formatListingSubtitle } from "../utils/listings";
 import {
   DOMAIN,
+  TYPE_LABELS,
   type ComicPage,
   type SwarmManga,
   type SwarmChapter,
@@ -117,28 +117,45 @@ export const parseDate = (value?: string): Date | undefined => {
   return Number.isNaN(date.getTime()) ? undefined : date;
 };
 export const chapterLabel = (manga: SwarmManga): string | undefined => {
-  const number = manga.latestChapterNumber ?? manga.latestChapter ?? manga.chapter ?? manga.number;
-  return number !== undefined && number !== null
-    ? `Ch. ${number}`
-    : manga.chapterCount || manga.chapter_count
-      ? `${manga.chapterCount ?? manga.chapter_count} Chs`
-      : manga._count
-        ? `${manga._count.chapters} Chs`
-        : undefined;
+  const number =
+    manga.latestChapterNumber ??
+    manga.latest_chapter_number ??
+    manga.latestChapter ??
+    manga.chapter ??
+    manga.number;
+  if (
+    number !== undefined &&
+    number !== null &&
+    String(number).trim() !== "" &&
+    Number.isFinite(Number(number))
+  )
+    return `Ch. ${Number(number)}`;
+  const count = manga.chapterCount ?? manga.chapter_count ?? manga._count?.chapters;
+  return count !== undefined ? `${count} Chapters` : undefined;
+};
+const typeName = (manga: SwarmManga): string | undefined => {
+  if (manga.slug) return "Novel";
+  for (const value of [
+    manga.type,
+    manga.demographic,
+    ...(manga.genres ?? []),
+    ...(manga.tags ?? []),
+  ]) {
+    const label = value ? TYPE_LABELS[value.trim().toLowerCase()] : undefined;
+    if (label) return label;
+  }
+  return undefined;
 };
 export const toSearchItem = (manga: SwarmManga): SearchResultItem => ({
   mangaId: idOf(manga),
   title: titleOf(manga),
   imageUrl: coverOf(manga),
   contentRating: ratingFor(manga),
-  subtitle: formatListingSubtitle({
-    chapter: manga.latestChapterNumber ?? manga.latestChapter ?? manga.chapter ?? manga.number,
-    chapterCount: manga.chapterCount ?? manga.chapter_count ?? manga._count?.chapters,
-    type: manga.slug ? "Novel" : manga.type || "Comic",
-  }),
+  subtitle: [chapterLabel(manga), typeName(manga)].filter(Boolean).join(" | ") || undefined,
 });
 export const parseMangaDetails = (manga: SwarmManga, id: string): SourceManga => {
   const novel = decodeURIComponent(id).startsWith("novel/");
+  const type = typeName(manga);
   const groups = [
     { id: "genres", title: "Genres", values: manga.genres ?? [] },
     { id: "tags", title: "Tags", values: manga.tags ?? [] },
@@ -171,14 +188,17 @@ export const parseMangaDetails = (manga: SwarmManga, id: string): SourceManga =>
         )
         .toString(),
       additionalInfo: {
-        ...(manga.type ? { Type: manga.type } : {}),
+        ...(type ? { Type: type } : {}),
         ...(manga.year ? { Year: String(manga.year) } : {}),
       },
     },
   };
 };
 const uploader = (chapter: SwarmChapter): string =>
-  chapter.source_name ?? chapter.source ?? chapter.scan_group ?? "Swarm";
+  chapter.source_name?.trim() || chapter.source?.trim() || chapter.scan_group?.trim() || "swarmws";
+// Numbered uploader names are repeat copies from the same origin.
+const uploaderGroup = (chapter: SwarmChapter): string =>
+  uploader(chapter).replace(/\d+$/, "").toLowerCase();
 export const parseChapters = (
   entries: SwarmChapter[],
   sourceManga: SourceManga,
@@ -186,7 +206,9 @@ export const parseChapters = (
 ): Chapter[] => {
   const novel = decodeURIComponent(sourceManga.mangaId).startsWith("novel/");
   const priority = (entry: SwarmChapter): number => {
-    const index = preferences.preferred.indexOf(uploader(entry).toLowerCase());
+    const index = preferences.preferred.findIndex(
+      (name) => name === uploader(entry).toLowerCase() || name === uploaderGroup(entry),
+    );
     return index < 0 ? preferences.preferred.length : index;
   };
   const sorted = entries
@@ -197,18 +219,27 @@ export const parseChapters = (
           (lang) => languageCode(lang) === languageCode(entry.lang ?? "en"),
         ),
     )
-    .filter((entry) => !preferences.blocked.includes(uploader(entry).toLowerCase()))
+    .filter(
+      (entry) =>
+        !preferences.blocked.some(
+          (name) => name === uploader(entry).toLowerCase() || name === uploaderGroup(entry),
+        ),
+    )
     .slice()
-    .sort(
-      (a, b) =>
+    .sort((a, b) => {
+      const aRank = a.rank?.toLowerCase() || "~",
+        bRank = b.rank?.toLowerCase() || "~";
+      return (
         Number(b.number) - Number(a.number) ||
         (preferences.chapterMode === "chapter" ? priority(a) - priority(b) : 0) ||
-        (a.rank ?? "~").localeCompare(b.rank ?? "~"),
-    );
+        (aRank < bRank ? -1 : aRank > bRank ? 1 : 0) ||
+        Number(/\d+$/.exec(uploader(a))?.[0] ?? 1) - Number(/\d+$/.exec(uploader(b))?.[0] ?? 1)
+      );
+    });
   const seen = new Set<string>();
   const filtered = sorted.filter((entry) => {
     if (novel || preferences.chapterMode === "all") return true;
-    const groupKey = `${languageCode(entry.lang ?? "en")}:${Number(entry.number)}:${preferences.chapterMode === "group" ? uploader(entry).toLowerCase() : ""}`;
+    const groupKey = `${languageCode(entry.lang ?? "en")}:${Number(entry.number)}:${preferences.chapterMode === "group" ? uploaderGroup(entry) : ""}`;
     if (seen.has(groupKey)) return false;
     seen.add(groupKey);
     return true;

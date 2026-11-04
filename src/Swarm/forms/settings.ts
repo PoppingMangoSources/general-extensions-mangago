@@ -15,7 +15,7 @@ const names = (value: string): string[] => [
 export const getPreferences = (): Preferences => ({
   languages: (Application.getState(STATE_KEYS.LANGUAGES) as string[] | undefined) ?? ["en"],
   content: (Application.getState(STATE_KEYS.CONTENT) as string | undefined) ?? "all",
-  chapterMode: (Application.getState(STATE_KEYS.CHAPTER_MODE) as string | undefined) ?? "all",
+  chapterMode: (Application.getState(STATE_KEYS.CHAPTER_MODE) as string | undefined) ?? "group",
   preferred: names((Application.getState(STATE_KEYS.PREFERRED) as string | undefined) ?? ""),
   blocked: names((Application.getState(STATE_KEYS.BLOCKED) as string | undefined) ?? ""),
 });
@@ -47,7 +47,7 @@ export class SwarmSettingsForm extends Form {
       ]),
       Section("uploads", [
         SelectRow("chapterMode", {
-          title: "Chapter uploads",
+          title: "Chapter list",
           value: [this.values.chapterMode],
           items: [
             { id: "all", title: "All uploads" },
@@ -83,7 +83,7 @@ export class SwarmSettingsForm extends Form {
     Application.invalidateDiscoverSections();
   }
   async handleMode(value: string[]): Promise<void> {
-    this.values.chapterMode = value[0] ?? "all";
+    this.values.chapterMode = value[0] ?? "group";
     Application.setState(this.values.chapterMode, STATE_KEYS.CHAPTER_MODE);
   }
   async handlePreferred(value: string): Promise<void> {
