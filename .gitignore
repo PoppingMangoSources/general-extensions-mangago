@@ -2,3 +2,4 @@
 /node_modules
 /bundles
 /.idea
+/.claude/settings.local.json

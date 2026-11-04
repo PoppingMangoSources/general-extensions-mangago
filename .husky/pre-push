@@ -1,1 +1,16 @@
+branch=$(git rev-parse --abbrev-ref HEAD)
+case "$branch" in
+  claude/* | codex/* | copilot/*)
+    echo "Branch $branch is named after an agent. Use feature/, bugfix/, chore/ or docs/ (AGENTS.md section 1)."
+    exit 1
+    ;;
+esac
+node scripts/check-commits.mjs
 npm run conformance
+npm run --silent check:docs
+npm run --silent test:scripts
+# 0.9/stable carries upstream's sources, not ours: our unit tests and source rules apply elsewhere.
+[ "$branch" = "0.9/stable" ] && exit 0
+npm run --silent test:unit
+git fetch --quiet origin 0.9/test 2>/dev/null || true
+node scripts/check-sources.mjs --base "$(git merge-base HEAD origin/0.9/test 2>/dev/null || echo HEAD)"
