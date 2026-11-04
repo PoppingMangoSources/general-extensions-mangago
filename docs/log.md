@@ -18,3 +18,5 @@
   Discover slowdown report; added merged-chapter edition/team inclusion and exclusion filters.
 - 2026-11-04: XCOMIC Latest now checks work-level genres/formats from the same response;
   square team labels omit edition ids and detail tags use resolved names. Unit and live checks passed.
+- 2026-11-04: MGRead and Swarm pages added for public feeds, paging, filters and readers;
+  LikeManga's final release archived on the existing dead-sources branch.

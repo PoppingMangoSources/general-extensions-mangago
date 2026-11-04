@@ -5,7 +5,7 @@
 <p align="center">
   <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/badge-ios.svg?v=2" alt="iOS / iPadOS" height="28"/>
   <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/badge-version.svg?v=2" alt="Paperback 0.9+" height="28"/>
-  <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/badge-count.svg?v=11" alt="28 sources" height="28"/>
+  <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/badge-count.svg" alt="29 sources" height="28"/>
 </p>
 
 <p align="center">
@@ -33,7 +33,7 @@ Toonkotsu separates chapter numbers reused across volumes with a decimal volume 
 
 ## Sources
 
-**28 sources:** 23 manga, manhwa & manhua, and 5 novels, all available from `0.9/test`.
+**29 sources:** 24 manga, manhwa & manhua, and 5 novels, all available from `0.9/test`.
 
 ### Manga, Manhwa & Manhua
 
@@ -43,7 +43,6 @@ Toonkotsu separates chapter numbers reused across volumes with a decimal volume 
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/chikari.png" width="22" align="top"/> **Chikari**               | [chikari.moe](https://chikari.moe)                 |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/cocomic.png" width="22" align="top"/> **Cocomic**               | [cocomic.co](https://cocomic.co)                   |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/kingofshojo.png" width="22" align="top"/> **KingOfShojo**       | [kingofshojo.com](https://kingofshojo.com)         |
-| <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/likemanga.png" width="22" align="top"/> **LikeManga**           | [likemanga.ink](https://likemanga.ink)             |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/luacomic.png" width="22" align="top"/> **Lua Comic**            | [luacomic.org](https://luacomic.org)               |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/mangaberri.png" width="22" align="top"/> **MangaBerri**         | [mangaberri.com](https://mangaberri.com)           |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/mangacherri.png" width="22" align="top"/> **MangaCherri**       | [mangacherri.com](https://mangacherri.com)         |
@@ -52,11 +51,13 @@ Toonkotsu separates chapter numbers reused across volumes with a decimal volume 
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/mangatown.png" width="22" align="top"/> **MangaTown**           | [mangatown.com](https://www.mangatown.com)         |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/myreadingmanga.png" width="22" align="top"/> **MyReadingManga** | [myreadingmanga.info](https://myreadingmanga.info) |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/reimanga.png" width="22" align="top"/> **ReiManga**             | [reimanga.com](https://reimanga.com)               |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/mgread.png" width="22" align="top"/> **MGRead**               | [mgread.io](https://mgread.io)                     |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/rinkocomics.png" width="22" align="top"/> **RinkoComics**       | [rinkocomics.com](https://rinkocomics.com)         |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/rokaricomics.png" width="22" align="top"/> **RokariComics**     | [rokaricomics.com](https://rokaricomics.com)       |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/scansgg.png" width="22" align="top"/> **Scans.GG**              | [scans.gg](https://scans.gg)                       |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/stonescape.png" width="22" align="top"/> **StoneScape**         | [stonescape.xyz](https://stonescape.xyz)           |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/templescan.png" width="22" align="top"/> **Temple Scan**        | [templetoons.com](https://templetoons.com)         |
+| <img src="https://raw.githubusercontent.com/PoppingMangoSources/general-extensions-mangago/0.9/test/media/sources/swarm.png" width="22" align="top"/> **Swarm**                 | [swarm.ws](https://swarm.ws)                       |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/toonkotsu.png" width="22" align="top"/> **Toonkotsu**           | [toonkotsu.com](https://toonkotsu.com)             |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/valirscans.png" width="22" align="top"/> **ValirScans**         | [valirscans.org](https://valirscans.org)           |
 | <img src="https://cdn.jsdelivr.net/gh/PoppingMangoSources/general-extensions-mangago@0.9%2Fstable/media/sources/vymanga.png" width="22" align="top"/> **VyManga**               | [vymanga.com](https://vymanga.com)                 |

@@ -14,6 +14,8 @@ this wiki's own rules are in [AGENTS.md](AGENTS.md).
 
 - [BunManga](sources/BunManga.md): canonical paths, ManhuaHot failover and password locks.
 - [Chikari](sources/Chikari.md): shared comic/novel listings, separate reader routes and stable ids.
+- [MGRead](sources/MGRead.md): ranking feeds, bulk taxonomy exclusions and protected readers.
+- [Swarm](sources/Swarm.md): period feeds, languages, upload versions and comic/novel reading.
 - [Toonkotsu](sources/Toonkotsu.md): reader keys, WebView session, AES-CTR in TypeScript.
 - [XCOMIC](sources/XCOMIC.md): edition merging, server deduplication and complete chapter lists.
 - [YaoiMe](sources/YaoiMe.md): advanced search metadata carries `undefined` values (device crash risk).
