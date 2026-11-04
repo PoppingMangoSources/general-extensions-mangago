@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-11-04T11:24:35.459Z",
+  "buildTime": "2026-11-04T13:08:20.566Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -100,28 +100,6 @@
       "id": "KingOfShojo"
     },
     {
-      "name": "LikeManga",
-      "description": "Extension that pulls content from likemanga.ink.",
-      "version": "1.0.0-alpha.9",
-      "icon": "icon.png",
-      "language": "en",
-      "contentRating": "ADULT",
-      "capabilities": [
-        1,
-        16,
-        4,
-        64
-      ],
-      "badges": [],
-      "developers": [
-        {
-          "name": "Popmango",
-          "github": "https://github.com/PoppingMangoSources"
-        }
-      ],
-      "id": "LikeManga"
-    },
-    {
       "name": "Lua Comic",
       "description": "Extension that pulls comics from luacomic.org.",
       "version": "1.0.0-alpha.17",
@@ -143,6 +121,29 @@
         }
       ],
       "id": "LuaComic"
+    },
+    {
+      "name": "MGRead",
+      "description": "Extension that pulls content from mgread.io.",
+      "version": "1.0.0-alpha.1",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "ADULT",
+      "capabilities": [
+        1,
+        16,
+        4,
+        64,
+        32
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "MGRead"
     },
     {
       "name": "MVLEMPYR",
@@ -513,6 +514,29 @@
         }
       ],
       "id": "StoneScape"
+    },
+    {
+      "name": "Swarm",
+      "description": "Extension that pulls content from swarm.ws.",
+      "version": "1.0.0-alpha.1",
+      "icon": "icon.png",
+      "language": "multi",
+      "contentRating": "ADULT",
+      "capabilities": [
+        1,
+        4,
+        64,
+        16,
+        32
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Popmango",
+          "github": "https://github.com/PoppingMangoSources"
+        }
+      ],
+      "id": "Swarm"
     },
     {
       "name": "Temple Scan",
