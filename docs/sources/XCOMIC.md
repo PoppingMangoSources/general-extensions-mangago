@@ -2,7 +2,7 @@
 title: XCOMIC
 type: subsystem
 created: 2026-11-03
-updated: 2026-11-03
+updated: 2026-11-04
 sources:
   - code: src/XCOMIC/models.ts
   - code: src/XCOMIC/network.ts
@@ -95,3 +95,19 @@ check.
 Live testing passed the six SDK defaults, unique/full switching and merged edition reading.
 The merged Asura Scans chapter `/chapter/jkrgp5` returned 40 images under the saved `vg7ypp`
 manga id. Unit coverage additionally ensures unnamed editions sharing an importer are kept.
+
+## Latest taxonomy and edition labels
+
+Live responses checked on 2026-11-04 show that an edition's `genres` can omit genres and
+formats carried by its work. Latest requests `comicNode.data.title_titleNode.data` inline,
+then tests both `genre_ids` and `format_ids` alongside the edition's taxonomy. No detail
+request is made per tile. Normalize both the selected exclusions and incoming taxonomy.
+
+The current Aidoku Community helper appends `[Team]` from `subName` or an existing bracketed
+suffix, without adding an edition id when two editions have the same label. Paperback now
+follows that display convention; its saved edition ids remain distinct and unchanged.
+
+Details use resolved `tagNodes.data.name`, preserving their wording, rather than displaying
+opaque entries from `tags`. The repeated-team title, stable ids, readable tags, and missing
+edition taxonomy are covered in unit tests. The six default live source checks passed for
+1.0.0-alpha.81. Device rendering and end-to-end latency still need an app check.

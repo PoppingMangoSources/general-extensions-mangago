@@ -112,6 +112,7 @@ query get_title_latestUploads($select: Title_LatestUploads_Select) {
               id name subName urlPath urlCover
               originalLanguage translatedLanguage
               type contentRating genres tags sfw_result
+              work: title_titleNode { data { genre_ids format_ids } }
             }
           }
         }
@@ -886,7 +887,10 @@ export interface ComicData {
   name: string;
   dbStatus?: string | null;
   isPublic?: boolean | null;
-  work?: { comicNodes?: Array<ComicNode | null> | null } | null;
+  work?: {
+    data?: { genre_ids?: string[] | null; format_ids?: string[] | null } | null;
+    comicNodes?: Array<ComicNode | null> | null;
+  } | null;
   // The edition/team label the site hangs off a comic when a title has several.
   subName?: string | null;
   altNames?: string[] | null;

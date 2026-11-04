@@ -41,6 +41,8 @@ const {
   toMergedEditions,
   filterEditions,
   toDiscoverItems,
+  toTitleSources,
+  toSourceManga,
   toRankedDiscoverItems,
 } = await import("../../src/XCOMIC/parsers");
 Reflect.deleteProperty(globalThis, "Application");
@@ -405,4 +407,97 @@ void test("XCOMIC filters editions before fetching their chapter lists and rejec
   const previous = requests.length;
   await assert.rejects(XCOMIC.getChapters(manga), /No editions match/);
   assert.equal(requests.length - previous, 1);
+});
+
+void test("XCOMIC duplicate team labels never put edition IDs in titles", (t) => {
+  mockApi(t, () => ({}));
+  const sources = toTitleSources(
+    {
+      data: { id: "work", name: "A Home Far Away", urlCover: "https://images.test/cover.jpg" },
+      comicNodes: ["m7jbkw", "second"].map((id) => ({
+        data: {
+          id,
+          name: "A Home Far Away",
+          subName: "scan beans",
+          translatedLanguage: "en",
+        },
+      })),
+    },
+    ["en"],
+  );
+  const items = toDiscoverItems(sources, "simpleCarouselItem");
+  assert.deepEqual(
+    items.map((item) => ("title" in item ? item.title : undefined)),
+    ["A Home Far Away [scan beans]", "A Home Far Away [scan beans]"],
+  );
+  assert.deepEqual(
+    items.map((item) => ("mangaId" in item ? item.mangaId : undefined)),
+    ["m7jbkw", "second"],
+  );
+  const details = toSourceManga({
+    data: {
+      id: "m7jbkw",
+      name: "A Home Far Away",
+      tags: ["n5pwg"],
+      tagNodes: [{ data: { name: "European Ambience" } }],
+    },
+  });
+  assert.deepEqual(
+    details.mangaInfo.tagGroups?.flatMap((group) => group.tags.map((tag) => tag.title)),
+    ["European Ambience"],
+  );
+});
+
+void test("XCOMIC Latest excludes work genres and formats missing from an edition without detail requests", async (t) => {
+  const { requests } = mockApi(
+    t,
+    () => ({
+      get_title_latestUploads: {
+        items: [
+          { id: "blocked-genre", genre_ids: ["hentai"], format_ids: [] },
+          { id: "blocked-format", genre_ids: [], format_ids: ["full_color"] },
+          { id: "allowed", genre_ids: [], format_ids: [] },
+        ].map(({ id, genre_ids, format_ids }) => ({
+          chapters: [
+            {
+              data: {
+                ...chapter(id),
+                datePublic: 1700000000,
+                comicNode: {
+                  data: {
+                    id,
+                    name: id,
+                    type: "manga",
+                    contentRating: "safe",
+                    translatedLanguage: "en",
+                    urlCover: "https://images.test/cover.jpg",
+                    genres: ["comedy"],
+                    work: { data: { genre_ids, format_ids } },
+                  },
+                },
+              },
+            },
+          ],
+        })),
+      },
+    }),
+    {
+      [STATE_KEYS.EXCLUDED_GENRES]: ["hentai"],
+      [STATE_KEYS.EXCLUDED_FORMATS]: ["full_color"],
+    },
+  );
+  const result = await XCOMIC.getDiscoverSectionItems(
+    {
+      id: "latest-uploads",
+      title: "Latest Uploads",
+      type: DiscoverSectionType.chapterUpdates,
+    },
+    undefined,
+  );
+  assert.deepEqual(
+    result.items.map((item) => ("mangaId" in item ? item.mangaId : undefined)),
+    ["allowed"],
+  );
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].query, /work: title_titleNode.*genre_ids format_ids/s);
 });

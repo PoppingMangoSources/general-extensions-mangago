@@ -124,8 +124,15 @@ export const isComicAllowed = (comic: ComicData, preferences: XComicPreferences)
     return false;
   }
   if (!preferences.contentRatings.includes(contentPreferenceRating(comic))) return false;
-  const excluded = new Set([...preferences.excludedGenres, ...preferences.excludedFormats]);
-  return ![...(comic.genres ?? []), ...(comic.tags ?? [])]
+  const excluded = new Set(
+    [...preferences.excludedGenres, ...preferences.excludedFormats].map(normalizedTaxonomyId),
+  );
+  return ![
+    ...(comic.genres ?? []),
+    ...(comic.tags ?? []),
+    ...(comic.work?.data?.genre_ids ?? []),
+    ...(comic.work?.data?.format_ids ?? []),
+  ]
     .map(normalizedTaxonomyId)
     .some((id) => excluded.has(id));
 };
@@ -221,7 +228,7 @@ const displayTitle = (comic: ComicData, preferences: TitlePreferences): string =
   );
   if (preferences.mergeEditions || !preferences.showEditionInTitle) return name;
   const edition = editionLabel(comic);
-  return edition && !name.includes(edition) ? `${name} (${edition})` : name;
+  return edition && !name.includes(edition) ? `${name} [${edition}]` : name;
 };
 
 // The API reports "releasing" for an ongoing work; map the known states to their display names.
@@ -288,21 +295,6 @@ const toTitleSource = (node: ComicNode, source: ComicNode): ComicNode => ({
   },
 });
 
-// Two editions of one work can carry the same team name; the comic id tells them apart so their
-// library entries and chapter versions do not collide.
-const disambiguateEditions = (sources: ComicNode[]): ComicNode[] => {
-  const counts = new Map<string, number>();
-  for (const source of sources) {
-    const label = editionLabel(source.data)?.toLowerCase();
-    if (label) counts.set(label, (counts.get(label) ?? 0) + 1);
-  }
-  return sources.map((source) => {
-    const label = editionLabel(source.data);
-    if (!label || (counts.get(label.toLowerCase()) ?? 0) < 2) return source;
-    return { ...source, data: { ...source.data, subName: `${label} [${source.data.id}]` } };
-  });
-};
-
 // Preferred language first, then whichever edition carries the most chapters.
 export const toTitleSources = (node: ComicNode, preferredLanguages: string[]): ComicNode[] => {
   const sources = (node.comicNodes ?? [])
@@ -325,7 +317,7 @@ export const toTitleSources = (node: ComicNode, preferredLanguages: string[]): C
       );
     })
     .map((source) => toTitleSource(node, source));
-  return disambiguateEditions(sources);
+  return sources;
 };
 
 export const toPreferredTitleSource = (
@@ -504,7 +496,11 @@ export const toSourceManga = (
   const tagGroups: TagSection[] = [
     { id: "genres", title: "Genres", tags: toTags(comic.genres ?? []) },
     { id: "demographics", title: "Demographics", tags: toTags(comic.demographics ?? []) },
-    { id: "tags", title: "Tags", tags: toTags(comic.tags ?? nodeNames(comic.tagNodes)) },
+    {
+      id: "tags",
+      title: "Tags",
+      tags: nodeNames(comic.tagNodes).map((name) => ({ id: sanitizeId(name), title: name })),
+    },
   ].filter((group) => group.tags.length > 0);
 
   const publicationFrom = formatDateYmd(comic.originalPubFrom);

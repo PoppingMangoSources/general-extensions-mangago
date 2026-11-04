@@ -16,3 +16,5 @@
   Mana, with complete-list and stable-id regression coverage and live merged chapter reading.
 - 2026-11-03: XCOMIC per-card merge-setting reads replaced with a per-page snapshot after a
   Discover slowdown report; added merged-chapter edition/team inclusion and exclusion filters.
+- 2026-11-04: XCOMIC Latest now checks work-level genres/formats from the same response;
+  square team labels omit edition ids and detail tags use resolved names. Unit and live checks passed.
