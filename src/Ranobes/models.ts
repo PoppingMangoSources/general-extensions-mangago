@@ -4,6 +4,8 @@
 import { DiscoverSectionType, type DiscoverSection, type JSONObject } from "@paperback/types";
 
 export const DOMAIN = "https://ranobes.net";
+export const COVER_FALLBACK =
+  "https://poppingmangosources.github.io/general-extensions-mangago/0.9/test/Ranobes/static/icon.png";
 export const PAGE_SIZE = 20;
 
 export const SECTIONS = {
@@ -12,10 +14,6 @@ export const SECTIONS = {
   MOST_VIEWED: "most-viewed",
   MOST_RATED: "most-rated",
   COMPLETED: "completed",
-} as const;
-
-export const STATE_KEYS = {
-  CHAPTER_CRAWL: "ranobes_chapter_crawl",
 } as const;
 
 export const DISCOVER_SECTIONS: DiscoverSection[] = [
@@ -168,25 +166,17 @@ export interface RanobesListing {
 }
 
 export interface RanobesChapterEntry {
-  id: string;
   title: string;
-  date?: string;
+  date?: unknown;
   link: string;
 }
 
 export interface RanobesChapterPage {
-  chapters?: RanobesChapterEntry[];
+  chapters: RanobesChapterEntry[];
   pages_count?: number;
   count_all?: number;
   cstart?: number;
   limit?: number;
-}
-
-export interface ChapterCrawlCheckpoint {
-  novelId: string;
-  pages: Record<string, RanobesChapterPage>;
-  pageCount?: number;
-  completedAt?: number;
 }
 
 export const LANGUAGE_OPTIONS: OptionItem[] = ["Chinese", "Korean", "English", "Japanese"].map(

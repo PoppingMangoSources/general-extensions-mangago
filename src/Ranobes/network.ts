@@ -117,30 +117,12 @@ const responseHeader = (response: Response, name: string): string => {
   return key ? (response.headers?.[key] ?? "") : "";
 };
 
-const isChallengeResponse = (response: Response, body: string): boolean => {
-  if (responseHeader(response, "cf-mitigated").toLowerCase() === "challenge") return true;
-  if (body.includes("window.__DATA__")) return false;
-  if (
-    response.status === 403 &&
-    responseHeader(response, "server").toLowerCase().includes("ddos-guard")
-  ) {
-    return true;
-  }
-  if (!body) return false;
-  return /(?:<title>\s*(?:Just a moment|Bot Verification)\b|vb-custom-captcha-shell|checking your browser|check\.ddos-guard\.net|__ddg\d+_)/i.test(
-    body,
-  );
-};
-
 export class RanobesInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
     const origin = request.url.match(MIRROR_HOST)?.[0] ?? DOMAIN;
     return {
       ...request,
       headers: {
-        // DDoS-Guard fingerprints the request, so present a full browser-shaped
-        // header set (not just UA + referer) to look like the challenge-solving
-        // webview that earned the clearance cookie.
         accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
         "accept-language": "en-US,en;q=0.9",
         ...request.headers,
@@ -155,22 +137,20 @@ export class RanobesInterceptor extends PaperbackInterceptor {
     response: Response,
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
-    const contentType = responseHeader(response, "content-type");
-    const body =
-      response.status === 403 || contentType.includes("text/html")
-        ? Application.arrayBufferToUTF8String(data)
-        : "";
-    if (isChallengeResponse(response, body)) {
-      throw new CloudflareError({
-        url: request.url.replace(MIRROR_HOST, DOMAIN),
-        method: request.method ?? "GET",
-        headers: {
-          accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-          "accept-language": "en-US,en;q=0.9",
-          referer: `${DOMAIN}/`,
-          "user-agent": await getRanobesUserAgent(),
-        },
-      });
+    const challenged =
+      responseHeader(response, "cf-mitigated").toLowerCase() === "challenge" ||
+      ((response.status === 403 || response.status === 503) &&
+        /<div\b[^>]*\bid=["']vb-captcha-shell["']/i.test(
+          Application.arrayBufferToUTF8String(data),
+        ));
+    if (challenged) {
+      throw new CloudflareError(
+        await this.interceptRequest({
+          url: response.url || request.url,
+          method: request.method ?? "GET",
+        }),
+        "Ranobes needs browser verification. Complete the check and retry.",
+      );
     }
     return data;
   }

@@ -15,10 +15,12 @@ import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
 import {
+  COVER_FALLBACK,
   DOMAIN,
   GENRES,
   type FilterTaxonomy,
   type ListingType,
+  type RanobesChapterEntry,
   type RanobesChapterPage,
   type RanobesListing,
 } from "./models";
@@ -42,10 +44,10 @@ const parseCount = (value: string): number | undefined => {
 
 const parseImageUrl = (element: cheerio.Cheerio<AnyNode>): string => {
   const source = [
-    element.attr("src"),
     element.attr("data-src"),
     element.attr("data-original"),
     element.attr("data-lazy-src"),
+    element.attr("src"),
   ].find((value) => value?.trim() && !value.includes("data:image"));
   if (source) return absoluteUrl(source);
 
@@ -54,9 +56,7 @@ const parseImageUrl = (element: cheerio.Cheerio<AnyNode>): string => {
 };
 
 const parseRating = (card: cheerio.Cheerio<AnyNode>): { rating?: number; ratingCount?: number } => {
-  const rating = Number(
-    card.find(".r-date .rate-drop strong, .rank-story-data-val").first().text(),
-  );
+  const rating = parseFloat(card.find(".r-date .rate-drop strong").first().text());
   return {
     rating: Number.isFinite(rating) ? rating : undefined,
     ratingCount: parseCount(
@@ -238,12 +238,14 @@ const parseNovelCard = (
   const link = card.find("h2.title a").first();
   const mangaId = absoluteUrl(link.attr("href") ?? "");
   const title = cleanText(link.text());
-  if (!mangaId || !title) return undefined;
+  const cover = card.find(ranking ? "figure.fit-cover img" : "figure.cover").first();
+  const imageUrl = parseImageUrl(cover) || parseImageUrl(cover.find("img").first());
+  if (!mangaId || !title || !imageUrl) return undefined;
 
   return {
     mangaId,
     title,
-    imageUrl: parseImageUrl(card.find(ranking ? "figure.fit-cover img" : "figure.cover").first()),
+    imageUrl,
     description: cleanText(
       card
         .find(ranking ? ".moreless__short" : ".cont-in > div[style*='color']")
@@ -361,7 +363,8 @@ export const parseMangaDetails = ($: cheerio.CheerioAPI, mangaId: string): Sourc
     .filter(Boolean);
   const language = cleanText(spec("language:").find("a").first().text());
   const status = cleanText(spec("status in coo").find("a").first().text());
-  const rating = Number($("#mc-fs-rate .rate-stat-num .bold").first().text());
+  const rating = parseFloat($("#mc-fs-rate .rate-stat-num .bold").first().text());
+  const cover = $(".r-fullstory-poster figure.cover").first();
   const views = parseCount($(".r-fullstory-spec li[title^='Unique views'] .grey").first().text());
   const toTags = (names: string[]): Tag[] =>
     names.map((name) => ({ id: toFilterOptionId(name), title: name }));
@@ -374,7 +377,8 @@ export const parseMangaDetails = ($: cheerio.CheerioAPI, mangaId: string): Sourc
     mangaInfo: {
       primaryTitle: title,
       secondaryTitles: secondaryTitle ? [secondaryTitle] : [],
-      thumbnailUrl: parseImageUrl($(".r-fullstory-poster figure.cover").first()),
+      thumbnailUrl:
+        parseImageUrl(cover) || parseImageUrl(cover.find("img").first()) || COVER_FALLBACK,
       synopsis: parseSynopsis($),
       author: authors.length ? authors.join(", ") : undefined,
       status: status || undefined,
@@ -391,26 +395,62 @@ export const parseMangaDetails = ($: cheerio.CheerioAPI, mangaId: string): Sourc
   };
 };
 
+const isChapterEntry = (value: unknown): value is RanobesChapterEntry =>
+  typeof value === "object" &&
+  value !== null &&
+  "link" in value &&
+  typeof value.link === "string" &&
+  value.link.trim().length > 0 &&
+  "title" in value &&
+  typeof value.title === "string";
+
+const chapterPageNumber = (value: unknown, name: string, minimum: number): number | undefined => {
+  if (value == null) return undefined;
+  const number = typeof value === "string" && /^\d+$/.test(value) ? Number(value) : value;
+  if (typeof number !== "number" || !Number.isSafeInteger(number) || number < minimum) {
+    throw new Error(`Ranobes: invalid chapter pagination field ${name}.`);
+  }
+  return number;
+};
+
 export const parseChapterPage = ($: cheerio.CheerioAPI): RanobesChapterPage => {
   const script = $("script")
     .toArray()
-    .map((element) => $(element).text())
-    .find((value) => value.includes("window.__DATA__"));
+    .map((element) => /window\.__DATA__\s*=\s*(\{[\s\S]*\})/.exec($(element).text())?.[1])
+    .find(Boolean);
   if (!script) throw new Error("Ranobes: chapter data was not found.");
 
-  const start = script.indexOf("{");
-  const end = script.lastIndexOf("}");
-  if (start < 0 || end < start) throw new Error("Ranobes: chapter data was malformed.");
-
+  let data: unknown;
   try {
-    return JSON.parse(script.slice(start, end + 1)) as RanobesChapterPage;
+    data = JSON.parse(script);
   } catch {
     throw new Error("Ranobes: could not parse the chapter list.");
   }
+  if (
+    !data ||
+    typeof data !== "object" ||
+    !("chapters" in data) ||
+    !Array.isArray(data.chapters) ||
+    !data.chapters.length ||
+    !data.chapters.every(isChapterEntry)
+  ) {
+    throw new Error("Ranobes: invalid or empty chapter-list page.");
+  }
+  return {
+    chapters: data.chapters,
+    pages_count: chapterPageNumber(
+      "pages_count" in data ? data.pages_count : undefined,
+      "pages_count",
+      1,
+    ),
+    count_all: chapterPageNumber("count_all" in data ? data.count_all : undefined, "count_all", 0),
+    cstart: chapterPageNumber("cstart" in data ? data.cstart : undefined, "cstart", 1),
+    limit: chapterPageNumber("limit" in data ? data.limit : undefined, "limit", 1),
+  };
 };
 
 // Chapter timestamps arrive zoneless; treating them as device-local makes fresh
-// ones render as negative ages. Read as UTC and clamp any remaining gap to now.
+// ones render as negative ages. Read as UTC.
 const parseChapterDate = (value: string): Date | undefined => {
   const text = value.trim();
   if (!text) return undefined;
@@ -433,24 +473,27 @@ const parseChapterDate = (value: string): Date | undefined => {
   }
 
   if (!date || Number.isNaN(date.getTime())) return undefined;
-  return date.getTime() > Date.now() ? new Date() : date;
+  return date;
 };
 
-const parseChapterTitle = (value: string): { chapNum: number; title?: string } => {
+const parseChapterTitle = (value: string): { chapNum?: number; title?: string } => {
   const title = cleanText(value);
   const match = /^chapter\s+(\d+(?:\.\d+)?)\s*(?:[:.\-–—]\s*)?(.*)$/i.exec(title);
-  if (!match) return { chapNum: 0, title };
+  if (!match) return { title };
   const subtitle = cleanText(match[2]);
   return { chapNum: Number(match[1]), title: subtitle || undefined };
 };
 
 export const parseChapters = (pages: RanobesChapterPage[], sourceManga: SourceManga): Chapter[] => {
+  const seen = new Set<string>();
   const entries = pages
-    .flatMap((page) => page.chapters ?? [])
-    .filter(
-      (entry, index, values) =>
-        values.findIndex((candidate) => candidate.id === entry.id) === index,
-    );
+    .flatMap((page) => page.chapters)
+    .filter((entry) => {
+      const id = absoluteUrl(entry.link);
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
   if (!entries.length) throw new Error(`Ranobes: no chapters found for ${sourceManga.mangaId}`);
 
   // Site lists chapters newest-first; keep that order, newest gets the highest index.
@@ -461,11 +504,11 @@ export const parseChapters = (pages: RanobesChapterPage[], sourceManga: SourceMa
       chapterId: absoluteUrl(entry.link),
       sourceManga,
       langCode: "en",
-      chapNum: chapter.chapNum || total - index,
+      chapNum: chapter.chapNum ?? total - index,
       ...(chapter.title ? { title: chapter.title } : {}),
       volume: 0,
       sortingIndex: total - index,
-      publishDate: entry.date ? parseChapterDate(entry.date) : undefined,
+      publishDate: typeof entry.date === "string" ? parseChapterDate(entry.date) : undefined,
     };
   });
 };

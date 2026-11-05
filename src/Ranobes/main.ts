@@ -30,8 +30,6 @@ import {
   PAGE_SIZE,
   SECTIONS,
   SORT_ORDERS,
-  STATE_KEYS,
-  type ChapterCrawlCheckpoint,
   type FilterTaxonomy,
   type PageMetadata,
   type RanobesChapterPage,
@@ -65,61 +63,9 @@ import {
 } from "./parsers";
 import type RanobesConfig from "./pbconfig";
 
-const isChapterCrawlCheckpoint = (value: unknown): value is ChapterCrawlCheckpoint => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const checkpoint = value as Partial<ChapterCrawlCheckpoint>;
-  return (
-    typeof checkpoint.novelId === "string" &&
-    !!checkpoint.pages &&
-    typeof checkpoint.pages === "object" &&
-    !Array.isArray(checkpoint.pages) &&
-    (checkpoint.pageCount === undefined || typeof checkpoint.pageCount === "number") &&
-    (checkpoint.completedAt === undefined || typeof checkpoint.completedAt === "number")
-  );
-};
-
-const orderedChapterPages = (
-  checkpoint: ChapterCrawlCheckpoint,
-  pageCount: number,
-): RanobesChapterPage[] => {
-  const pages = Array.from(
-    { length: pageCount },
-    (_, index) => checkpoint.pages[String(index + 1)],
-  ).filter((page): page is RanobesChapterPage => page !== undefined);
-  if (pages.length !== pageCount) {
-    throw new Error(`Ranobes: loaded ${pages.length} of ${pageCount} chapter-list pages`);
-  }
-  return pages;
-};
-
-export const resumeChapterPageCrawl = async (
-  checkpoint: ChapterCrawlCheckpoint,
-  pageCount: number,
-  fetchPage: (page: number) => Promise<RanobesChapterPage>,
-): Promise<RanobesChapterPage[]> => {
-  const missingPages = Array.from({ length: pageCount }, (_, index) => index + 1).filter(
-    (page) => checkpoint.pages[String(page)] === undefined,
-  );
-  const batchSize = 3;
-
-  for (let offset = 0; offset < missingPages.length; offset += batchSize) {
-    const results = await Promise.allSettled(
-      missingPages.slice(offset, offset + batchSize).map(async (page) => {
-        checkpoint.pages[String(page)] = await fetchPage(page);
-      }),
-    );
-    const failure = results.find(
-      (result): result is PromiseRejectedResult => result.status === "rejected",
-    );
-    if (failure) throw failure.reason;
-  }
-
-  return orderedChapterPages(checkpoint, pageCount);
-};
-
 class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   mainRateLimiter = new BasicRateLimiter("ranobes-rate-limiter", {
-    numberOfRequests: 3,
+    numberOfRequests: 1,
     bufferInterval: 1,
     ignoreImages: true,
   });
@@ -128,13 +74,10 @@ class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
 
   private taxonomyPromise?: Promise<FilterTaxonomy>;
 
-  // Successful pages survive a challenge so the resumed crawl skips them.
-  private chapterCrawl?: ChapterCrawlCheckpoint;
-
   async initialise(): Promise<void> {
-    this.requestManager.registerInterceptor();
     this.mainRateLimiter.registerInterceptor();
     cookieStorage.registerInterceptor();
+    this.requestManager.registerInterceptor();
   }
 
   async getSettingsForm(): Promise<Form> {
@@ -214,7 +157,10 @@ class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
     return new RanobesAdvancedSearchForm(
       query,
-      await (this.taxonomyPromise ??= this.getFilterTaxonomy()),
+      await (this.taxonomyPromise ??= this.getFilterTaxonomy().catch((error: unknown) => {
+        this.taxonomyPromise = undefined;
+        throw error;
+      })),
     );
   }
 
@@ -242,56 +188,15 @@ class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
     const novelId = extractNovelId(sourceManga.mangaId);
-    const current = this.chapterCrawl;
-    if (
-      current?.novelId === novelId &&
-      current.completedAt !== undefined &&
-      current.pageCount !== undefined &&
-      Date.now() - current.completedAt < 10 * 60 * 1000
-    ) {
-      return parseChapters(orderedChapterPages(current, current.pageCount), sourceManga);
-    }
-
-    const saved = Application.getState(STATE_KEYS.CHAPTER_CRAWL);
-    const checkpoint =
-      current?.novelId === novelId && current.completedAt === undefined
-        ? current
-        : isChapterCrawlCheckpoint(saved) &&
-            saved.novelId === novelId &&
-            saved.completedAt === undefined
-          ? saved
-          : { novelId, pages: {} };
-    if (
-      !isChapterCrawlCheckpoint(saved) ||
-      saved.novelId !== novelId ||
-      saved.completedAt !== undefined
-    ) {
-      Application.setState(undefined, STATE_KEYS.CHAPTER_CRAWL);
-    }
-    this.chapterCrawl = checkpoint;
-
-    let firstPage = checkpoint.pages["1"];
-    if (!firstPage) {
-      firstPage = await this.fetchChapterPage(novelId, 1);
-      checkpoint.pages["1"] = firstPage;
-    }
-    const pageCount = Math.max(
-      1,
+    const firstPage = await this.fetchChapterPage(novelId, 1);
+    const pageCount =
       firstPage.pages_count ??
-        (firstPage.count_all && firstPage.limit
-          ? Math.ceil(firstPage.count_all / firstPage.limit)
-          : 1),
-    );
-    checkpoint.pageCount = pageCount;
-
-    let pages: RanobesChapterPage[];
-    try {
-      pages = await resumeChapterPageCrawl(checkpoint, pageCount, (page) =>
-        this.fetchChapterPage(novelId, page),
-      );
-    } catch (error) {
-      Application.setState(checkpoint, STATE_KEYS.CHAPTER_CRAWL);
-      throw error;
+      (firstPage.count_all && firstPage.limit
+        ? Math.ceil(firstPage.count_all / firstPage.limit)
+        : 1);
+    const pages = [firstPage];
+    for (let page = 2; page <= pageCount; page++) {
+      pages.push(await this.fetchChapterPage(novelId, page));
     }
     const chapters = parseChapters(pages, sourceManga);
     if (firstPage.count_all && chapters.length < firstPage.count_all) {
@@ -299,8 +204,6 @@ class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
         `Ranobes: loaded ${chapters.length} of ${firstPage.count_all} chapters for ${sourceManga.mangaId}`,
       );
     }
-    checkpoint.completedAt = Date.now();
-    Application.setState(undefined, STATE_KEYS.CHAPTER_CRAWL);
     return chapters;
   }
 
