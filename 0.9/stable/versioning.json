@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-11-05T10:10:15.848Z",
+  "buildTime": "2026-11-05T10:25:38.935Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.92",
     "types": "1.0.0-alpha.92"
@@ -418,7 +418,7 @@
     {
       "name": "RanobesWebView",
       "description": "Experimental Ranobes chapter-list loader using a browser session.",
-      "version": "1.0.0-alpha.1",
+      "version": "1.0.0-alpha.2",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
