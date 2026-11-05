@@ -17,8 +17,6 @@ import type { AnyNode } from "domhandler";
 import {
   COVER_FALLBACK,
   DOMAIN,
-  GENRES,
-  FILTER_OPTION_FALLBACKS,
   type FilterTaxonomy,
   type ListingType,
   type RanobesChapterEntry,
@@ -123,28 +121,27 @@ export const extractNovelId = (mangaId: string): string => {
   return match[1];
 };
 
-export const parseFilterTaxonomy = ($: cheerio.CheerioAPI): FilterTaxonomy => {
-  const options = (include: string, exclude: string, fallback: readonly string[]) => {
-    const items = new Map<string, string>();
-    const fields = [include, exclude].flatMap((name) => [name, `${name}[]`]);
-    const selects = fields.map((name) => `select[name="${name}"] option`).join(", ");
-    for (const option of $(selects)) {
-      const title = cleanText($(option).text());
-      const value = $(option).attr("value") ?? title;
-      if (value.trim() && title && !$(option).is("[disabled]")) {
-        items.set(toFilterOptionId(value), title);
-      }
+export const parseFilterTaxonomy = (text: string): FilterTaxonomy => {
+  const data: unknown = JSON.parse(text);
+  const options = (key: string) => {
+    const values: unknown =
+      typeof data === "object" && data !== null ? Reflect.get(data, key) : undefined;
+    if (
+      !Array.isArray(values) ||
+      !values.every(
+        (value): value is string => typeof value === "string" && value.trim().length > 0,
+      )
+    ) {
+      throw new Error(`Ranobes: invalid filter options for ${key}.`);
     }
-    return items.size
-      ? Array.from(items, ([id, title]) => ({ id, title }))
-      : fallback.map((title) => ({ id: toFilterOptionId(title), title }));
+    return [...new Set(values)].map((title) => ({ id: toFilterOptionId(title), title }));
   };
   return {
-    genres: options("n.genre", "v.genre", GENRES),
-    events: options("n.events", "v.events", FILTER_OPTION_FALLBACKS.events),
-    authors: options("n.authors", "v.authors", FILTER_OPTION_FALLBACKS.authors),
-    translators: options("n.translater", "v.translater", FILTER_OPTION_FALLBACKS.translators),
-    publishers: options("n.l.tags", "!m.tags", FILTER_OPTION_FALLBACKS.publishers),
+    genres: options("genre"),
+    events: options("events"),
+    authors: options("authors"),
+    translators: options("translater"),
+    publishers: options("tags"),
   };
 };
 

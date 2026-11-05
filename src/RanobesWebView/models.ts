@@ -74,44 +74,6 @@ export const SORT_ORDERS = [
   },
 ] as const;
 
-export const GENRES = [
-  "Action",
-  "Adult",
-  "Adventure",
-  "Comedy",
-  "Drama",
-  "Ecchi",
-  "Fantasy",
-  "Game",
-  "Gender Bender",
-  "Harem",
-  "Historical",
-  "Horror",
-  "Josei",
-  "Martial Arts",
-  "Mature",
-  "Mecha",
-  "Mystery",
-  "Psychological",
-  "Romance",
-  "School Life",
-  "Sci-fi",
-  "Seinen",
-  "Shoujo",
-  "Shounen",
-  "Shounen Ai",
-  "Slice of Life",
-  "Smut",
-  "Sports",
-  "Supernatural",
-  "Tragedy",
-  "Wuxia",
-  "Xianxia",
-  "Xuanhuan",
-  "Yaoi",
-  "Yuri",
-];
-
 export interface PageMetadata extends JSONObject {
   page: number;
   collectedIds?: string[];
@@ -152,70 +114,6 @@ export interface FilterTaxonomy {
   translators: OptionItem[];
   publishers: OptionItem[];
 }
-
-// Options visible in the site catalogue when its full lists are unavailable.
-export const FILTER_OPTION_FALLBACKS = {
-  events: [
-    "Adapted to Manhwa",
-    "Adapted to Movie",
-    "Adapted to Visual Novel",
-    "Adopted Children",
-    "Adopted Protagonist",
-    "Adultery",
-    "Adventurers",
-    "Affair",
-    "Against the Gods",
-    "Age Progression",
-    "Evil Gods",
-    "God-human Relationship",
-    "Netorare",
-    "Dense Protagonist",
-    "Contracts",
-    "Curious Protagonist",
-    "Investigations",
-    "Master-Disciple Relationship",
-  ],
-  authors: [
-    "-90°",
-    "0_Jordinio_0",
-    "1King_Rep1",
-    "1Q2W",
-    "1st_Manga_KING",
-    "1_394",
-    "7 Percent",
-    "7 Years 7 Days",
-    "8k Dollar",
-    "Get Lost",
-    "Cuttlefish That Loves Diving",
-  ],
-  translators: [
-    "-Legion-",
-    "3ZTEE",
-    "88tang",
-    "1314dreamer",
-    "2022",
-    "549690339",
-    "Active Translations",
-    "Adar Terra",
-    "AdirTranslations",
-    "CKtalon",
-    "Machine translate",
-  ],
-  publishers: [
-    "3G书城",
-    "8kana",
-    "17k",
-    "A:Tempo Media",
-    "Able",
-    "ACES Media",
-    "Ai Hrist Dream Translations",
-    "Alibaba Literature",
-    "Alice-Translations",
-    "Alpha Polis",
-    "Qidian Webnovel",
-    "Webnovel",
-  ],
-} as const;
 
 export type ListingType = "stories" | "updates" | "rankings";
 
