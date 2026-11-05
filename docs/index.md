@@ -12,6 +12,7 @@ this wiki's own rules are in [AGENTS.md](AGENTS.md).
 
 ## sources
 
+- [Ranobes WebView](sources/RanobesWebView.md): experimental browser chapter-list loader.
 - [BunManga](sources/BunManga.md): canonical paths, ManhuaHot failover and password locks.
 - [Chikari](sources/Chikari.md): shared comic/novel listings, separate reader routes and stable ids.
 - [MGRead](sources/MGRead.md): ranking feeds, bulk taxonomy exclusions and protected readers.

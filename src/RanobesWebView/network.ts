@@ -1,0 +1,237 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* Copyright © 2026 Inkdex */
+
+import {
+  CloudflareError,
+  CookieStorageInterceptor,
+  PaperbackInterceptor,
+  type Cookie,
+  type Request,
+  type Response,
+  type SortingOption,
+} from "@paperback/types";
+
+import { DOMAIN, SORT_ORDERS, type SearchMetadata, type TriState } from "./models";
+
+const MIRROR_HOST = /^https?:\/\/(?:www\.)?ranobes\.[a-z.]+/i;
+
+export const toFilterOptionId = (title: string): string =>
+  encodeURIComponent(title).replace(
+    /[!'()*~]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+
+const filterTitle = (id: string): string => {
+  try {
+    return decodeURIComponent(id);
+  } catch {
+    return id;
+  }
+};
+
+export const buildSearchPath = (
+  title: string,
+  metadata: SearchMetadata | undefined,
+  sortingOption: SortingOption | undefined,
+): string | undefined => {
+  const segments: string[] = [];
+  const add = (key: string, value?: string) => {
+    if (value) segments.push(`${key}=${encodeURIComponent(value).replace(/%20/g, "+")}`);
+  };
+  const selected = (values: TriState | undefined, state: "included" | "excluded") =>
+    Object.entries(values ?? {})
+      .filter(([, value]) => value === state)
+      .map(([id]) => filterTitle(id))
+      .join(",");
+
+  add("l.title", title.trim());
+  add("n.genre", selected(metadata?.genres, "included"));
+  add("v.genre", selected(metadata?.genres, "excluded"));
+  add("n.events", selected(metadata?.events, "included"));
+  add("v.events", selected(metadata?.events, "excluded"));
+  add("b.languages", selected(metadata?.languages, "included"));
+  add("v.languages", selected(metadata?.languages, "excluded"));
+  add("f.year", metadata?.yearFrom);
+  add("t.year", metadata?.yearTo);
+  add("status-trs", metadata?.translationStatus);
+  add("status-end", metadata?.originalStatus);
+  add("f.chap-num", metadata?.chaptersFrom);
+  add("t.chap-num", metadata?.chaptersTo);
+  add("f.pvotenum", metadata?.ratingsFrom);
+  add("t.pvotenum", metadata?.ratingsTo);
+  for (const [includeKey, excludeKey, values, legacyExcluded] of [
+    ["n.authors", "v.authors", metadata?.authors, metadata?.excludedAuthors],
+    ["n.translater", "v.translater", metadata?.translators, metadata?.excludedTranslators],
+    ["n.l.tags", "!m.tags", metadata?.publishers, metadata?.excludedPublishers],
+  ] as const) {
+    if (typeof values === "object") {
+      add(includeKey, selected(values, "included"));
+      add(excludeKey, selected(values, "excluded"));
+    } else {
+      add(includeKey, values);
+      add(excludeKey, legacyExcluded);
+    }
+  }
+  if (metadata?.onlyTranslated) add("g.translater", "1");
+  if (metadata?.mtlFiles) add("g.mtl_files", "1");
+  if (metadata?.aiTranslated) {
+    add("b.mtl-ai-translator", "DeepSeek,LLaMA 4,Gemini Flash,Mistral");
+  }
+
+  const sorting = SORT_ORDERS.find(({ id }) => id === sortingOption?.id);
+  add("sort", sorting && "sort" in sorting ? sorting.sort : undefined);
+  add("order", sorting && "order" in sorting ? sorting.order : undefined);
+  return segments.length ? `/f/${segments.join("/")}/` : undefined;
+};
+
+export const cookieStorage = new CookieStorageInterceptor({ storage: "stateManager" });
+
+let verificationPromptUntil = 0;
+
+export const resetVerificationPrompt = (): void => {
+  verificationPromptUntil = 0;
+};
+
+const verificationPendingMessage =
+  "Complete the pending Ranobes verification, then retry. You can also open the site in source settings.";
+
+const checkVerificationPending = (): void => {
+  if (Date.now() < verificationPromptUntil) throw new Error(verificationPendingMessage);
+};
+
+const completeMobileSafariUserAgent = (userAgent: string): string => {
+  if (!/\b(?:iPhone|iPad|iPod)\b/.test(userAgent) || /\bSafari\//.test(userAgent)) {
+    return userAgent;
+  }
+  const os = /\bOS (\d+)[_.](\d+)/.exec(userAgent);
+  const version = os ? `${os[1]}.${os[2]}` : "18.0";
+  const withVersion = /\bVersion\//.test(userAgent)
+    ? userAgent
+    : userAgent.replace(/\sMobile\//, ` Version/${version} Mobile/`);
+  return /\bSafari\//.test(withVersion) ? withVersion : `${withVersion} Safari/604.1`;
+};
+
+let userAgentPromise: Promise<string> | undefined;
+
+export const getRanobesUserAgent = (): Promise<string> =>
+  (userAgentPromise ??= Application.getDefaultUserAgent().then(completeMobileSafariUserAgent));
+
+export const storeSessionCookies = (cookies: Cookie[]): void => {
+  const cookieId = (cookie: Cookie): string =>
+    `${cookie.name}:${cookie.domain.replace(/^(?:www)?\.?/i, "").toLowerCase()}:${
+      cookie.path?.startsWith("/") ? cookie.path : `/${cookie.path ?? ""}`
+    }`;
+  const replaced = new Set(cookies.map(cookieId));
+  cookieStorage.cookies = cookieStorage.cookies.filter((cookie) => !replaced.has(cookieId(cookie)));
+  for (const cookie of cookies) {
+    if (!cookie.expires || cookie.expires.getTime() > Date.now()) {
+      cookieStorage.setCookie(cookie);
+    }
+  }
+  resetVerificationPrompt();
+};
+
+const responseHeader = (response: Response, name: string): string => {
+  const key = Object.keys(response.headers ?? {}).find(
+    (header) => header.toLowerCase() === name.toLowerCase(),
+  );
+  return key ? (response.headers?.[key] ?? "") : "";
+};
+
+export class RanobesInterceptor extends PaperbackInterceptor {
+  override async interceptRequest(request: Request): Promise<Request> {
+    if (MIRROR_HOST.test(request.url)) checkVerificationPending();
+    return this.withHeaders(request);
+  }
+
+  private async withHeaders(request: Request): Promise<Request> {
+    const origin = request.url.match(MIRROR_HOST)?.[0] ?? DOMAIN;
+    return {
+      ...request,
+      headers: {
+        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "accept-language": "en-US,en;q=0.9",
+        ...request.headers,
+        referer: `${origin}/`,
+        "user-agent": await getRanobesUserAgent(),
+      },
+    };
+  }
+
+  override async interceptResponse(
+    request: Request,
+    response: Response,
+    data: ArrayBuffer,
+  ): Promise<ArrayBuffer> {
+    const challenged =
+      responseHeader(response, "cf-mitigated").toLowerCase() === "challenge" ||
+      ((response.status === 403 || response.status === 503) &&
+        /<div\b[^>]*\bid=["']vb-captcha-shell["']/i.test(
+          Application.arrayBufferToUTF8String(data),
+        ));
+    if (challenged) {
+      checkVerificationPending();
+      // Paperback has a completion callback but no cancellation callback for this prompt.
+      verificationPromptUntil = Date.now() + 60_000;
+      throw new CloudflareError(
+        await this.withHeaders({
+          url: response.url || request.url,
+          method: request.method ?? "GET",
+        }),
+        "Ranobes needs browser verification. Complete the check and retry.",
+      );
+    }
+    return data;
+  }
+}
+
+const responseText = (response: Response, buffer: ArrayBuffer, url: string): string => {
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error(`Ranobes request failed with status ${response.status}: ${url}`);
+  }
+  const text = Application.arrayBufferToUTF8String(buffer);
+  if (!text.trim()) throw new Error(`Ranobes returned an empty response: ${url}`);
+  return text;
+};
+
+// Identical concurrent GETs (e.g. discover and a chapter list hitting the same
+// page) share one in-flight promise so we never fire duplicate network requests.
+const inFlightTextRequests = new Map<string, Promise<string>>();
+
+const requestText = async (url: string): Promise<string> => {
+  checkVerificationPending();
+  const key = `GET:${url}`;
+  const existing = inFlightTextRequests.get(key);
+  if (existing) {
+    try {
+      return await existing;
+    } catch (error) {
+      if (error instanceof CloudflareError) throw new Error(verificationPendingMessage);
+      throw error;
+    }
+  }
+
+  const promise = (async () => {
+    const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });
+    return responseText(response, buffer, url);
+  })();
+  inFlightTextRequests.set(key, promise);
+  try {
+    return await promise;
+  } finally {
+    if (inFlightTextRequests.get(key) === promise) {
+      inFlightTextRequests.delete(key);
+    }
+  }
+};
+
+// ranobe.top is intentionally not used. Its clearance is independent and
+// repeatedly causes a second challenge cycle after ranobes.net succeeds.
+export const fetchHtml = async (url: string): Promise<string> =>
+  requestText(url.replace(MIRROR_HOST, DOMAIN));
+
+export const fetchListingPage = (path: string, page = 1): Promise<string> =>
+  fetchHtml(`${DOMAIN}${path}${page > 1 ? `page/${page}/` : ""}`);
+
+export const fetchChapterListPage = (novelId: string, page = 1): Promise<string> =>
+  fetchHtml(`${DOMAIN}/chapters/${novelId}/${page > 1 ? `page/${page}/` : ""}`);
