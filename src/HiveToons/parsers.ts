@@ -125,7 +125,9 @@ const stripHtml = (html: string): string => {
 };
 
 export const parseMangaList = (posts: HiveToonsPost[]): MangaListItem[] =>
-  posts.map((post) => {
+  posts.flatMap((post) => {
+    if (!post.featuredImage) return [];
+
     const novel = isNovel(post);
     const latestChapter = post.chapters?.find((chapter) => chapter.isAccessible === true);
     const subtitle = [
@@ -143,7 +145,7 @@ export const parseMangaList = (posts: HiveToonsPost[]): MangaListItem[] =>
     return {
       mangaId: encodeMangaId(post.slug),
       title: Application.decodeHTMLEntities(post.postTitle),
-      imageUrl: post.featuredImage ?? "",
+      imageUrl: post.featuredImage,
       subtitle: subtitle || formatSeriesSubtitle(post.seriesType, post.seriesStatus),
       summary: stripHtml(post.postContent ?? "") || undefined,
       author:
