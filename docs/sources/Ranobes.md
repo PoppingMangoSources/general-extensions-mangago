@@ -58,3 +58,12 @@ sequential lists, interrupted chapter lists, invalid payloads, and the cover and
 A protection page at search blocks the remaining live
 suite from obtaining a title. Ranking pagination and search's no-match response still need a
 normal live response before changing their routes.
+
+## Advanced Search
+
+Genre, tag, author, translator and publisher selectors preserve the site's option value
+separately from its display label. Author, translator and publisher lists use an include/exclude
+picker when the options are embedded in the catalogue HTML, with text entry otherwise.
+Vote count uses `f.pvotenum` and `t.pvotenum`. The former MTL Reader toggle duplicated the
+MTL Files parameter and was removed. The live catalogue returned verification during recon,
+so the request keys for Reviews, star range, score-only sorting and MTL Reader are unconfirmed.

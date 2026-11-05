@@ -41,10 +41,15 @@ const hook = registerHooks({
 });
 const { Ranobes } = await import("../../src/Ranobes/main");
 hook.deregister();
-const { RanobesInterceptor, cookieStorage, fetchHtml, resetVerificationPrompt } =
+const { buildSearchPath, RanobesInterceptor, cookieStorage, fetchHtml, resetVerificationPrompt } =
   await import("../../src/Ranobes/network");
-const { parseChapterDetails, parseChapterPage, parseListings, parseMangaDetails } =
-  await import("../../src/Ranobes/parsers");
+const {
+  parseChapterDetails,
+  parseChapterPage,
+  parseFilterTaxonomy,
+  parseListings,
+  parseMangaDetails,
+} = await import("../../src/Ranobes/parsers");
 
 const chapterListUrl = "https://ranobes.net/chapters/123/";
 const request: Request = { url: chapterListUrl, method: "GET" };
@@ -288,5 +293,45 @@ void test("skips coverless cards and keeps a real lazy-loaded GIF in the reader"
   assert.match(
     details.html,
     /<em>Test<\/em><br\s*\/><img src="https:\/\/ranobes\.net\/real\.gif"\s*\/>/,
+  );
+});
+
+void test("search pickers preserve site option values and send distinct exclusions", () => {
+  const taxonomy = parseFilterTaxonomy(
+    cheerio.load(`
+    <select name="n.genre"><option value="104">Drama</option></select>
+    <select name="n.events"><option value="">Any</option><option value="Evil Gods">Evil Gods</option></select>
+    <select name="n.authors"><option value="Get Lost">Get Lost</option></select>
+    <select name="v.authors"><option value="Get Lost">Get Lost</option><option value="7 Percent">7 Percent</option></select>
+    <select name="n.translater"><option value="CKtalon">CKtalon</option></select>
+    <select name="!m.tags"><option value="3G书城">3G书城</option></select>
+  `),
+  );
+  assert.deepEqual(taxonomy.genres, [{ id: "104", title: "Drama" }]);
+  assert.deepEqual(taxonomy.events, [{ id: "Evil%20Gods", title: "Evil Gods" }]);
+  assert.equal(taxonomy.authors.length, 2);
+  const result = buildSearchPath(
+    "reincarn",
+    {
+      genres: { [taxonomy.genres[0].id]: "included" },
+      authors: {
+        [taxonomy.authors[0].id]: "included",
+        [taxonomy.authors[1].id]: "excluded",
+      },
+      translators: { [taxonomy.translators[0].id]: "included" },
+      publishers: { [taxonomy.publishers[0].id]: "excluded" },
+      ratingsFrom: "0",
+      ratingsTo: "1000",
+      mtlFiles: true,
+    },
+    { id: "comments_desc", label: "Comments" },
+  );
+  assert.equal(
+    result,
+    "/f/l.title=reincarn/n.genre=104/f.pvotenum=0/t.pvotenum=1000/n.authors=Get+Lost/v.authors=7+Percent/n.translater=CKtalon/!m.tags=3G%E4%B9%A6%E5%9F%8E/g.mtl_files=1/sort=comm_num/order=desc/",
+  );
+  assert.equal(
+    buildSearchPath("", { authors: "Get Lost", excludedAuthors: "7 Percent" }, undefined),
+    "/f/n.authors=Get+Lost/v.authors=7+Percent/",
   );
 });

@@ -59,14 +59,21 @@ export const buildSearchPath = (
   add("t.chap-num", metadata?.chaptersTo);
   add("f.pvotenum", metadata?.ratingsFrom);
   add("t.pvotenum", metadata?.ratingsTo);
-  add("n.authors", metadata?.authors);
-  add("v.authors", metadata?.excludedAuthors);
-  add("n.translater", metadata?.translators);
-  add("v.translater", metadata?.excludedTranslators);
-  add("n.l.tags", metadata?.publishers);
-  add("!m.tags", metadata?.excludedPublishers);
+  for (const [includeKey, excludeKey, values, legacyExcluded] of [
+    ["n.authors", "v.authors", metadata?.authors, metadata?.excludedAuthors],
+    ["n.translater", "v.translater", metadata?.translators, metadata?.excludedTranslators],
+    ["n.l.tags", "!m.tags", metadata?.publishers, metadata?.excludedPublishers],
+  ] as const) {
+    if (typeof values === "object") {
+      add(includeKey, selected(values, "included"));
+      add(excludeKey, selected(values, "excluded"));
+    } else {
+      add(includeKey, values);
+      add(excludeKey, legacyExcluded);
+    }
+  }
   if (metadata?.onlyTranslated) add("g.translater", "1");
-  if (metadata?.mtlFiles || metadata?.mtlReader) add("g.mtl_files", "1");
+  if (metadata?.mtlFiles) add("g.mtl_files", "1");
   if (metadata?.aiTranslated) {
     add("b.mtl-ai-translator", "DeepSeek,LLaMA 4,Gemini Flash,Mistral");
   }

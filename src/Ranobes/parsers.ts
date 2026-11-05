@@ -123,13 +123,26 @@ export const extractNovelId = (mangaId: string): string => {
 };
 
 export const parseFilterTaxonomy = ($: cheerio.CheerioAPI): FilterTaxonomy => {
-  const events = $("select[name='n.events'] option")
-    .toArray()
-    .map((element) => cleanText($(element).attr("value") ?? $(element).text()))
-    .filter(Boolean);
+  const options = (include: string, exclude: string) => {
+    const items = new Map<string, string>();
+    for (const option of $(`select[name="${include}"] option, select[name="${exclude}"] option`)) {
+      const title = cleanText($(option).text());
+      const value = $(option).attr("value") ?? title;
+      if (value.trim() && title && !$(option).is("[disabled]")) {
+        items.set(toFilterOptionId(value), title);
+      }
+    }
+    return Array.from(items, ([id, title]) => ({ id, title }));
+  };
+  const genres = options("n.genre", "v.genre");
   return {
-    genres: GENRES.map((title) => ({ id: toFilterOptionId(title), title })),
-    events: [...new Set(events)].map((title) => ({ id: toFilterOptionId(title), title })),
+    genres: genres.length
+      ? genres
+      : GENRES.map((title) => ({ id: toFilterOptionId(title), title })),
+    events: options("n.events", "v.events"),
+    authors: options("n.authors", "v.authors"),
+    translators: options("n.translater", "v.translater"),
+    publishers: options("n.l.tags", "!m.tags"),
   };
 };
 

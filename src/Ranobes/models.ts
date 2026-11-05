@@ -130,15 +130,14 @@ export interface SearchMetadata extends JSONObject {
   chaptersTo?: string;
   ratingsFrom?: string;
   ratingsTo?: string;
-  authors?: string;
+  authors?: string | TriState;
   excludedAuthors?: string;
-  translators?: string;
+  translators?: string | TriState;
   excludedTranslators?: string;
-  publishers?: string;
+  publishers?: string | TriState;
   excludedPublishers?: string;
   onlyTranslated?: boolean;
   mtlFiles?: boolean;
-  mtlReader?: boolean;
   aiTranslated?: boolean;
 }
 
@@ -147,6 +146,9 @@ export type OptionItem = { id: string; title: string };
 export interface FilterTaxonomy {
   genres: OptionItem[];
   events: OptionItem[];
+  authors: OptionItem[];
+  translators: OptionItem[];
+  publishers: OptionItem[];
 }
 
 export type ListingType = "stories" | "updates" | "rankings";
