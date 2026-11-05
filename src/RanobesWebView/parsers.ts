@@ -18,6 +18,7 @@ import {
   COVER_FALLBACK,
   DOMAIN,
   GENRES,
+  FILTER_OPTION_FALLBACKS,
   type FilterTaxonomy,
   type ListingType,
   type RanobesChapterEntry,
@@ -123,26 +124,27 @@ export const extractNovelId = (mangaId: string): string => {
 };
 
 export const parseFilterTaxonomy = ($: cheerio.CheerioAPI): FilterTaxonomy => {
-  const options = (include: string, exclude: string) => {
+  const options = (include: string, exclude: string, fallback: readonly string[]) => {
     const items = new Map<string, string>();
-    for (const option of $(`select[name="${include}"] option, select[name="${exclude}"] option`)) {
+    const fields = [include, exclude].flatMap((name) => [name, `${name}[]`]);
+    const selects = fields.map((name) => `select[name="${name}"] option`).join(", ");
+    for (const option of $(selects)) {
       const title = cleanText($(option).text());
       const value = $(option).attr("value") ?? title;
       if (value.trim() && title && !$(option).is("[disabled]")) {
         items.set(toFilterOptionId(value), title);
       }
     }
-    return Array.from(items, ([id, title]) => ({ id, title }));
+    return items.size
+      ? Array.from(items, ([id, title]) => ({ id, title }))
+      : fallback.map((title) => ({ id: toFilterOptionId(title), title }));
   };
-  const genres = options("n.genre", "v.genre");
   return {
-    genres: genres.length
-      ? genres
-      : GENRES.map((title) => ({ id: toFilterOptionId(title), title })),
-    events: options("n.events", "v.events"),
-    authors: options("n.authors", "v.authors"),
-    translators: options("n.translater", "v.translater"),
-    publishers: options("n.l.tags", "!m.tags"),
+    genres: options("n.genre", "v.genre", GENRES),
+    events: options("n.events", "v.events", FILTER_OPTION_FALLBACKS.events),
+    authors: options("n.authors", "v.authors", FILTER_OPTION_FALLBACKS.authors),
+    translators: options("n.translater", "v.translater", FILTER_OPTION_FALLBACKS.translators),
+    publishers: options("n.l.tags", "!m.tags", FILTER_OPTION_FALLBACKS.publishers),
   };
 };
 
