@@ -242,7 +242,7 @@ class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
       );
     }
     if (pages.length > 1) {
-      this.completedChapterList = { novelId, pages, expiresAt: Date.now() + 2 * 60_000 };
+      this.completedChapterList = { novelId, pages, expiresAt: Date.now() + 2 * 60 * 60_000 };
     }
     return chapters;
   }
@@ -276,7 +276,9 @@ class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   }
 
   private async getFilterTaxonomy(): Promise<FilterTaxonomy> {
-    return parseFilterTaxonomy(cheerio.load(await fetchListingPage("/novels/")));
+    return parseFilterTaxonomy(
+      await fetchHtml(`${DOMAIN}/engine/mods/dle_filter/ajax.php?action=options`),
+    );
   }
 
   private async fetchChapterPage(novelId: string, page: number): Promise<RanobesChapterPage> {

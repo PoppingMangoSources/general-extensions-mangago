@@ -40,7 +40,7 @@ subsequent `/page/<n>/` routes sequentially under the SDK limiter, which allows 
 requests per second. Require chapter rows and valid pagination fields before continuing. An
 interrupted crawl keeps the most recent partial list in memory for ten minutes. On retry, compare
 the first and last saved page with the current site before reusing the saved pages. If either
-has changed, fetch the list again from the first page. For two minutes after a successful multi-page load, reopening the same novel rechecks the first
+has changed, fetch the list again from the first page. For two hours after a successful multi-page load, reopening the same novel rechecks the first
 page and reuses the remaining pages if the chapter links and pagination still match. A changed
 first page or an expired snapshot triggers a fresh load.
 On the reported title, the request to page 44 received HTTP 503. After verification, the next
@@ -63,10 +63,10 @@ normal live response before changing their routes.
 
 ## Advanced Search
 
-Tag, author, translator and publisher selectors preserve the site's option values and use
-include, exclude and clear states. When the catalogue HTML does not expose the options,
-the pickers use a small set of options observed on the site. This fallback is incomplete.
-The 1–5 star range is sent as `r.prate=<minimum>%3B<maximum>` based on a captured search URL.
-Vote count is separate and still uses `f.pvotenum` and `t.pvotenum`. Verification blocked
-confirmation of the full option lists, Reviews, score-only sorting
-and the separate MTL Reader filter.
+The site's `/engine/mods/dle_filter/ajax.php?action=options` response contains name arrays
+under `genre`, `events`, `authors`, `translater`, and `tags` (publishers). The capture and a
+fresh request confirmed the JSON contract. The extension loads these lists when Advanced
+Search is opened, keeps them in memory for the source session, and uses the names for include,
+exclude and clear states. The 1–5 star range uses `r.prate=<minimum>%3B<maximum>`. Vote count
+uses `f.pvotenum` and `t.pvotenum`. Reviews, score-only sorting, and the separate MTL Reader
+filter still need their request parameters confirmed.

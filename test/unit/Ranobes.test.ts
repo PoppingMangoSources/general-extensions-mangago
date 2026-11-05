@@ -164,6 +164,8 @@ void test("verification cookies reach matching chapter requests through the SDK 
 });
 
 void test("fetches real chapter pages sequentially and refreshes from page one", async (t) => {
+  let now = Date.now();
+  t.mock.method(Date, "now", () => now);
   const calls: string[] = [];
   let active = 0;
   let latest = 5;
@@ -191,6 +193,7 @@ void test("fetches real chapter pages sequentially and refreshes from page one",
     [5, 2, 1, 0],
   );
   assert.equal(first[3].chapterId, "https://ranobes.net/test-novel-123/0.html");
+  now += 90 * 60_000;
   calls.length = 0;
   assert.deepEqual(
     (await Ranobes.getChapters(manga)).map((chapter) => chapter.chapterId),
@@ -242,7 +245,7 @@ void test("resumes page 44 after verification and restarts if the chapter list h
   assert.equal((await Ranobes.getChapters(manga)).length, 45);
   assert.deepEqual(calls, [1, 43, 44, 45]);
 
-  now += 2 * 60_000;
+  now += 2 * 60 * 60_000;
   blocked = true;
   await assert.rejects(Ranobes.getChapters(manga), CloudflareError);
   blocked = false;
@@ -304,16 +307,15 @@ void test("skips coverless cards and keeps a real lazy-loaded GIF in the reader"
 
 void test("search pickers preserve site option values and send distinct exclusions", () => {
   const taxonomy = parseFilterTaxonomy(
-    cheerio.load(`
-    <select name="n.genre"><option value="104">Drama</option></select>
-    <select name="n.events"><option value="">Any</option><option value="Evil Gods">Evil Gods</option></select>
-    <select name="n.authors"><option value="Get Lost">Get Lost</option></select>
-    <select name="v.authors"><option value="Get Lost">Get Lost</option><option value="7 Percent">7 Percent</option></select>
-    <select name="n.translater"><option value="CKtalon">CKtalon</option></select>
-    <select name="!m.tags"><option value="3G书城">3G书城</option></select>
-  `),
+    JSON.stringify({
+      genre: ["Drama"],
+      events: ["Evil Gods"],
+      authors: ["Get Lost", "7 Percent"],
+      translater: ["CKtalon"],
+      tags: ["3G书城"],
+    }),
   );
-  assert.deepEqual(taxonomy.genres, [{ id: "104", title: "Drama" }]);
+  assert.deepEqual(taxonomy.genres, [{ id: "Drama", title: "Drama" }]);
   assert.deepEqual(taxonomy.events, [{ id: "Evil%20Gods", title: "Evil Gods" }]);
   assert.equal(taxonomy.authors.length, 2);
   const result = buildSearchPath(
@@ -334,7 +336,7 @@ void test("search pickers preserve site option values and send distinct exclusio
   );
   assert.equal(
     result,
-    "/f/l.title=reincarn/n.genre=104/f.pvotenum=0/t.pvotenum=1000/n.authors=Get+Lost/v.authors=7+Percent/n.translater=CKtalon/!m.tags=3G%E4%B9%A6%E5%9F%8E/g.mtl_files=1/sort=comm_num/order=desc/",
+    "/f/l.title=reincarn/n.genre=Drama/f.pvotenum=0/t.pvotenum=1000/n.authors=Get+Lost/v.authors=7+Percent/n.translater=CKtalon/!m.tags=3G%E4%B9%A6%E5%9F%8E/g.mtl_files=1/sort=comm_num/order=desc/",
   );
   assert.equal(
     buildSearchPath("", { authors: "Get Lost", excludedAuthors: "7 Percent" }, undefined),
@@ -342,16 +344,31 @@ void test("search pickers preserve site option values and send distinct exclusio
   );
 });
 
-void test("offers tri-state options when the catalogue omits its lists", () => {
-  const taxonomy = parseFilterTaxonomy(
-    cheerio.load('<select name="n.events[]"><option value="Dark">Dark Fantasy</option></select>'),
+void test("advanced search fetches and memoizes the site's JSON filter catalogue", async (t) => {
+  const url = "https://ranobes.net/engine/mods/dle_filter/ajax.php?action=options";
+  const schedule = t.mock.method(application, "scheduleRequest", async (request: Request) => {
+    assert.equal(request.url, url);
+    assert.equal(request.method, "GET");
+    return [
+      response(url, 200, { "content-type": "application/json" }),
+      encode(
+        JSON.stringify({
+          genre: ["Drama"],
+          events: ["Abandoned Children"],
+          authors: ["Get Lost"],
+          translater: ["CKtalon"],
+          tags: ["Qidian Webnovel"],
+        }),
+      ),
+    ];
+  });
+  await Ranobes.getAdvancedSearchForm({ title: "" });
+  await Ranobes.getAdvancedSearchForm({ title: "" });
+  assert.equal(schedule.mock.callCount(), 1);
+  assert.throws(
+    () => parseFilterTaxonomy('{"genre":["Drama"]}'),
+    /invalid filter options for events/,
   );
-  assert.deepEqual(taxonomy.events, [{ id: "Dark", title: "Dark Fantasy" }]);
-  const fallback = parseFilterTaxonomy(cheerio.load(""));
-  assert.ok(fallback.events.some(({ title }) => title === "Adopted Children"));
-  assert.ok(fallback.authors.some(({ title }) => title === "Get Lost"));
-  assert.ok(fallback.translators.some(({ title }) => title === "CKtalon"));
-  assert.ok(fallback.publishers.some(({ title }) => title === "Qidian Webnovel"));
 });
 
 void test("sends the site rating range alongside status and sort", async (t) => {
