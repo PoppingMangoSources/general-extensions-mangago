@@ -36,8 +36,8 @@ on chapter-list page 44. Ranobes supplies the URL and headers to that flow. It s
 ## Chapter lists and reader
 
 The first `/chapters/<id>/` response supplies the page count, or the total and page size. Fetch
-subsequent `/page/<n>/` routes sequentially under the SDK limiter, which starts one non-image
-request per second. Require chapter rows and valid pagination fields before continuing. An
+subsequent `/page/<n>/` routes sequentially under the SDK limiter, which allows up to two non-image
+requests per second. Require chapter rows and valid pagination fields before continuing. An
 interrupted crawl keeps the most recent partial list in memory for ten minutes. On retry, compare
 the first and last saved page with the current site before reusing the saved pages. If either
 has changed, fetch the list again from the first page. For two minutes after a successful multi-page load, reopening the same novel rechecks the first
@@ -66,7 +66,7 @@ normal live response before changing their routes.
 Tag, author, translator and publisher selectors preserve the site's option values and use
 include, exclude and clear states. When the catalogue HTML does not expose the options,
 the pickers use a small set of options observed on the site. This fallback is incomplete.
-The 1–5 star range filters each result page by its published score and retains site pagination.
+The 1–5 star range is sent as `r.prate=<minimum>%3B<maximum>` based on a captured search URL.
 Vote count is separate and still uses `f.pvotenum` and `t.pvotenum`. Verification blocked
-confirmation of the server-side star range, full option lists, Reviews, score-only sorting
+confirmation of the full option lists, Reviews, score-only sorting
 and the separate MTL Reader filter.

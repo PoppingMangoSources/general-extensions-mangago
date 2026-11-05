@@ -354,25 +354,22 @@ void test("offers tri-state options when the catalogue omits its lists", () => {
   assert.ok(fallback.publishers.some(({ title }) => title === "Qidian Webnovel"));
 });
 
-void test("filters listing scores separately from votes and keeps pagination", async (t) => {
-  const card = (id: number, score: string) => `
-    <article class="block story shortstory">
-      <h2 class="title"><a href="/novels/${id}-test.html">Novel ${id}</a></h2>
-      <figure class="cover"><img src="/test.jpg"></figure>
-      <div class="r-date"><div class="rate-drop"><strong>${score}</strong></div></div>
-    </article>`;
-  t.mock.method(application, "scheduleRequest", async ({ url }: Request) => [
+void test("sends the site rating range alongside status and sort", async (t) => {
+  const path = "/f/r.prate=4.6%3B5/status-end=Ongoing/sort=date/order=desc/";
+  const query = {
+    title: "",
+    metadata: { starsFrom: 4.600000000000001, originalStatus: "Ongoing" },
+  };
+  const sorting = { id: "date_desc", label: "New Novels" };
+  assert.equal(buildSearchPath(query.title, query.metadata, sorting), path);
+  assert.equal(buildSearchPath("", { starsTo: 4 }, undefined), "/f/r.prate=1%3B4/");
+  const schedule = t.mock.method(application, "scheduleRequest", async ({ url }: Request) => [
     response(url, 200),
-    encode(`${card(1, "2.5")}${card(2, "3.8")}${card(3, "")}
-      <div class="navigation"><span class="page_next"><a href="/novels/page/2/">Next</a></span></div>`),
+    encode(
+      '<div class="navigation"><span class="page_next"><a href="/page/2/">Next</a></span></div>',
+    ),
   ]);
-  const result = await Ranobes.getSearchResults(
-    { title: "", metadata: { starsFrom: 3, starsTo: 4 } },
-    undefined,
-  );
-  assert.deepEqual(
-    result.items.map(({ title }) => title),
-    ["Novel 2"],
-  );
+  const result = await Ranobes.getSearchResults(query, undefined, sorting);
+  assert.equal(schedule.mock.calls[0].arguments[0].url, `https://ranobes.net${path}`);
   assert.deepEqual(result.metadata, { page: 2 });
 });

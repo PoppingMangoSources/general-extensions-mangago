@@ -67,7 +67,7 @@ import type RanobesConfig from "./pbconfig";
 
 class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   mainRateLimiter = new BasicRateLimiter("ranobes-rate-limiter", {
-    numberOfRequests: 1,
+    numberOfRequests: 2,
     bufferInterval: 1,
     ignoreImages: true,
   });
@@ -176,17 +176,8 @@ class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     const page = metadata?.page ?? 1;
     const path = buildSearchPath(query.title, query.metadata, sortingOption) ?? "/novels/";
     const $ = cheerio.load(await fetchListingPage(path, page));
-    const { starsFrom, starsTo } = query.metadata ?? {};
-    const listings = parseListings($, "stories");
-    const filtered =
-      starsFrom !== undefined || starsTo !== undefined
-        ? listings.filter(
-            ({ rating }) =>
-              rating !== undefined && rating >= (starsFrom ?? 1) && rating <= (starsTo ?? 5),
-          )
-        : listings;
     return {
-      items: filtered.map(toSearchResult),
+      items: parseListings($, "stories").map(toSearchResult),
       metadata: isLastListingPage($) ? undefined : { page: page + 1 },
     };
   }

@@ -53,6 +53,12 @@ export const buildSearchPath = (
   add("v.languages", selected(metadata?.languages, "excluded"));
   add("f.year", metadata?.yearFrom);
   add("t.year", metadata?.yearTo);
+  const { starsFrom, starsTo } = metadata ?? {};
+  if (starsFrom !== undefined || starsTo !== undefined) {
+    const minimum = Number((starsFrom ?? 1).toFixed(1));
+    const maximum = Number((starsTo ?? 5).toFixed(1));
+    add("r.prate", `${minimum};${maximum}`);
+  }
   add("status-trs", metadata?.translationStatus);
   add("status-end", metadata?.originalStatus);
   add("f.chap-num", metadata?.chaptersFrom);
