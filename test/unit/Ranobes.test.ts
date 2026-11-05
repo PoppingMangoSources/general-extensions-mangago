@@ -191,16 +191,19 @@ void test("fetches real chapter pages sequentially and refreshes from page one",
     [5, 2, 1, 0],
   );
   assert.equal(first[3].chapterId, "https://ranobes.net/test-novel-123/0.html");
+  calls.length = 0;
+  assert.deepEqual(
+    (await Ranobes.getChapters(manga)).map((chapter) => chapter.chapterId),
+    first.map((chapter) => chapter.chapterId),
+  );
+  assert.deepEqual(calls, [chapterListUrl]);
+  calls.length = 0;
   latest = 6;
   assert.deepEqual(
     (await Ranobes.getChapters(manga)).map((c) => c.chapNum),
     [6, 2, 1, 0],
   );
   assert.deepEqual(calls, [
-    chapterListUrl,
-    `${chapterListUrl}page/2/`,
-    `${chapterListUrl}page/3/`,
-    `${chapterListUrl}page/4/`,
     chapterListUrl,
     `${chapterListUrl}page/2/`,
     `${chapterListUrl}page/3/`,
@@ -212,6 +215,8 @@ void test("resumes page 44 after verification and restarts if the chapter list h
   const calls: number[] = [];
   let blocked = true;
   let shiftBoundary = false;
+  let now = Date.now();
+  t.mock.method(Date, "now", () => now);
   t.mock.method(application, "scheduleRequest", async ({ url }: Request) => {
     const page = Number(/\/page\/(\d+)\//.exec(url)?.[1] ?? 1);
     calls.push(page);
@@ -237,6 +242,7 @@ void test("resumes page 44 after verification and restarts if the chapter list h
   assert.equal((await Ranobes.getChapters(manga)).length, 45);
   assert.deepEqual(calls, [1, 43, 44, 45]);
 
+  now += 2 * 60_000;
   blocked = true;
   await assert.rejects(Ranobes.getChapters(manga), CloudflareError);
   blocked = false;
@@ -334,4 +340,39 @@ void test("search pickers preserve site option values and send distinct exclusio
     buildSearchPath("", { authors: "Get Lost", excludedAuthors: "7 Percent" }, undefined),
     "/f/n.authors=Get+Lost/v.authors=7+Percent/",
   );
+});
+
+void test("offers tri-state options when the catalogue omits its lists", () => {
+  const taxonomy = parseFilterTaxonomy(
+    cheerio.load('<select name="n.events[]"><option value="Dark">Dark Fantasy</option></select>'),
+  );
+  assert.deepEqual(taxonomy.events, [{ id: "Dark", title: "Dark Fantasy" }]);
+  const fallback = parseFilterTaxonomy(cheerio.load(""));
+  assert.ok(fallback.events.some(({ title }) => title === "Adopted Children"));
+  assert.ok(fallback.authors.some(({ title }) => title === "Get Lost"));
+  assert.ok(fallback.translators.some(({ title }) => title === "CKtalon"));
+  assert.ok(fallback.publishers.some(({ title }) => title === "Qidian Webnovel"));
+});
+
+void test("filters listing scores separately from votes and keeps pagination", async (t) => {
+  const card = (id: number, score: string) => `
+    <article class="block story shortstory">
+      <h2 class="title"><a href="/novels/${id}-test.html">Novel ${id}</a></h2>
+      <figure class="cover"><img src="/test.jpg"></figure>
+      <div class="r-date"><div class="rate-drop"><strong>${score}</strong></div></div>
+    </article>`;
+  t.mock.method(application, "scheduleRequest", async ({ url }: Request) => [
+    response(url, 200),
+    encode(`${card(1, "2.5")}${card(2, "3.8")}${card(3, "")}
+      <div class="navigation"><span class="page_next"><a href="/novels/page/2/">Next</a></span></div>`),
+  ]);
+  const result = await Ranobes.getSearchResults(
+    { title: "", metadata: { starsFrom: 3, starsTo: 4 } },
+    undefined,
+  );
+  assert.deepEqual(
+    result.items.map(({ title }) => title),
+    ["Novel 2"],
+  );
+  assert.deepEqual(result.metadata, { page: 2 });
 });

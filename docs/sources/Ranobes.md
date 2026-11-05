@@ -40,7 +40,9 @@ subsequent `/page/<n>/` routes sequentially under the SDK limiter, which starts 
 request per second. Require chapter rows and valid pagination fields before continuing. An
 interrupted crawl keeps the most recent partial list in memory for ten minutes. On retry, compare
 the first and last saved page with the current site before reusing the saved pages. If either
-has changed, fetch the list again from the first page. Successful lists are always fetched fresh.
+has changed, fetch the list again from the first page. For two minutes after a successful multi-page load, reopening the same novel rechecks the first
+page and reuses the remaining pages if the chapter links and pagination still match. A changed
+first page or an expired snapshot triggers a fresh load.
 On the reported title, the request to page 44 received HTTP 503. After verification, the next
 load got HTTP 200 on pages 1, 2, 48, and 49. That rules out a fixed page-44 ceiling in the log.
 The app's existing title and chapter URLs stay usable as IDs. A missing optional date is omitted
@@ -61,9 +63,10 @@ normal live response before changing their routes.
 
 ## Advanced Search
 
-Genre, tag, author, translator and publisher selectors preserve the site's option value
-separately from its display label. Author, translator and publisher lists use an include/exclude
-picker when the options are embedded in the catalogue HTML, with text entry otherwise.
-Vote count uses `f.pvotenum` and `t.pvotenum`. The former MTL Reader toggle duplicated the
-MTL Files parameter and was removed. The live catalogue returned verification during recon,
-so the request keys for Reviews, star range, score-only sorting and MTL Reader are unconfirmed.
+Tag, author, translator and publisher selectors preserve the site's option values and use
+include, exclude and clear states. When the catalogue HTML does not expose the options,
+the pickers use a small set of options observed on the site. This fallback is incomplete.
+The 1–5 star range filters each result page by its published score and retains site pagination.
+Vote count is separate and still uses `f.pvotenum` and `t.pvotenum`. Verification blocked
+confirmation of the server-side star range, full option lists, Reviews, score-only sorting
+and the separate MTL Reader filter.

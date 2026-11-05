@@ -31,7 +31,7 @@ import {
   SECTIONS,
   SORT_ORDERS,
   type FilterTaxonomy,
-  type InterruptedChapterList,
+  type ChapterListSnapshot,
   type PageMetadata,
   type RanobesChapterPage,
   type SearchMetadata,
@@ -75,7 +75,8 @@ class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   requestManager = new RanobesInterceptor("ranobes-interceptor");
 
   private taxonomyPromise?: Promise<FilterTaxonomy>;
-  private interruptedChapterList?: InterruptedChapterList;
+  private interruptedChapterList?: ChapterListSnapshot;
+  private completedChapterList?: ChapterListSnapshot;
 
   async initialise(): Promise<void> {
     this.mainRateLimiter.registerInterceptor();
@@ -175,8 +176,17 @@ class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
     const page = metadata?.page ?? 1;
     const path = buildSearchPath(query.title, query.metadata, sortingOption) ?? "/novels/";
     const $ = cheerio.load(await fetchListingPage(path, page));
+    const { starsFrom, starsTo } = query.metadata ?? {};
+    const listings = parseListings($, "stories");
+    const filtered =
+      starsFrom !== undefined || starsTo !== undefined
+        ? listings.filter(
+            ({ rating }) =>
+              rating !== undefined && rating >= (starsFrom ?? 1) && rating <= (starsTo ?? 5),
+          )
+        : listings;
     return {
-      items: parseListings($, "stories").map(toSearchResult),
+      items: filtered.map(toSearchResult),
       metadata: isLastListingPage($) ? undefined : { page: page + 1 },
     };
   }
@@ -197,6 +207,19 @@ class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
       (firstPage.count_all && firstPage.limit
         ? Math.ceil(firstPage.count_all / firstPage.limit)
         : 1);
+    const completed = this.completedChapterList;
+    if (
+      completed?.novelId === novelId &&
+      completed.expiresAt > Date.now() &&
+      completed.pages.length === pageCount &&
+      sameChapterPage(firstPage, completed.pages[0])
+    ) {
+      return parseChapters([firstPage, ...completed.pages.slice(1)], sourceManga);
+    }
+    if (completed?.novelId === novelId || (completed && completed.expiresAt <= Date.now())) {
+      this.completedChapterList = undefined;
+    }
+
     let pages = [firstPage];
     const interrupted = this.interruptedChapterList;
     if (interrupted && interrupted.expiresAt <= Date.now()) {
@@ -226,6 +249,9 @@ class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
       throw new Error(
         `Ranobes: loaded ${chapters.length} of ${firstPage.count_all} chapters for ${sourceManga.mangaId}`,
       );
+    }
+    if (pages.length > 1) {
+      this.completedChapterList = { novelId, pages, expiresAt: Date.now() + 2 * 60_000 };
     }
     return chapters;
   }

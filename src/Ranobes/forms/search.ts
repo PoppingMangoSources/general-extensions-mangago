@@ -7,6 +7,7 @@ import {
   InputRow,
   Section,
   SelectRow,
+  StepperRow,
   ToggleRow,
   TriStateSelectRow,
   type FormSectionElement,
@@ -50,34 +51,46 @@ export class RanobesAdvancedSearchForm extends AdvancedSearchForm {
 
   override getSections(): FormSectionElement<unknown>[] {
     return [
-      Section({ id: "genres", footer: "Tap once to include, twice to exclude." }, [
-        TriStateSelectRow("genres", {
-          title: "Genres",
-          layout: "flow",
-          value: this.searchMetadata.genres ?? {},
-          items: this.taxonomy.genres,
-          allowExclusion: true,
-          allowEmptySelection: true,
-          onValueChange: Application.Selector(
-            this as RanobesAdvancedSearchForm,
-            "handleGenresChange",
-          ),
-        }),
-      ]),
-      Section({ id: "events", footer: "Tap once to include, twice to exclude." }, [
-        TriStateSelectRow("events", {
-          title: "Tags",
-          layout: "list",
-          value: this.searchMetadata.events ?? {},
-          items: this.taxonomy.events,
-          allowExclusion: true,
-          allowEmptySelection: true,
-          onValueChange: Application.Selector(
-            this as RanobesAdvancedSearchForm,
-            "handleEventsChange",
-          ),
-        }),
-      ]),
+      Section(
+        {
+          id: "genres",
+          footer: "Tap once to include, twice to exclude, and a third time to clear.",
+        },
+        [
+          TriStateSelectRow("genres", {
+            title: "Genres",
+            layout: "flow",
+            value: this.searchMetadata.genres ?? {},
+            items: this.taxonomy.genres,
+            allowExclusion: true,
+            allowEmptySelection: true,
+            onValueChange: Application.Selector(
+              this as RanobesAdvancedSearchForm,
+              "handleGenresChange",
+            ),
+          }),
+        ],
+      ),
+      Section(
+        {
+          id: "events",
+          footer: "Tap once to include, twice to exclude, and a third time to clear.",
+        },
+        [
+          TriStateSelectRow("events", {
+            title: "Tags",
+            layout: "list",
+            value: this.searchMetadata.events ?? {},
+            items: this.taxonomy.events,
+            allowExclusion: true,
+            allowEmptySelection: true,
+            onValueChange: Application.Selector(
+              this as RanobesAdvancedSearchForm,
+              "handleEventsChange",
+            ),
+          }),
+        ],
+      ),
       Section("years", [
         InputRow("year_from", {
           title: "Year of Release From",
@@ -96,20 +109,26 @@ export class RanobesAdvancedSearchForm extends AdvancedSearchForm {
           ),
         }),
       ]),
-      Section({ id: "languages", footer: "Tap once to include, twice to exclude." }, [
-        TriStateSelectRow("languages", {
-          title: "Languages",
-          layout: "flow",
-          value: this.searchMetadata.languages ?? {},
-          items: LANGUAGE_OPTIONS,
-          allowExclusion: true,
-          allowEmptySelection: true,
-          onValueChange: Application.Selector(
-            this as RanobesAdvancedSearchForm,
-            "handleLanguagesChange",
-          ),
-        }),
-      ]),
+      Section(
+        {
+          id: "languages",
+          footer: "Tap once to include, twice to exclude, and a third time to clear.",
+        },
+        [
+          TriStateSelectRow("languages", {
+            title: "Languages",
+            layout: "flow",
+            value: this.searchMetadata.languages ?? {},
+            items: LANGUAGE_OPTIONS,
+            allowExclusion: true,
+            allowEmptySelection: true,
+            onValueChange: Application.Selector(
+              this as RanobesAdvancedSearchForm,
+              "handleLanguagesChange",
+            ),
+          }),
+        ],
+      ),
       Section("statuses", [
         SelectRow("translation_status", {
           title: "Translate Status",
@@ -172,96 +191,59 @@ export class RanobesAdvancedSearchForm extends AdvancedSearchForm {
           ),
         }),
       ]),
-      this.taxonomy.authors.length
-        ? this.peopleSection(
-            "authors",
-            "Authors",
-            this.taxonomy.authors,
-            this.searchMetadata.authors,
-            this.searchMetadata.excludedAuthors,
-            Application.Selector(this as RanobesAdvancedSearchForm, "handleAuthorsSelection"),
-          )
-        : Section("authors", [
-            InputRow("authors", {
-              title: "Authors",
-              value: this.legacyNames(this.searchMetadata.authors, "included"),
-              onValueChange: Application.Selector(
-                this as RanobesAdvancedSearchForm,
-                "handleAuthorsChange",
-              ),
-            }),
-            InputRow("excluded_authors", {
-              title: "Exclude Authors",
-              value:
-                this.legacyNames(this.searchMetadata.authors, "excluded") ||
-                this.searchMetadata.excludedAuthors ||
-                "",
-              onValueChange: Application.Selector(
-                this as RanobesAdvancedSearchForm,
-                "handleExcludedAuthorsChange",
-              ),
-            }),
-          ]),
-      this.taxonomy.translators.length
-        ? this.peopleSection(
-            "translators",
-            "Translators",
-            this.taxonomy.translators,
-            this.searchMetadata.translators,
-            this.searchMetadata.excludedTranslators,
-            Application.Selector(this as RanobesAdvancedSearchForm, "handleTranslatorsSelection"),
-          )
-        : Section("translators", [
-            InputRow("translators", {
-              title: "Translators",
-              value: this.legacyNames(this.searchMetadata.translators, "included"),
-              onValueChange: Application.Selector(
-                this as RanobesAdvancedSearchForm,
-                "handleTranslatorsChange",
-              ),
-            }),
-            InputRow("excluded_translators", {
-              title: "Exclude Translators",
-              value:
-                this.legacyNames(this.searchMetadata.translators, "excluded") ||
-                this.searchMetadata.excludedTranslators ||
-                "",
-              onValueChange: Application.Selector(
-                this as RanobesAdvancedSearchForm,
-                "handleExcludedTranslatorsChange",
-              ),
-            }),
-          ]),
-      this.taxonomy.publishers.length
-        ? this.peopleSection(
-            "publishers",
-            "Publishers",
-            this.taxonomy.publishers,
-            this.searchMetadata.publishers,
-            this.searchMetadata.excludedPublishers,
-            Application.Selector(this as RanobesAdvancedSearchForm, "handlePublishersSelection"),
-          )
-        : Section("publishers", [
-            InputRow("publishers", {
-              title: "Publishers",
-              value: this.legacyNames(this.searchMetadata.publishers, "included"),
-              onValueChange: Application.Selector(
-                this as RanobesAdvancedSearchForm,
-                "handlePublishersChange",
-              ),
-            }),
-            InputRow("excluded_publishers", {
-              title: "Exclude Publishers",
-              value:
-                this.legacyNames(this.searchMetadata.publishers, "excluded") ||
-                this.searchMetadata.excludedPublishers ||
-                "",
-              onValueChange: Application.Selector(
-                this as RanobesAdvancedSearchForm,
-                "handleExcludedPublishersChange",
-              ),
-            }),
-          ]),
+      Section(
+        { id: "stars", footer: "Filters each results page using its published star scores." },
+        [
+          StepperRow("stars_from", {
+            title: "Minimum Stars",
+            value: this.searchMetadata.starsFrom ?? 1,
+            minValue: 1,
+            maxValue: 5,
+            stepValue: 0.1,
+            loopOver: false,
+            onValueChange: Application.Selector(
+              this as RanobesAdvancedSearchForm,
+              "handleStarsFromChange",
+            ),
+          }),
+          StepperRow("stars_to", {
+            title: "Maximum Stars",
+            value: this.searchMetadata.starsTo ?? 5,
+            minValue: 1,
+            maxValue: 5,
+            stepValue: 0.1,
+            loopOver: false,
+            onValueChange: Application.Selector(
+              this as RanobesAdvancedSearchForm,
+              "handleStarsToChange",
+            ),
+          }),
+        ],
+      ),
+      this.peopleSection(
+        "authors",
+        "Authors",
+        this.taxonomy.authors,
+        this.searchMetadata.authors,
+        this.searchMetadata.excludedAuthors,
+        Application.Selector(this as RanobesAdvancedSearchForm, "handleAuthorsSelection"),
+      ),
+      this.peopleSection(
+        "translators",
+        "Translators",
+        this.taxonomy.translators,
+        this.searchMetadata.translators,
+        this.searchMetadata.excludedTranslators,
+        Application.Selector(this as RanobesAdvancedSearchForm, "handleTranslatorsSelection"),
+      ),
+      this.peopleSection(
+        "publishers",
+        "Publishers",
+        this.taxonomy.publishers,
+        this.searchMetadata.publishers,
+        this.searchMetadata.excludedPublishers,
+        Application.Selector(this as RanobesAdvancedSearchForm, "handlePublishersSelection"),
+      ),
       Section("translation_types", [
         ToggleRow("only_translated", {
           title: "Only TL",
@@ -322,25 +304,20 @@ export class RanobesAdvancedSearchForm extends AdvancedSearchForm {
         }
       }
     }
-    return Section(key, [
-      TriStateSelectRow(key, {
-        title,
-        layout: "list",
-        items: [...choices.values()],
-        value,
-        allowExclusion: true,
-        allowEmptySelection: true,
-        onValueChange,
-      }),
-    ]);
-  }
-
-  private legacyNames(selection: SearchMetadata["authors"], state: TriState[string]): string {
-    if (typeof selection !== "object") return state === "included" ? (selection ?? "") : "";
-    return Object.entries(selection)
-      .filter(([, value]) => value === state)
-      .map(([id]) => decodeURIComponent(id))
-      .join(", ");
+    return Section(
+      { id: key, footer: "Tap once to include, twice to exclude, and a third time to clear." },
+      [
+        TriStateSelectRow(key, {
+          title,
+          layout: "list",
+          items: [...choices.values()],
+          value,
+          allowExclusion: true,
+          allowEmptySelection: true,
+          onValueChange,
+        }),
+      ],
+    );
   }
 
   async handleResetFilters(): Promise<void> {
@@ -373,10 +350,6 @@ export class RanobesAdvancedSearchForm extends AdvancedSearchForm {
 
   private async digitOnlyChange(key: keyof SearchMetadata, value: string): Promise<void> {
     this.setMetadata(key, value.replace(/\D/g, "") || undefined);
-  }
-
-  private async trimChange(key: keyof SearchMetadata, value: string): Promise<void> {
-    this.setMetadata(key, value.trim() || undefined);
   }
 
   private async booleanChange(key: keyof SearchMetadata, value: boolean): Promise<void> {
@@ -427,64 +400,12 @@ export class RanobesAdvancedSearchForm extends AdvancedSearchForm {
     return this.digitOnlyChange("ratingsTo", value);
   }
 
-  async handleAuthorsChange(value: string): Promise<void> {
-    if (typeof this.searchMetadata.authors === "object") {
-      this.setMetadata(
-        "excludedAuthors",
-        this.legacyNames(this.searchMetadata.authors, "excluded") || undefined,
-      );
-    }
-    return this.trimChange("authors", value);
+  async handleStarsFromChange(value: number): Promise<void> {
+    this.setMetadata("starsFrom", value > 1 ? value : undefined);
   }
 
-  async handleExcludedAuthorsChange(value: string): Promise<void> {
-    if (typeof this.searchMetadata.authors === "object") {
-      this.setMetadata(
-        "authors",
-        this.legacyNames(this.searchMetadata.authors, "included") || undefined,
-      );
-    }
-    return this.trimChange("excludedAuthors", value);
-  }
-
-  async handleTranslatorsChange(value: string): Promise<void> {
-    if (typeof this.searchMetadata.translators === "object") {
-      this.setMetadata(
-        "excludedTranslators",
-        this.legacyNames(this.searchMetadata.translators, "excluded") || undefined,
-      );
-    }
-    return this.trimChange("translators", value);
-  }
-
-  async handleExcludedTranslatorsChange(value: string): Promise<void> {
-    if (typeof this.searchMetadata.translators === "object") {
-      this.setMetadata(
-        "translators",
-        this.legacyNames(this.searchMetadata.translators, "included") || undefined,
-      );
-    }
-    return this.trimChange("excludedTranslators", value);
-  }
-
-  async handlePublishersChange(value: string): Promise<void> {
-    if (typeof this.searchMetadata.publishers === "object") {
-      this.setMetadata(
-        "excludedPublishers",
-        this.legacyNames(this.searchMetadata.publishers, "excluded") || undefined,
-      );
-    }
-    return this.trimChange("publishers", value);
-  }
-
-  async handleExcludedPublishersChange(value: string): Promise<void> {
-    if (typeof this.searchMetadata.publishers === "object") {
-      this.setMetadata(
-        "publishers",
-        this.legacyNames(this.searchMetadata.publishers, "included") || undefined,
-      );
-    }
-    return this.trimChange("excludedPublishers", value);
+  async handleStarsToChange(value: number): Promise<void> {
+    this.setMetadata("starsTo", value < 5 ? value : undefined);
   }
 
   async handleOnlyTranslatedChange(value: boolean): Promise<void> {
