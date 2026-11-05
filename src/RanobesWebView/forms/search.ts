@@ -192,7 +192,7 @@ export class RanobesAdvancedSearchForm extends AdvancedSearchForm {
         }),
       ]),
       Section(
-        { id: "stars", footer: "Filters each results page using its published star scores." },
+        { id: "stars", footer: "Ranobes filters by star score separately from vote count." },
         [
           StepperRow("stars_from", {
             title: "Minimum Stars",

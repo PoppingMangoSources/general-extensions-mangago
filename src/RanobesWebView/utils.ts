@@ -5,6 +5,11 @@ import { cookieStorage, getRanobesUserAgent } from "./network";
 
 export const fetchChapterPagesInWebView = async (urls: string[]): Promise<string[]> => {
   const baseUrl = urls[0];
+  // The WebView bridge requires expires even for session cookies.
+  const sessionExpiry = new Date(Date.now() + 5 * 60_000);
+  const cookies = cookieStorage
+    .cookiesForUrl(baseUrl)
+    .map((cookie) => (cookie.expires ? cookie : { ...cookie, expires: sessionExpiry }));
   const execution = await Application.executeInWebView({
     source: {
       baseUrl,
@@ -36,7 +41,7 @@ export const fetchChapterPagesInWebView = async (urls: string[]): Promise<string
       </script>`,
     },
     inject: "return window.__ranobesChapterPages;",
-    storage: { cookies: cookieStorage.cookiesForUrl(baseUrl) },
+    storage: { cookies },
   });
   const { result } = execution;
   if (
