@@ -41,7 +41,8 @@ const hook = registerHooks({
 });
 const { Ranobes } = await import("../../src/Ranobes/main");
 hook.deregister();
-const { RanobesInterceptor, cookieStorage } = await import("../../src/Ranobes/network");
+const { RanobesInterceptor, cookieStorage, fetchHtml, resetVerificationPrompt } =
+  await import("../../src/Ranobes/network");
 const { parseChapterDetails, parseChapterPage, parseListings, parseMangaDetails } =
   await import("../../src/Ranobes/parsers");
 
@@ -58,7 +59,8 @@ const manga = parseMangaDetails(
   "https://ranobes.net/novels/123-test-novel.html",
 );
 
-void test("opens the challenged chapter-list URL on the observed DDoS-Guard response", async () => {
+void test("opens the challenged chapter-list URL on the observed DDoS-Guard response", async (t) => {
+  t.after(resetVerificationPrompt);
   const interceptor = new RanobesInterceptor("test-ranobes");
   const finalUrl = `${chapterListUrl}page/4/`;
   const body = encode(
@@ -72,6 +74,7 @@ void test("opens the challenged chapter-list URL on the observed DDoS-Guard resp
       error.resolutionRequest.method === "GET" &&
       error.resolutionRequest.headers?.["user-agent"] === "Ranobes test browser",
   );
+  resetVerificationPrompt();
   await assert.rejects(
     interceptor.interceptResponse(
       request,
@@ -80,6 +83,41 @@ void test("opens the challenged chapter-list URL on the observed DDoS-Guard resp
     ),
     CloudflareError,
   );
+});
+
+void test("concurrent Discover requests queue only one verification prompt", async (t) => {
+  const interceptor = new RanobesInterceptor("test-ranobes");
+  t.after(resetVerificationPrompt);
+  const calls: string[] = [];
+  t.mock.method(application, "scheduleRequest", async (request: Request) => {
+    const prepared = await interceptor.interceptRequest(request);
+    calls.push(prepared.url);
+    const blocked = response(prepared.url, 503);
+    const data = await interceptor.interceptResponse(
+      prepared,
+      blocked,
+      encode('<div id="vb-captcha-shell"></div>'),
+    );
+    return [blocked, data];
+  });
+  const results = await Promise.allSettled(
+    ["/", "/", "/updates/", "/ranking/", "/tags/status-trs/Completed/"].map((path) =>
+      fetchHtml(`https://ranobes.net${path}`),
+    ),
+  );
+  assert.equal(results.filter((result) => result.status === "rejected").length, 5);
+  assert.equal(
+    results.filter(
+      (result) => result.status === "rejected" && result.reason instanceof CloudflareError,
+    ).length,
+    1,
+  );
+  const callCount = calls.length;
+  await assert.rejects(fetchHtml(chapterListUrl), /pending Ranobes verification/);
+  assert.equal(calls.length, callCount);
+  await Ranobes.cloudflareBypassCompleted(request, [], {});
+  await assert.rejects(fetchHtml(chapterListUrl), CloudflareError);
+  assert.equal(calls.length, callCount + 1);
 });
 
 void test("passes ordinary chapter text and plain denials through the challenge detector", async () => {
@@ -163,6 +201,44 @@ void test("fetches real chapter pages sequentially and refreshes from page one",
     `${chapterListUrl}page/3/`,
     `${chapterListUrl}page/4/`,
   ]);
+});
+
+void test("resumes page 44 after verification and restarts if the chapter list has shifted", async (t) => {
+  const calls: number[] = [];
+  let blocked = true;
+  let shiftBoundary = false;
+  t.mock.method(application, "scheduleRequest", async ({ url }: Request) => {
+    const page = Number(/\/page\/(\d+)\//.exec(url)?.[1] ?? 1);
+    calls.push(page);
+    if (blocked && page === 44) throw new CloudflareError({ url, method: "GET" });
+    const number = shiftBoundary && page === 43 ? 46 : 45 - page;
+    return [
+      response(url, 200),
+      encode(
+        `<script>window.__DATA__ = ${JSON.stringify({
+          chapters: [{ link: `/test-novel-123/${number}.html`, title: `Chapter ${number}: Test` }],
+          cstart: page,
+          pages_count: 45,
+          count_all: 45,
+        })};</script>`,
+      ),
+    ];
+  });
+
+  await assert.rejects(Ranobes.getChapters(manga), CloudflareError);
+  await Ranobes.cloudflareBypassCompleted(request, [], {});
+  blocked = false;
+  calls.length = 0;
+  assert.equal((await Ranobes.getChapters(manga)).length, 45);
+  assert.deepEqual(calls, [1, 43, 44, 45]);
+
+  blocked = true;
+  await assert.rejects(Ranobes.getChapters(manga), CloudflareError);
+  blocked = false;
+  shiftBoundary = true;
+  calls.length = 0;
+  assert.equal((await Ranobes.getChapters(manga)).length, 45);
+  assert.deepEqual(calls, [1, 43, ...Array.from({ length: 44 }, (_, index) => index + 2)]);
 });
 
 void test("rejects malformed chapter pages before scheduling more requests", () => {

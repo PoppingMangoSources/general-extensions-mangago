@@ -79,6 +79,19 @@ export const buildSearchPath = (
 
 export const cookieStorage = new CookieStorageInterceptor({ storage: "stateManager" });
 
+let verificationPromptUntil = 0;
+
+export const resetVerificationPrompt = (): void => {
+  verificationPromptUntil = 0;
+};
+
+const verificationPendingMessage =
+  "Complete the pending Ranobes verification, then retry. You can also open the site in source settings.";
+
+const checkVerificationPending = (): void => {
+  if (Date.now() < verificationPromptUntil) throw new Error(verificationPendingMessage);
+};
+
 const completeMobileSafariUserAgent = (userAgent: string): string => {
   if (!/\b(?:iPhone|iPad|iPod)\b/.test(userAgent) || /\bSafari\//.test(userAgent)) {
     return userAgent;
@@ -108,6 +121,7 @@ export const storeSessionCookies = (cookies: Cookie[]): void => {
       cookieStorage.setCookie(cookie);
     }
   }
+  resetVerificationPrompt();
 };
 
 const responseHeader = (response: Response, name: string): string => {
@@ -119,6 +133,11 @@ const responseHeader = (response: Response, name: string): string => {
 
 export class RanobesInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
+    if (MIRROR_HOST.test(request.url)) checkVerificationPending();
+    return this.withHeaders(request);
+  }
+
+  private async withHeaders(request: Request): Promise<Request> {
     const origin = request.url.match(MIRROR_HOST)?.[0] ?? DOMAIN;
     return {
       ...request,
@@ -144,8 +163,11 @@ export class RanobesInterceptor extends PaperbackInterceptor {
           Application.arrayBufferToUTF8String(data),
         ));
     if (challenged) {
+      checkVerificationPending();
+      // Paperback has a completion callback but no cancellation callback for this prompt.
+      verificationPromptUntil = Date.now() + 60_000;
       throw new CloudflareError(
-        await this.interceptRequest({
+        await this.withHeaders({
           url: response.url || request.url,
           method: request.method ?? "GET",
         }),
@@ -170,9 +192,17 @@ const responseText = (response: Response, buffer: ArrayBuffer, url: string): str
 const inFlightTextRequests = new Map<string, Promise<string>>();
 
 const requestText = async (url: string): Promise<string> => {
+  checkVerificationPending();
   const key = `GET:${url}`;
   const existing = inFlightTextRequests.get(key);
-  if (existing) return existing;
+  if (existing) {
+    try {
+      return await existing;
+    } catch (error) {
+      if (error instanceof CloudflareError) throw new Error(verificationPendingMessage);
+      throw error;
+    }
+  }
 
   const promise = (async () => {
     const [response, buffer] = await Application.scheduleRequest({ url, method: "GET" });

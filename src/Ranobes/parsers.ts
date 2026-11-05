@@ -449,6 +449,13 @@ export const parseChapterPage = ($: cheerio.CheerioAPI): RanobesChapterPage => {
   };
 };
 
+export const sameChapterPage = (current: RanobesChapterPage, saved: RanobesChapterPage): boolean =>
+  current.count_all === saved.count_all &&
+  current.pages_count === saved.pages_count &&
+  current.limit === saved.limit &&
+  current.chapters.length === saved.chapters.length &&
+  current.chapters.every((chapter, index) => chapter.link === saved.chapters[index].link);
+
 // Chapter timestamps arrive zoneless; treating them as device-local makes fresh
 // ones render as negative ages. Read as UTC.
 const parseChapterDate = (value: string): Date | undefined => {

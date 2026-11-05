@@ -11,7 +11,7 @@ import {
 } from "@paperback/types";
 
 import { DOMAIN } from "../models";
-import { storeSessionCookies } from "../network";
+import { resetVerificationPrompt, storeSessionCookies } from "../network";
 
 export class RanobesSettingsForm extends Form {
   constructor(
@@ -64,5 +64,6 @@ export class RanobesSettingsForm extends Form {
   // Stale clearance can stall requests; wiping the session lets the next solve start clean.
   async handleResetSession(): Promise<void> {
     this.cookieStorage.cookies = [];
+    resetVerificationPrompt();
   }
 }

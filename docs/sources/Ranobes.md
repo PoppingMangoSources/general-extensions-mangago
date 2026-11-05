@@ -26,12 +26,23 @@ cookies without an expiry are available to the active store and are dropped when
 state. A fixture verifies cookie forwarding after the callback. Completion of the prompt and the
 first successful native retry require a device check.
 
+The iPhone log shows separate verification requests for the homepage, updates, rankings, and
+completed titles. The source now reports only one verification request across concurrent calls.
+Other calls stop with a normal pending-verification error. Completion or a source-settings reset
+clears that state. The prompt can be requested again after one minute if it was dismissed.
+The same log shows a top-level `return` syntax error from Paperback's verification WebView
+on chapter-list page 44. Ranobes supplies the URL and headers to that flow. It supplies no script.
+
 ## Chapter lists and reader
 
 The first `/chapters/<id>/` response supplies the page count, or the total and page size. Fetch
 subsequent `/page/<n>/` routes sequentially under the SDK limiter, which starts one non-image
 request per second. Require chapter rows and valid pagination fields before continuing. An
-interrupted crawl restarts at page 1 because newer chapters can shift the page boundaries.
+interrupted crawl keeps the most recent partial list in memory for ten minutes. On retry, compare
+the first and last saved page with the current site before reusing the saved pages. If either
+has changed, fetch the list again from the first page. Successful lists are always fetched fresh.
+On the reported title, the request to page 44 received HTTP 503. After verification, the next
+load got HTTP 200 on pages 1, 2, 48, and 49. That rules out a fixed page-44 ceiling in the log.
 The app's existing title and chapter URLs stay usable as IDs. A missing optional date is omitted
 and a numbered prologue remains chapter zero.
 
@@ -42,7 +53,8 @@ XHTML, so a placeholder cannot hide a real GIF.
 ## Checks
 
 The source's generated live suite lives under `src/tests/`. Offline tests cover the observed
-challenge shape, ordinary chapter text, scoped cookies, fresh sequential lists, invalid chapter
-payloads, and the cover and reader fixes. A protection page at search blocks the remaining live
+challenge shape, concurrent prompt suppression, ordinary chapter text, scoped cookies, fresh
+sequential lists, interrupted chapter lists, invalid payloads, and the cover and reader fixes.
+A protection page at search blocks the remaining live
 suite from obtaining a title. Ranking pagination and search's no-match response still need a
 normal live response before changing their routes.

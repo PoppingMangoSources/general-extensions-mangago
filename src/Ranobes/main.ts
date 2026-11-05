@@ -31,6 +31,7 @@ import {
   SECTIONS,
   SORT_ORDERS,
   type FilterTaxonomy,
+  type InterruptedChapterList,
   type PageMetadata,
   type RanobesChapterPage,
   type SearchMetadata,
@@ -55,6 +56,7 @@ import {
   parseListings,
   parseMangaDetails,
   parseHomepageRated,
+  sameChapterPage,
   toChapterUpdateItem,
   toCompletedItem,
   toFeaturedItem,
@@ -73,6 +75,7 @@ class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
   requestManager = new RanobesInterceptor("ranobes-interceptor");
 
   private taxonomyPromise?: Promise<FilterTaxonomy>;
+  private interruptedChapterList?: InterruptedChapterList;
 
   async initialise(): Promise<void> {
     this.mainRateLimiter.registerInterceptor();
@@ -194,9 +197,29 @@ class RanobesExtension implements ExtensionImpl<typeof RanobesConfig> {
       (firstPage.count_all && firstPage.limit
         ? Math.ceil(firstPage.count_all / firstPage.limit)
         : 1);
-    const pages = [firstPage];
-    for (let page = 2; page <= pageCount; page++) {
-      pages.push(await this.fetchChapterPage(novelId, page));
+    let pages = [firstPage];
+    const interrupted = this.interruptedChapterList;
+    if (interrupted && interrupted.expiresAt <= Date.now()) {
+      this.interruptedChapterList = undefined;
+    } else if (interrupted?.novelId === novelId) {
+      const savedPages = interrupted.pages;
+      if (savedPages.length <= pageCount && sameChapterPage(firstPage, savedPages[0])) {
+        const boundary = await this.fetchChapterPage(novelId, savedPages.length);
+        if (sameChapterPage(boundary, savedPages[savedPages.length - 1])) {
+          pages = [firstPage, ...savedPages.slice(1, -1), boundary];
+        }
+      }
+      if (this.interruptedChapterList === interrupted) this.interruptedChapterList = undefined;
+    }
+    try {
+      for (let page = pages.length + 1; page <= pageCount; page++) {
+        pages.push(await this.fetchChapterPage(novelId, page));
+      }
+    } catch (error) {
+      if (pages.length > 1) {
+        this.interruptedChapterList = { novelId, pages, expiresAt: Date.now() + 10 * 60_000 };
+      }
+      throw error;
     }
     const chapters = parseChapters(pages, sourceManga);
     if (firstPage.count_all && chapters.length < firstPage.count_all) {

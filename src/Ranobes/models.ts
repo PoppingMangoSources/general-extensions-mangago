@@ -179,6 +179,12 @@ export interface RanobesChapterPage {
   limit?: number;
 }
 
+export interface InterruptedChapterList {
+  novelId: string;
+  pages: RanobesChapterPage[];
+  expiresAt: number;
+}
+
 export const LANGUAGE_OPTIONS: OptionItem[] = ["Chinese", "Korean", "English", "Japanese"].map(
   (title) => ({ id: title, title }),
 );
