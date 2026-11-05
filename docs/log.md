@@ -31,3 +31,5 @@
 - 2026-11-05: Ranobes verification detection narrowed to the observed protection response.
   Sequential chapter requests replace the shared crawl cache. Added offline coverage for the
   cookie handoff, chapter refresh, cover URLs, and novel reader images.
+- 2026-11-05: Restored Ranobes to one request per second after the iPhone log showed
+  verification interrupting the faster chapter crawl.

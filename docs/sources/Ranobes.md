@@ -36,8 +36,8 @@ on chapter-list page 44. Ranobes supplies the URL and headers to that flow. It s
 ## Chapter lists and reader
 
 The first `/chapters/<id>/` response supplies the page count, or the total and page size. Fetch
-subsequent `/page/<n>/` routes sequentially under the SDK limiter, which allows up to two non-image
-requests per second. Require chapter rows and valid pagination fields before continuing. An
+subsequent `/page/<n>/` routes sequentially under the SDK limiter, which allows one non-image request
+per second. Require chapter rows and valid pagination fields before continuing. An
 interrupted crawl keeps the most recent partial list in memory for ten minutes. On retry, compare
 the first and last saved page with the current site before reusing the saved pages. If either
 has changed, fetch the list again from the first page. For two hours after a successful multi-page load, reopening the same novel rechecks the first
@@ -45,6 +45,9 @@ page and reuses the remaining pages if the chapter links and pagination still ma
 first page or an expired snapshot triggers a fresh load.
 On the reported title, the request to page 44 received HTTP 503. After verification, the next
 load got HTTP 200 on pages 1, 2, 48, and 49. That rules out a fixed page-44 ceiling in the log.
+At two requests per second, the iPhone log for The First Store System shows HTTP 503 on page 52
+and on page 1 during retries, with the same WebView syntax error. The limiter was restored to
+one request per second.
 The app's existing title and chapter URLs stay usable as IDs. A missing optional date is omitted
 and a numbered prologue remains chapter zero.
 
