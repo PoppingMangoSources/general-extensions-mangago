@@ -237,7 +237,8 @@ export const SECTIONS = {
 export const DISCOVER_SECTIONS: DiscoverSection[] = [
   {
     id: SECTIONS.FEATURED,
-    title: "",
+    title: "Most Popular",
+    subtitle: "The most popular titles in the catalogue",
     type: DiscoverSectionType.featured,
   },
   {

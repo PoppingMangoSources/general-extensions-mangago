@@ -12,6 +12,11 @@ verified_at: pending
 
 # ValirScans
 
+## Discover
+
+The featured carousel uses the homepage's most-popular list. Its section heading is
+Most Popular, with the subtitle The most popular titles in the catalogue.
+
 ## Reader data
 
 The reader route is `/series/<comic|novel>/<slug>/chapter/<number>`. Sending `rsc: 1`
