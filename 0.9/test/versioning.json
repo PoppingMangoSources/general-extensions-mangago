@@ -1,8 +1,8 @@
 {
-  "buildTime": "2026-11-05T10:51:15.884Z",
+  "buildTime": "2026-11-07T05:28:10.318Z",
   "builtWith": {
-    "toolchain": "1.0.0-alpha.92",
-    "types": "1.0.0-alpha.92"
+    "toolchain": "1.0.0-alpha.94",
+    "types": "1.0.0-alpha.94"
   },
   "repository": {
     "name": "PoppingMango Sources",
@@ -34,7 +34,7 @@
     {
       "name": "Chikari",
       "description": "Extension that pulls content from chikari.moe.",
-      "version": "1.0.0-alpha.14",
+      "version": "1.0.0-alpha.15",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "SAFE",
@@ -472,7 +472,7 @@
     {
       "name": "Scans.GG",
       "description": "Extension that pulls content from scans.gg.",
-      "version": "1.0.0-alpha.28",
+      "version": "1.0.0-alpha.29",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
@@ -518,7 +518,7 @@
     {
       "name": "Swarm",
       "description": "Extension that pulls content from swarm.ws.",
-      "version": "1.0.0-alpha.3",
+      "version": "1.0.0-alpha.4",
       "icon": "icon.png",
       "language": "multi",
       "contentRating": "ADULT",
@@ -564,7 +564,7 @@
     {
       "name": "Toonkotsu",
       "description": "Extension that pulls content from toonkotsu.com.",
-      "version": "1.0.0-alpha.28",
+      "version": "1.0.0-alpha.29",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
@@ -587,7 +587,7 @@
     {
       "name": "ValirScans",
       "description": "Extension that pulls comics and novels from valirscans.org.",
-      "version": "1.0.0-alpha.23",
+      "version": "1.0.0-alpha.24",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
@@ -662,7 +662,7 @@
     {
       "name": "XCOMIC",
       "description": "Extension that pulls content from XCOMIC and its mirrors.",
-      "version": "1.0.0-alpha.81",
+      "version": "1.0.0-alpha.82",
       "icon": "icon.png",
       "language": "multi",
       "contentRating": "ADULT",
@@ -685,7 +685,7 @@
     {
       "name": "YaoiMe",
       "description": "Extension that pulls content from yaoi.me.",
-      "version": "1.0.0-alpha.9",
+      "version": "1.0.0-alpha.10",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
