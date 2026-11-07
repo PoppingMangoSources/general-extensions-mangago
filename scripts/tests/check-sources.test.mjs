@@ -90,6 +90,12 @@ void test("deprecated APIs fail", () => {
   assert.ok(
     !rules(withFile("const c = [SourceIntents.SEARCH_RESULT_PROVIDING];\n")).includes("deprecated"),
   );
+  assert.ok(
+    rules(withFile("async getManagedLibraryCollections() { return []; }\n")).includes("deprecated"),
+  );
+  assert.ok(
+    !rules(withFile("async getManagedCollections() { return []; }\n")).includes("deprecated"),
+  );
 });
 
 void test("SelectRow options is a note, items is clean", () => {
@@ -232,6 +238,11 @@ void test("a non-square icon and a missing README entry fail", () => {
   wide.writeUInt32BE(128, 16);
   assert.ok(rules(makeRepo({ "src/Demo/static/icon.png": wide })).includes("icon"));
   assert.ok(rules(makeRepo({ "README.md": "nothing here\n" })).includes("readme"));
+  const shown = makeRepo({
+    "README.md": "| **De.mo** |\n",
+    "src/Demo/pbconfig.ts": `${HEADER}export default { name: "De.mo", version: "1.0.0-alpha.1", language: "en", icon: "icon.png" };\n`,
+  });
+  assert.ok(!rules(shown).includes("readme"), "a README listing the display name passes");
 });
 
 void test("a missing SPDX header fails", () => {

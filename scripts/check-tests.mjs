@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// `paperback-cli test` (toolchain 1.0.0-alpha.92) exits 0 even when tests fail, and silently
+// `paperback-cli test` (toolchain 1.0.0-alpha.94) exits 0 even when tests fail, and silently
 // skips a source with no test file. This reads the --output report and fails on either.
 //
 //   node scripts/check-tests.mjs [--report bundles/tests.json] [Name...]

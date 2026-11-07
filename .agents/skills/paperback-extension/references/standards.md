@@ -139,6 +139,10 @@ src/tests/<Name>.ts   the generated baseline, unchanged [check]
 - Build page lists from a total and a URL template, not a next-page walk (`173bccd`).
 - Novels: `{ type: "html" }` in a namespaced XHTML document, XML-safe entities, void elements
   closed; `contentType: "novel"`. Validate with `xmllint --noout`. **[platform]**
+- `isWebtoon` (types alpha.93) comes from the site's own type or format field in the details
+  payload: true for Manhwa, Manhua, Webtoon or Long Strip, false otherwise. Never derive it from a
+  title, genre tag or language, and do not fetch anything extra for it. A site with only "Comic"
+  or only an origin country leaves it unset. **[platform]**
 - Pass images through untouched; GIFs animate.
 
 ## 7. Ids

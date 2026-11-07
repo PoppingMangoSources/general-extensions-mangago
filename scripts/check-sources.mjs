@@ -45,6 +45,10 @@ const DEPRECATED = [
     /SourceIntents\.(MANGA_CHAPTERS|MANGA_PROGRESS|MANGA_PROGRESS_PROVIDING|DISCOVER_SECIONS|DISCOVER_SECIONS_PROVIDING|COLLECTION_MANAGEMENT|CLOUDFLARE_BYPASS_REQUIRED|SETTINGS_UI|MANGA_SEARCH|SEARCH_RESULTS_PROVIDING)\b/,
     "deprecated SourceIntents name: use the *_PROVIDING name the types recommend",
   ],
+  [
+    /\b(getManagedLibraryCollections|commitManagedCollectionChanges|getSourceMangaInManagedCollection|PartialLibraryItem|LibraryItemSourceLinkProposal|ManagedCollectionChangeset)\b/,
+    "removed in types alpha.93: use getManagedCollections, getManagedCollectionItems and applyManagedCollectionChanges",
+  ],
 ];
 
 export const RULES = {
@@ -379,9 +383,15 @@ export function checkSource(root, name, { base } = {}) {
     }
   }
 
+  // The README lists a source by its display name ("Scans.GG"), which may differ from the id.
   const readme = path.join(root, "README.md");
-  if (fs.existsSync(readme) && !fs.readFileSync(readme, "utf8").includes(name)) {
-    add("readme", readme, undefined, `README.md does not list ${name}`);
+  const shownAs = fs.existsSync(configFile)
+    ? fs.readFileSync(configFile, "utf8").match(/\bname:\s*["'`]([^"'`]*)["'`]/)?.[1]
+    : undefined;
+  if (fs.existsSync(readme)) {
+    const text = fs.readFileSync(readme, "utf8");
+    if (!text.includes(name) && !(shownAs && text.includes(shownAs)))
+      add("readme", readme, undefined, `README.md does not list ${name}`);
   }
 
   if (!fs.existsSync(dir)) return findings;
