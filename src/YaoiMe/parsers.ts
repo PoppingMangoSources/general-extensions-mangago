@@ -367,6 +367,7 @@ export const parseMangaDetails = ($: cheerio.CheerioAPI, mangaId: string): Sourc
       secondaryTitles: secondaryTitle && secondaryTitle !== primaryTitle ? [secondaryTitle] : [],
       contentRating: toContentRating(ratingName ?? ratingFrom(header)),
       contentType: typeName?.toLowerCase() === "novel" ? "novel" : "comic",
+      isWebtoon: /^(?:manhwa|manhua|webtoon)$/i.test(typeName ?? ""),
       status,
       artist: artist || author || undefined,
       author: author || undefined,

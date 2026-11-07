@@ -298,6 +298,7 @@ export const parseMangaDetails = (series: SeriesDto): SourceManga => {
     mangaId: slugId,
     mangaInfo: {
       primaryTitle: Application.decodeHTMLEntities(series.title),
+      isWebtoon: /^(?:manhwa|manhua|webtoon)$/i.test(TYPE_NAMES[series.type ?? 0] ?? ""),
       secondaryTitles,
       thumbnailUrl: buildCoverUrl(series.cover),
       synopsis: stripHtml(series.summary),

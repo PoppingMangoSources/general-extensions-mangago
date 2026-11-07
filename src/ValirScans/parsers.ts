@@ -247,6 +247,7 @@ export const parseMangaDetails = (page: ValirSeriesPage, mangaId: string): Sourc
       synopsis: cleanText(series.description),
       contentRating: toContentRating(series),
       contentType: isNovel(series) ? "novel" : "comic",
+      isWebtoon: /^(?:manhwa|manhua|webtoon)$/i.test(series.type ?? ""),
       status: series.status ? toTitleCase(series.status) : undefined,
       author: cleanText(series.author) || undefined,
       artist: cleanText(series.artist) || undefined,

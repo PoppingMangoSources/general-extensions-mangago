@@ -517,6 +517,7 @@ export const toSourceManga = (
     mangaId,
     mangaInfo: {
       primaryTitle: displayTitle(comic, preferences),
+      isWebtoon: /^(?:manhwa|manhua|webtoon)$/i.test(comic.type ?? ""),
       secondaryTitles: (comic.altNames ?? []).map((title) => Application.decodeHTMLEntities(title)),
       thumbnailUrl: cover,
       synopsis: stripHtml(comic.summary?.html ?? comic.description),

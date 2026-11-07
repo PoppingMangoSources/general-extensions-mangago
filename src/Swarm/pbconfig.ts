@@ -5,7 +5,7 @@ import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/typ
 export default {
   name: "Swarm",
   description: "Extension that pulls content from swarm.ws.",
-  version: "1.0.0-alpha.3",
+  version: "1.0.0-alpha.4",
   icon: "icon.png",
   language: "multi",
   contentRating: ContentRating.ADULT,

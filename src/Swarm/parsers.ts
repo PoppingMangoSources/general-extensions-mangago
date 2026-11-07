@@ -181,6 +181,7 @@ export const parseMangaDetails = (manga: SwarmManga, id: string): SourceManga =>
       status: manga.status,
       contentRating: ratingFor(manga),
       contentType: novel ? "novel" : "comic",
+      isWebtoon: /^(?:manhwa|manhua|webtoon)$/i.test(manga.type ?? ""),
       tagGroups: groups,
       shareUrl: new URL(DOMAIN)
         .setPath(

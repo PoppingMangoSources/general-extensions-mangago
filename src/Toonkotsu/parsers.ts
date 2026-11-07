@@ -264,6 +264,7 @@ export const parseMangaDetails = (
       bannerUrl: banner ? toAbsoluteUrl(banner) : undefined,
       synopsis: cleanText(series.description),
       contentRating: toContentRating(parseRatingId(series)),
+      isWebtoon: /^(?:manhwa|manhua|webtoon)$/i.test(series.type ?? ""),
       status: series.status ? (STATUS_NAMES[series.status] ?? series.status) : undefined,
       author: authors || undefined,
       artist: authors || undefined,

@@ -33,6 +33,7 @@ export const parseMangaDetails = (series: SeriesDetails, medium: Medium): Source
       synopsis: series.description,
       contentRating: toContentRating(series.is_nsfw),
       contentType: medium === "novel" ? "novel" : "comic",
+      isWebtoon: /^(?:manhwa|manhua|webtoon)$/i.test(series.type),
       status: formatSeriesStatus(series.status),
       author: authors || undefined,
       artist: artists || undefined,
