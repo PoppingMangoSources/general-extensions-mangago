@@ -2,7 +2,7 @@
 title: XCOMIC
 type: subsystem
 created: 2026-11-03
-updated: 2026-11-04
+updated: 2026-11-07
 sources:
   - code: src/XCOMIC/models.ts
   - code: src/XCOMIC/network.ts
@@ -12,7 +12,7 @@ sources:
   - ext: https://github.com/Aidoku-Community/sources/tree/main/sources/multi.xcomic
   - ext: https://github.com/keiyoushi/extensions-source/tree/main/src/all/xcomic
   - ext: https://github.com/PoppingMangoSources/popmango-extensions-mana/tree/main/src/XCOMIC
-verified_at: pending
+verified_at: 9d2f1133
 ---
 
 # XCOMIC
@@ -111,3 +111,8 @@ Details use resolved `tagNodes.data.name`, preserving their wording, rather than
 opaque entries from `tags`. The repeated-team title, stable ids, readable tags, and missing
 edition taxonomy are covered in unit tests. The six default live source checks passed for
 1.0.0-alpha.81. Device rendering and end-to-end latency still need an app check.
+
+## Webtoon flag, 2026-11-07
+
+`MangaInfo.isWebtoon` (types alpha.93) comes from the comic's `type`: true for manhwa, manhua and webtoon,
+false otherwise, so the reader scrolls those vertically. Nothing extra is fetched for it.
