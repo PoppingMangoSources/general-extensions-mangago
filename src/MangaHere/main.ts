@@ -44,6 +44,7 @@ import {
   MangaHereInterceptor,
   MangaHereRateLimiter,
   mangaUrl,
+  mobileChapterUrl,
   mobileHomeUrl,
   rankingUrl,
   searchUrl,
@@ -58,6 +59,7 @@ import {
   parseMangaId,
   parseMangaList,
   parseMobileHomeSection,
+  parseMobileChapterPages,
   parseRankingList,
   parseReaderMetadata,
   toChapterUpdateItem,
@@ -440,6 +442,14 @@ export class MangaHereExtension implements ExtensionImpl<typeof MangaHereConfig>
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
     const mangaId = chapter.sourceManga.mangaId;
+    // Some titles are unavailable on the mobile site but still have a desktop reader.
+    try {
+      const mobile = await fetchDocument(mobileChapterUrl(mangaId, chapter.chapterId));
+      const pages = parseMobileChapterPages(mobile);
+      if (pages.length > 0) return { id: chapter.chapterId, mangaId, pages };
+    } catch (error) {
+      if (error instanceof CloudflareError) throw error;
+    }
     const readerUrl = chapterUrl(mangaId, chapter.chapterId);
     const $ = await fetchDocument(readerUrl);
     const metadata = parseReaderMetadata($);

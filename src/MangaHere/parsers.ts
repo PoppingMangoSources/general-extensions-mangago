@@ -66,13 +66,14 @@ const toAbsoluteUrl = (value?: string | null): string => {
   const url = Application.decodeHTMLEntities(value ?? "").trim();
   if (!url) return "";
   if (url.startsWith("//")) return `https:${url}`;
-  if (/^https?:\/\//i.test(url)) return url;
+  if (/^https?:\/\//i.test(url)) return url.replace(/^http:/i, "https:");
   return `${DOMAIN}${url.startsWith("/") ? "" : "/"}${url}`;
 };
 
 const imageUrlFrom = (image: cheerio.Cheerio<AnyNode>): string =>
   toAbsoluteUrl(
-    image.attr("data-src") ??
+    image.attr("data-original") ??
+      image.attr("data-src") ??
       image.attr("data-lazy-src") ??
       image.attr("data-cfsrc") ??
       image.attr("src"),
@@ -382,6 +383,15 @@ export const parseChapters = ($: cheerio.CheerioAPI, sourceManga: SourceManga): 
   }
   return chapters;
 };
+
+export const parseMobileChapterPages = ($: cheerio.CheerioAPI): string[] => [
+  ...new Set(
+    $("#viewer img")
+      .toArray()
+      .map((image) => imageUrlFrom($(image)))
+      .filter((url) => /\/store\/manga\//.test(url)),
+  ),
+];
 
 export const parseReaderMetadata = ($: cheerio.CheerioAPI): ReaderMetadata | undefined => {
   const scripts = $("script:not([src])")

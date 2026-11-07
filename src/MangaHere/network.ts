@@ -34,6 +34,7 @@ export class MangaHereInterceptor extends PaperbackInterceptor {
     const isImage = IMAGE_EXTENSION_REGEX.test(request.url);
     return {
       ...request,
+      url: request.url.replace(/^http:/i, "https:"),
       headers: {
         ...request.headers,
         referer: request.headers?.referer ?? `${DOMAIN}/`,
@@ -70,13 +71,9 @@ export class MangaHereInterceptor extends PaperbackInterceptor {
   }
 }
 
-// The site drops connections under load, which iOS reports as a TLS handshake failure and
-// which rejects the request rather than answering it with a status. Every row of the home
-// page comes from one of four documents, so one dropped connection empties the whole screen
-// until the reader pulls to refresh — and refreshing is what gets it, so it is worth
-// absorbing here instead. A challenge is re-thrown: only a person can clear one.
+// The site sometimes drops connections before sending a response.
 const TRANSPORT_ATTEMPTS = 3;
-const RETRY_BACKOFF_MS = 400;
+const RETRY_BACKOFF_SECONDS = 0.4;
 
 const request = async (options: Request): Promise<[Response, ArrayBuffer]> => {
   for (let attempt = 1; ; attempt++) {
@@ -84,7 +81,7 @@ const request = async (options: Request): Promise<[Response, ArrayBuffer]> => {
       return await Application.scheduleRequest(options);
     } catch (error) {
       if (error instanceof CloudflareError || attempt >= TRANSPORT_ATTEMPTS) throw error;
-      await new Promise((resolve) => setTimeout(resolve, RETRY_BACKOFF_MS * attempt));
+      await Application.sleep(RETRY_BACKOFF_SECONDS * attempt);
     }
   }
 };
@@ -161,6 +158,9 @@ export const mangaUrl = (mangaId: string): string => `${DOMAIN}/manga/${mangaId}
 
 export const chapterUrl = (mangaId: string, chapterId: string): string =>
   `${DOMAIN}/manga/${mangaId}/${chapterId}/1.html`;
+
+export const mobileChapterUrl = (mangaId: string, chapterId: string): string =>
+  `https://m.mangahere.cc/roll_manga/${mangaId}/${chapterId}/1.html`;
 
 export const fetchChapterScript = async (
   readerUrl: string,

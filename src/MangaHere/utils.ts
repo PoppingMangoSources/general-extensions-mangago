@@ -48,7 +48,9 @@ export const parseEmbeddedPages = (script: string): string[] => {
   if (!Array.isArray(pages) || !pages.every((page) => typeof page === "string" && page)) {
     throw new Error("The embedded page list has an invalid shape.");
   }
-  return pages.map((page) => (page.startsWith("//") ? `https:${page}` : page));
+  return pages.map((page) =>
+    page.startsWith("//") ? `https:${page}` : page.replace(/^http:/i, "https:"),
+  );
 };
 
 export const parseReaderSecretKey = (script: string): string => {
@@ -78,7 +80,7 @@ export const parseChapterImageUrl = (script: string): string => {
   if (typeof url !== "string" || !url) {
     throw new Error("No chapter image was found in the reader response.");
   }
-  return url.startsWith("//") ? `https:${url}` : url;
+  return url.startsWith("//") ? `https:${url}` : url.replace(/^http:/i, "https:");
 };
 
 export const validateChapterPages = (pages: string[], expectedCount: number): string[] => {

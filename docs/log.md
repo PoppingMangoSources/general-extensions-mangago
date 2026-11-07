@@ -37,6 +37,8 @@
   following MangaFire and Kitty's XNovel. Native completion remains unverified.
 - 2026-11-07: ValirScans recognizes the current reader props with `kind` before `chapter`,
   fixing missing chapter data while preserving the reader's access flags.
+- 2026-11-07: MangaHere uses the verified mobile roll reader, upgrades HTTP image URLs,
+  and waits through the SDK when retrying dropped connections.
 - 2026-11-07: Toolchain moved to 1.0.0-alpha.94. platform.md records the alpha.93 managed-collection
   rework, `MangaInfo.isWebtoon`, and the URL and test-VM cookie `=` fixes; seven sources set
   `isWebtoon` from their site's own type field.

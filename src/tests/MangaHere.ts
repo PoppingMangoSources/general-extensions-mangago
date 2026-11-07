@@ -6,9 +6,7 @@ import { TestSuite, registerDefaultTests } from "./suite.js";
 
 export async function runTests(logger: TestLogger) {
   const suite = new TestSuite("MangaHere tests", logger);
-  registerDefaultTests(suite, MangaHere, sourceInfo, {
-    mangaProviding: { getMangaDetails: ["tsugumomo"] },
-  });
+  registerDefaultTests(suite, MangaHere, sourceInfo);
 
   await suite.run();
 }
