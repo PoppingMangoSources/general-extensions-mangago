@@ -191,6 +191,9 @@ return `{ changeId, reason }` for the ones that failed and throw only when none 
 `move` into one takes it out of the others. `getManagedLibraryCollections`,
 `commitManagedCollectionChanges`, `getSourceMangaInManagedCollection`, `PartialLibraryItem`,
 `LibraryItemSourceLinkProposal` and `ManagedCollectionChangeset` are gone **[check]**.
+`0.9/test` runs alpha.94; `0.9/stable` stays on alpha.92 because inkdex's MangaDex
+(`implementations/managed-collection/`) still implements the old three methods and fails `tsc`
+on alpha.93+. Move stable once inkdex migrates MangaDex; never patch their source on our stable.
 
 `capabilities` is an array (niclim on #230). The app's sort control has no direction toggle, so a
 site with field and direction lists each combination as one option.
