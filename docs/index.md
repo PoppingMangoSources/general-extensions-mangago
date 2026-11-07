@@ -18,6 +18,7 @@ this wiki's own rules are in [AGENTS.md](AGENTS.md).
 - [Ranobes](sources/Ranobes.md): verification responses, sequential chapter lists and novel XHTML.
 - [Swarm](sources/Swarm.md): period feeds, languages, upload versions and comic/novel reading.
 - [Toonkotsu](sources/Toonkotsu.md): reader keys, WebView session, AES-CTR in TypeScript.
+- [ValirScans](sources/ValirScans.md): Flight reader props, access flags and chapter images.
 - [XCOMIC](sources/XCOMIC.md): edition merging, server deduplication and complete chapter lists.
 - [YaoiMe](sources/YaoiMe.md): advanced search metadata carries `undefined` values (device crash risk).
 

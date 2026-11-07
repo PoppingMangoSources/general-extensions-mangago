@@ -321,7 +321,10 @@ const resolveContentRef = (payload: string, ref: string): string | undefined => 
 
 export const parseChapterDetails = (html: string, chapter: Chapter): ChapterDetails => {
   const payload = decodeFlightPayload(html);
-  const reader = extractByMarker<ValirReaderData>(payload, '{"chapter":', true).find(
+  const reader = [
+    ...extractByMarker<ValirReaderData>(payload, '{"kind":', true),
+    ...extractByMarker<ValirReaderData>(payload, '{"chapter":', true),
+  ].find(
     (candidate) =>
       Array.isArray(candidate.chapter?.pages) || typeof candidate.chapter?.content === "string",
   );
