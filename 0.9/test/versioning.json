@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-11-07T15:01:46.730Z",
+  "buildTime": "2026-11-07T16:09:13.576Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.94",
     "types": "1.0.0-alpha.94"
@@ -221,7 +221,7 @@
     {
       "name": "MangaHere",
       "description": "Extension that pulls content from mangahere.cc.",
-      "version": "1.0.0-alpha.8",
+      "version": "1.0.0-alpha.9",
       "icon": "icons.png",
       "language": "en",
       "contentRating": "ADULT",
