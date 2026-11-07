@@ -28,3 +28,11 @@
 - 2026-11-04: Swarm totals changed to full Chapters/type labels with canonical type casing;
   unknown generic labels omitted. One per uploader is now the default, selecting by site rank
   then numbered copy while preserving explicit settings and separate languages.
+- 2026-11-05: Ranobes verification detection narrowed to the observed protection response.
+  Sequential chapter requests replace the shared crawl cache. Added offline coverage for the
+  cookie handoff, chapter refresh, cover URLs, and novel reader images.
+- 2026-11-05: Restored Ranobes to one request per second after the iPhone log showed
+  verification interrupting the faster chapter crawl.
+- 2026-11-07: Toolchain moved to 1.0.0-alpha.94. platform.md records the alpha.93 managed-collection
+  rework, `MangaInfo.isWebtoon`, and the URL and test-VM cookie `=` fixes; seven sources set
+  `isWebtoon` from their site's own type field.

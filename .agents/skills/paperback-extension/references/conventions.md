@@ -315,15 +315,15 @@ const genres = await (this.genresPromise ??= fetchGenres());
 - **Version scheme `1.0.0-alpha.N`, bumped on every change.** Every modified existing source gets a bump (PR-template requirement); a new source starts at `alpha.1`; a revived source bumps from its old version, not a reset. [policy]
 - **Consistent `capabilities` ordering** across sources. ALL_CAPS constants throughout. Each `SourceIntents` value obliges the class to implement its methods (the compiler enforces this via `ExtensionImpl<typeof pbconfig>`):
 
-  | Capability                     | Required methods                                                                                      | Optional                                                                            |
-  | ------------------------------ | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-  | `CHAPTER_PROVIDING`            | `getChapters`, `getChapterDetails`                                                                    | `processTitlesForUpdates`                                                           |
-  | `DISCOVER_SECTION_PROVIDING`   | `getDiscoverSections`, `getDiscoverSectionItems`                                                      | none                                                                                |
-  | `SEARCH_RESULT_PROVIDING`      | `getSearchResults`                                                                                    | `getSortingOptions`, `getAdvancedSearchForm`                                        |
-  | `SETTINGS_FORM_PROVIDING`      | `getSettingsForm`                                                                                     | none                                                                                |
-  | `CLOUDFLARE_BYPASS_PROVIDING`  | none                                                                                                  | `cloudflareBypassCompleted` (use this; `saveCloudflareBypassCookies` is deprecated) |
-  | `PROGRESS_PROVIDING`           | `getMangaProgressManagementForm`, `getMangaProgress`, `processChapterReadActionQueue`                 | none                                                                                |
-  | `MANAGED_COLLECTION_PROVIDING` | `getManagedLibraryCollections`, `commitManagedCollectionChanges`, `getSourceMangaInManagedCollection` | none                                                                                |
+  | Capability                     | Required methods                                                                                       | Optional                                                                            |
+  | ------------------------------ | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+  | `CHAPTER_PROVIDING`            | `getChapters`, `getChapterDetails`                                                                     | `processTitlesForUpdates`                                                           |
+  | `DISCOVER_SECTION_PROVIDING`   | `getDiscoverSections`, `getDiscoverSectionItems`                                                       | none                                                                                |
+  | `SEARCH_RESULT_PROVIDING`      | `getSearchResults`                                                                                     | `getSortingOptions`, `getAdvancedSearchForm`                                        |
+  | `SETTINGS_FORM_PROVIDING`      | `getSettingsForm`                                                                                      | none                                                                                |
+  | `CLOUDFLARE_BYPASS_PROVIDING`  | none                                                                                                   | `cloudflareBypassCompleted` (use this; `saveCloudflareBypassCookies` is deprecated) |
+  | `PROGRESS_PROVIDING`           | `getMangaProgressManagementForm`, `getMangaProgress`, `processChapterReadActionQueue`                  | none                                                                                |
+  | `MANAGED_COLLECTION_PROVIDING` | `getManagedCollections`, `getManagedCollectionItems`, `applyManagedCollectionChanges` (types alpha.93) | none                                                                                |
 
 - **Single-line import:** `import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/types";`.
 - **Single consistent developers block:** `{ name: "Popmango", github: "https://github.com/PoppingMangoSources" }`. Real, useful support contact, no bare non-copyable URLs.

@@ -2,13 +2,13 @@
 title: YaoiMe
 type: subsystem
 created: 2026-11-02
-updated: 2026-11-04
+updated: 2026-11-07
 sources:
   - code: src/YaoiMe/parsers.ts
   - code: src/YaoiMe/forms.ts
   - code: test/unit/YaoiMe.test.ts
   - ext: https://yaoi.me
-verified_at: pending
+verified_at: 9d2f1133
 ---
 
 # YaoiMe
@@ -38,3 +38,8 @@ subtitle facts. Cover URLs and chapter numbers are derived from the existing pag
 The live Latest check returned 36 valid image URLs, including the site-icon fallback. The
 baseline browse request returned HTTP 403 on this machine, leaving its dependent details,
 chapters and reader tests unverified. This does not establish a reader failure in the app.
+
+## Webtoon flag, 2026-11-07
+
+`MangaInfo.isWebtoon` (types alpha.93) comes from the type shown in the series header: true for manhwa, manhua and webtoon,
+false otherwise, so the reader scrolls those vertically. Nothing extra is fetched for it.

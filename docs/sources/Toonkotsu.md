@@ -2,12 +2,12 @@
 title: Toonkotsu
 type: subsystem
 created: 2026-11-02
-updated: 2026-11-02
+updated: 2026-11-07
 sources:
   - code: src/Toonkotsu/
   - code: test/unit/Toonkotsu.test.ts
   - ext: https://toonkotsu.com
-verified_at: a33af20
+verified_at: 9d2f1133
 ---
 
 # Toonkotsu
@@ -29,3 +29,8 @@ verified_at: a33af20
   would be sent as `false`. Unverified on a device: send `JSON.stringify(body)` when next touched.
 - Reader requests stay inside the WebView session (`executeInWebView`), which `npm test` cannot
   run; the reader is device-only verification.
+
+## Webtoon flag, 2026-11-07
+
+`MangaInfo.isWebtoon` (types alpha.93) comes from the series `type` (`manga`, `manhwa`, `manhua`, `oel`): true for manhwa, manhua and webtoon,
+false otherwise, so the reader scrolls those vertically. Nothing extra is fetched for it.

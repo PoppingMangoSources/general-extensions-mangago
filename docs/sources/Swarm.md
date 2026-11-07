@@ -2,12 +2,12 @@
 title: Swarm
 type: subsystem
 created: 2026-11-04
-updated: 2026-11-04
+updated: 2026-11-07
 sources:
   - code: src/Swarm/
   - code: test/unit/Swarm.test.ts
   - ext: https://swarm.ws
-verified_at: pending
+verified_at: 9d2f1133
 ---
 
 # Swarm
@@ -108,3 +108,8 @@ This revision passed 13 offline source tests and all six baseline live tests. Th
 Villain to the Rescue response contains 694 English uploads; One per uploader keeps 573,
 with the selected upload ids verified against the original response. Native iOS presentation
 and settings interaction remain unverified without a device.
+
+## Webtoon flag, 2026-11-07
+
+`MangaInfo.isWebtoon` (types alpha.93) comes from the series payload's `type`: true for manhwa, manhua and webtoon,
+false otherwise, so the reader scrolls those vertically. Nothing extra is fetched for it.

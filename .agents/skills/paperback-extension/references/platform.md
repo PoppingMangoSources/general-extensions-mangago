@@ -2,8 +2,10 @@
 
 What the toolchain, the test runner and the app actually do, read line by line from
 `Paperback-iOS/paperback-toolchain` branch `0.9` (packages `types`, `toolchain`,
-`runtime-polyfills`, all `1.0.0-alpha.92`, the newest published; npm `latest` still points at
-alpha.64) and from device findings. Tags: **[src]** read in the toolchain source, **[device]**
+`runtime-polyfills`, all `1.0.0-alpha.94`, published under the `alpha` tag; npm `latest` still
+points at alpha.64, so install with `^1.0.0-alpha.94`) and from device findings. alpha.93 reworked
+the managed-collection API, added `MangaInfo.isWebtoon` and fixed `=` inside URL query values and
+test-VM cookie values; alpha.94 only updated dependencies. Tags: **[src]** read in the toolchain source, **[device]**
 probed on a phone (kodama's notes unless named), **[merged]** used by a merged inkdex source.
 Re-check a line against `node_modules/@paperback/*` before building on it.
 
@@ -16,7 +18,7 @@ JavaScriptCore behind a Swift bridge. Anything only the bridge validates passes 
 | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `paperback-cli bundle [--folder f] [--debug] [--tests]`                           | Every `src/<dir>` holding both `pbconfig.ts` and `main.ts` becomes `bundles/<f>/<dir>/index.js` (rolldown, one minified IIFE named `source`, target es2020, every import inlined), plus `info.json` (the pbconfig default export with `id = <dir>`) and a copy of `static/`. Then `versioning.json` (`buildTime`, `builtWith.{toolchain,types}`, `repository.{name,description}` from `package.json`, `sources`) and `index.html`. `--debug` keeps it unminified with inline sourcemaps. |
 | `paperback-cli serve [--port] [--watch]`                                          | Bundles (no folder, no tests, minified) and serves `./bundles` over HTTP with CORS, printing LAN addresses; `--watch` rebuilds 500 ms after a change in `src`. It does not run our homepage theme.                                                                                                                                                                                                                                                                                       |
-| `paperback-cli test [Name] [--generate] [--overwrite] [--output f] [--noConsole]` | Bundles `src/tests/<Name>.ts`, runs it in a VM, writes the report. Exits 0 even when tests fail, and silently skips a source with no test file: read the report with `scripts/check-tests.mjs`.                                                                                                                                                                                                                                                                                          |
+| `paperback-cli test [Name] [--generate] [--overwrite] [--output f] [--noConsole]` | Bundles `src/tests/<Name>.ts`, runs it in a VM, writes the report. Takes at most one name ("Too many arguments" otherwise, alpha.94): loop for several. Exits 0 even when tests fail, and silently skips a source with no test file: read the report with `scripts/check-tests.mjs`.                                                                                                                                                                                                     |
 | `paperback-cli logcat --ip <phone> [--port 27015]`                                | Streams the app's logs over gRPC (`PaperbackLogger.streamLogs`).                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 `engines.node` is `>=24`. A `PDTSourceTester` gRPC service (install and test a source on the
@@ -43,7 +45,7 @@ the published folder (`/0.9/test/`) are part of every install link.
 | Id fields                          | unchecked                                                                                                                                                                                                                                  | every id-typed field (manga, chapter, `Tag.id`, `DiscoverSection.id`, form rows) must match `[a-zA-Z0-9._\-@()[\]%?#+=/&:]`; "Invalid ID `Slice of Life`" crashed a series page [device]                                                                                                                                        |
 | Images                             | the default suite never fetches them                                                                                                                                                                                                       | the app's cover and page requests go through your interceptors [device]                                                                                                                                                                                                                                                         |
 
-alpha.92 also injects Node's `Promise` into the VM, which breaks the 0.8-compat
+Since alpha.92 the VM also injects Node's `Promise`, which breaks the 0.8-compat
 `SearchFilterForm` (`instanceof Promise`): "this.filters.map is not a function" (pirate.vodka).
 Native `AdvancedSearchForm` sources are unaffected.
 
@@ -92,13 +94,18 @@ license header; the repository formatter rewrites it.
 - `CookieStorageInterceptor({ storage: "stateManager" | "memory" })`: id `cookie_store`, state
   key `cookie_store_cookies`. It stores every response `Set-Cookie` itself; **only cookies with an
   `expires` survive a restart**; matching strips a leading `www.`/`.` from the cookie domain and
-  prefers the longest path. `setCookie`, `deleteCookie`, `cookiesForUrl`.
+  prefers the longest path. `setCookie`, `deleteCookie`, `cookiesForUrl`. Before alpha.93 the
+  test VM cut a `Set-Cookie` value at its second `=` (base64 padding) and, because of the space
+  after each `;`, never read `Expires`, `Max-Age` or `Domain`: every cookie got `expires` = now and
+  the response host as its domain. A cookie session that failed only in `npm test` on alpha.92
+  should be retested.
 - `CloudflareError(resolutionRequest, message?)` shows the bypass banner only when the source
   declares `CLOUDFLARE_BYPASS_PROVIDING`.
 - `URL(string)`: one argument; protocol and host required (a relative URL throws).
   `addPathComponent` does not encode; `setQueryItem(key, string[])` repeats the key; values are
-  encoded on `toString()`; an empty `queryItems` leaves a trailing `?`; parsing keeps only the text
-  before a value's second `=` and does not decode `+`.
+  encoded on `toString()`; an empty `queryItems` leaves a trailing `?`; parsing splits each pair on
+  its first `=` only (alpha.93; earlier versions dropped the rest of the value) and does not
+  decode `+`.
 - `Lock`: `lock(id)`/`unlock(id)` helpers.
 
 ## Interfaces [src]
@@ -127,7 +134,9 @@ license header; the repository formatter rewrites it.
 ## Types [src]
 
 - `MangaInfo`: `thumbnailUrl`, `synopsis`, `primaryTitle`, `secondaryTitles`, `contentRating`,
-  `contentType?: "comic" | "novel"`, `status`, `artist`, `author`, `bannerUrl`, `rating`
+  `contentType?: "comic" | "novel"`, `isWebtoon?` (alpha.93: true makes the reader scroll
+  vertically with no page padding unless the reader set those on the title; default false),
+  `status`, `artist`, `author`, `bannerUrl`, `rating`
   (rendered as a percentage of 0..1: a ten-point 9.22 showed as 922% [device]), `tagGroups`,
   `artworkUrls`, `additionalInfo`, `shareUrl`. No language: that is `Chapter.langCode` (an IETF
   code, never a flag; niclim on #246).
@@ -163,16 +172,28 @@ license header; the repository formatter rewrites it.
 
 ## Capabilities [src]
 
-| `SourceIntents`                | Required                                                                                              | Optional                                                    |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| always                         | `initialise`, `getMangaDetails`                                                                       |                                                             |
-| `CHAPTER_PROVIDING`            | `getChapters`, `getChapterDetails`                                                                    | `processTitlesForUpdates`                                   |
-| `DISCOVER_SECTION_PROVIDING`   | `getDiscoverSections`, `getDiscoverSectionItems`                                                      |                                                             |
-| `SEARCH_RESULT_PROVIDING`      | `getSearchResults`                                                                                    | `getSortingOptions`, `getAdvancedSearchForm`                |
-| `SETTINGS_FORM_PROVIDING`      | `getSettingsForm`                                                                                     |                                                             |
-| `CLOUDFLARE_BYPASS_PROVIDING`  |                                                                                                       | `cloudflareBypassCompleted(request, cookies, localStorage)` |
-| `PROGRESS_PROVIDING`           | `getMangaProgressManagementForm`, `getMangaProgress`, `processChapterReadActionQueue`                 |                                                             |
-| `MANAGED_COLLECTION_PROVIDING` | `getManagedLibraryCollections`, `commitManagedCollectionChanges`, `getSourceMangaInManagedCollection` |                                                             |
+| `SourceIntents`                | Required                                                                                                    | Optional                                                    |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| always                         | `initialise`, `getMangaDetails`                                                                             |                                                             |
+| `CHAPTER_PROVIDING`            | `getChapters`, `getChapterDetails`                                                                          | `processTitlesForUpdates`                                   |
+| `DISCOVER_SECTION_PROVIDING`   | `getDiscoverSections`, `getDiscoverSectionItems`                                                            |                                                             |
+| `SEARCH_RESULT_PROVIDING`      | `getSearchResults`                                                                                          | `getSortingOptions`, `getAdvancedSearchForm`                |
+| `SETTINGS_FORM_PROVIDING`      | `getSettingsForm`                                                                                           |                                                             |
+| `CLOUDFLARE_BYPASS_PROVIDING`  |                                                                                                             | `cloudflareBypassCompleted(request, cookies, localStorage)` |
+| `PROGRESS_PROVIDING`           | `getMangaProgressManagementForm`, `getMangaProgress`, `processChapterReadActionQueue`                       |                                                             |
+| `MANAGED_COLLECTION_PROVIDING` | `getManagedCollections`, `getManagedCollectionItems(collections)`, `applyManagedCollectionChanges(changes)` |                                                             |
+
+Managed collections (alpha.93): `getManagedCollectionItems` returns every requested collection's
+`{ collectionId, items }` in one call, so a tracker fetches its library once.
+`applyManagedCollectionChanges` receives `add`, `remove` and `move` changes, each with an `id`;
+return `{ changeId, reason }` for the ones that failed and throw only when none applied.
+`ManagedCollection.exclusiveGroup` marks collections a title can be in only one of: an `add` or
+`move` into one takes it out of the others. `getManagedLibraryCollections`,
+`commitManagedCollectionChanges`, `getSourceMangaInManagedCollection`, `PartialLibraryItem`,
+`LibraryItemSourceLinkProposal` and `ManagedCollectionChangeset` are gone **[check]**.
+`0.9/test` runs alpha.94; `0.9/stable` stays on alpha.92 because inkdex's MangaDex
+(`implementations/managed-collection/`) still implements the old three methods and fails `tsc`
+on alpha.93+. Move stable once inkdex migrates MangaDex; never patch their source on our stable.
 
 `capabilities` is an array (niclim on #230). The app's sort control has no direction toggle, so a
 site with field and direction lists each combination as one option.
@@ -186,8 +207,9 @@ helpers are what inkdex merges.
 
 ## App changes from the developer's beta notes
 
-- r207: the reader can mark a title as a webtoon, but alpha.92 has no field for it: do not invent
-  one. Reader layout and chapter sorting moved into Chapter Settings (all titles, per extension,
+- r207: the reader can mark a title as a webtoon; alpha.93 added `MangaInfo.isWebtoon` for it.
+  Set it from the site's own type or format field (Manhwa, Manhua, Webtoon, Long Strip), never
+  from a title, genre tag or language, and leave it unset when the site says nothing. Reader layout and chapter sorting moved into Chapter Settings (all titles, per extension,
   per title), so a source needs no setting for them.
 - r200: extensions load lazily and quick search runs per source on scroll: keep `initialise`
   cheap. Better JS error reporting: thrown messages reach the user, so make them useful. Developer
