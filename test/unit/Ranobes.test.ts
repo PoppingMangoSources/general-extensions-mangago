@@ -64,21 +64,29 @@ const manga = parseMangaDetails(
   "https://ranobes.net/novels/123-test-novel.html",
 );
 
-void test("opens the challenged chapter-list URL on the observed DDoS-Guard response", async (t) => {
+void test("opens the challenged site's homepage for browser verification", async (t) => {
   t.after(resetVerificationPrompt);
   const interceptor = new RanobesInterceptor("test-ranobes");
   const finalUrl = `${chapterListUrl}page/4/`;
   const body = encode(
     '<title>Just a moment...</title><div id="vb-captcha-shell" class="vb-custom-captcha-shell"></div>',
   );
-  await assert.rejects(
-    interceptor.interceptResponse(request, response(finalUrl, 503, { server: "ddos-guard" }), body),
-    (error: unknown) =>
-      error instanceof CloudflareError &&
-      error.resolutionRequest.url === finalUrl &&
-      error.resolutionRequest.method === "GET" &&
-      error.resolutionRequest.headers?.["user-agent"] === "Ranobes test browser",
-  );
+  for (const [url, homepage] of [
+    [finalUrl, "https://ranobes.net/"],
+    ["https://ranobes.top/chapters/123/page/4/", "https://ranobes.top/"],
+    ["", "https://ranobes.net/"],
+  ]) {
+    resetVerificationPrompt();
+    await assert.rejects(
+      interceptor.interceptResponse(request, response(url, 503, { server: "ddos-guard" }), body),
+      (error: unknown) =>
+        error instanceof CloudflareError &&
+        error.resolutionRequest.url === homepage &&
+        error.resolutionRequest.method === "GET" &&
+        error.resolutionRequest.headers?.referer === homepage &&
+        error.resolutionRequest.headers?.["user-agent"] === "Ranobes test browser",
+    );
+  }
   resetVerificationPrompt();
   await assert.rejects(
     interceptor.interceptResponse(

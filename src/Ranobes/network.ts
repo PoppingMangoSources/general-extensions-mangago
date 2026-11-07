@@ -179,10 +179,11 @@ export class RanobesInterceptor extends PaperbackInterceptor {
       checkVerificationPending();
       // Paperback has a completion callback but no cancellation callback for this prompt.
       verificationPromptUntil = Date.now() + 60_000;
+      const origin = (response.url || request.url).match(MIRROR_HOST)?.[0] ?? DOMAIN;
       throw new CloudflareError(
         await this.withHeaders({
-          url: response.url || request.url,
-          method: request.method ?? "GET",
+          url: `${origin}/`,
+          method: "GET",
         }),
         "Ranobes needs browser verification. Complete the check and retry.",
       );

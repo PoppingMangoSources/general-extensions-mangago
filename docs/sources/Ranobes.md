@@ -2,7 +2,7 @@
 title: Ranobes
 type: subsystem
 created: 2026-11-05
-updated: 2026-11-05
+updated: 2026-11-07
 sources:
   - code: src/Ranobes/
   - code: test/unit/Ranobes.test.ts
@@ -20,7 +20,10 @@ chapter data. A separate browser showed the image-matching prompt. The HTTP prox
 the server header, so the detector recognizes the verification element on 403 or 503 responses.
 The explicit `cf-mitigated: challenge` header still opens the SDK verification flow.
 
-The resolution request uses the response URL and the same request headers as ordinary browsing.
+The resolution request opens the challenged host's homepage with GET and the same browser
+headers as ordinary browsing. This follows MangaFire's merged interceptor and Kitty's XNovel.
+The host comes from the response URL, falling back to the request URL, to keep mirror cookies
+on the host that issued the challenge.
 Keep the cookies returned by Paperback within the SDK store's domain and path scopes. Session
 cookies without an expiry are available to the active store and are dropped when it reloads from
 state. A fixture verifies cookie forwarding after the callback. Completion of the prompt and the
@@ -32,6 +35,10 @@ Other calls stop with a normal pending-verification error. Completion or a sourc
 clears that state. The prompt can be requested again after one minute if it was dismissed.
 The same log shows a top-level `return` syntax error from Paperback's verification WebView
 on chapter-list page 44. Ranobes supplies the URL and headers to that flow. It supplies no script.
+The two-minute completed-list cache and the increase to two requests per second left the
+verification handler identical to alpha.66. The later page-6 report shows the error after the
+limiter returned to one request per second. Alpha.71 tests verification on the homepage instead
+of the chapter-list route. Whether this avoids the native WebView error requires an iPhone test.
 
 ## Chapter lists and reader
 
