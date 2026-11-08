@@ -1,5 +1,5 @@
 {
-  "buildTime": "2026-11-08T09:13:10.819Z",
+  "buildTime": "2026-11-08T12:23:24.280Z",
   "builtWith": {
     "toolchain": "1.0.0-alpha.94",
     "types": "1.0.0-alpha.94"
@@ -244,7 +244,7 @@
     {
       "name": "MangaHome",
       "description": "Extension that pulls content from mangahome.com.",
-      "version": "1.0.0-alpha.9",
+      "version": "1.0.0-alpha.10",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
@@ -266,7 +266,7 @@
     {
       "name": "MangaTown",
       "description": "Extension that pulls content from mangatown.com.",
-      "version": "1.0.0-alpha.11",
+      "version": "1.0.0-alpha.12",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "MATURE",
