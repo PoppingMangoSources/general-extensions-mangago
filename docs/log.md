@@ -45,3 +45,5 @@
   `isWebtoon` from their site's own type field.
 - 2026-11-08: ValirScans' top carousel now uses the site's Trending catalogue and keeps that
   sort through View More pagination, with a Trending heading and subtitle.
+- 2026-11-08: MangaHome and MangaTown upgrade scraped and saved HTTP URLs to HTTPS,
+  including MangaHome's legacy reader output, after iOS transport security failures.

@@ -19,6 +19,7 @@ export class MangaTownInterceptor extends PaperbackInterceptor {
     const isImage = IMAGE_EXTENSION_REGEX.test(request.url);
     return {
       ...request,
+      url: request.url.replace(/^http:/i, "https:"),
       headers: {
         ...request.headers,
         referer: request.headers?.referer ?? `${DOMAIN}/`,

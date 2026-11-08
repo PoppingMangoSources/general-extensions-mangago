@@ -66,7 +66,7 @@ const toAbsoluteUrl = (value?: string | null): string => {
   const url = Application.decodeHTMLEntities(value ?? "").trim();
   if (!url) return "";
   if (url.startsWith("//")) return `https:${url}`;
-  if (/^https?:\/\//i.test(url)) return url;
+  if (/^https?:\/\//i.test(url)) return url.replace(/^http:/i, "https:");
   return `${DOMAIN}${url.startsWith("/") ? "" : "/"}${url}`;
 };
 

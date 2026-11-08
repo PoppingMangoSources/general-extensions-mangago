@@ -180,3 +180,5 @@ export interface MangaListItem {
   chapter?: ListingChapter;
   updatedAt?: Date;
 }
+
+export type RankedMangaListItem = Omit<MangaListItem, "imageUrl"> & { imageUrl?: string };

@@ -35,6 +35,7 @@ import {
   SORT_TOKENS,
   type MangaListItem,
   type PageMetadata,
+  type RankedMangaListItem,
   type SearchMetadata,
   type SearchRequest,
 } from "./models";
@@ -256,20 +257,22 @@ export class MangaHomeExtension implements ExtensionImpl<typeof MangaHomeConfig>
 
   // The rank page omits covers after third place, so complete only those rows
   // from their detail pages and memoize the result for the session.
-  private async hydrateRankImages(items: MangaListItem[]): Promise<MangaListItem[]> {
+  private async hydrateRankImages(items: RankedMangaListItem[]): Promise<MangaListItem[]> {
     const hydrated = [...items];
     let cursor = 0;
     const worker = async (): Promise<void> => {
       while (cursor < hydrated.length) {
         const index = cursor++;
         const item = hydrated[index];
-        if (item.imageUrl.length > 0) continue;
+        if (item.imageUrl) continue;
         const imageUrl = await this.getRankCover(item.mangaId);
         if (imageUrl) hydrated[index] = { ...item, imageUrl };
       }
     };
     await Promise.all(Array.from({ length: Math.min(3, hydrated.length) }, worker));
-    return hydrated.filter((item) => item.imageUrl.length > 0);
+    return hydrated.flatMap((item) =>
+      item.imageUrl ? [{ ...item, imageUrl: item.imageUrl }] : [],
+    );
   }
 
   private getRankCover(mangaId: string): Promise<string> {
@@ -432,7 +435,7 @@ export class MangaHomeExtension implements ExtensionImpl<typeof MangaHomeConfig>
             if (typeof value !== "string" || value.length === 0) return "";
             var link = document.createElement("a");
             link.href = value;
-            return link.href;
+            return link.href.replace(/^http:/i, "https:");
           }
 
           function firstString(value) {
