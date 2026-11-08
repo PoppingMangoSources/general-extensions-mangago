@@ -151,28 +151,37 @@ class ValirScansExtension implements ExtensionImpl<typeof ValirScansConfig> {
     section: DiscoverSection,
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    if (section.id === SECTIONS.NEW_SERIES || section.id === SECTIONS.TOP_RATED) {
+    if (
+      section.id === SECTIONS.FEATURED ||
+      section.id === SECTIONS.NEW_SERIES ||
+      section.id === SECTIONS.TOP_RATED
+    ) {
       const page = metadata?.page ?? 1;
       const browse = parseBrowsePage(
         await fetchBrowsePage(
           page,
           undefined,
-          section.id === SECTIONS.TOP_RATED ? "rating" : "newest",
+          section.id === SECTIONS.FEATURED
+            ? "trending"
+            : section.id === SECTIONS.TOP_RATED
+              ? "rating"
+              : "newest",
         ),
       );
       return {
-        items: toCarouselItems(
-          browse.series,
-          section.id === SECTIONS.TOP_RATED ? "prominentCarouselItem" : "simpleCarouselItem",
-        ),
+        items:
+          section.id === SECTIONS.FEATURED
+            ? toFeaturedItems(browse.series)
+            : toCarouselItems(
+                browse.series,
+                section.id === SECTIONS.TOP_RATED ? "prominentCarouselItem" : "simpleCarouselItem",
+              ),
         metadata: browse.hasMore ? { page: page + 1 } : undefined,
       };
     }
 
     const home = await this.getHomeSections();
     switch (section.id) {
-      case SECTIONS.FEATURED:
-        return { items: toFeaturedItems(home.mostPopular) };
       case SECTIONS.EDITORS_PICKS:
         return { items: toCarouselItems(home.editorsPicks, "prominentCarouselItem") };
       case SECTIONS.LATEST_COMICS:

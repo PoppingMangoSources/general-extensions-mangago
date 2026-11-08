@@ -89,7 +89,6 @@ export interface HomeSections {
   editorsPicks: ValirSeries[];
   latestUpdates: ValirSeries[];
   popularToday: ValirSeries[];
-  mostPopular: ValirSeries[];
 }
 
 export interface FilterOption {
@@ -237,8 +236,8 @@ export const SECTIONS = {
 export const DISCOVER_SECTIONS: DiscoverSection[] = [
   {
     id: SECTIONS.FEATURED,
-    title: "Most Popular",
-    subtitle: "The most popular titles in the catalogue",
+    title: "Trending",
+    subtitle: "The titles trending on ValirScans",
     type: DiscoverSectionType.featured,
   },
   {

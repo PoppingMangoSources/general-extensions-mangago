@@ -6,12 +6,17 @@ import { readFileSync } from "node:fs";
 import { registerHooks, stripTypeScriptTypes } from "node:module";
 import test from "node:test";
 
-import { ContentRating, type Chapter } from "@paperback/types";
+import { ContentRating, type Chapter, type Request, type Response } from "@paperback/types";
 
-Object.defineProperty(globalThis, "Application", {
-  configurable: true,
-  value: { getState: () => undefined },
-});
+const application = {
+  getState: () => undefined,
+  decodeHTMLEntities: (value: string) => value,
+  arrayBufferToUTF8String: (value: ArrayBuffer) => new TextDecoder().decode(value),
+  scheduleRequest: async (_request: Request): Promise<[Response, ArrayBuffer]> => {
+    throw new Error("Unexpected network request");
+  },
+};
+Object.defineProperty(globalThis, "Application", { configurable: true, value: application });
 
 const hook = registerHooks({
   load(url, context, nextLoad) {
@@ -29,6 +34,7 @@ const hook = registerHooks({
   },
 });
 const { parseChapterDetails } = await import("../../src/ValirScans/parsers");
+const { ValirScans } = await import("../../src/ValirScans/main");
 hook.deregister();
 
 const chapter: Chapter = {
@@ -101,5 +107,65 @@ void test("rejects locked and empty readers with current props", () => {
   assert.throws(
     () => parseChapterDetails('{"kind":"comic","chapter":{"pages":[]}}', chapter),
     /has no readable content/,
+  );
+});
+
+void test("pages Trending through the catalogue API and preserves the other carousel sorts", async (t) => {
+  const requests: URL[] = [];
+  t.mock.method(
+    application,
+    "scheduleRequest",
+    async ({ url }: Request): Promise<[Response, ArrayBuffer]> => {
+      const request = new URL(url);
+      requests.push(request);
+      const page = Number(request.searchParams.get("page"));
+      return [
+        { url, status: 200, headers: {}, cookies: [] },
+        new TextEncoder().encode(
+          JSON.stringify({
+            data: [
+              {
+                slug: `title-${page}`,
+                title: `Title ${page}`,
+                coverImage: "https://valirscans.org/cover.webp",
+              },
+            ],
+            meta: { hasMore: page === 1 },
+          }),
+        ).buffer,
+      ];
+    },
+  );
+  const sections = await ValirScans.getDiscoverSections();
+  const featured = sections.find((section) => section.id === "featured");
+  assert.ok(featured);
+  assert.equal(featured.title, "Trending");
+  assert.ok(featured.subtitle);
+  const first = await ValirScans.getDiscoverSectionItems(featured, undefined);
+  assert.deepEqual(first.metadata, { page: 2 });
+  assert.equal(first.items[0].type, "featuredCarouselItem");
+  assert.equal(first.items[0].mangaId, "comic/title-1");
+  const second = await ValirScans.getDiscoverSectionItems(featured, first.metadata);
+  assert.equal(second.metadata, undefined);
+  assert.equal(second.items[0].type, "featuredCarouselItem");
+  assert.equal(second.items[0].mangaId, "comic/title-2");
+  for (const id of ["top-rated", "new-series"]) {
+    const section = sections.find((candidate) => candidate.id === id);
+    assert.ok(section);
+    await ValirScans.getDiscoverSectionItems(section, undefined);
+  }
+  assert.deepEqual(
+    requests.map((request) => [
+      request.pathname,
+      request.searchParams.get("sort"),
+      request.searchParams.get("page"),
+      request.searchParams.get("order"),
+    ]),
+    [
+      ["/api/series", "trending", "1", "desc"],
+      ["/api/series", "trending", "2", "desc"],
+      ["/api/series", "rating", "1", "desc"],
+      ["/api/series", "newest", "1", "desc"],
+    ],
   );
 });

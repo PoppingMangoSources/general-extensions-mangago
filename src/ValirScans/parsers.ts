@@ -168,10 +168,6 @@ export const parseHomeSections = (html: string): HomeSections => {
       seriesLists.find((list) => "viewCount" in list[0] && !("createdAt" in list[0])) ?? [],
     latestUpdates: seriesLists.find((list) => "lastChapterAt" in list[0]) ?? [],
     popularToday: extractByMarker<ValirSeries[]>(payload, '"novels":')[0] ?? [],
-    // The Top 10 component supplies its ranked cards in a single rows prop.
-    mostPopular: (extractByMarker<ValirSeries[]>(payload, '"rows":')[0] ?? []).filter(
-      isValirSeries,
-    ),
   };
 };
 

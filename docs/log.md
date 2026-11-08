@@ -43,3 +43,5 @@
 - 2026-11-07: Toolchain moved to 1.0.0-alpha.94. platform.md records the alpha.93 managed-collection
   rework, `MangaInfo.isWebtoon`, and the URL and test-VM cookie `=` fixes; seven sources set
   `isWebtoon` from their site's own type field.
+- 2026-11-08: ValirScans' top carousel now uses the site's Trending catalogue and keeps that
+  sort through View More pagination, with a Trending heading and subtitle.

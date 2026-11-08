@@ -2,7 +2,7 @@
 title: ValirScans
 type: subsystem
 created: 2026-11-07
-updated: 2026-11-07
+updated: 2026-11-08
 sources:
   - code: src/ValirScans/
   - code: test/unit/ValirScans.test.ts
@@ -14,8 +14,11 @@ verified_at: pending
 
 ## Discover
 
-The featured carousel uses the homepage's most-popular list. Its section heading is
-Most Popular, with the subtitle The most popular titles in the catalogue.
+The featured carousel uses the Trending catalogue at `/series?sort=trending`, fetched through
+`/api/series?page=1&limit=24&mode=all&sort=trending&order=desc`. Its section heading is Trending,
+with the subtitle The titles trending on ValirScans. View More keeps the same sort when paging.
+The first titles matched the site's Trending page on 2026-11-08. The saved section id remains
+`featured`.
 
 ## Reader data
 
