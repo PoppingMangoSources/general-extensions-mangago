@@ -43,7 +43,7 @@ on inventing positional chapter IDs does not apply here.
 - **Latest-release labels and native reader IDs are distinct.** Listing responses usually omit
   `chapter_names` but supply `latest_release`. Parse an explicit `Chapter N` or `Ch. N` into
   `Ch. N` on cards, preferring it to the total. If it says `Unknown` or `9 hours ago`, keep
-  `N Chs` rather than invent a chapter number. These site-supplied release labels can be stale:
+  `N Chapters` rather than invent a chapter number. These site-supplied release labels can be stale:
   Two Worlds returned `total_chapters: "3"` and `latest_release: "Chapter 134 ..."`; native
   chapter 3 returned HTTP 200 but chapter 134 returned 404. The Extra's Odyssey had
   `total_chapters: "226"` and stale `latest_release: "Chapter 3 ..."`. Keep update links

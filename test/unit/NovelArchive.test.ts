@@ -110,7 +110,7 @@ void test("listing totals are labeled as totals and invalid cards are omitted", 
     { ...novel, cover_url: "" },
   ]);
   assert.equal(items.length, 1);
-  assert.equal(toSearchResultItem(items[0]).subtitle, "226 Chs • ★ 4.5");
+  assert.equal(toSearchResultItem(items[0]).subtitle, "226 Chapters • ★ 4.5");
 });
 
 void test("latest release labels distinguish chapter numbers from totals and elapsed time", () => {
@@ -120,8 +120,8 @@ void test("latest release labels distinguish chapter numbers from totals and ela
     ["Vol 7 Chapter 38", "5950", "Ch. 38 • ★ 4.5"],
     ["Ch. #12.5", "20", "Ch. 12.5 • ★ 4.5"],
     ["Chapter 0 - Prologue", "1", "Ch. 0 • ★ 4.5"],
-    ["9 hours ago", "1766", "1766 Chs • ★ 4.5"],
-    ["Unknown", "226", "226 Chs • ★ 4.5"],
+    ["9 hours ago", "1766", "1766 Chapters • ★ 4.5"],
+    ["Unknown", "226", "226 Chapters • ★ 4.5"],
   ] as const) {
     const [item] = parseNovelList([{ ...novel, latest_release: release, total_chapters: count }]);
     assert.equal(toSearchResultItem(item).subtitle, expected);

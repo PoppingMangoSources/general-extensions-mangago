@@ -186,7 +186,7 @@ export const toSearchResultItem = (item: NovelListItem) =>
         item.latestChapter != null
           ? `Ch. ${item.latestChapter}`
           : item.chapterCount > 0
-            ? `${item.chapterCount} Chs`
+            ? `${item.chapterCount} Chapters`
             : undefined,
         item.rating != null ? `★ ${item.rating.toFixed(1)}` : undefined,
       ]
