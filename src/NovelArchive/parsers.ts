@@ -113,7 +113,7 @@ const escapeXml = (value: string): string =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
 
-export const parseMangaList = (novels: Novel[]): NovelListItem[] =>
+export const parseNovelList = (novels: Novel[]): NovelListItem[] =>
   novels.flatMap((novel) => {
     const title = decodeText(novel.title);
     if (!title || !String(novel.id ?? "").trim()) return [];
@@ -150,7 +150,7 @@ export const parseMangaList = (novels: Novel[]): NovelListItem[] =>
     ];
   });
 
-export const filterMangaList = (
+export const filterNovelList = (
   items: NovelListItem[],
   genres: TriState,
   hideAdult: boolean,

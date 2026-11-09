@@ -53,3 +53,5 @@
 ## 2026-11-09: NovelArchive audit
 
 Documented the current API, native and mirror IDs, genre/default filtering, reader traps and verified source audit in [NovelArchive](sources/NovelArchive.md).
+
+NovelArchive naming clarification: use `parseNovelList` and `filterNovelList` for the novels-only catalog; retain SDK method names and framework-required form classes.

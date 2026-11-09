@@ -80,6 +80,9 @@ Used the current canonical file layout and free functions. `main.ts` owns orches
 `forms/` settings/search, and `utils.ts` the nontrivial encoding repair. Consolidated the
 listing parser and section mapping; removed the extra dispatch, feed and item wrappers.
 `fetchJSON` follows the merged vocabulary and retains contextual JSON errors with their cause.
+The owner prefers `parseNovelList` and `filterNovelList` for this novels-only catalog.
+SDK method names and types retain Paperback's manga terminology. Parsers and network helpers
+are arrow functions; the extension, interceptor and native form classes are framework-required.
 
 Compared merged HiveToons for generic listing mapping, filtering, forms and memo loading;
 FlameComics for request helpers and class removal; MangaFire for shared section behavior;
@@ -112,7 +115,7 @@ was explicitly verified before invoking it, so the fallback was not used.
 
 ## Verification
 
-Source version `1.0.0-alpha.59`, Node `24.22.1`, Paperback types/toolchain `1.0.0-alpha.94`.
+Source version `1.0.0-alpha.60`, Node `24.22.1`, Paperback types/toolchain `1.0.0-alpha.94`.
 Offline regression coverage includes exact subtitles, chapter zero/decimals, safe IDs,
 mirror ordering, genre reset/AND/OR, shared visibility, memo retry, error propagation,
 blank readers, relative illustrations and known upstream security content.

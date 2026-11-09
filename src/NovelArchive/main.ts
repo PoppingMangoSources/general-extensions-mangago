@@ -52,12 +52,12 @@ import {
 import {
   contentRatingForGenres,
   decodeId,
-  filterMangaList,
+  filterNovelList,
   mergeChapterVersions,
   parseChapterDetails,
   parseChapters,
   parseMangaDetails,
-  parseMangaList,
+  parseNovelList,
   parseSourceChapterDetails,
   parseSourceChapters,
   pickGenreValues,
@@ -174,8 +174,8 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
         return { items: [] };
     }
     const data = await fetchJSON<NovelListResponse>(url);
-    const novels = filterMangaList(
-      parseMangaList(data.novels),
+    const novels = filterNovelList(
+      parseNovelList(data.novels),
       getDefaultGenres(),
       getHideAdultContent(),
     );
@@ -271,8 +271,8 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
     if (urlId) {
       const data = await fetchJSON<NovelDetailResponse>(novelsUrl(decodeId(urlId)));
       return {
-        items: filterMangaList(
-          parseMangaList([data.novel]),
+        items: filterNovelList(
+          parseNovelList([data.novel]),
           genres,
           getHideAdultContent(),
           match,
@@ -292,7 +292,7 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
       }),
     );
     return {
-      items: filterMangaList(parseMangaList(data.novels), genres, getHideAdultContent(), match).map(
+      items: filterNovelList(parseNovelList(data.novels), genres, getHideAdultContent(), match).map(
         toSearchResultItem,
       ),
       ...(data.pagination?.has_next ? { metadata: { page: page + 1 } } : {}),

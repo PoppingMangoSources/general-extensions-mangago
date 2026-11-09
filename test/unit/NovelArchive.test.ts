@@ -17,11 +17,11 @@ import {
   parseChapters,
   parseGenreOptions,
   parseMangaDetails,
-  parseMangaList,
+  parseNovelList,
   parseSourceChapterDetails,
   parseSourceChapters,
   toSearchResultItem,
-  filterMangaList,
+  filterNovelList,
   parseChapterDetails,
 } from "../../src/NovelArchive/parsers";
 
@@ -103,7 +103,7 @@ void test("mirror versions merge by chapter number without changing saved IDs", 
 });
 
 void test("listing totals are labeled as totals and invalid cards are omitted", () => {
-  const items = parseMangaList([
+  const items = parseNovelList([
     novel,
     { ...novel, title: " " },
     { ...novel, cover_url: "javascript:alert(1)" },
@@ -319,17 +319,17 @@ void test("native missing-name fallback and per-search genre OR preserve endpoin
       ["2", 2, undefined],
     ],
   );
-  const items = parseMangaList([novel, { ...novel, genres: "Action" }]);
+  const items = parseNovelList([novel, { ...novel, genres: "Action" }]);
   assert.equal(
-    filterMangaList(items, { fantasy: "included", action: "included" }, false, "any").length,
+    filterNovelList(items, { fantasy: "included", action: "included" }, false, "any").length,
     2,
   );
   assert.equal(
-    filterMangaList(items, { fantasy: "included", action: "included" }, false, "all").length,
+    filterNovelList(items, { fantasy: "included", action: "included" }, false, "all").length,
     0,
   );
   assert.equal(
-    toSearchResultItem(parseMangaList([{ ...novel, chapter_names: ["Chapter 0 - Prologue"] }])[0])
+    toSearchResultItem(parseNovelList([{ ...novel, chapter_names: ["Chapter 0 - Prologue"] }])[0])
       .subtitle,
     "Ch. 0 • ★ 4.5",
   );
