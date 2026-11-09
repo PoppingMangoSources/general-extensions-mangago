@@ -5,14 +5,15 @@ import type { ContentRating, JSONObject, SortingOption, Tag } from "@paperback/t
 
 export const DOMAIN = "https://novelarchive.st";
 export const API_URL = `${DOMAIN}/api`;
-export const PAGE_SIZE = 24;
+export const PAGE_SIZE = 30;
+export const FEED_SIZE = 50;
 
 export const SECTIONS = {
-  POPULAR: "popular",
+  TRENDING: "trending",
   LATEST: "latest",
   EDITORS: "editors",
   TOP_RATED: "top-rated",
-  MOST_CHAPTERS: "most-chapters",
+  RECENTLY_ADDED: "recently-added",
   GENRES: "genres",
 } as const;
 
@@ -81,6 +82,7 @@ export interface Novel {
   associated_names?: string[] | null;
   description?: string | null;
   total_chapters?: string | number | null;
+  latest_release?: string | null;
   views?: string | number | null;
   views_number?: number | null;
   rating?: number | null;

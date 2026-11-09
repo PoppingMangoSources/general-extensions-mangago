@@ -30,7 +30,7 @@ import {
 import { NovelArchiveAdvancedSearchForm } from "./forms/search";
 import { NovelArchiveSettingsForm, getDefaultGenres, getHideAdultContent } from "./forms/settings";
 import {
-  PAGE_SIZE,
+  FEED_SIZE,
   SECTIONS,
   SORT_OPTIONS,
   type ChapterDetailResponse,
@@ -105,15 +105,15 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
-      { id: SECTIONS.POPULAR, title: "Popular", type: DiscoverSectionType.featured },
+      { id: SECTIONS.TRENDING, title: "Trending", type: DiscoverSectionType.featured },
       { id: SECTIONS.TOP_RATED, title: "Top Rated", type: DiscoverSectionType.simpleCarousel },
-      { id: SECTIONS.LATEST, title: "Latest Updates", type: DiscoverSectionType.chapterUpdates },
-      { id: SECTIONS.EDITORS, title: "Editor's Choice", type: DiscoverSectionType.featured },
       {
-        id: SECTIONS.MOST_CHAPTERS,
-        title: "Most Chapters",
+        id: SECTIONS.RECENTLY_ADDED,
+        title: "Recently Added",
         type: DiscoverSectionType.simpleCarousel,
       },
+      { id: SECTIONS.LATEST, title: "Latest Updates", type: DiscoverSectionType.chapterUpdates },
+      { id: SECTIONS.EDITORS, title: "Editor's Choice", type: DiscoverSectionType.featured },
       { id: SECTIONS.GENRES, title: "Genres", type: DiscoverSectionType.genres },
     ];
   }
@@ -149,25 +149,24 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
     const page = metadata?.page ?? 1;
     let url: string;
     switch (section.id) {
-      case SECTIONS.POPULAR:
       case SECTIONS.TOP_RATED:
-      case SECTIONS.MOST_CHAPTERS:
+      case SECTIONS.RECENTLY_ADDED:
         url = buildNovelsUrl({
           page,
-          sort:
-            section.id === SECTIONS.TOP_RATED
-              ? "rating"
-              : section.id === SECTIONS.MOST_CHAPTERS
-                ? "chapters"
-                : "popular",
+          sort: section.id === SECTIONS.TOP_RATED ? "rating" : "recent",
         });
         break;
+      case SECTIONS.TRENDING:
+        url = new URL(novelsUrl("trending")).setQueryItem("limit", FEED_SIZE.toString()).toString();
+        break;
       case SECTIONS.EDITORS:
-        url = novelsUrl("editors-choice");
+        url = new URL(novelsUrl("editors-choice"))
+          .setQueryItem("limit", FEED_SIZE.toString())
+          .toString();
         break;
       case SECTIONS.LATEST:
         url = new URL(novelsUrl("recently-updated"))
-          .setQueryItem("limit", PAGE_SIZE.toString())
+          .setQueryItem("limit", FEED_SIZE.toString())
           .toString();
         break;
       default:
@@ -182,14 +181,14 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
     const items: DiscoverSectionItem[] = novels.flatMap((novel): DiscoverSectionItem[] => {
       const item = toSearchResultItem(novel);
       switch (section.id) {
-        case SECTIONS.POPULAR:
+        case SECTIONS.TRENDING:
         case SECTIONS.EDITORS: {
           const ratingInfo =
             novel.rating != null
               ? { symbol: "star.fill" as const, text: novel.rating.toFixed(1) }
               : undefined;
           const secondaryInfo =
-            section.id === SECTIONS.POPULAR
+            section.id === SECTIONS.TRENDING
               ? novel.author
                 ? { symbol: "person.fill" as const, text: novel.author }
                 : undefined

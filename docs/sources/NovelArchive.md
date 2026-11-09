@@ -23,11 +23,11 @@ Live API and client JavaScript inspected on 2026-11-09. Working baseline:
 | Feature           | Contract                                                                                                                                                                                      |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Domain            | `.cc` redirects to `.st`; accept pasted novel/reader URLs on either domain.                                                                                                                   |
-| Browse and search | `GET /api/novels`, `page`, `per_page=24`, `search`, `fuzzy=1`; use `pagination.has_next` before local filtering.                                                                              |
+| Browse and search | `GET /api/novels`, `page`, `per_page=30`, `search`, `fuzzy=1`; use `pagination.has_next` before local filtering.                                                                              |
 | Sort              | `recent`, `popular`, `rating`, `chapters`.                                                                                                                                                    |
 | Status            | `all`, `ongoing`, `completed`, `hiatus`.                                                                                                                                                      |
 | Genres            | `/api/novels/genres`; lower-case `value`, display `label`; comma-separated `genres_include` and `genres_exclude`; `genre_match=any` means OR, omitted means AND.                              |
-| Feeds             | `/api/novels/recently-updated?limit=24`, `/api/novels/editors-choice`; no pagination advertised in sampled responses.                                                                         |
+| Feeds             | `/api/novels/trending?limit=50`, `/api/novels/recently-updated?limit=50`, `/api/novels/editors-choice?limit=50`; feeds are unpaged, while Top Rated and Recently Added use the library endpoint.                                                                         |
 | Details           | `/api/novels/<id>`; aliases in `associated_names`, five-point `rating`, comma-separated `genres`.                                                                                             |
 | Native chapters   | `chapter_names` in detail payload; endpoint IDs are **1-based positions**, independent of printed numbering. The site's `novel-page.js` falls back to `total_chapters` when names are absent. |
 | Mirror chapters   | `/api/novels/<id>/sources`, then `/sources/<source>/chapters`; each entry supplies `number` and `title`.                                                                                      |
@@ -40,10 +40,15 @@ on inventing positional chapter IDs does not apply here.
 
 ## Verified traps and fixes
 
-- **Totals are not printed chapter numbers.** Listing responses usually omit names. The Extra's
-  Odyssey returned `total_chapters: "226"` and stale `latest_release: "Chapter 3 ..."`, while native
-  chapter 226 contained prose. Show `226 Chs`; derive `Ch. N` only from supplied chapter names.
-  Update links retain the native endpoint position. No per-card detail requests.
+- **Latest-release labels and native reader IDs are distinct.** Listing responses usually omit
+  `chapter_names` but supply `latest_release`. Parse an explicit `Chapter N` or `Ch. N` into
+  `Ch. N` on cards, preferring it to the total. If it says `Unknown` or `9 hours ago`, keep
+  `N Chs` rather than invent a chapter number. These site-supplied release labels can be stale:
+  Two Worlds returned `total_chapters: "3"` and `latest_release: "Chapter 134 ..."`; native
+  chapter 3 returned HTTP 200 but chapter 134 returned 404. The Extra's Odyssey had
+  `total_chapters: "226"` and stale `latest_release: "Chapter 3 ..."`. Keep update links
+  addressed by native 1-based position, never by the displayed release number. No per-card
+  detail requests.
 - **Unequal versions must sort by chapter number.** Sorting each source's local index interleaves
   native `[1, 2]` and mirror `[100, 101]` as `[1, 100, 2, 101]`. Sort the combined chapters by
   `chapNum`, retaining IDs and version labels.
@@ -115,7 +120,7 @@ was explicitly verified before invoking it, so the fallback was not used.
 
 ## Verification
 
-Source version `1.0.0-alpha.60`, Node `24.22.1`, Paperback types/toolchain `1.0.0-alpha.94`.
+Source version `1.0.0-alpha.61`, Node `24.22.1`, Paperback types/toolchain `1.0.0-alpha.94`.
 Offline regression coverage includes exact subtitles, chapter zero/decimals, safe IDs,
 mirror ordering, genre reset/AND/OR, shared visibility, memo retry, error propagation,
 blank readers, relative illustrations and known upstream security content.
@@ -135,5 +140,7 @@ unverified on a device. Sampled responses expose no paid/locked flags; no specul
 access fields were added. Missing-name fallback is verified against the site's own client
 and offline fixtures; sampled live detail payloads contained names.
 
-Opera was disconnected and Browser Use reported insufficient credits. Firecrawl and direct
-HTTP/API requests supplied the live evidence. No user accounts or private data were used.
+Opera was disconnected during the prior audit. Browser Use subsequently verified the public
+Trending, Editor's Choice and Recently Updated APIs, 30-item library paging and the inconsistent
+Two Worlds chapter IDs on 2026-11-09. Firecrawl and direct HTTP/API checks also supplied earlier
+live evidence. No user accounts or private data were used.

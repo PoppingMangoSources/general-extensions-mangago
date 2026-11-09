@@ -113,6 +113,21 @@ void test("listing totals are labeled as totals and invalid cards are omitted", 
   assert.equal(toSearchResultItem(items[0]).subtitle, "226 Chs • ★ 4.5");
 });
 
+void test("latest release labels distinguish chapter numbers from totals and elapsed time", () => {
+  for (const [release, count, expected] of [
+    ["Chapter 134 - 103: This Is Too Much Noise!", "3", "Ch. 134 • ★ 4.5"],
+    ["Chapter 1225", "1223", "Ch. 1225 • ★ 4.5"],
+    ["Vol 7 Chapter 38", "5950", "Ch. 38 • ★ 4.5"],
+    ["Ch. #12.5", "20", "Ch. 12.5 • ★ 4.5"],
+    ["Chapter 0 - Prologue", "1", "Ch. 0 • ★ 4.5"],
+    ["9 hours ago", "1766", "1766 Chs • ★ 4.5"],
+    ["Unknown", "226", "226 Chs • ★ 4.5"],
+  ] as const) {
+    const [item] = parseNovelList([{ ...novel, latest_release: release, total_chapters: count }]);
+    assert.equal(toSearchResultItem(item).subtitle, expected);
+  }
+});
+
 void test("explicit genre selections replace defaults including an empty reset", () => {
   state[STATE_KEYS.DEFAULT_GENRES] = { fantasy: "included", horror: "excluded" };
   const explicit = new globalThis.URL(
@@ -227,20 +242,43 @@ void test("genre memo retries failures and reuses a successful request without p
   );
 });
 
-void test("all Discover feeds apply defaults with one request and retain server pagination", async () => {
+void test("Discover feeds request 50, library sections page by 30 and defaults apply once", async () => {
   state[STATE_KEYS.DEFAULT_GENRES] = { fantasy: "included", adult: "excluded" };
-  const requests = mockResponses(() => ({
+  const requests = mockResponses((url) => ({
     novels: [novel, { ...novel, genres: "Adult" }],
-    pagination: { has_next: true },
+    ...(url.pathname === "/api/novels" ? { pagination: { has_next: true } } : {}),
   }));
   for (const section of (await NovelArchive.getDiscoverSections()).filter(
     (entry) => entry.id !== "genres",
   )) {
     const result = await NovelArchive.getDiscoverSectionItems(section, undefined);
     assert.equal(result.items.length, 1);
-    assert.deepEqual(result.metadata, { page: 2 });
+    if (section.id === "top-rated" || section.id === "recently-added") {
+      assert.deepEqual(result.metadata, { page: 2 });
+    } else {
+      assert.equal(Object.hasOwn(result, "metadata"), false);
+    }
   }
   assert.equal(requests.length, 5);
+  assert.deepEqual(
+    requests.map((url) => url.pathname),
+    [
+      "/api/novels/trending",
+      "/api/novels",
+      "/api/novels",
+      "/api/novels/recently-updated",
+      "/api/novels/editors-choice",
+    ],
+  );
+  for (const url of requests) {
+    if (url.pathname === "/api/novels") {
+      assert.equal(url.searchParams.get("per_page"), "30");
+    } else {
+      assert.equal(url.searchParams.get("limit"), "50");
+    }
+  }
+  assert.equal(requests[1].searchParams.get("sort"), "rating");
+  assert.equal(requests[2].searchParams.has("sort"), false);
   delete state[STATE_KEYS.DEFAULT_GENRES];
 });
 

@@ -126,6 +126,9 @@ export const parseNovelList = (novels: Novel[]): NovelListItem[] =>
     }
     const chapterCount = novel.chapter_names?.length || Number(novel.total_chapters) || 0;
     const latestName = novel.chapter_names?.at(-1) ?? "";
+    const releaseMatch = novel.latest_release?.match(
+      /\b(?:chapter|chap\.?|ch\.?|episode|ep\.?)\s*#?\s*(\d[\d,]*(?:\.\d+)?)/i,
+    );
     const date = novel.updated_at ? new Date(novel.updated_at) : undefined;
     const genres = parseGenres(novel);
     const views = Number(novel.views_number ?? novel.views);
@@ -144,7 +147,9 @@ export const parseNovelList = (novels: Novel[]): NovelListItem[] =>
             : undefined,
         views: Number.isFinite(views) ? views : undefined,
         chapterCount,
-        latestChapter: cleanChapterName(latestName).chapNum,
+        latestChapter: releaseMatch
+          ? Number(releaseMatch[1].replace(/,/g, ""))
+          : cleanChapterName(latestName).chapNum,
         publishDate: date && !Number.isNaN(date.getTime()) ? date : undefined,
       },
     ];
