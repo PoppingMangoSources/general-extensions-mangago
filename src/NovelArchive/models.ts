@@ -3,7 +3,7 @@
 
 import type { ContentRating, JSONObject, SortingOption, Tag } from "@paperback/types";
 
-export const DOMAIN = "https://novelarchive.cc";
+export const DOMAIN = "https://novelarchive.st";
 export const API_URL = `${DOMAIN}/api`;
 export const PAGE_SIZE = 24;
 
@@ -18,7 +18,6 @@ export const SECTIONS = {
 
 export const STATE_KEYS = {
   DEFAULT_GENRES: "novelarchive_default_genres",
-  GENRES: "novelarchive_genres",
   HIDE_ADULT: "novelarchive_hide_adult",
 } as const;
 
@@ -107,6 +106,7 @@ export interface NovelListItem {
   rating?: number;
   views?: number;
   chapterCount: number;
+  latestChapter?: number;
   publishDate?: Date;
 }
 

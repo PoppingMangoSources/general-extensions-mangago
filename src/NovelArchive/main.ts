@@ -4,6 +4,8 @@
 import {
   BasicRateLimiter,
   CloudflareError,
+  ContentRating,
+  URL,
   CookieStorageInterceptor,
   DiscoverSectionType,
   type AdvancedSearchForm,
@@ -14,6 +16,7 @@ import {
   type DiscoverSectionItem,
   type ExtensionImpl,
   type Form,
+  type FeaturedCarouselItem,
   type PagedResults,
   type Request,
   type SearchQuery,
@@ -25,15 +28,13 @@ import {
 } from "@paperback/types";
 
 import { NovelArchiveAdvancedSearchForm } from "./forms/search";
-import { NovelArchiveSettingsForm, getHideAdultContent } from "./forms/settings";
+import { NovelArchiveSettingsForm, getDefaultGenres, getHideAdultContent } from "./forms/settings";
 import {
   PAGE_SIZE,
   SECTIONS,
   SORT_OPTIONS,
-  STATE_KEYS,
   type ChapterDetailResponse,
   type NovelDetailResponse,
-  type NovelListItem,
   type NovelListResponse,
   type PageMetadata,
   type SearchMetadata,
@@ -41,31 +42,25 @@ import {
 } from "./models";
 import {
   buildNovelsUrl,
-  fetchApi,
+  fetchJSON,
   fetchGenres,
   fetchSourceChapters,
   fetchSources,
-  novelsFeedUrl,
   novelsUrl,
   NovelArchiveInterceptor,
 } from "./network";
 import {
+  contentRatingForGenres,
   decodeId,
-  encodeId,
-  filterAdultItems,
+  filterMangaList,
   mergeChapterVersions,
   parseChapterDetails,
   parseChapters,
-  parseGenreOptions,
   parseMangaDetails,
-  parseNovelList,
+  parseMangaList,
   parseSourceChapterDetails,
   parseSourceChapters,
   pickGenreValues,
-  toCardItem,
-  toChapterUpdateItem,
-  toFeaturedItem,
-  toGenreCarouselItems,
   toSearchResultItem,
 } from "./parsers";
 import type NovelArchiveConfig from "./pbconfig";
@@ -131,85 +126,129 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
     section: DiscoverSection,
     metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    const results = await this.loadDiscoverSection(section, metadata);
-    return { ...results, items: filterAdultItems(results.items, getHideAdultContent()) };
-  }
-
-  private async loadDiscoverSection(
-    section: DiscoverSection,
-    metadata: PageMetadata | undefined,
-  ): Promise<PagedResults<DiscoverSectionItem>> {
+    if (section.id === SECTIONS.GENRES) {
+      const genres = await this.getGenres();
+      return {
+        items: genres
+          .filter(
+            (genre) =>
+              !getHideAdultContent() ||
+              contentRatingForGenres([genre.title]) === ContentRating.EVERYONE,
+          )
+          .map((genre) => ({
+            type: "genresCarouselItem",
+            name: genre.title,
+            searchQuery: {
+              title: "",
+              metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
+            },
+            contentRating: contentRatingForGenres([genre.title]),
+          })),
+      };
+    }
+    const page = metadata?.page ?? 1;
+    let url: string;
     switch (section.id) {
       case SECTIONS.POPULAR:
-        return this.getBrowseSectionItems(
-          "popular",
-          (item) => toFeaturedItem(item, "popular"),
-          metadata,
-        );
-      case SECTIONS.EDITORS:
-        return this.getEditorsSectionItems();
-      case SECTIONS.LATEST:
-        return this.getLatestSectionItems();
       case SECTIONS.TOP_RATED:
-        return this.getBrowseSectionItems("rating", (item) => toCardItem(item, "rating"), metadata);
       case SECTIONS.MOST_CHAPTERS:
-        return this.getBrowseSectionItems(
-          "chapters",
-          (item) => toCardItem(item, "chapters"),
-          metadata,
-        );
-      case SECTIONS.GENRES:
-        return this.getGenresSectionItems();
+        url = buildNovelsUrl({
+          page,
+          sort:
+            section.id === SECTIONS.TOP_RATED
+              ? "rating"
+              : section.id === SECTIONS.MOST_CHAPTERS
+                ? "chapters"
+                : "popular",
+        });
+        break;
+      case SECTIONS.EDITORS:
+        url = novelsUrl("editors-choice");
+        break;
+      case SECTIONS.LATEST:
+        url = new URL(novelsUrl("recently-updated"))
+          .setQueryItem("limit", PAGE_SIZE.toString())
+          .toString();
+        break;
       default:
         return { items: [] };
     }
-  }
-
-  private getGenres(): Promise<Tag[]> {
-    return (this.genresPromise ??= (async () => {
-      const cached = Application.getState(STATE_KEYS.GENRES) as Tag[] | undefined;
-      if (cached) return cached;
-
-      const genres = parseGenreOptions(await fetchGenres());
-      Application.setState(genres, STATE_KEYS.GENRES);
-      return genres;
-    })());
-  }
-
-  private async getGenresSectionItems(): Promise<PagedResults<DiscoverSectionItem>> {
-    return { items: toGenreCarouselItems(await this.getGenres()) };
-  }
-
-  private async getLatestSectionItems(): Promise<PagedResults<DiscoverSectionItem>> {
-    const { novels } = await fetchApi<NovelListResponse>(
-      novelsFeedUrl("recently-updated", PAGE_SIZE),
+    const data = await fetchJSON<NovelListResponse>(url);
+    const novels = filterMangaList(
+      parseMangaList(data.novels),
+      getDefaultGenres(),
+      getHideAdultContent(),
     );
-    return {
-      items: parseNovelList(novels).flatMap((item) => {
-        const card = toChapterUpdateItem(item);
-        return card ? [card] : [];
-      }),
-    };
+    const items: DiscoverSectionItem[] = novels.flatMap((novel): DiscoverSectionItem[] => {
+      const item = toSearchResultItem(novel);
+      switch (section.id) {
+        case SECTIONS.POPULAR:
+        case SECTIONS.EDITORS: {
+          const ratingInfo =
+            novel.rating != null
+              ? { symbol: "star.fill" as const, text: novel.rating.toFixed(1) }
+              : undefined;
+          const secondaryInfo =
+            section.id === SECTIONS.POPULAR
+              ? novel.author
+                ? { symbol: "person.fill" as const, text: novel.author }
+                : undefined
+              : novel.views != null
+                ? {
+                    symbol: "eye.fill" as const,
+                    text: new Intl.NumberFormat("en", {
+                      notation: "compact",
+                      maximumFractionDigits: 1,
+                    }).format(novel.views),
+                  }
+                : undefined;
+          const infoItems: FeaturedCarouselItem["infoItems"] =
+            ratingInfo && secondaryInfo
+              ? [ratingInfo, secondaryInfo]
+              : ratingInfo
+                ? [ratingInfo]
+                : secondaryInfo
+                  ? [secondaryInfo]
+                  : undefined;
+          return [
+            {
+              ...item,
+              type: "featuredCarouselItem",
+              supertitle:
+                section.id === SECTIONS.EDITORS
+                  ? novel.author
+                  : novel.genres.slice(0, 3).join(", "),
+              summary: novel.summary,
+              infoItems,
+            },
+          ];
+        }
+        case SECTIONS.LATEST:
+          return novel.chapterCount > 0
+            ? [
+                {
+                  ...item,
+                  type: "chapterUpdatesCarouselItem",
+                  // The native endpoint uses positions, even when printed chapter numbers skip.
+                  chapterId: String(novel.chapterCount),
+                  publishDate: novel.publishDate,
+                },
+              ]
+            : [];
+        default:
+          return [{ ...item, type: "simpleCarouselItem" }];
+      }
+    });
+    return { items, ...(data.pagination?.has_next ? { metadata: { page: page + 1 } } : {}) };
   }
 
-  private async getEditorsSectionItems(): Promise<PagedResults<DiscoverSectionItem>> {
-    const { novels } = await fetchApi<NovelListResponse>(novelsFeedUrl("editors-choice"));
-    return {
-      items: parseNovelList(novels).map((item) => toFeaturedItem(item, "editors")),
-    };
-  }
-
-  private async getBrowseSectionItems(
-    sort: string,
-    toItem: (item: NovelListItem) => DiscoverSectionItem,
-    metadata: PageMetadata | undefined,
-  ): Promise<PagedResults<DiscoverSectionItem>> {
-    const page = metadata?.page ?? 1;
-    const data = await fetchApi<NovelListResponse>(buildNovelsUrl({ page, sort }));
-    return {
-      items: parseNovelList(data.novels).map(toItem),
-      metadata: data.pagination?.has_next ? { page: page + 1 } : undefined,
-    };
+  private async getGenres(): Promise<Tag[]> {
+    try {
+      return await (this.genresPromise ??= fetchGenres());
+    } catch (error) {
+      this.genresPromise = undefined;
+      throw error;
+    }
   }
 
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
@@ -221,79 +260,54 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
     metadata: PageMetadata | undefined,
     sortingOption?: SortingOption,
   ): Promise<PagedResults<SearchResultItem>> {
-    const results = await this.loadSearchResults(query, metadata, sortingOption);
-    return { ...results, items: filterAdultItems(results.items, getHideAdultContent()) };
-  }
-
-  private async loadSearchResults(
-    query: SearchQuery<SearchMetadata>,
-    metadata: PageMetadata | undefined,
-    sortingOption?: SortingOption,
-  ): Promise<PagedResults<SearchResultItem>> {
-    const pasted = await this.resolveUrlQuery(query.title ?? "");
-    if (pasted) return pasted;
-
-    const searchMetadata = query.metadata ?? { status: [], genreMatch: ["all"], genres: {} };
     const search = (query.title ?? "").trim();
+    const searchMetadata = query.metadata ?? { status: [], genreMatch: ["all"] };
+    const genres = searchMetadata.genres ?? getDefaultGenres();
+    const match = searchMetadata.genreMatch?.[0] ?? "all";
+    const urlId = /^https?:\/\/(?:www\.)?novelarchive\.(?:cc|st)\//i.test(search)
+      ? (search.match(/[?&](?:id|novel)=([^&#]+)/i)?.[1] ??
+        search.match(/\/novels?\/([^/?#]+)/i)?.[1])
+      : undefined;
+    if (urlId) {
+      const data = await fetchJSON<NovelDetailResponse>(novelsUrl(decodeId(urlId)));
+      return {
+        items: filterMangaList(
+          parseMangaList([data.novel]),
+          genres,
+          getHideAdultContent(),
+          match,
+        ).map(toSearchResultItem),
+      };
+    }
     const page = metadata?.page ?? 1;
-
-    const url = buildNovelsUrl({
-      page,
-      search: search || undefined,
-      sort: sortingOption?.id,
-      status: searchMetadata.status?.[0],
-      genreMatch: searchMetadata.genreMatch?.[0],
-      genresInclude: pickGenreValues(searchMetadata.genres, "included"),
-      genresExclude: pickGenreValues(searchMetadata.genres, "excluded"),
-    });
-
-    const data = await fetchApi<NovelListResponse>(url);
+    const data = await fetchJSON<NovelListResponse>(
+      buildNovelsUrl({
+        page,
+        search,
+        sort: sortingOption?.id,
+        status: searchMetadata.status?.[0],
+        genreMatch: match,
+        genresInclude: pickGenreValues(genres, "included"),
+        genresExclude: pickGenreValues(genres, "excluded"),
+      }),
+    );
     return {
-      items: parseNovelList(data.novels).map(toSearchResultItem),
-      metadata: data.pagination?.has_next ? { page: page + 1 } : undefined,
+      items: filterMangaList(parseMangaList(data.novels), genres, getHideAdultContent(), match).map(
+        toSearchResultItem,
+      ),
+      ...(data.pagination?.has_next ? { metadata: { page: page + 1 } } : {}),
     };
   }
 
-  private async resolveUrlQuery(
-    query: string,
-  ): Promise<PagedResults<SearchResultItem> | undefined> {
-    const trimmed = query.trim();
-    if (!/^https?:\/\/(?:www\.)?novelarchive\.cc\//i.test(trimmed)) return undefined;
-
-    const urlId =
-      trimmed.match(/[?&](?:id|novel)=([^&#]+)/i)?.[1] ??
-      trimmed.match(/\/novels?\/([^/?#]+)/i)?.[1];
-    if (!urlId) return undefined;
-
-    const novelId = decodeId(urlId);
-    try {
-      const data = await fetchApi<NovelDetailResponse>(novelsUrl(novelId));
-      const manga = parseMangaDetails(data.novel, encodeId(novelId));
-      return {
-        items: [
-          {
-            mangaId: manga.mangaId,
-            title: manga.mangaInfo.primaryTitle,
-            imageUrl: manga.mangaInfo.thumbnailUrl,
-            contentRating: manga.mangaInfo.contentRating,
-          },
-        ],
-      };
-    } catch (error: unknown) {
-      if (error instanceof CloudflareError) throw error;
-      return undefined;
-    }
-  }
-
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
-    const data = await fetchApi<NovelDetailResponse>(novelsUrl(decodeId(mangaId)));
+    const data = await fetchJSON<NovelDetailResponse>(novelsUrl(decodeId(mangaId)));
     return parseMangaDetails(data.novel, mangaId);
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
     const novelId = decodeId(sourceManga.mangaId);
     const [data, sources] = await Promise.all([
-      fetchApi<NovelDetailResponse>(novelsUrl(novelId)),
+      fetchJSON<NovelDetailResponse>(novelsUrl(novelId)),
       fetchSources(novelId),
     ]);
 
@@ -311,8 +325,9 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
     const [first] = updateManager.getQueuedItems();
     if (!first) return;
     try {
-      await fetchApi<NovelDetailResponse>(novelsUrl(decodeId(first.mangaId)));
+      await fetchJSON<NovelDetailResponse>(novelsUrl(decodeId(first.mangaId)));
     } catch (error) {
+      // This probe only prompts for Cloudflare; Paperback performs the update fetch.
       if (error instanceof CloudflareError) throw error;
     }
   }
@@ -325,14 +340,16 @@ class NovelArchiveExtension implements ExtensionImpl<typeof NovelArchiveConfig> 
     if (separator >= 0) {
       const sourceId = decodeId(chapter.chapterId.slice(0, separator));
       const chapterNumber = decodeId(chapter.chapterId.slice(separator + 1));
-      const data = await fetchApi<SourceChapterDetailResponse>(
+      const data = await fetchJSON<SourceChapterDetailResponse>(
         novelsUrl(novelId, "sources", sourceId, "chapters", chapterNumber),
       );
       return parseSourceChapterDetails(data, chapter);
     }
 
-    const data = await fetchApi<ChapterDetailResponse>(
-      novelsUrl(novelId, "chapters", chapter.chapterId),
+    const data = await fetchJSON<ChapterDetailResponse>(
+      new URL(novelsUrl(novelId, "chapters", chapter.chapterId))
+        .setQueryItem("prefetch", "1")
+        .toString(),
     );
     return parseChapterDetails(data, chapter);
   }

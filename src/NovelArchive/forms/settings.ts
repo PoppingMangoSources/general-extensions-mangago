@@ -5,13 +5,15 @@ import { Form, Section, ToggleRow, TriStateSelectRow, type Tag } from "@paperbac
 
 import { STATE_KEYS, type TriState } from "../models";
 
-// Adult titles remain visible unless the user opts to hide them.
 export const getHideAdultContent = (): boolean =>
   (Application.getState(STATE_KEYS.HIDE_ADULT) as boolean | undefined) ?? false;
 
+export const getDefaultGenres = (): TriState =>
+  (Application.getState(STATE_KEYS.DEFAULT_GENRES) as TriState | undefined) ?? {};
+
 export class NovelArchiveSettingsForm extends Form {
   private hideAdultContent = getHideAdultContent();
-  private genres = (Application.getState(STATE_KEYS.DEFAULT_GENRES) as TriState | undefined) ?? {};
+  private genres = getDefaultGenres();
 
   private readonly genreOptions: Tag[];
 
@@ -26,7 +28,8 @@ export class NovelArchiveSettingsForm extends Form {
         {
           id: "browse",
           header: "Browse Settings",
-          footer: "Default genres apply to paginated browse sections and search.",
+          footer:
+            "Default genres apply to Discover and search. Search selections replace these defaults.",
         },
         [
           ToggleRow("hide_adult", {

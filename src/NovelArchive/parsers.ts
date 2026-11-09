@@ -3,10 +3,9 @@
 
 import {
   ContentRating,
+  URL,
   type Chapter,
   type ChapterDetails,
-  type DiscoverSectionItem,
-  type FeaturedCarouselItem,
   type SearchResultItem,
   type SourceManga,
   type Tag,
@@ -23,7 +22,6 @@ import {
   type Novel,
   type NovelListItem,
   type NovelSource,
-  type SearchMetadata,
   type SourceChapter,
   type SourceChapterDetailResponse,
   type TriState,
@@ -36,7 +34,7 @@ const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
 export const encodeId = (value: string): string =>
   value.replace(SAFE_ID_REGEX, (char) => {
     const encoded = encodeURIComponent(char);
-    return encoded !== char ? encoded : "-";
+    return encoded !== char ? encoded : `%${char.charCodeAt(0).toString(16).toUpperCase()}`;
   });
 
 export const decodeId = (value: string): string => {
@@ -48,9 +46,15 @@ export const decodeId = (value: string): string => {
 };
 
 const parseCoverUrl = (novel: Novel): string => {
-  const path = novel.cover_url ?? novel.image_url ?? novel.novel_image;
-  if (!path) return "";
-  return path.startsWith("http") ? path : `${DOMAIN}${path.startsWith("/") ? "" : "/"}${path}`;
+  const path = (novel.cover_url ?? novel.image_url ?? novel.novel_image ?? "").trim();
+  if (!path) throw new Error("No cover returned for this novel");
+  const url = path.startsWith("//")
+    ? `https:${path}`
+    : path.startsWith("/")
+      ? `${DOMAIN}${path}`
+      : path;
+  if (!/^https?:\/\/[^/\s?#]+(?:[/?#]|$)/i.test(url)) throw new Error("Invalid novel cover URL");
+  return url;
 };
 
 const parseGenres = (novel: Novel): string[] => {
@@ -64,18 +68,6 @@ const parseGenres = (novel: Novel): string[] => {
       seen.add(key);
       return true;
     });
-};
-
-const parseViews = (novel: Novel): number | undefined => {
-  const raw = novel.views_number ?? novel.views;
-  const value = raw == null ? NaN : Number(raw);
-  return Number.isFinite(value) ? value : undefined;
-};
-
-const formatCount = (count: number): string => {
-  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
-  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K`;
-  return count.toString();
 };
 
 const parseStatus = (novel: Novel): string | undefined => {
@@ -98,12 +90,7 @@ const cleanDescription = (value?: string | null): string => {
 const decodeText = (value?: string | null): string =>
   value ? Application.decodeHTMLEntities(value).trim() : "";
 
-const ratingToUnit = (value?: number | null): number | undefined => {
-  if (!value || !Number.isFinite(value)) return undefined;
-  return Math.min(1, Math.max(0, value / 5));
-};
-
-const contentRatingForGenres = (genres: string[]): ContentRating => {
+export const contentRatingForGenres = (genres: string[]): ContentRating => {
   const normalizedGenres = genres.map((genre) => genre.toLowerCase());
   if (
     normalizedGenres.some(
@@ -126,137 +113,82 @@ const escapeXml = (value: string): string =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
 
-export const parseNovelList = (novels: Novel[]): NovelListItem[] =>
-  novels.map((novel) => {
-    // Native chapters are addressed by 1-based position, so the count is the
-    // list length; fall back to total_chapters when the array is omitted.
-    const listLength = novel.chapter_names?.length ?? 0;
-    const chapterCount =
-      listLength > 0
-        ? listLength
-        : parseInt(String(novel.total_chapters ?? "").replace(/\D/g, ""), 10) || 0;
+export const parseMangaList = (novels: Novel[]): NovelListItem[] =>
+  novels.flatMap((novel) => {
+    const title = decodeText(novel.title);
+    if (!title || !String(novel.id ?? "").trim()) return [];
+    let imageUrl: string;
+    try {
+      imageUrl = parseCoverUrl(novel);
+    } catch {
+      // A malformed card must not reject the entire listing at the native bridge.
+      return [];
+    }
+    const chapterCount = novel.chapter_names?.length || Number(novel.total_chapters) || 0;
+    const latestName = novel.chapter_names?.at(-1) ?? "";
     const date = novel.updated_at ? new Date(novel.updated_at) : undefined;
     const genres = parseGenres(novel);
-    return {
-      mangaId: encodeId(String(novel.id)),
-      title: decodeText(novel.title),
-      imageUrl: parseCoverUrl(novel),
-      contentRating: contentRatingForGenres(genres),
-      genres,
-      author: decodeText(novel.author) || undefined,
-      summary: cleanDescription(novel.description) || undefined,
-      rating: novel.rating ?? undefined,
-      views: parseViews(novel),
-      chapterCount,
-      publishDate: date && !Number.isNaN(date.getTime()) ? date : undefined,
-    };
+    const views = Number(novel.views_number ?? novel.views);
+    return [
+      {
+        mangaId: encodeId(String(novel.id)),
+        title,
+        imageUrl,
+        genres,
+        contentRating: contentRatingForGenres(genres),
+        author: decodeText(novel.author) || undefined,
+        summary: cleanDescription(novel.description) || undefined,
+        rating:
+          novel.rating != null && Number.isFinite(novel.rating) && novel.rating > 0
+            ? Math.min(5, Math.max(0, novel.rating))
+            : undefined,
+        views: Number.isFinite(views) ? views : undefined,
+        chapterCount,
+        latestChapter: cleanChapterName(latestName).chapNum,
+        publishDate: date && !Number.isNaN(date.getTime()) ? date : undefined,
+      },
+    ];
   });
 
-export const filterAdultItems = <T extends { contentRating?: ContentRating }>(
-  items: T[],
+export const filterMangaList = (
+  items: NovelListItem[],
+  genres: TriState,
   hideAdult: boolean,
-): T[] =>
-  hideAdult ? items.filter((item) => item.contentRating === ContentRating.EVERYONE) : items;
-
-export const toFeaturedItem = (
-  item: NovelListItem,
-  variant: "popular" | "editors",
-): DiscoverSectionItem => {
-  const ratingInfo =
-    item.rating === undefined
-      ? undefined
-      : { symbol: "star.fill" as const, text: item.rating.toFixed(1) };
-  const secondaryInfo =
-    variant === "popular"
-      ? item.author
-        ? { symbol: "person.fill" as const, text: item.author }
-        : undefined
-      : item.views === undefined
-        ? undefined
-        : { symbol: "eye.fill" as const, text: formatCount(item.views) };
-  const infoItems: FeaturedCarouselItem["infoItems"] =
-    ratingInfo && secondaryInfo
-      ? [ratingInfo, secondaryInfo]
-      : ratingInfo
-        ? [ratingInfo]
-        : secondaryInfo
-          ? [secondaryInfo]
-          : undefined;
-  return {
-    type: "featuredCarouselItem",
-    mangaId: item.mangaId,
-    imageUrl: item.imageUrl,
-    title: item.title,
-    supertitle:
-      variant === "editors" ? item.author : item.genres.slice(0, 3).join(", ") || undefined,
-    summary: item.summary,
-    infoItems,
-    contentRating: item.contentRating,
-  };
+  match = "all",
+): NovelListItem[] => {
+  const includes = pickGenreValues(genres, "included");
+  const excludes = pickGenreValues(genres, "excluded");
+  return items.filter((item) => {
+    if (hideAdult && item.contentRating !== ContentRating.EVERYONE) return false;
+    const values = item.genres.map((genre) => genre.toLowerCase());
+    return (
+      !excludes.some((genre) => values.includes(genre)) &&
+      (!includes.length ||
+        (match === "any"
+          ? includes.some((genre) => values.includes(genre))
+          : includes.every((genre) => values.includes(genre))))
+    );
+  });
 };
 
-export const toCardItem = (
-  item: NovelListItem,
-  variant: "rating" | "chapters",
-): DiscoverSectionItem => {
-  const lead =
-    variant === "chapters"
-      ? item.chapterCount > 0
-        ? `Ch. ${item.chapterCount}`
-        : undefined
-      : item.rating
-        ? `★ ${item.rating.toFixed(1)}`
-        : undefined;
-  return {
-    type: "simpleCarouselItem",
+export const toSearchResultItem = (item: NovelListItem) =>
+  ({
     mangaId: item.mangaId,
-    imageUrl: item.imageUrl,
     title: item.title,
-    subtitle:
-      [lead, item.genres[0]].filter((value): value is string => Boolean(value)).join(" • ") ||
-      undefined,
-    contentRating: item.contentRating,
-  };
-};
-
-export const toChapterUpdateItem = (item: NovelListItem): DiscoverSectionItem | undefined => {
-  if (item.chapterCount <= 0) return undefined;
-  return {
-    type: "chapterUpdatesCarouselItem",
-    mangaId: item.mangaId,
-    chapterId: String(item.chapterCount),
     imageUrl: item.imageUrl,
-    title: item.title,
     subtitle:
-      [`Ch. ${item.chapterCount}`, item.author]
-        .filter((value): value is string => Boolean(value))
+      [
+        item.latestChapter != null
+          ? `Ch. ${item.latestChapter}`
+          : item.chapterCount > 0
+            ? `${item.chapterCount} Chs`
+            : undefined,
+        item.rating != null ? `★ ${item.rating.toFixed(1)}` : undefined,
+      ]
+        .filter(Boolean)
         .join(" • ") || undefined,
-    publishDate: item.publishDate,
     contentRating: item.contentRating,
-  };
-};
-
-export const toGenreCarouselItems = (genres: Tag[]): DiscoverSectionItem[] =>
-  genres.map((genre) => ({
-    type: "genresCarouselItem",
-    name: genre.title,
-    searchQuery: {
-      title: "",
-      metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
-    },
-    contentRating: contentRatingForGenres([decodeId(genre.id)]),
-  }));
-
-export const toSearchResultItem = (item: NovelListItem): SearchResultItem => ({
-  mangaId: item.mangaId,
-  title: item.title,
-  imageUrl: item.imageUrl,
-  subtitle:
-    [item.rating ? `★ ${item.rating.toFixed(1)}` : undefined, item.genres[0]]
-      .filter((value): value is string => Boolean(value))
-      .join(" • ") || undefined,
-  contentRating: item.contentRating,
-});
+  }) satisfies SearchResultItem;
 
 export const parseMangaDetails = (novel: Novel, mangaId: string): SourceManga => {
   const primaryTitle = decodeText(novel.title) || "Untitled";
@@ -276,7 +208,10 @@ export const parseMangaDetails = (novel: Novel, mangaId: string): SourceManga =>
     title: genre,
   }));
 
-  const percentage = ratingToUnit(novel.rating);
+  const percentage =
+    novel.rating != null && Number.isFinite(novel.rating)
+      ? Math.min(1, Math.max(0, novel.rating / 5))
+      : undefined;
   const additionalInfo =
     percentage === undefined
       ? undefined
@@ -323,7 +258,13 @@ const cleanChapterName = (name: string): { chapNum?: number; title: string } => 
 };
 
 export const parseChapters = (novel: Novel, sourceManga: SourceManga): Chapter[] =>
-  (novel.chapter_names ?? []).map((rawName, index) => {
+  (novel.chapter_names?.length
+    ? novel.chapter_names
+    : Array.from(
+        { length: Number(novel.total_chapters) || 0 },
+        (_, index) => `Chapter ${index + 1}`,
+      )
+  ).map((rawName, index) => {
     const { chapNum, title } = cleanChapterName((rawName ?? "").trim());
     const chapterNumber = chapNum ?? index + 1;
     // Native reader IDs are 1-based positions even when the printed number differs.
@@ -332,7 +273,7 @@ export const parseChapters = (novel: Novel, sourceManga: SourceManga): Chapter[]
       sourceManga,
       langCode: "en",
       chapNum: chapterNumber,
-      title: title || `Chapter ${chapterNumber}`,
+      title: title || undefined,
       version: "NovelArchive",
       volume: 0,
       sortingIndex: index,
@@ -357,7 +298,7 @@ export const parseSourceChapters = (
       sourceManga,
       langCode: "en",
       chapNum,
-      title: title || `Chapter ${chapNum}`,
+      title: title || undefined,
       version: displayName,
       volume: 0,
       sortingIndex: index,
@@ -368,10 +309,9 @@ export const parseSourceChapters = (
 export const mergeChapterVersions = (...lists: Chapter[][]): Chapter[] =>
   lists
     .flat()
-    .sort((left, right) => (left.sortingIndex ?? 0) - (right.sortingIndex ?? 0))
+    .sort((left, right) => left.chapNum - right.chapNum)
     .map((chapter, sortingIndex) => ({ ...chapter, sortingIndex }));
 
-// The reader parses chapters as XHTML, so escape content into closed tags.
 const wrapXhtml = (bodyHtml: string, heading: string): string => {
   const title = heading ? `<h2>${escapeXml(heading)}</h2>` : "";
   return `<html xmlns="http://www.w3.org/1999/xhtml"><head><meta charset="utf-8"/></head><body>${title}${bodyHtml}</body></html>`;
@@ -389,10 +329,28 @@ const textToXhtml = (text: string, heading: string): string =>
     heading,
   );
 
-// Mirror sources arrive as HTML; serialize through cheerio so the original
-// structure survives instead of being flattened to plain text.
+const validateChapterContent = (content: string): void => {
+  if (
+    !content.trim() ||
+    (content.length < 60 && /chapter\s+(not\s+found|does\s+not\s+exist)/i.test(content))
+  )
+    throw new Error("No content returned for this chapter");
+  if (/Security Check Required\s+Please complete the security check/i.test(content.trim()))
+    throw new Error(
+      "NovelArchive returned an upstream security check. Try another chapter version or open the site.",
+    );
+};
+
+// XML serialization closes void elements without losing mirror formatting.
 const htmlToXhtml = (html: string, heading: string): string => {
   const $ = cheerio.load(html, null, false);
+  $("script, style").remove();
+  $("img[src]").each((_, image) => {
+    const src = $(image).attr("src")!;
+    if (!/^[a-z][a-z0-9+.-]*:/i.test(src))
+      $(image).attr("src", new URL(`${DOMAIN}/`).update(src).toString());
+  });
+  if ($.root().text().trim() || !$("img[src]").length) validateChapterContent($.root().text());
   return wrapXhtml($.html({ xml: true }), $("h1, h2").length > 0 ? "" : heading);
 };
 
@@ -401,9 +359,7 @@ export const parseChapterDetails = (
   chapter: Chapter,
 ): ChapterDetails => {
   const content = (response.chapter?.content ?? response.content ?? "").trim();
-  if (!content) {
-    throw new Error(`No content returned for chapter ${chapter.chapterId}`);
-  }
+  validateChapterContent(content);
   return {
     type: "html",
     id: chapter.chapterId,
@@ -433,7 +389,7 @@ export const parseSourceChapterDetails = (
 export const parseGenreOptions = (genres: GenreOption[]): Tag[] => {
   const seen = new Set<string>();
   return genres.flatMap((genre) => {
-    const value = genre.value.trim();
+    const value = genre.value.trim().toLowerCase();
     const key = value.toLowerCase();
     if (!value || NON_GENRE_VALUES.has(key) || seen.has(key)) return [];
     seen.add(key);
@@ -447,4 +403,4 @@ export const pickGenreValues = (
 ): string[] =>
   Object.entries(genres ?? {})
     .filter(([, value]) => value === state)
-    .map(([id]) => decodeId(id));
+    .map(([id]) => decodeId(id).toLowerCase());

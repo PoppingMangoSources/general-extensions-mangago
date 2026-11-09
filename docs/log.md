@@ -49,3 +49,7 @@
   including MangaHome's legacy reader output, after iOS transport security failures.
 
 - 2026-11-09: YaoiMe alpha.11 aligns live language/filter values, adds tri-state tags and full ranking lists, preserves real/unnumbered chapter metadata, adds optional deduplication, resolves pasted links and retries rejected memos. See [YaoiMe](sources/YaoiMe.md).
+
+## 2026-11-09: NovelArchive audit
+
+Documented the current API, native and mirror IDs, genre/default filtering, reader traps and verified source audit in [NovelArchive](sources/NovelArchive.md).

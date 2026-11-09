@@ -12,6 +12,7 @@ import {
 } from "@paperback/types";
 
 import { GENRE_MATCH_OPTIONS, STATUS_OPTIONS, type SearchMetadata, type TriState } from "../models";
+import { getDefaultGenres } from "./settings";
 
 export class NovelArchiveAdvancedSearchForm extends AdvancedSearchForm {
   private status: string[];
@@ -25,7 +26,7 @@ export class NovelArchiveAdvancedSearchForm extends AdvancedSearchForm {
     const metadata = searchQuery.metadata ?? {};
     this.status = metadata.status ?? [];
     this.genreMatch = metadata.genreMatch ?? ["all"];
-    this.genres = { ...metadata.genres };
+    this.genres = { ...(metadata.genres ?? getDefaultGenres()) };
     this.genreOptions = genres;
   }
 
@@ -83,7 +84,7 @@ export class NovelArchiveAdvancedSearchForm extends AdvancedSearchForm {
     const result: SearchMetadata = {};
     if (this.status.length > 0) result.status = this.status;
     if (this.genreMatch.length > 0) result.genreMatch = this.genreMatch;
-    if (Object.keys(this.genres).length > 0) result.genres = this.genres;
+    result.genres = this.genres;
     return result;
   }
 }

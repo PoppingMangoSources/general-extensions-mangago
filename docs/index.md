@@ -18,6 +18,7 @@ this wiki's own rules are in [AGENTS.md](AGENTS.md).
 - [MangaHere](sources/MangaHere.md): mobile roll reader, HTTPS image URLs and transport retries.
 - [MangaHome](sources/MangaHome.md): HTTPS covers and legacy reader images.
 - [MangaTown](sources/MangaTown.md): HTTPS covers, reader links and chapter images.
+- [NovelArchive](sources/NovelArchive.md): native/mirror chapter IDs, genre filters and XML readers.
 - [Ranobes](sources/Ranobes.md): verification responses, sequential chapter lists and novel XHTML.
 - [Swarm](sources/Swarm.md): period feeds, languages, upload versions and comic/novel reading.
 - [Toonkotsu](sources/Toonkotsu.md): reader keys, WebView session, AES-CTR in TypeScript.
