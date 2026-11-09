@@ -12,6 +12,7 @@ import {
 export const DOMAIN = "https://yaoi.me";
 
 export const STATE_KEYS = {
+  DEDUPLICATE_CHAPTERS: "yaoime_deduplicate_chapters",
   CHAPTER_LANGUAGES: "yaoime_chapter_languages",
   CONTENT_RATINGS: "yaoime_content_ratings",
   CONTENT_TYPES: "yaoime_content_types",
@@ -97,6 +98,7 @@ export const SECTION_OPTIONS: Tag[] = SECTION_IDS.map((id) => ({
 }));
 
 export const TYPE_OPTIONS: Tag[] = [
+  { id: "doujinshi", title: "Doujinshi" },
   { id: "manga", title: "Manga" },
   { id: "manhwa", title: "Manhwa" },
   { id: "manhua", title: "Manhua" },
@@ -110,20 +112,6 @@ export const CONTENT_RATING_OPTIONS: Tag[] = [
   { id: "suggestive", title: "Suggestive" },
   { id: "erotica", title: "Erotica" },
   { id: "pornographic", title: "Pornographic" },
-];
-
-export const STATUS_OPTIONS: Tag[] = [
-  { id: "ongoing", title: "Ongoing" },
-  { id: "completed", title: "Completed" },
-  { id: "hiatus", title: "Hiatus" },
-  { id: "cancelled", title: "Cancelled" },
-];
-
-export const DEMOGRAPHIC_OPTIONS: Tag[] = [
-  { id: "shounen", title: "Shounen" },
-  { id: "shoujo", title: "Shoujo" },
-  { id: "seinen", title: "Seinen" },
-  { id: "josei", title: "Josei" },
 ];
 
 export const LANGUAGE_OPTIONS: Tag[] = [
@@ -209,7 +197,18 @@ export const SORT_OPTIONS: SortingOption[] = [
   { id: "az-desc", label: "Title Z–A" },
 ];
 
+export interface SearchFilters {
+  genres: Tag[];
+  tags: Tag[];
+  types: Tag[];
+  statuses: Tag[];
+  ratings: Tag[];
+  demographics: Tag[];
+  languages: Tag[];
+}
+
 export interface Preferences {
+  deduplicateChapters: boolean;
   chapterLanguages: string[];
   contentRatings: string[];
   contentTypes: string[];
@@ -256,7 +255,11 @@ export interface ChapterVariant {
 
 export interface ChapterGroup {
   label: string;
-  num: number;
+  num: number | null;
+  numReal?: number;
+  vol?: number | null;
+  extra?: boolean;
+  after?: number | null;
   createdAt?: number;
   variants: ChapterVariant[];
 }

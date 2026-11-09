@@ -13,7 +13,6 @@ import {
   ToggleRow,
   TriStateSelectRow,
   type SearchQuery,
-  type Tag,
 } from "@paperback/types";
 
 import {
@@ -21,15 +20,14 @@ import {
   DEFAULT_LANGUAGES,
   DEFAULT_RATINGS,
   DEFAULT_TYPES,
-  DEMOGRAPHIC_OPTIONS,
   LANGUAGE_OPTIONS,
   SECTION_IDS,
   SECTION_OPTIONS,
   STATE_KEYS,
-  STATUS_OPTIONS,
   TYPE_OPTIONS,
   type Preferences,
   type SearchMetadata,
+  type SearchFilters,
   type SectionId,
   type TriState,
 } from "./models";
@@ -44,6 +42,8 @@ const storedSelection = (key: string, valid: string[], fallback: string[]): stri
 };
 
 export const getPreferences = (): Preferences => ({
+  deduplicateChapters:
+    (Application.getState(STATE_KEYS.DEDUPLICATE_CHAPTERS) as boolean | undefined) ?? false,
   chapterLanguages: storedSelection(
     STATE_KEYS.CHAPTER_LANGUAGES,
     LANGUAGE_OPTIONS.map(({ id }) => id),
@@ -124,6 +124,7 @@ export class YaoiMeSettingsForm extends Form {
   private contentTypes: string[];
   private hiddenTags: string;
   private officialOnly: boolean;
+  private deduplicateChapters: boolean;
   private visibleSections: SectionId[];
 
   constructor(
@@ -137,6 +138,7 @@ export class YaoiMeSettingsForm extends Form {
     this.contentTypes = preferences.contentTypes;
     this.hiddenTags = preferences.hiddenTags.join(", ");
     this.officialOnly = preferences.officialOnly;
+    this.deduplicateChapters = preferences.deduplicateChapters;
     this.visibleSections = visibleSections;
   }
 
@@ -193,6 +195,18 @@ export class YaoiMeSettingsForm extends Form {
           ),
         }),
       ]),
+      Section("chapters", [
+        ToggleRow("deduplicate_chapters", {
+          title: "Deduplicate Chapters",
+          subtitle:
+            "Keep the first site-ranked upload per chapter and language. Specials are retained.",
+          value: this.deduplicateChapters,
+          onValueChange: Application.Selector(
+            this as YaoiMeSettingsForm,
+            "handleDeduplicateChaptersChange",
+          ),
+        }),
+      ]),
       Section("discover", [
         SelectRow("visible_sections", {
           title: "Visible Sections",
@@ -246,6 +260,11 @@ export class YaoiMeSettingsForm extends Form {
     this.save(STATE_KEYS.OFFICIAL_ONLY, value);
   }
 
+  async handleDeduplicateChaptersChange(value: boolean): Promise<void> {
+    this.deduplicateChapters = value;
+    this.save(STATE_KEYS.DEDUPLICATE_CHAPTERS, value);
+  }
+
   async handleVisibleSectionsChange(value: string[]): Promise<void> {
     this.visibleSections = value as SectionId[];
     this.save(STATE_KEYS.VISIBLE_SECTIONS, this.visibleSections);
@@ -277,7 +296,7 @@ export class YaoiMeAdvancedSearchForm extends AdvancedSearchForm {
   constructor(
     query: SearchQuery<SearchMetadata>,
     preferences: Preferences,
-    private readonly genreOptions: Tag[],
+    private readonly options: SearchFilters,
   ) {
     super();
     const metadata = query.metadata ?? {};
@@ -304,23 +323,15 @@ export class YaoiMeAdvancedSearchForm extends AdvancedSearchForm {
   }
 
   override getSections() {
-    const includedTags = Object.entries(this.tags)
-      .filter(([, state]) => state === "included")
-      .map(([tag]) => tag)
-      .join(", ");
-    const excludedTags = Object.entries(this.tags)
-      .filter(([, state]) => state === "excluded")
-      .map(([tag]) => tag)
-      .join(", ");
     return [
       Section("content", [
         SelectRow("types", {
           title: "Types",
           layout: "flow",
           value: this.types,
-          items: TYPE_OPTIONS,
+          items: this.options.types,
           minItemCount: 0,
-          maxItemCount: TYPE_OPTIONS.length,
+          maxItemCount: this.options.types.length,
           onValueChange: Application.Selector(
             this as YaoiMeAdvancedSearchForm,
             "handleTypesChange",
@@ -330,9 +341,9 @@ export class YaoiMeAdvancedSearchForm extends AdvancedSearchForm {
           title: "Content Ratings",
           layout: "flow",
           value: this.ratings,
-          items: CONTENT_RATING_OPTIONS,
+          items: this.options.ratings,
           minItemCount: 0,
-          maxItemCount: CONTENT_RATING_OPTIONS.length,
+          maxItemCount: this.options.ratings.length,
           onValueChange: Application.Selector(
             this as YaoiMeAdvancedSearchForm,
             "handleRatingsChange",
@@ -342,9 +353,9 @@ export class YaoiMeAdvancedSearchForm extends AdvancedSearchForm {
           title: "Publication Status",
           layout: "flow",
           value: this.statuses,
-          items: STATUS_OPTIONS,
+          items: this.options.statuses,
           minItemCount: 0,
-          maxItemCount: STATUS_OPTIONS.length,
+          maxItemCount: this.options.statuses.length,
           onValueChange: Application.Selector(
             this as YaoiMeAdvancedSearchForm,
             "handleStatusesChange",
@@ -354,9 +365,9 @@ export class YaoiMeAdvancedSearchForm extends AdvancedSearchForm {
           title: "Demographics",
           layout: "flow",
           value: this.demographics,
-          items: DEMOGRAPHIC_OPTIONS,
+          items: this.options.demographics,
           minItemCount: 0,
-          maxItemCount: DEMOGRAPHIC_OPTIONS.length,
+          maxItemCount: this.options.demographics.length,
           onValueChange: Application.Selector(
             this as YaoiMeAdvancedSearchForm,
             "handleDemographicsChange",
@@ -366,9 +377,9 @@ export class YaoiMeAdvancedSearchForm extends AdvancedSearchForm {
           title: "Chapter Languages",
           layout: "list",
           value: this.languages,
-          items: LANGUAGE_OPTIONS,
+          items: this.options.languages,
           minItemCount: 0,
-          maxItemCount: LANGUAGE_OPTIONS.length,
+          maxItemCount: this.options.languages.length,
           onValueChange: Application.Selector(
             this as YaoiMeAdvancedSearchForm,
             "handleLanguagesChange",
@@ -380,7 +391,7 @@ export class YaoiMeAdvancedSearchForm extends AdvancedSearchForm {
           title: "Genres",
           layout: "flow",
           value: this.genres,
-          items: this.genreOptions,
+          items: this.options.genres,
           allowExclusion: true,
           allowEmptySelection: true,
           onValueChange: Application.Selector(
@@ -388,21 +399,14 @@ export class YaoiMeAdvancedSearchForm extends AdvancedSearchForm {
             "handleGenresChange",
           ),
         }),
-        InputRow("included_tags", {
-          title: "Included Tags (comma-separated)",
-          value: includedTags,
-          onValueChange: Application.Selector(
-            this as YaoiMeAdvancedSearchForm,
-            "handleIncludedTagsChange",
-          ),
-        }),
-        InputRow("excluded_tags", {
-          title: "Excluded Tags (comma-separated)",
-          value: excludedTags,
-          onValueChange: Application.Selector(
-            this as YaoiMeAdvancedSearchForm,
-            "handleExcludedTagsChange",
-          ),
+        TriStateSelectRow("tags", {
+          title: "Tags",
+          layout: "list",
+          value: this.tags,
+          items: this.options.tags,
+          allowExclusion: true,
+          allowEmptySelection: true,
+          onValueChange: Application.Selector(this as YaoiMeAdvancedSearchForm, "handleTagsChange"),
         }),
       ]),
       Section("credits", [
@@ -574,20 +578,8 @@ export class YaoiMeAdvancedSearchForm extends AdvancedSearchForm {
     this.yearTo = value;
   }
 
-  async handleIncludedTagsChange(value: string): Promise<void> {
-    const excluded = Object.entries(this.tags).filter(([, state]) => state === "excluded");
-    this.tags = Object.fromEntries([
-      ...excluded,
-      ...parseList(value).map((tag) => [tag, "included"] as const),
-    ]);
-  }
-
-  async handleExcludedTagsChange(value: string): Promise<void> {
-    const included = Object.entries(this.tags).filter(([, state]) => state === "included");
-    this.tags = Object.fromEntries([
-      ...included,
-      ...parseList(value).map((tag) => [tag, "excluded"] as const),
-    ]);
+  async handleTagsChange(value: TriState): Promise<void> {
+    this.tags = value;
   }
 
   override getSearchQueryMetadata(): SearchMetadata {
@@ -613,8 +605,10 @@ export class YaoiMeAdvancedSearchForm extends AdvancedSearchForm {
         updatedWithin: this.updatedWithin,
         yearFrom: this.yearFrom,
         yearTo: this.yearTo,
-      }).filter(([, value]) =>
-        typeof value === "object" ? Object.keys(value).length > 0 : Boolean(value),
+      }).filter(
+        ([key, value]) =>
+          ["languages", "types", "ratings"].includes(key) ||
+          (typeof value === "object" ? Object.keys(value).length > 0 : Boolean(value)),
       ),
     );
   }

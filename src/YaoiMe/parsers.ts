@@ -18,10 +18,19 @@ import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
 import { formatListingSubtitle } from "../utils/listings";
-import { DOMAIN, type ChapterGroup, type MangaCard, type SearchMetadata } from "./models";
+import {
+  DOMAIN,
+  LANGUAGE_OPTIONS,
+  TYPE_OPTIONS,
+  CONTENT_RATING_OPTIONS,
+  type ChapterGroup,
+  type MangaCard,
+  type SearchMetadata,
+  type SearchFilters,
+} from "./models";
 
 const SAFE_ID = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
-const SERIES_PATH = /^\/series\/\d+\/[a-zA-Z0-9._~-]+$/;
+const SERIES_PATH = /^\/series\/\d+(?:\/[a-zA-Z0-9._~-]+)?$/;
 const CHAPTER_PATH = /^\/chapter\/\d+\/\d+$/;
 const RATING_NAMES = new Set(["safe", "suggestive", "erotica", "pornographic"]);
 
@@ -37,7 +46,7 @@ const safePath = (value?: string | null): string =>
     .replace(SAFE_ID, "-");
 
 export const parseMangaId = (value?: string | null): string => {
-  const path = safePath(value);
+  const path = safePath(value).replace(/\/+$/, "");
   return SERIES_PATH.test(path) ? path : "";
 };
 
@@ -61,7 +70,7 @@ export const fromTagId = (id: string): string => {
 const toTag = (name: string): Tag => ({ id: toTagId(name), title: name });
 
 const parseChapterId = (value?: string | null): string => {
-  const path = safePath(value);
+  const path = safePath(value).replace(/\/+$/, "");
   return CHAPTER_PATH.test(path) ? path : "";
 };
 
@@ -118,7 +127,9 @@ const parseCard = ($: cheerio.CheerioAPI, node: AnyNode): MangaCard | undefined 
     facts
       .children("span")
       .add(element.find(".card-trail span"))
-      .filter((_, item) => /^(?:Manga|Manhwa|Manhua|OEL|Novel|Other)$/i.test($(item).text().trim()))
+      .filter((_, item) =>
+        /^(?:Doujinshi|Manga|Manhwa|Manhua|OEL|Novel|Other)$/i.test($(item).text().trim()),
+      )
       .first()
       .text(),
   );
@@ -267,27 +278,45 @@ const flightData = ($: cheerio.CheerioAPI): string => {
   return output;
 };
 
-export const parseGenres = ($: cheerio.CheerioAPI): Tag[] => {
+export const parseSearchFilters = ($: cheerio.CheerioAPI): SearchFilters => {
   const payload = flightData($);
-  const match = payload.match(/"genres":(\[[^\]]*\])/);
-  if (match) {
-    try {
-      const values = JSON.parse(match[1]) as { name?: unknown }[];
-      const genres = values.flatMap(({ name }): Tag[] =>
-        typeof name === "string" && name ? [toTag(name)] : [],
-      );
-      if (genres.length) return genres;
-    } catch (error) {
-      if (!(error instanceof SyntaxError)) throw error;
-    }
-  }
-  const genres = new Map<string, Tag>();
-  $("a[href^='/genre/']").each((_, element) => {
-    const title = cleanText($(element).text());
-    if (title) genres.set(title, toTag(title));
-  });
-  return [...genres.values()];
+  const options = (key: string, field: "name" | "value" | "code", labels: Tag[] = []): Tag[] => {
+    const at = payload.indexOf(`"${key}":[`);
+    const json = at >= 0 ? sliceJson(payload, at + key.length + 3) : undefined;
+    if (!json) throw new Error(`The site's ${key} filter list is missing.`);
+    const entries: unknown = JSON.parse(json);
+    if (!Array.isArray(entries)) throw new Error(`The site's ${key} filter list is invalid.`);
+    return entries.flatMap((entry): Tag[] => {
+      const value: unknown = entry && typeof entry === "object" ? entry[field] : undefined;
+      if (typeof value !== "string" || !value) return [];
+      return field === "name"
+        ? [toTag(value)]
+        : [
+            {
+              id: toTagId(value),
+              title:
+                labels.find(({ id }) => id === value)?.title ??
+                (value === "releasing"
+                  ? "Ongoing"
+                  : value.charAt(0).toUpperCase() + value.slice(1)),
+            },
+          ];
+    });
+  };
+  return {
+    genres: options("genres", "name"),
+    tags: options("tags", "name"),
+    types: options("types", "value", TYPE_OPTIONS),
+    statuses: options("statuses", "value"),
+    ratings: options("content", "value", CONTENT_RATING_OPTIONS),
+    demographics: options("demographics", "value"),
+    languages: options("languages", "code", LANGUAGE_OPTIONS),
+  };
 };
+
+export const parseLinkedMangaId = ($: cheerio.CheerioAPI): string =>
+  parseMangaId($("link[rel='canonical']").attr("href")) ||
+  parseMangaId($("a[href^='/series/']").first().attr("href"));
 
 export const toGenreItem = (genre: Tag): GenresCarouselItem => ({
   type: "genresCarouselItem",
@@ -312,7 +341,17 @@ export const parseMangaDetails = ($: cheerio.CheerioAPI, mangaId: string): Sourc
   const header = titleElement.parent();
   const primaryTitle = cleanText(titleElement.text());
   if (!primaryTitle) throw new Error(`No title found for ${mangaId}.`);
-  const secondaryTitle = cleanText(titleElement.next("div").text());
+  const secondaryTitles = new Set([cleanText(titleElement.next("div").text())]);
+  $("script[type='application/ld+json']").each((_, element) => {
+    const data: unknown = JSON.parse($(element).text());
+    for (const entry of Array.isArray(data) ? data : [data]) {
+      if (!entry || typeof entry !== "object" || !("alternateName" in entry)) continue;
+      const names = Array.isArray(entry.alternateName)
+        ? entry.alternateName
+        : [entry.alternateName];
+      for (const name of names) if (typeof name === "string") secondaryTitles.add(cleanText(name));
+    }
+  });
   // The credits line reads "Story by A, B · Art by C"; both name lists link to /author/.
   const credits = header.find("a[href^='/author/']").first().parent();
   const [storyHtml = "", artHtml = ""] = (credits.html() ?? "").split(/Art by/i);
@@ -328,7 +367,7 @@ export const parseMangaDetails = ($: cheerio.CheerioAPI, mangaId: string): Sourc
   const author = creditNames(storyHtml) || artist;
   const headerText = cleanText(header.children("div").first().text());
   const status = headerText.match(/Ongoing|Completed|Hiatus|Cancelled/i)?.[0];
-  const typeName = headerText.match(/Manga|Manhwa|Manhua|OEL|Novel|Other/i)?.[0];
+  const typeName = headerText.match(/Doujinshi|Manga|Manhwa|Manhua|OEL|Novel|Other/i)?.[0];
   const ratingName = headerText.toLowerCase().match(/safe|suggestive|erotica|pornographic/)?.[0] as
     | MangaCard["contentRating"]
     | undefined;
@@ -364,7 +403,7 @@ export const parseMangaDetails = ($: cheerio.CheerioAPI, mangaId: string): Sourc
       thumbnailUrl,
       synopsis,
       primaryTitle,
-      secondaryTitles: secondaryTitle && secondaryTitle !== primaryTitle ? [secondaryTitle] : [],
+      secondaryTitles: [...secondaryTitles].filter((title) => title && title !== primaryTitle),
       contentRating: toContentRating(ratingName ?? ratingFrom(header)),
       contentType: typeName?.toLowerCase() === "novel" ? "novel" : "comic",
       isWebtoon: /^(?:manhwa|manhua|webtoon)$/i.test(typeName ?? ""),
@@ -419,21 +458,21 @@ const isChapterGroup = (value: unknown): value is ChapterGroup => {
   const group = value as Partial<ChapterGroup>;
   return (
     typeof group.label === "string" &&
-    typeof group.num === "number" &&
+    (group.num == null || typeof group.num === "number") &&
     Array.isArray(group.variants)
   );
 };
 
-// The HTML renders only the first rows; the full list, with every upload of each chapter, is the
-// chapter component's data in the page payload. Its order is not by number, so chapters sort by
-// their number, as the site's own list does.
+// The embedded list keeps extras beside their anchor chapter; numReal distinguishes numbers
+// from internal counters used for notices. Variants are ranked by the site, best first.
 export const parseChapters = (
   $: cheerio.CheerioAPI,
   sourceManga: SourceManga,
   languages: string[],
+  deduplicate = false,
 ): Chapter[] => {
   const payload = flightData($);
-  const groupsAt = payload.indexOf('"groups":[{');
+  const groupsAt = payload.indexOf('"groups":[');
   const groupsJson = groupsAt >= 0 ? sliceJson(payload, groupsAt + '"groups":'.length) : undefined;
   if (!groupsJson) throw new Error(`No chapter list found for ${sourceManga.mangaId}.`);
   const sourcesAt = payload.indexOf('"sources":{', groupsAt);
@@ -450,20 +489,29 @@ export const parseChapters = (
     });
   }
 
-  return groups.flatMap((group) => {
+  return groups.flatMap((group, index) => {
+    const seenLanguages = new Set<string>();
     const variants = group.variants.filter(
       (variant) =>
         typeof variant?.id === "number" &&
         typeof variant.s === "number" &&
-        languages.includes(variant.lang || "en"),
+        (!languages.length || languages.includes(variant.lang || "en")),
     );
+    const selected = deduplicate
+      ? variants.filter((variant) => {
+          const language = variant.lang || "en";
+          if (seenLanguages.has(language)) return false;
+          seenLanguages.add(language);
+          return true;
+        })
+      : variants;
     const uploadsPerSource = new Map<number, number>();
-    for (const variant of variants) {
+    for (const variant of selected) {
       uploadsPerSource.set(variant.s, (uploadsPerSource.get(variant.s) ?? 0) + 1);
     }
     const numbered = new Map<number, number>();
     const publishDate = group.createdAt ? new Date(group.createdAt) : undefined;
-    return variants.map((variant): Chapter => {
+    return selected.map((variant): Chapter => {
       const key = sources[variant.s] ?? "";
       const name = key.charAt(0).toUpperCase() + key.slice(1);
       const occurrence = (numbered.get(variant.s) ?? 0) + 1;
@@ -475,11 +523,14 @@ export const parseChapters = (
         chapterId: `/chapter/${variant.s}/${variant.id}`,
         sourceManga,
         langCode: variant.lang || "en",
-        chapNum: group.num,
-        title: chapterTitle(cleanText(group.label)),
+        chapNum: group.numReal === 0 || group.num == null ? -1 : group.num,
+        title:
+          group.numReal === 0 || group.num == null
+            ? cleanText(group.label)
+            : chapterTitle(cleanText(group.label)),
         version: version || undefined,
-        volume: 0,
-        sortingIndex: group.num,
+        volume: group.vol ?? 0,
+        sortingIndex: groups.length - index,
         publishDate: publishDate && !Number.isNaN(publishDate.getTime()) ? publishDate : undefined,
       };
     });

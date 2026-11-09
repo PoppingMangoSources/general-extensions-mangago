@@ -18,7 +18,7 @@ import {
   type Preferences,
   type SearchMetadata,
 } from "./models";
-import { fromTagId } from "./parsers";
+import { fromTagId, parseSealKey } from "./parsers";
 
 const IMAGE_REGEX = /\.(?:avif|gif|jpe?g|jxl|png|svg|webp)(?:[/?#]|$)|\/i\/[cp]\//i;
 
@@ -125,7 +125,7 @@ export const browseUrl = (
   const entries: [string, string | string[] | undefined][] = [
     ["q", query.trim() || undefined],
     ["anime", metadata.anime ? "1" : undefined],
-    ["lang", metadata.languages],
+    ["langs", metadata.languages],
     ["genre", values(metadata.genres, "included")],
     ["without", values(metadata.genres, "excluded")],
     ["tags", values(metadata.tags, "included")],
@@ -154,6 +154,14 @@ export const browseUrl = (
   return url.toString();
 };
 
+export const fetchFiltersPage = (): Promise<cheerio.CheerioAPI> =>
+  fetchDocument(`${DOMAIN}/browse`);
+
+export const fetchDiscoverPage = (section: string, page: number): Promise<cheerio.CheerioAPI> =>
+  fetchDocument(
+    new URL(`${DOMAIN}/discover/${section}`).setQueryItem("page", String(page)).toString(),
+  );
+
 export const fetchHomePage = (): Promise<cheerio.CheerioAPI> => fetchDocument(`${DOMAIN}/`);
 
 export const fetchBrowsePage = (
@@ -168,3 +176,11 @@ export const fetchSeriesPage = (mangaId: string): Promise<cheerio.CheerioAPI> =>
 
 export const fetchChapterPage = (chapterId: string): Promise<string> =>
   fetchText(`${DOMAIN}${chapterId}`);
+
+export const fetchSealKey = async (scripts: string[]): Promise<string> => {
+  for (const url of scripts) {
+    const key = parseSealKey(await fetchText(url));
+    if (key) return key;
+  }
+  throw new Error("The site's reader script no longer carries a page-list key.");
+};

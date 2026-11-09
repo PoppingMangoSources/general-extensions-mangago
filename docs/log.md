@@ -47,3 +47,5 @@
   sort through View More pagination, with a Trending heading and subtitle.
 - 2026-11-08: MangaHome and MangaTown upgrade scraped and saved HTTP URLs to HTTPS,
   including MangaHome's legacy reader output, after iOS transport security failures.
+
+- 2026-11-09: YaoiMe alpha.11 aligns live language/filter values, adds tri-state tags and full ranking lists, preserves real/unnumbered chapter metadata, adds optional deduplication, resolves pasted links and retries rejected memos. See [YaoiMe](sources/YaoiMe.md).

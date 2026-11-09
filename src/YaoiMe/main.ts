@@ -19,7 +19,6 @@ import {
   type SearchResultItem,
   type SortingOption,
   type SourceManga,
-  type Tag,
   type UpdateManager,
 } from "@paperback/types";
 import type { CheerioAPI } from "cheerio";
@@ -41,26 +40,29 @@ import {
   type PageMetadata,
   type SealKey,
   type SearchMetadata,
+  type SearchFilters,
 } from "./models";
 import {
   YaoiMeInterceptor,
   fetchBrowsePage,
+  fetchDiscoverPage,
+  fetchFiltersPage,
   fetchChapterPage,
   fetchHomePage,
   fetchSeriesPage,
-  fetchText,
+  fetchSealKey,
 } from "./network";
 import {
   hasNextPage,
   parseBrowseCards,
   decryptPageList,
   parseChapters,
-  parseGenres,
+  parseSearchFilters,
+  parseLinkedMangaId,
   parseHomeCards,
   parseMangaDetails,
   parseMangaId,
   parseReaderPage,
-  parseSealKey,
   toFeaturedItem,
   toGenreItem,
   toLatestItem,
@@ -81,7 +83,7 @@ class YaoiMeExtension implements ExtensionImpl<typeof YaoiMeConfig> {
   private cookieStorageInterceptor = new CookieStorageInterceptor({ storage: "stateManager" });
   private interceptor = new YaoiMeInterceptor("main", getPreferences, getSectionOrder);
   private homePromise?: Promise<CheerioAPI>;
-  private genresPromise?: Promise<Tag[]>;
+  private filtersPromise?: Promise<SearchFilters>;
   private sealKeyPromise?: Promise<string>;
 
   async initialise(): Promise<void> {
@@ -106,7 +108,7 @@ class YaoiMeExtension implements ExtensionImpl<typeof YaoiMeConfig> {
 
   private clearMemos = (): void => {
     this.homePromise = undefined;
-    this.genresPromise = undefined;
+    this.filtersPromise = undefined;
   };
 
   async getSettingsForm(): Promise<Form> {
@@ -124,32 +126,34 @@ class YaoiMeExtension implements ExtensionImpl<typeof YaoiMeConfig> {
 
   async getDiscoverSectionItems(
     section: DiscoverSection,
-    _metadata: PageMetadata | undefined,
+    metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
     switch (section.id) {
       case SECTIONS.GENRES:
-        return { items: (await this.getGenres()).map(toGenreItem) };
+        return { items: (await this.getSearchFilters()).genres.map(toGenreItem) };
       case SECTIONS.POPULAR:
         return this.getHomeSectionItems("Popular updates", (card) => [toFeaturedItem(card)]);
       case SECTIONS.BINGE:
-        return this.getHomeSectionItems("Binge-worthy", (card) => [toProminentItem(card)]);
+        return this.getRankingSectionItems(section.id, metadata, (card) => [toProminentItem(card)]);
       case SECTIONS.TRENDING:
-        return this.getHomeSectionItems("Trending now", (card) => [toSimpleItem(card)]);
+        return this.getRankingSectionItems(section.id, metadata, (card) => [toSimpleItem(card)]);
       case SECTIONS.TOP_RATED:
-        return this.getHomeSectionItems("Top rated", (card) => [toSimpleItem(card)]);
+        return this.getRankingSectionItems(section.id, metadata, (card) => [toSimpleItem(card)]);
       case SECTIONS.LATEST:
         return this.getHomeSectionItems("Latest releases", (card) => {
           const item = toLatestItem(card);
           return item ? [item] : [];
         });
       case SECTIONS.BOOKMARKED:
-        return this.getHomeSectionItems("Most bookmarked", (card) => [toFeaturedItem(card, true)]);
+        return this.getRankingSectionItems(section.id, metadata, (card) => [
+          toFeaturedItem(card, true),
+        ]);
       case SECTIONS.HIDDEN_GEMS:
-        return this.getHomeSectionItems("Hidden gems", (card) => [toProminentItem(card)]);
+        return this.getRankingSectionItems(section.id, metadata, (card) => [toProminentItem(card)]);
       case SECTIONS.TALKED:
-        return this.getHomeSectionItems("Most talked about", (card) => [toSimpleItem(card)]);
+        return this.getRankingSectionItems(section.id, metadata, (card) => [toSimpleItem(card)]);
       case SECTIONS.RISING:
-        return this.getHomeSectionItems("Rising", (card) => [toSimpleItem(card)]);
+        return this.getRankingSectionItems(section.id, metadata, (card) => [toSimpleItem(card)]);
       default:
         return { items: [] };
     }
@@ -160,14 +164,33 @@ class YaoiMeExtension implements ExtensionImpl<typeof YaoiMeConfig> {
     heading: string,
     toItems: (card: MangaCard) => DiscoverSectionItem[],
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    const $ = await (this.homePromise ??= fetchHomePage());
+    const $ = await (this.homePromise ??= fetchHomePage().catch((error: unknown) => {
+      this.homePromise = undefined;
+      throw error;
+    }));
     return { items: parseHomeCards($, heading).flatMap(toItems) };
   }
 
-  private getGenres(): Promise<Tag[]> {
-    return (this.genresPromise ??= fetchBrowsePage(1, "", {}, SORT_OPTIONS[0].id).then(
-      parseGenres,
-    ));
+  private async getRankingSectionItems(
+    section: string,
+    metadata: PageMetadata | undefined,
+    toItems: (card: MangaCard) => DiscoverSectionItem[],
+  ): Promise<PagedResults<DiscoverSectionItem>> {
+    const page = metadata?.page ?? 1;
+    const $ = await fetchDiscoverPage(section, page);
+    return {
+      items: parseBrowseCards($).flatMap(toItems),
+      ...(hasNextPage($, page) ? { metadata: { page: page + 1 } } : {}),
+    };
+  }
+
+  private getSearchFilters(): Promise<SearchFilters> {
+    return (this.filtersPromise ??= fetchFiltersPage()
+      .then(parseSearchFilters)
+      .catch((error: unknown) => {
+        this.filtersPromise = undefined;
+        throw error;
+      }));
   }
 
   async getSortingOptions(_query: SearchQuery<SearchMetadata>): Promise<SortingOption[]> {
@@ -175,7 +198,7 @@ class YaoiMeExtension implements ExtensionImpl<typeof YaoiMeConfig> {
   }
 
   async getAdvancedSearchForm(query: SearchQuery<SearchMetadata>): Promise<AdvancedSearchForm> {
-    return new YaoiMeAdvancedSearchForm(query, getPreferences(), await this.getGenres());
+    return new YaoiMeAdvancedSearchForm(query, getPreferences(), await this.getSearchFilters());
   }
 
   async getSearchResults(
@@ -205,7 +228,7 @@ class YaoiMeExtension implements ExtensionImpl<typeof YaoiMeConfig> {
     );
     return {
       items: parseBrowseCards($).map(toSearchResult),
-      metadata: hasNextPage($, page) ? { page: page + 1 } : undefined,
+      ...(hasNextPage($, page) ? { metadata: { page: page + 1 } } : {}),
     };
   }
 
@@ -214,26 +237,30 @@ class YaoiMeExtension implements ExtensionImpl<typeof YaoiMeConfig> {
   ): Promise<PagedResults<SearchResultItem> | undefined> {
     const url = query
       .trim()
-      .match(/^https?:\/\/(?:www\.)?yaoi\.me\/series\/\d+\/[a-zA-Z0-9._~-]+\/?$/i)?.[0];
+      .match(
+        /^https?:\/\/(?:www\.)?yaoi\.me\/(?:series\/\d+(?:\/[a-zA-Z0-9._~-]+)?|chapter\/\d+\/\d+)\/?(?:[?#].*)?$/i,
+      )?.[0];
     if (!url) return undefined;
-    const mangaId = parseMangaId(url);
-    if (!mangaId) return undefined;
-    try {
-      const manga = await this.getMangaDetails(mangaId);
-      return {
-        items: [
-          {
-            mangaId,
-            title: manga.mangaInfo.primaryTitle,
-            imageUrl: manga.mangaInfo.thumbnailUrl,
-            contentRating: manga.mangaInfo.contentRating,
-          },
-        ],
-      };
-    } catch (error) {
-      if (error instanceof CloudflareError) throw error;
-      return undefined;
+    let mangaId = parseMangaId(url);
+    let $ = await fetchSeriesPage(url.replace(/^https?:\/\/(?:www\.)?yaoi\.me/i, ""));
+    if (!mangaId) {
+      mangaId = parseLinkedMangaId($);
+      if (!mangaId) throw new Error("No series link found on this chapter page.");
+      $ = await fetchSeriesPage(mangaId);
+    } else {
+      mangaId = parseLinkedMangaId($) || mangaId;
     }
+    const manga = parseMangaDetails($, mangaId);
+    return {
+      items: [
+        {
+          mangaId,
+          title: manga.mangaInfo.primaryTitle,
+          imageUrl: manga.mangaInfo.thumbnailUrl,
+          contentRating: manga.mangaInfo.contentRating,
+        },
+      ],
+    };
   }
 
   async getMangaDetails(mangaId: string): Promise<SourceManga> {
@@ -241,10 +268,12 @@ class YaoiMeExtension implements ExtensionImpl<typeof YaoiMeConfig> {
   }
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
+    const preferences = getPreferences();
     return parseChapters(
       await fetchSeriesPage(sourceManga.mangaId),
       sourceManga,
-      getPreferences().chapterLanguages,
+      preferences.chapterLanguages,
+      preferences.deduplicateChapters,
     );
   }
 
@@ -299,7 +328,7 @@ class YaoiMeExtension implements ExtensionImpl<typeof YaoiMeConfig> {
   private async getSealKey(reader: ReaderPage, refresh = false): Promise<string> {
     const stored = Application.getState(STATE_KEYS.SEAL_KEY) as SealKey | undefined;
     if (!refresh && reader.build && stored?.build === reader.build) return stored.key;
-    const key = await (this.sealKeyPromise ??= findSealKey(reader.scripts).finally(() => {
+    const key = await (this.sealKeyPromise ??= fetchSealKey(reader.scripts).finally(() => {
       this.sealKeyPromise = undefined;
     }));
     if (reader.build)
@@ -307,13 +336,5 @@ class YaoiMeExtension implements ExtensionImpl<typeof YaoiMeConfig> {
     return key;
   }
 }
-
-const findSealKey = async (scripts: string[]): Promise<string> => {
-  for (const url of scripts) {
-    const key = parseSealKey(await fetchText(url));
-    if (key) return key;
-  }
-  throw new Error("The site's reader script no longer carries a page-list key.");
-};
 
 export const YaoiMe = new YaoiMeExtension();
