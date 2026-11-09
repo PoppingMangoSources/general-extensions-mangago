@@ -20,19 +20,19 @@ Live API and client JavaScript inspected on 2026-11-09. Working baseline:
 
 ## Live contract
 
-| Feature           | Contract                                                                                                                                                                                      |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Domain            | `.cc` redirects to `.st`; accept pasted novel/reader URLs on either domain.                                                                                                                   |
-| Browse and search | `GET /api/novels`, `page`, `per_page=30`, `search`, `fuzzy=1`; use `pagination.has_next` before local filtering.                                                                              |
-| Sort              | `recent`, `popular`, `rating`, `chapters`.                                                                                                                                                    |
-| Status            | `all`, `ongoing`, `completed`, `hiatus`.                                                                                                                                                      |
-| Genres            | `/api/novels/genres`; lower-case `value`, display `label`; comma-separated `genres_include` and `genres_exclude`; `genre_match=any` means OR, omitted means AND.                              |
-| Feeds             | `/api/novels/trending?limit=50`, `/api/novels/recently-updated?limit=50`, `/api/novels/editors-choice?limit=50`; feeds are unpaged, while Top Rated and Recently Added use the library endpoint.                                                                         |
-| Details           | `/api/novels/<id>`; aliases in `associated_names`, five-point `rating`, comma-separated `genres`.                                                                                             |
-| Native chapters   | `chapter_names` in detail payload; endpoint IDs are **1-based positions**, independent of printed numbering. The site's `novel-page.js` falls back to `total_chapters` when names are absent. |
-| Mirror chapters   | `/api/novels/<id>/sources`, then `/sources/<source>/chapters`; each entry supplies `number` and `title`.                                                                                      |
-| Native reader     | `/api/novels/<id>/chapters/<position>?prefetch=1`, text in `chapter.content`; prefetch avoids resending the full novel chapter-name array.                                                    |
-| Mirror reader     | `/api/novels/<id>/sources/<source>/chapters/<number>`, HTML in `content_html`.                                                                                                                |
+| Feature           | Contract                                                                                                                                                                                         |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Domain            | `.cc` redirects to `.st`; accept pasted novel/reader URLs on either domain.                                                                                                                      |
+| Browse and search | `GET /api/novels`, `page`, `per_page=30`, `search`, `fuzzy=1`; use `pagination.has_next` before local filtering.                                                                                 |
+| Sort              | `recent`, `popular`, `rating`, `chapters`.                                                                                                                                                       |
+| Status            | `all`, `ongoing`, `completed`, `hiatus`.                                                                                                                                                         |
+| Genres            | `/api/novels/genres`; lower-case `value`, display `label`; comma-separated `genres_include` and `genres_exclude`; `genre_match=any` means OR, omitted means AND.                                 |
+| Feeds             | `/api/novels/trending?limit=50`, `/api/novels/recently-updated?limit=50`, `/api/novels/editors-choice?limit=50`; feeds are unpaged, while Top Rated and Recently Added use the library endpoint. |
+| Details           | `/api/novels/<id>`; aliases in `associated_names`, five-point `rating`, comma-separated `genres`.                                                                                                |
+| Native chapters   | `chapter_names` in detail payload; endpoint IDs are **1-based positions**, independent of printed numbering. The site's `novel-page.js` falls back to `total_chapters` when names are absent.    |
+| Mirror chapters   | `/api/novels/<id>/sources`, then `/sources/<source>/chapters`; each entry supplies `number` and `title`.                                                                                         |
+| Native reader     | `/api/novels/<id>/chapters/<position>?prefetch=1`, text in `chapter.content`; prefetch avoids resending the full novel chapter-name array.                                                       |
+| Mirror reader     | `/api/novels/<id>/sources/<source>/chapters/<number>`, HTML in `content_html`.                                                                                                                   |
 
 Keep manga IDs and native chapter IDs unchanged. Mirror IDs remain `<source>:<number>`.
 The array position is the native API's actual addressing contract, so the general prohibition
