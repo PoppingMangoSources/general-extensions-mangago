@@ -28,6 +28,7 @@ import {
   getLetterMatching,
   getMergeEditions,
   getDeduplicateChapters,
+  getCollapseSameNameGroups,
   getTitlePreferences,
   getEditionFilters,
   getPreferences,
@@ -434,11 +435,13 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
 
   async getChapters(sourceManga: SourceManga): Promise<Chapter[]> {
     const deduplicate = getDeduplicateChapters();
+    const collapseSameNameGroups = getCollapseSameNameGroups();
     if (!getMergeEditions())
       return parseChapterLists(
         [{ chapters: await this.getEditionChapters(sourceManga.mangaId, deduplicate) }],
         sourceManga,
         deduplicate,
+        collapseSameNameGroups,
       );
     const node = (await fetchEditions(sourceManga.mangaId)).get_comicNode;
     if (!node) throw new Error(`Manga not found: ${sourceManga.mangaId}`);
@@ -461,7 +464,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
         )),
       );
     }
-    return parseChapterLists(lists, sourceManga, deduplicate);
+    return parseChapterLists(lists, sourceManga, deduplicate, collapseSameNameGroups);
   }
 
   private async getEditionChapters(id: string, deduplicate: boolean): Promise<ChapterData[]> {

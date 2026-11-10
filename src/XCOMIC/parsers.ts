@@ -274,10 +274,22 @@ const cardSubtitle = (comic: ComicData): string | undefined =>
 export const toSearchResultItem = (
   node: ComicNode,
   preferences = getTitlePreferences(),
-): SearchResultItem => ({
-  ...baseCard(node, preferences),
-  subtitle: cardSubtitle(node.data),
-});
+): SearchResultItem => {
+  const chapterCount = node.data.chaps_normal ?? node.data.totalChapters;
+  return {
+    ...baseCard(node, preferences),
+    subtitle: preferences.mergeEditions
+      ? cardSubtitle(node.data)
+      : [
+          editionLabel(node.data),
+          typeof chapterCount === "number" && Number.isFinite(chapterCount) && chapterCount >= 0
+            ? `${chapterCount.toLocaleString("en-US")} Ch`
+            : undefined,
+        ]
+          .filter(Boolean)
+          .join(" • ") || undefined,
+  };
+};
 
 // A title groups every edition of a work. Each edition is its own comic, so it inherits the
 // title's artwork and taxonomy and overrides only what belongs to that edition.
@@ -644,6 +656,7 @@ export const parseChapterLists = (
   lists: EditionChapters[],
   sourceManga: SourceManga,
   deduplicate: boolean,
+  collapseSameNameGroups: boolean,
 ): Chapter[] => {
   const owners = new Map<string, number>();
   const teams = new Map<string, string>();
@@ -660,10 +673,8 @@ export const parseChapterLists = (
         chapter.version = teams.get(team) ?? chapter.version;
         teams.set(team, chapter.version);
         if (
-          deduplicate &&
-          list.edition &&
-          editionLabel(list.edition) &&
-          chapterNumber(data) != null
+          chapterNumber(data) != null &&
+          (collapseSameNameGroups || (deduplicate && list.edition && editionLabel(list.edition)))
         ) {
           const key = JSON.stringify([team, chapter.langCode, chapter.volume, chapter.chapNum]);
           const owner = owners.get(key);

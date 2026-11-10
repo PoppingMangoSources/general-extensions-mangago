@@ -55,8 +55,9 @@ case-insensitively. For the same language, volume and chapter number, keep entri
 first edition that supplies them. Preserve multiple parts within that edition, unnumbered
 extras and other teams' translations. With deduplication off, retain every distinct upload.
 Do not deduplicate across all teams by chapter number.
-An importer such as `srcName=mpark` is not proof of a shared scanlator: unnamed editions keep
-their entries even when that importer label matches.
+Without the separate group-collapse toggle, an importer such as `srcName=mpark` is not
+proof of a shared scanlator: unnamed editions keep their entries even when that importer
+label matches.
 
 ## Further parity work
 
@@ -118,3 +119,28 @@ edition taxonomy are covered in unit tests. The six default live source checks p
 
 `MangaInfo.isWebtoon` (types alpha.93) comes from the comic's `type`: true for manhwa, manhua and webtoon,
 false otherwise, so the reader scrolls those vertically. Nothing extra is fetched for it.
+
+## Same-name groups and unmerged search, 2026-11-10
+
+`Collapse same-name groups` defaults on from `1.0.0-alpha.84`. For matching displayed group
+names (case-insensitive), each numbered chapter keeps the first edition that supplies it.
+This also applies to importer labels such as Bato, MPark and Comix, even with server chapter
+deduplication off. Other chapter numbers, languages and volumes stay separate. Multiple parts
+within the kept edition, unnumbered extras and chapters without a group remain intact. The
+opened edition has priority; unique chapters from sibling editions still fill gaps.
+Turning this off restores the previous importer-label behavior; the existing Deduplicate
+chapters toggle still controls the server's unique/full list and named-team deduplication.
+No additional requests are made for collapsing groups, and the toggle does not filter Discover
+or search. Existing manga and chapter IDs are retained.
+
+Live inspection of The Greatest Estate Developer (`vg7ypp`) confirmed `srcName=mpark` on the
+opened edition, `mbato` on imported editions, and `comix` on newer editions. Actual edition
+team labels take precedence over importer labels, so distinct scanlators are not collapsed
+just because their uploads share an importer. A live comparison reduced the merged list from
+1,096 to 1,082 entries by removing 14 overlapping MPark uploads. The retained reader chapter
+`/chapter/qdy4pe` returned three pages under the original `vg7ypp` manga ID.
+
+With Merge editions off, search subtitles use `Group name • 172 Ch`. The count is the edition's
+`chaps_normal` total from the listing, including zero; missing groups or totals are omitted.
+Merged-search and Discover subtitles retain their previous formatting. No per-card detail
+requests are added. Native settings persistence and reader rendering still need a device check.

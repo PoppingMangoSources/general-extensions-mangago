@@ -13,7 +13,12 @@ import {
   type SourceManga,
 } from "@paperback/types";
 
-import { STATE_KEYS, type ChapterData, type ComicData } from "../../src/XCOMIC/models";
+import {
+  STATE_KEYS,
+  type ChapterData,
+  type ComicData,
+  type EditionChapters,
+} from "../../src/XCOMIC/models";
 
 registerHooks({
   load(url, context, nextLoad) {
@@ -34,8 +39,13 @@ Object.defineProperty(globalThis, "Application", {
   value: { getState: () => undefined },
 });
 const { XCOMIC } = await import("../../src/XCOMIC/main");
-const { getMergeEditions, getDeduplicateChapters, getEditionFilters, XComicSettingsForm } =
-  await import("../../src/XCOMIC/forms/settings");
+const {
+  getMergeEditions,
+  getDeduplicateChapters,
+  getCollapseSameNameGroups,
+  getEditionFilters,
+  XComicSettingsForm,
+} = await import("../../src/XCOMIC/forms/settings");
 const {
   parseChapterLists,
   toMergedEditions,
@@ -43,6 +53,7 @@ const {
   toDiscoverItems,
   toTitleSources,
   toSourceManga,
+  toSearchResultItem,
   toRankedDiscoverItems,
 } = await import("../../src/XCOMIC/parsers");
 Reflect.deleteProperty(globalThis, "Application");
@@ -81,6 +92,7 @@ const mockApi = (
       setState: (value: unknown, key: string) => {
         state[key] = value;
       },
+      invalidateDiscoverSections: () => {},
       decodeHTMLEntities: (text: string) => text,
       arrayBufferToUTF8String: (data: ArrayBuffer) => Buffer.from(data).toString(),
       scheduleRequest: async (request: Request) => {
@@ -214,7 +226,7 @@ void test("XCOMIC merging deduplicates a team's repeated editions without droppi
       chapters: [chapter("french")],
     },
   ];
-  const merged = parseChapterLists(lists, manga, true);
+  const merged = parseChapterLists(lists, manga, true, false);
   assert.equal(merged.length, 8);
   assert.ok(!merged.some((item) => item.chapterId === "/chapter/duplicate"));
   assert.ok(
@@ -223,12 +235,12 @@ void test("XCOMIC merging deduplicates a team's repeated editions without droppi
   assert.ok(merged.some((item) => item.chapterId === "/chapter/french" && item.langCode === "fr"));
   assert.equal(merged.find((item) => item.chapterId === "/chapter/volume-two")?.volume, 2);
   assert.ok(merged.every((item) => item.sourceManga === manga));
-  assert.equal(parseChapterLists(lists, manga, false).length, 9);
+  assert.equal(parseChapterLists(lists, manga, false, false).length, 9);
   const unknownTeams = ["unknown-one", "unknown-two"].map((id) => ({
     edition: { id, name: "A Work", translatedLanguage: "en" },
     chapters: [{ ...chapter(id), srcName: "mpark" }],
   }));
-  assert.equal(parseChapterLists(unknownTeams, manga, true).length, 2);
+  assert.equal(parseChapterLists(unknownTeams, manga, true, false).length, 2);
 });
 
 void test("XCOMIC Merge editions fetches only allowed editions and retains separate team versions", async (t) => {
@@ -509,4 +521,168 @@ void test("XCOMIC Latest excludes work genres and formats missing from an editio
   );
   assert.equal(requests.length, 1);
   assert.match(requests[0].query, /work: title_titleNode.*genre_ids format_ids/s);
+});
+
+void test("XCOMIC collapses repeated group uploads without dropping unique chapters, parts, volumes or languages", (t) => {
+  mockApi(t, () => ({}));
+  const editions = (id: string, language = "en"): ComicData => ({
+    id,
+    name: "A Work",
+    translatedLanguage: language,
+  });
+  const imported = (id: string, group: string, number: number | null = 0): ChapterData => ({
+    ...chapter(id, number),
+    srcName: group,
+  });
+  const lists: EditionChapters[] = [
+    {
+      edition: editions("own"),
+      chapters: [
+        imported("bato", "bato"),
+        imported("bato-part", "bato"),
+        imported("mpark", "mpark"),
+        imported("comix", "comix"),
+        imported("extra-a", "bato", null),
+      ],
+    },
+    {
+      edition: editions("repeat"),
+      chapters: [
+        imported("bato-repeat", "BATO"),
+        imported("mpark-repeat", "MPark"),
+        imported("comix-repeat", "Comix"),
+        imported("unique", "bato", 1),
+        imported("extra-b", "bato", null),
+        { ...imported("volume-two", "bato"), volNum: 2 },
+      ],
+    },
+    { edition: editions("french", "fr"), chapters: [imported("french", "bato")] },
+    {
+      edition: { ...editions("team"), subName: "Different Team" },
+      chapters: [imported("different-team", "bato")],
+    },
+    { edition: editions("unknown-a"), chapters: [chapter("unknown-a", 0)] },
+    { edition: editions("unknown-b"), chapters: [chapter("unknown-b", 0)] },
+  ];
+  const collapsed = parseChapterLists(lists, manga, false, true);
+  assert.deepEqual(
+    new Set(collapsed.map((x) => x.chapterId)),
+    new Set(
+      [
+        "bato",
+        "bato-part",
+        "mpark",
+        "comix",
+        "extra-a",
+        "unique",
+        "extra-b",
+        "volume-two",
+        "french",
+        "different-team",
+        "unknown-a",
+        "unknown-b",
+      ].map((id) => `/chapter/${id}`),
+    ),
+  );
+  assert.ok(collapsed.every((x) => x.sourceManga === manga));
+  assert.equal(collapsed.find((x) => x.chapterId === "/chapter/bato")?.chapNum, 0);
+  assert.equal(collapsed.find((x) => x.chapterId === "/chapter/volume-two")?.volume, 2);
+  assert.equal(collapsed.find((x) => x.chapterId === "/chapter/french")?.langCode, "fr");
+  assert.equal(parseChapterLists(lists, manga, true, false).length, 15);
+});
+
+void test("XCOMIC group collapsing defaults on and the saved toggle changes merged chapter results", async (t) => {
+  const { requests, state } = mockApi(t, (query, variables) =>
+    query.includes("work: title_titleNode")
+      ? {
+          get_comicNode: {
+            data: {
+              id: "own",
+              name: "A Work",
+              translatedLanguage: "en",
+              work: {
+                comicNodes: [{ data: { id: "second", name: "A Work", translatedLanguage: "en" } }],
+              },
+            },
+          },
+        }
+      : {
+          chapterList: {
+            paging: { pages: 1, total: 1 },
+            items: [
+              {
+                data: {
+                  ...chapter(String(Reflect.get(variables.select ?? {}, "comic_id")), 0),
+                  srcName: "mpark",
+                },
+              },
+            ],
+          },
+        },
+  );
+  assert.equal(getCollapseSameNameGroups(), true);
+  assert.deepEqual(
+    (await XCOMIC.getChapters(manga)).map((x) => x.chapterId),
+    ["/chapter/own"],
+  );
+  assert.equal(requests.length, 3);
+  const form = await XCOMIC.getSettingsForm();
+  assert.ok(form instanceof XComicSettingsForm);
+  await form.handleCollapseSameNameGroupsChange(false);
+  assert.equal(state[STATE_KEYS.COLLAPSE_SAME_NAME_GROUPS], false);
+  assert.equal(getCollapseSameNameGroups(), false);
+  assert.equal((await XCOMIC.getChapters(manga)).length, 2);
+  assert.equal(requests.length, 6);
+});
+
+void test("XCOMIC unmerged search subtitles show group and edition chapter count", (t) => {
+  mockApi(t, () => ({}));
+  const node = {
+    data: {
+      id: "own",
+      name: "A Work",
+      type: "manhwa",
+      subName: "Asura Scans",
+      chaps_normal: 172,
+      chapterNodes_last: [{ data: chapter("latest", 222) }],
+      urlCover: "https://images.test/cover.jpg",
+    },
+  };
+  const preferences = { mergeEditions: false, showEditionInTitle: true };
+  assert.equal(toSearchResultItem(node, preferences).subtitle, "Asura Scans • 172 Ch");
+  assert.equal(
+    toSearchResultItem({ ...node, data: { ...node.data, chaps_normal: 0 } }, preferences).subtitle,
+    "Asura Scans • 0 Ch",
+  );
+  assert.equal(
+    toSearchResultItem(
+      { ...node, data: { ...node.data, subName: null, name: "A Work [Team]" } },
+      preferences,
+    ).subtitle,
+    "Team • 172 Ch",
+  );
+  assert.equal(
+    toSearchResultItem({ ...node, data: { ...node.data, subName: "src-site:usr" } }, preferences)
+      .subtitle,
+    "172 Ch",
+  );
+  assert.equal(
+    toSearchResultItem({ ...node, data: { ...node.data, chaps_normal: undefined } }, preferences)
+      .subtitle,
+    "Asura Scans",
+  );
+  assert.equal(
+    toSearchResultItem(
+      { ...node, data: { ...node.data, subName: null, chaps_normal: undefined } },
+      preferences,
+    ).subtitle,
+    undefined,
+  );
+  assert.equal(
+    toSearchResultItem(node, { ...preferences, mergeEditions: true }).subtitle,
+    "Ch. 222 • Manhwa",
+  );
+  const discover = toDiscoverItems([node], "simpleCarouselItem", preferences)[0];
+  assert.ok("subtitle" in discover);
+  assert.equal(discover.subtitle, "Ch. 222 • Manhwa");
 });

@@ -341,6 +341,7 @@ export const STATE_KEYS = {
   // Reset this preference once so existing installs also start with merging enabled.
   MERGE_EDITIONS: "xcomic_merge_editions_v2",
   DEDUPLICATE_CHAPTERS: "xcomic_deduplicate_chapters",
+  COLLAPSE_SAME_NAME_GROUPS: "xcomic_collapse_same_name_groups",
   INCLUDED_EDITIONS: "xcomic_included_editions",
   EXCLUDED_EDITIONS: "xcomic_excluded_editions",
   ORIGINAL_LANGUAGES: "xcomic_original_languages",

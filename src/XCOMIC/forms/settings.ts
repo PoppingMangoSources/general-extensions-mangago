@@ -62,6 +62,9 @@ export const getMergeEditions = (): boolean =>
 export const getDeduplicateChapters = (): boolean =>
   (Application.getState(STATE_KEYS.DEDUPLICATE_CHAPTERS) as boolean | undefined) ?? true;
 
+export const getCollapseSameNameGroups = (): boolean =>
+  (Application.getState(STATE_KEYS.COLLAPSE_SAME_NAME_GROUPS) as boolean | undefined) ?? true;
+
 export const getTitlePreferences = (): TitlePreferences => ({
   mergeEditions: getMergeEditions(),
   showEditionInTitle: getShowEditionInTitle(),
@@ -164,6 +167,7 @@ export class XComicSettingsForm extends Form {
   private showEditionInTitle: boolean;
   private mergeEditions = getMergeEditions();
   private deduplicateChapters = getDeduplicateChapters();
+  private collapseSameNameGroups = getCollapseSameNameGroups();
   private includedEditions =
     (Application.getState(STATE_KEYS.INCLUDED_EDITIONS) as string | undefined) ?? "";
   private excludedEditions =
@@ -336,6 +340,15 @@ export class XComicSettingsForm extends Form {
               "handleMergeEditionsChange",
             ),
           }),
+          ToggleRow("collapse_same_name_groups", {
+            title: "Collapse same-name groups",
+            subtitle: "Keep one copy per chapter and group, including Bato, MPark and Comix.",
+            value: this.collapseSameNameGroups,
+            onValueChange: Application.Selector(
+              this as XComicSettingsForm,
+              "handleCollapseSameNameGroupsChange",
+            ),
+          }),
           ToggleRow("deduplicate_chapters", {
             title: "Deduplicate chapters",
             value: this.deduplicateChapters,
@@ -449,6 +462,11 @@ export class XComicSettingsForm extends Form {
   async handleMergeEditionsChange(value: boolean): Promise<void> {
     this.mergeEditions = value;
     saveSetting(this, STATE_KEYS.MERGE_EDITIONS, value);
+  }
+
+  async handleCollapseSameNameGroupsChange(value: boolean): Promise<void> {
+    this.collapseSameNameGroups = value;
+    saveSetting(this, STATE_KEYS.COLLAPSE_SAME_NAME_GROUPS, value);
   }
 
   async handleDeduplicateChaptersChange(value: boolean): Promise<void> {
