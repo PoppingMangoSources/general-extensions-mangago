@@ -57,7 +57,7 @@ export const getShowEditionInTitle = (): boolean =>
   (Application.getState(STATE_KEYS.SHOW_EDITION_IN_TITLE) as boolean | undefined) ?? true;
 
 export const getMergeEditions = (): boolean =>
-  (Application.getState(STATE_KEYS.MERGE_EDITIONS) as boolean | undefined) ?? false;
+  (Application.getState(STATE_KEYS.MERGE_EDITIONS) as boolean | undefined) ?? true;
 
 export const getDeduplicateChapters = (): boolean =>
   (Application.getState(STATE_KEYS.DEDUPLICATE_CHAPTERS) as boolean | undefined) ?? true;

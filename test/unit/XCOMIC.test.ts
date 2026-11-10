@@ -104,8 +104,8 @@ const mockApi = (
   return { requests, state, stateReads };
 };
 
-void test("XCOMIC defaults to separate editions and the server's unique list, and loads all pages", async (t) => {
-  const { requests } = mockApi(t, (_query, variables) => ({
+void test("XCOMIC enables merging for everyone and preserves unique-list pagination when disabled", async (t) => {
+  const { requests, state } = mockApi(t, (_query, variables) => ({
     chapterList: {
       paging: { pages: 2, total: 3 },
       items: (Reflect.get(variables.select ?? {}, "page") === 1
@@ -114,6 +114,10 @@ void test("XCOMIC defaults to separate editions and the server's unique list, an
       ).map((data) => ({ data })),
     },
   }));
+  assert.equal(getMergeEditions(), true);
+  state.xcomic_merge_editions = false;
+  assert.equal(getMergeEditions(), true);
+  state[STATE_KEYS.MERGE_EDITIONS] = false;
   assert.equal(getMergeEditions(), false);
   assert.equal(getDeduplicateChapters(), true);
   const chapters = await XCOMIC.getChapters(manga);
@@ -136,6 +140,7 @@ void test("XCOMIC deduplication can be disabled without changing saved chapter I
       },
     }),
     {
+      [STATE_KEYS.MERGE_EDITIONS]: false,
       [STATE_KEYS.DEDUPLICATE_CHAPTERS]: false,
       [STATE_KEYS.INCLUDED_EDITIONS]: "non-matching team",
     },
@@ -151,9 +156,13 @@ void test("XCOMIC deduplication can be disabled without changing saved chapter I
 });
 
 void test("XCOMIC rejects incomplete chapter lists instead of publishing a partial library update", async (t) => {
-  mockApi(t, () => ({
-    chapterList: { paging: { pages: 1, total: 3 }, items: [{ data: chapter("one") }] },
-  }));
+  mockApi(
+    t,
+    () => ({
+      chapterList: { paging: { pages: 1, total: 3 }, items: [{ data: chapter("one") }] },
+    }),
+    { [STATE_KEYS.MERGE_EDITIONS]: false },
+  );
   await assert.rejects(XCOMIC.getChapters(manga), /sent 1 of 3 chapters/);
 });
 
@@ -268,7 +277,7 @@ void test("XCOMIC Merge editions fetches only allowed editions and retains separ
 });
 
 void test("XCOMIC formats a Discover page with constant settings reads and keeps all cards", (t) => {
-  const { stateReads, state } = mockApi(t, () => ({}));
+  const { stateReads, state } = mockApi(t, () => ({}), { [STATE_KEYS.MERGE_EDITIONS]: false });
   const nodes = Array.from({ length: 48 }, (_, index) => ({
     data: {
       id: String(index),
@@ -410,7 +419,7 @@ void test("XCOMIC filters editions before fetching their chapter lists and rejec
 });
 
 void test("XCOMIC duplicate team labels never put edition IDs in titles", (t) => {
-  mockApi(t, () => ({}));
+  mockApi(t, () => ({}), { [STATE_KEYS.MERGE_EDITIONS]: false });
   const sources = toTitleSources(
     {
       data: { id: "work", name: "A Home Far Away", urlCover: "https://images.test/cover.jpg" },

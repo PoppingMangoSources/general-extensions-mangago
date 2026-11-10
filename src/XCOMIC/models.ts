@@ -338,7 +338,8 @@ export const STATE_KEYS = {
   EXCLUDED_GENRES: "xcomic_excluded_genres",
   EXCLUDED_FORMATS: "xcomic_excluded_formats",
   LETTER_MATCHING: "xcomic_letter_matching",
-  MERGE_EDITIONS: "xcomic_merge_editions",
+  // Reset this preference once so existing installs also start with merging enabled.
+  MERGE_EDITIONS: "xcomic_merge_editions_v2",
   DEDUPLICATE_CHAPTERS: "xcomic_deduplicate_chapters",
   INCLUDED_EDITIONS: "xcomic_included_editions",
   EXCLUDED_EDITIONS: "xcomic_excluded_editions",

@@ -2,7 +2,7 @@
 title: XCOMIC
 type: subsystem
 created: 2026-11-03
-updated: 2026-11-07
+updated: 2026-11-10
 sources:
   - code: src/XCOMIC/models.ts
   - code: src/XCOMIC/network.ts
@@ -24,7 +24,9 @@ Their useful shared behaviors are edition/team preservation, the server's unique
 lists, correct chapter languages and complete pagination. Keiyoushi uses title-based library
 keys; Paperback's existing edition keys must remain unchanged.
 
-`Merge editions` defaults off. With it off, refreshing chapters makes only the opened
+`Merge editions` defaults on as of `1.0.0-alpha.83`, including existing installs. The setting
+uses a new state key to reset the previous preference once; users can turn it off afterward
+and that choice persists. Other saved settings and library IDs are unchanged. With it off, refreshing chapters makes only the opened
 edition's chapter-list requests. With it on, `get_comicNode.data.title_titleNode.comicNodes`
 supplies sibling editions. Keep the opened edition first, even after the language preference
 changes. Add public, normal, nonempty siblings in the selected languages; request at most
