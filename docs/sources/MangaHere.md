@@ -2,7 +2,7 @@
 title: MangaHere
 type: subsystem
 created: 2026-11-07
-updated: 2026-11-07
+updated: 2026-11-09
 sources:
   - code: src/MangaHere/
   - code: test/unit/MangaHere.test.ts
@@ -48,3 +48,15 @@ Transport retries wait with `Application.sleep(seconds)`. The old `setTimeout` b
 in Node but fails in Paperback's device runtime. Verification errors propagate immediately.
 Tests cover one-request reading, HTTPS URLs, loading placeholders, retry delays, and challenge
 propagation. Completing browser verification and rendering pages still need a device check.
+
+## Interceptor request identity
+
+Matched Kitty's MangaFox (`deeaea6`) on 2026-11-09, starting from `db931cf`.
+Mutate the original request because the alpha.94 test runtime passes it to every interceptor;
+a later cookie interceptor would otherwise discard returned-copy URL and header changes.
+Tests use the SDK's `CookieStorageInterceptor` to cover that order. Keep our source interceptor last.
+HTTP and protocol-relative image requests become HTTPS, and image referers use the site root.
+Keep the explicit chapter referer for desktop `chapterfun.ashx` requests.
+
+Keep the manga-detail trailing slash, but leave `/search` slashless: `/search/` returns a directory.
+Native iOS transport handling and rendering still require a device check.

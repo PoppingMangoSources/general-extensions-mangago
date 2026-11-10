@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { CookieStorageInterceptor, type Request } from "@paperback/types";
 import * as cheerio from "cheerio";
 
 import { MangaTownInterceptor } from "../../src/MangaTown/network";
@@ -53,5 +54,25 @@ void test("upgrades HTTP requests from previously saved covers and preserves HTT
     });
     assert.equal(result.url, "https://fmcdn.mangahere.com/cover.jpg?token=fixture&ttl=123");
     assert.equal(result.headers?.referer, "https://www.mangatown.com/");
+  }
+});
+
+void test("preserves image transport changes when the cookie interceptor receives the original request", async () => {
+  const interceptor = new MangaTownInterceptor("test");
+  const cookies = new CookieStorageInterceptor({ storage: "memory" });
+  for (const prefix of ["http://", "https://", "//"]) {
+    const request: Request = {
+      url: `${prefix}fmcdn.mangahere.com/cover.jpg?token=fixture&ttl=123`,
+      method: "GET",
+      headers: { referer: "http://old.example/", "x-existing": "keep" },
+      cookies: { existing: "keep" },
+    };
+    await interceptor.interceptRequest(request);
+    const outgoing = await cookies.interceptRequest(request);
+    assert.equal(outgoing.url, "https://fmcdn.mangahere.com/cover.jpg?token=fixture&ttl=123");
+    assert.equal(outgoing.headers?.referer, "https://www.mangatown.com/");
+    assert.equal(outgoing.headers?.["user-agent"], "MangaTown test browser");
+    assert.equal(outgoing.headers?.["x-existing"], "keep");
+    assert.equal(outgoing.cookies?.existing, "keep");
   }
 });

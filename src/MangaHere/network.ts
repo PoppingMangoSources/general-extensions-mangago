@@ -32,22 +32,21 @@ export class MangaHereRateLimiter extends BasicRateLimiter {
 export class MangaHereInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
     const isImage = IMAGE_EXTENSION_REGEX.test(request.url);
-    return {
-      ...request,
-      url: request.url.replace(/^http:/i, "https:"),
-      headers: {
-        ...request.headers,
-        referer: request.headers?.referer ?? `${DOMAIN}/`,
-        "user-agent": await Application.getDefaultUserAgent(),
-        accept:
-          request.headers?.accept ??
-          (isImage
-            ? "image/avif,image/webp,image/png,image/jpeg,image/*,*/*;q=0.8"
-            : "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"),
-        "accept-language": "en-US,en;q=0.5",
-      },
-      cookies: { ...request.cookies, isAdult: "1", MHNMM: "1" },
+    // Later interceptors may receive the original request rather than the returned copy.
+    request.url = request.url.replace(/^http:/i, "https:").replace(/^\/\//, "https://");
+    request.headers = {
+      ...request.headers,
+      referer: isImage ? `${DOMAIN}/` : (request.headers?.referer ?? `${DOMAIN}/`),
+      "user-agent": await Application.getDefaultUserAgent(),
+      accept:
+        request.headers?.accept ??
+        (isImage
+          ? "image/avif,image/webp,image/png,image/jpeg,image/*,*/*;q=0.8"
+          : "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"),
+      "accept-language": "en-US,en;q=0.5",
     };
+    request.cookies = { ...request.cookies, isAdult: "1", MHNMM: "1" };
+    return request;
   }
 
   override async interceptResponse(

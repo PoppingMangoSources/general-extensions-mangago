@@ -7,6 +7,7 @@ import test from "node:test";
 import {
   CloudflareError,
   ContentRating,
+  CookieStorageInterceptor,
   type Chapter,
   type Request,
   type Response,
@@ -165,4 +166,38 @@ void test("uses the SDK sleep for transport retries and forwards verification er
   });
   await assert.rejects(fetchDocument("https://www.mangahere.cc/"), (error) => error === challenge);
   assert.deepEqual(sleeps, [0.4, 0.8]);
+});
+
+void test("preserves image transport changes when the cookie interceptor receives the original request", async () => {
+  const interceptor = new MangaHereInterceptor("test");
+  const cookies = new CookieStorageInterceptor({ storage: "memory" });
+  for (const prefix of ["http://", "https://", "//"]) {
+    const request: Request = {
+      url: `${prefix}fmcdn.mangahere.com/cover.jpg?token=fixture&ttl=123`,
+      method: "GET",
+      headers: { referer: "http://old.example/", "x-existing": "keep" },
+      cookies: { existing: "keep" },
+    };
+    await interceptor.interceptRequest(request);
+    const outgoing = await cookies.interceptRequest(request);
+    assert.equal(outgoing.url, "https://fmcdn.mangahere.com/cover.jpg?token=fixture&ttl=123");
+    assert.equal(outgoing.headers?.referer, "https://www.mangahere.cc/");
+    assert.equal(outgoing.headers?.["user-agent"], "MangaHere test browser");
+    assert.equal(outgoing.headers?.["x-existing"], "keep");
+    assert.equal(outgoing.cookies?.existing, "keep");
+    assert.equal(outgoing.cookies?.isAdult, "1");
+    assert.equal(outgoing.cookies?.MHNMM, "1");
+  }
+});
+
+void test("preserves the chapter referer and AJAX headers for the desktop reader", async () => {
+  const referer = "https://www.mangahere.cc/manga/tsugumomo/v20/c187/1.html";
+  const prepared = await new MangaHereInterceptor("test").interceptRequest({
+    url: "https://www.mangahere.cc/manga/tsugumomo/v20/c187/chapterfun.ashx?cid=123&page=1",
+    method: "GET",
+    headers: { referer, accept: "*/*", "x-requested-with": "XMLHttpRequest" },
+  });
+  assert.equal(prepared.headers?.referer, referer);
+  assert.equal(prepared.headers?.accept, "*/*");
+  assert.equal(prepared.headers?.["x-requested-with"], "XMLHttpRequest");
 });

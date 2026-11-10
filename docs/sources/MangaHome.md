@@ -2,7 +2,7 @@
 title: MangaHome
 type: subsystem
 created: 2026-11-08
-updated: 2026-11-08
+updated: 2026-11-09
 sources:
   - code: src/MangaHome/
   - code: test/unit/MangaHome.test.ts
@@ -27,3 +27,14 @@ A direct check of I'm Being Raised by Villains chapter 163 returned 91 HTTPS pag
 the first image returned HTTP 200 with image/jpeg. Ranked rows omit missing covers internally
 until the existing detail lookup resolves them; only rows with a cover reach the app.
 These results do not verify native reader rendering or iOS transport handling.
+
+## Interceptor request identity
+
+Matched Kitty's MangaFox (`deeaea6`) on 2026-11-09, starting from `db931cf`.
+Mutate the original request because the alpha.94 test runtime passes it to every interceptor;
+a later cookie interceptor would otherwise discard returned-copy URL and header changes.
+Tests use the SDK's `CookieStorageInterceptor` to cover that order. Keep our source interceptor last.
+HTTP and protocol-relative image requests become HTTPS, and image referers use the site root.
+
+Keep the existing routes: `/search/` redirects back to `/search`, so a blanket trailing slash adds redirects.
+Native iOS transport handling and rendering still require a device check.

@@ -2,7 +2,7 @@
 title: MangaTown
 type: subsystem
 created: 2026-11-08
-updated: 2026-11-08
+updated: 2026-11-09
 sources:
   - code: src/MangaTown/
   - code: test/unit/MangaTown.test.ts
@@ -25,3 +25,14 @@ Golden Kamui chapter 314 returned a whole-chapter viewer with protocol-relative
 Offline regressions cover listing and detail covers, reader links, images and outgoing requests.
 All six generated live tests passed.
 Native reader rendering and iOS transport handling remain unverified on a device.
+
+## Interceptor request identity
+
+Matched Kitty's MangaFox (`deeaea6`) on 2026-11-09, starting from `db931cf`.
+Mutate the original request because the alpha.94 test runtime passes it to every interceptor;
+a later cookie interceptor would otherwise discard returned-copy URL and header changes.
+Tests use the SDK's `CookieStorageInterceptor` to cover that order. Keep our source interceptor last.
+HTTP and protocol-relative image requests become HTTPS, and image referers use the site root.
+
+Keep the manga-detail trailing slash, but leave `/search` slashless: `/search/` returns 404.
+Native iOS transport handling and rendering still require a device check.
