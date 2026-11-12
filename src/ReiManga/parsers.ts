@@ -3,6 +3,7 @@
 
 import {
   ContentRating,
+  URL,
   type Chapter,
   type ChapterDetails,
   type DiscoverSectionItem,
@@ -337,13 +338,51 @@ export const parseChapters = (body: string, sourceManga: SourceManga): Chapter[]
 
 export const parseChapterPages = (body: string, chapter: Chapter): ChapterDetails => {
   const data = extractFlight<FlightImages>(body, "images");
-  const pages = (data?.images ?? [])
+  let pages = (data?.images ?? [])
     .slice()
     .sort((left, right) => (left.page_number ?? 0) - (right.page_number ?? 0))
-    .map((image) => (image.image_url ?? image.url ?? "").trim())
-    .filter(Boolean);
+    .map((image) => (image.image_url || image.url || "").trim());
 
-  if (pages.length === 0) {
+  if (data?.pack) {
+    const { index, urls } = data.pack;
+    if (
+      index?.v !== 1 ||
+      !Array.isArray(index.s) ||
+      !Array.isArray(index.p) ||
+      !Array.isArray(urls) ||
+      index.s.length !== urls.length ||
+      index.p.length === 0 ||
+      index.s.some((count) => !Number.isSafeInteger(count) || count <= 0) ||
+      index.s.reduce((sum, count) => sum + count, 0) !== index.p.length ||
+      urls.some((url) => typeof url !== "string" || !/^https?:\/\//i.test(url))
+    ) {
+      throw new Error(`Invalid image pack for chapter ${chapter.chapterId}`);
+    }
+    pages = [];
+    let page = 0;
+    for (let segment = 0; segment < index.s.length; segment++) {
+      let offset = 0;
+      for (let count = 0; count < index.s[segment]; count++, page++) {
+        const length = index.p[page]?.[0];
+        if (
+          !Number.isSafeInteger(length) ||
+          length < 12 ||
+          !Number.isSafeInteger(offset + length)
+        ) {
+          throw new Error(`Invalid image pack for chapter ${chapter.chapterId}`);
+        }
+        // Distinct page cache keys carry ranges to the interceptor without changing the CDN path.
+        pages.push(
+          new URL(urls[segment])
+            .setFragment(`reimanga-range=${offset}-${offset + length - 1}.webp`)
+            .toString(),
+        );
+        offset += length;
+      }
+    }
+  }
+
+  if (pages.length === 0 || pages.some((url) => !/^https?:\/\//i.test(url))) {
     throw new Error(`No pages found for chapter ${chapter.chapterId}`);
   }
 

@@ -17,9 +17,21 @@ const getUserAgent = (): Promise<string> =>
 
 const IMAGE_EXTENSION_REGEX = /\.(jpe?g|png|webp|gif|avif|bmp)(\?|#|$)/i;
 
+const pageRange = (url: string): { start: number; end: number } | undefined => {
+  const match = /#reimanga-range=(\d+)-(\d+)\.webp$/.exec(url);
+  if (!match) return undefined;
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || end - start < 11) {
+    throw new Error("Invalid ReiManga page range");
+  }
+  return { start, end };
+};
+
 export class ReiMangaInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
     const isImage = IMAGE_EXTENSION_REGEX.test(request.url);
+    const range = pageRange(request.url);
 
     return {
       ...request,
@@ -31,6 +43,7 @@ export class ReiMangaInterceptor extends PaperbackInterceptor {
         accept: isImage
           ? "image/avif,image/webp,image/apng,image/png,image/svg+xml,*/*;q=0.8"
           : (request.headers?.accept ?? "*/*"),
+        ...(range && { origin: getBaseUrl(), range: `bytes=${range.start}-${range.end}` }),
       },
       // Without this the catalogue silently drops adult entries, so a search
       // that should match returns nothing rather than an age-gated result.
@@ -43,14 +56,54 @@ export class ReiMangaInterceptor extends PaperbackInterceptor {
     response: Response,
     data: ArrayBuffer,
   ): Promise<ArrayBuffer> {
-    if (response.headers?.["cf-mitigated"] === "challenge") {
+    if (
+      Object.entries(response.headers).some(
+        ([name, value]) =>
+          name.toLowerCase() === "cf-mitigated" && value.toLowerCase() === "challenge",
+      )
+    ) {
       throw new CloudflareError({
         url: request.url,
         method: request.method ?? "GET",
         headers: { "user-agent": await getUserAgent() },
       });
     }
-    return data;
+    const range = pageRange(request.url);
+    if (!range) return data;
+    if (response.status !== 200 && response.status !== 206) {
+      throw new Error(`Could not load ReiManga page (status ${response.status})`);
+    }
+
+    const length = range.end - range.start + 1;
+    let offset = range.start;
+    if (response.status === 206) {
+      const header = Object.entries(response.headers).find(
+        ([name]) => name.toLowerCase() === "content-range",
+      )?.[1];
+      const match = /^bytes (\d+)-(\d+)\/(\d+|\*)$/.exec(header?.trim() ?? "");
+      if (
+        !match ||
+        Number(match[1]) !== range.start ||
+        Number(match[2]) !== range.end ||
+        data.byteLength !== length
+      ) {
+        throw new Error("ReiManga returned a mismatched page range");
+      }
+      offset = 0;
+    } else if (data.byteLength <= range.end) {
+      throw new Error("ReiManga returned an incomplete page range");
+    }
+    const image = data.slice(offset, offset + length);
+    const view = new DataView(image);
+    if (
+      view.getUint32(0) !== 0x52494646 ||
+      view.getUint32(8) !== 0x57454250 ||
+      view.getUint32(4, true) + 8 !== length
+    ) {
+      throw new Error("ReiManga returned invalid WebP page data; reload the chapter");
+    }
+    response.headers["content-type"] = "image/webp";
+    return image;
   }
 }
 

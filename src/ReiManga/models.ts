@@ -140,4 +140,8 @@ export interface FlightImage {
 
 export interface FlightImages {
   images?: FlightImage[];
+  pack?: {
+    index: { v: number; s: number[]; p: number[][] };
+    urls: string[];
+  };
 }

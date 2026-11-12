@@ -55,3 +55,7 @@
 Documented the current API, native and mirror IDs, genre/default filtering, reader traps and verified source audit in [NovelArchive](sources/NovelArchive.md).
 
 NovelArchive naming clarification: use `parseNovelList` and `filterNovelList` for the novels-only catalog; retain SDK method names and framework-required form classes.
+
+- 2026-11-12: ReiManga alpha.5 reads packed WebP manifests and extracts image byte ranges.
+  Five live chapter payloads parsed; CDN HTTP 403 and native reader verification remain
+  documented in [ReiManga](sources/ReiManga.md).

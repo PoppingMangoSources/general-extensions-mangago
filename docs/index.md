@@ -20,6 +20,7 @@ this wiki's own rules are in [AGENTS.md](AGENTS.md).
 - [MangaTown](sources/MangaTown.md): HTTPS covers, reader links and chapter images.
 - [NovelArchive](sources/NovelArchive.md): native/mirror chapter IDs, genre filters and XML readers.
 - [Ranobes](sources/Ranobes.md): verification responses, sequential chapter lists and novel XHTML.
+- [ReiManga](sources/ReiManga.md): packed WebP readers, byte ranges and image delivery limits.
 - [Swarm](sources/Swarm.md): period feeds, languages, upload versions and comic/novel reading.
 - [Toonkotsu](sources/Toonkotsu.md): reader keys, WebView session, AES-CTR in TypeScript.
 - [ValirScans](sources/ValirScans.md): Flight reader props, access flags and chapter images.
