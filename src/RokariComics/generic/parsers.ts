@@ -256,7 +256,9 @@ export class MangaStreamParser {
 
     for (const index of scriptObj.sources) {
       if (index?.images.length == 0) continue;
-      index.images.map((p: string) => pages.push(encodeURI(p.trim())));
+      for (const image of index.images) {
+        pages.push(encodeURI(image.trim()).replace(/%25([0-9a-f]{2})/gi, "%$1"));
+      }
     }
 
     const chapterDetails = {

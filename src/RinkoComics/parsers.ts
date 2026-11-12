@@ -15,6 +15,7 @@ import { type Cheerio, type CheerioAPI } from "cheerio";
 import { type AnyNode } from "domhandler";
 
 import { DOMAIN, LOCK_SUFFIX, type ComicCard, type Genre } from "./models";
+import { decodePageUrls } from "./utils";
 
 const MONTHS: Record<string, number> = {
   jan: 0,
@@ -450,6 +451,14 @@ const toXhtml = (fragment: string): string => {
 };
 
 export const parseChapterDetails = ($: CheerioAPI, chapter: Chapter): ChapterDetails => {
+  const encoded = $("#cwPages").text().trim();
+  if (encoded) {
+    return {
+      id: chapter.chapterId,
+      mangaId: chapter.sourceManga.mangaId,
+      pages: decodePageUrls(encoded),
+    };
+  }
   const pages: string[] = [];
   for (const element of $("img.chapter-image").toArray()) {
     const el = $(element);
@@ -477,5 +486,5 @@ export const parseChapterDetails = ($: CheerioAPI, chapter: Chapter): ChapterDet
     };
   }
 
-  throw new Error("Chapter is locked or unavailable.");
+  throw new Error("RinkoComics returned no readable pages or text for this chapter.");
 };

@@ -59,3 +59,11 @@ NovelArchive naming clarification: use `parseNovelList` and `filterNovelList` fo
 - 2026-11-12: ReiManga alpha.5 reads packed WebP manifests and extracts image byte ranges.
   Five live chapter payloads parsed; CDN HTTP 403 and native reader verification remain
   documented in [ReiManga](sources/ReiManga.md).
+
+- 2026-11-12: RinkoComics decodes canvas page lists, RokariComics skips the repeated
+  chapter-list lookup for integer chapters, and VyManga refreshes expiring outbound links.
+  Recorded the ValirScans device 404 that could not be reproduced and the corresponding
+  Mana reader checks. Device rendering remains unverified.
+- 2026-11-12: Completed the reader comparison across the 29-source catalogue.
+  RokariComics and NovelCool preserve existing image URL escapes; fixed-input regressions
+  cover encoded paths and signature values. See [reader audit](operations/reader-audit.md).

@@ -308,7 +308,22 @@ class VyMangaExtension implements ExtensionImpl<typeof VyMangaConfig> {
     if (!/^https?:\/\//i.test(chapter.chapterId)) {
       throw new Error("Refresh the chapter list to reload chapters.");
     }
-    const url = `${chapter.chapterId}${chapter.chapterId.includes("?") ? "&" : "?"}view=0`;
+    // The site's outbound chapter links expire, including links saved in a library.
+    const fresh = parseChapters(
+      await fetchCheerio({ url: this.mangaUrl(chapter.sourceManga.mangaId), method: "GET" }),
+      this.baseUrl,
+      chapter.sourceManga,
+    ).filter((entry) =>
+      chapter.title ? entry.title === chapter.title : entry.chapNum === chapter.chapNum,
+    );
+    const current =
+      fresh.find((entry) => entry.chapterId === chapter.chapterId) ??
+      (fresh.length === 1 ? fresh[0] : undefined);
+    if (!current)
+      throw new Error(
+        "Unable to refresh this chapter link. Refresh the chapter list and try again.",
+      );
+    const url = `${current.chapterId}${current.chapterId.includes("?") ? "&" : "?"}view=0`;
     const $ = await fetchCheerio({ url, method: "GET" });
     const pages = parseChapterPages($, this.baseUrl);
     if (pages.length === 0) {

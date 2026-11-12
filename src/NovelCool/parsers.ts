@@ -66,10 +66,13 @@ const encodeBookPathId = (value: string): string => {
 const resolveUrl = (value?: string | null): string => {
   const path = Application.decodeHTMLEntities(value ?? "").trim();
   if (!path) return "";
-  if (/^https?:\/\//i.test(path)) return encodeURI(path);
-  if (path.startsWith("//")) return encodeURI(`https:${path}`);
-  if (/^[a-z][a-z0-9+.-]*:/i.test(path)) return "";
-  return encodeURI(`${DOMAIN}${path.startsWith("/") ? "" : "/"}${path}`);
+  if (/^[a-z][a-z0-9+.-]*:/i.test(path) && !/^https?:\/\//i.test(path)) return "";
+  const absolute = /^https?:\/\//i.test(path)
+    ? path
+    : path.startsWith("//")
+      ? `https:${path}`
+      : `${DOMAIN}${path.startsWith("/") ? "" : "/"}${path}`;
+  return encodeURI(absolute).replace(/%25([0-9a-f]{2})/gi, "%$1");
 };
 
 const imageUrlFrom = (image: cheerio.Cheerio<AnyNode>): string => {

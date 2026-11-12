@@ -4,6 +4,8 @@
 import {
   DiscoverSectionType,
   URL,
+  type Chapter,
+  type ChapterDetails,
   type ContentRating,
   type DiscoverSection,
   type DiscoverSectionItem,
@@ -27,6 +29,7 @@ import {
 } from "./generic/models";
 import { getFilterTagsBySection, getIncludedTagBySection } from "./generic/parsers";
 import { DOMAIN, RANKING_RANGES, SECTIONS, SORT_OPTIONS } from "./models";
+import { fetchChapterPage } from "./network";
 import { parseRelativeDate } from "./parsers";
 import pbconfig from "./pbconfig";
 import { getBaseUrlOverride, getShowLockedChapters, RokariComicsSettings } from "./settings";
@@ -52,6 +55,23 @@ class RokariComicsExtension extends MangaStreamGeneric {
     if (details.mangaInfo.author === "Unknown") details.mangaInfo.author = undefined;
     if (details.mangaInfo.artist === "Unknown") details.mangaInfo.artist = undefined;
     return details;
+  }
+
+  override async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
+    const mangaId = chapter.sourceManga.mangaId;
+    const slug = getUsePostIds() ? Application.getState(mangaId) : mangaId;
+    // Existing post-ID libraries without a saved slug still need the original lookup.
+    if (
+      typeof slug !== "string" ||
+      !/^[a-z][a-z0-9-]*$/i.test(slug) ||
+      !/^\d+$/.test(chapter.chapterId)
+    ) {
+      return super.getChapterDetails(chapter);
+    }
+    return this.parser.parseChapterDetails(
+      await fetchChapterPage(this.domain, slug, chapter.chapterId),
+      chapter,
+    );
   }
 
   override configureSections() {

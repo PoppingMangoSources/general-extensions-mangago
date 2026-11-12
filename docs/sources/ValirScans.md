@@ -2,7 +2,7 @@
 title: ValirScans
 type: subsystem
 created: 2026-11-07
-updated: 2026-11-08
+updated: 2026-11-12
 sources:
   - code: src/ValirScans/
   - code: test/unit/ValirScans.test.ts
@@ -47,3 +47,17 @@ unverified on a device.
 The screenshot's automated test received HTTP 200 Flight responses before parsing failed.
 The failing comic response also contained ordinary image URLs when fetched directly here.
 Completing Turnstile in Paperback requires a device check independently of these parser tests.
+
+On 2026-11-12 the reported Golden-Handed Baby chapter 1 image at
+`media.valirscans.org/series/the-golden-handed-baby-fixes-everything/0001/`
+returned HTTP 200 and valid WebP bytes, including with a bare iOS WebView UA,
+the site-root Referer, the reader Referer, image Accept and no Referer.
+Its exact URL was still present in the live chapter payload. The reported
+404 could not be reproduced; no replacement host or speculative URL rewrite
+was introduced. This does not establish the cause of the earlier device 404.
+
+Mana's reader still searched only for props beginning with `chapter`, so it
+needed the newer `kind` reader shape already supported here. After that change,
+its Golden-Handed Baby chapter 1 probe returned 50 pages and passed all 17
+checks, including nine sampled images/covers. Device rendering remains
+unverified.
