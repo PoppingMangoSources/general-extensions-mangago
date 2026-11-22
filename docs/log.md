@@ -75,3 +75,5 @@ NovelArchive naming clarification: use `parseNovelList` and `filterNovelList` fo
   Cloudflare through FlareSolverr and marks Cloudflare failures; additionalInfo is shown on the
   title page, so NovelArchive and Ranobes use Title Case labels and a checker note
   flags lowercase keys. src/tests/suite.ts was regenerated from the new template.
+- 2026-11-22: Inherited backlog (a spaced name or custom test file the base already had) is now a
+  checker note, not a failure; LuaComic's title page label is Title Case.
