@@ -100,12 +100,12 @@ class CocomicExtension implements ExtensionImpl<typeof CocomicConfig> {
         title: "Trending Now",
         type: DiscoverSectionType.prominentCarousel,
       },
+      { id: SECTIONS.POPULAR, title: "Popular Manga", type: DiscoverSectionType.simpleCarousel },
       {
         id: SECTIONS.LATEST_UPDATES,
         title: "Latest Updates",
         type: DiscoverSectionType.chapterUpdates,
       },
-      { id: SECTIONS.POPULAR, title: "Popular Manga", type: DiscoverSectionType.simpleCarousel },
       {
         id: SECTIONS.NEW_RELEASES,
         title: "New Releases",

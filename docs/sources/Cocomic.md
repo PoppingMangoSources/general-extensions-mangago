@@ -19,8 +19,10 @@ Home hero uses `.mobile-hero-slide`; the desktop `.hero-slide` supplements its
 synopsis when available. Desktop has fewer slides, so missing descriptions are
 omitted rather than fetched. Rails use `.mobile-swimlane-section`, heading
 `.swimlane-heading` and `.mobile-swimlane-card`. Order: Trending, Trending Now,
-Latest Updates, Popular Manga, New Releases, Genres. Chapter and rating are the
-two subtitle facts; updates use native timestamps. A coming-soon card may link
+Popular Manga, Latest Updates, New Releases, Genres. Chapter and rating are the
+two subtitle facts; updates use native timestamps. The hero places the native
+`star.fill` rating beside one `tag.fill` item containing at most the first two
+genres, with no duplicate genre supertitle. A coming-soon card may link
 its chapter label to the series itself; it is not a valid chapter ID.
 
 Details now use `.asura-series-title`, `.asura-poster-img`,

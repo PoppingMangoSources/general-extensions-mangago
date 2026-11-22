@@ -14,14 +14,17 @@ import {
   parseMangaDetails,
   parseChapters,
   parseChapterDetails,
+  toFeaturedItem,
   toSimpleItem,
   toChapterUpdateItem,
 } from "../../src/Cocomic/parsers";
 
 Object.defineProperty(globalThis, "Application", {
   configurable: true,
-  value: { decodeHTMLEntities: decodeHTML },
+  value: { decodeHTMLEntities: decodeHTML, getState: () => undefined },
 });
+
+const { Cocomic } = await import("../../src/Cocomic/main");
 
 void test("redesigned home preserves chapter zero, rating, timestamps and missing fields", () => {
   const $ =
@@ -92,4 +95,34 @@ void test("redesigned details, free and paid chapters and reader retain saved ID
   assert.ok("pages" in reader);
   assert.deepEqual(reader.pages, ["https://cdn.example/page.webp"]);
   assert.equal(reader.id, "chapter-0");
+});
+
+void test("trending hero places at most two genre names beside the rating", () => {
+  const item = {
+    mangaId: "example",
+    title: "Example",
+    imageUrl: "https://cocomic.co/cover.webp",
+    contentRating: ContentRating.EVERYONE,
+    genres: ["Drama", "Fantasy", "Full Color"],
+    rating: 9.8,
+    chapter: { chapterId: "chapter-0", title: "Ch. 0" },
+  };
+  const hero = toFeaturedItem(item);
+  assert.deepEqual(hero.infoItems, [
+    { symbol: "star.fill", text: "9.8" },
+    { symbol: "tag.fill", text: "Drama, Fantasy" },
+  ]);
+  assert.equal(hero.supertitle, undefined);
+  assert.deepEqual(toFeaturedItem({ ...item, rating: undefined }).infoItems, [
+    { symbol: "tag.fill", text: "Drama, Fantasy" },
+  ]);
+  assert.equal(toFeaturedItem({ ...item, rating: undefined, genres: [] }).infoItems, undefined);
+});
+
+void test("Popular Manga precedes the native Latest Updates carousel", async () => {
+  const sections = await Cocomic.getDiscoverSections();
+  assert.deepEqual(
+    sections.map((section) => section.id),
+    ["trending", "trending_now", "popular", "latest_updates", "new_releases", "genres"],
+  );
 });

@@ -337,19 +337,15 @@ export const hasNextPage = ($: cheerio.CheerioAPI): boolean =>
 
 export const toFeaturedItem = (item: MangaListItem): FeaturedCarouselItem => {
   const infoItems: { symbol: string; text: string }[] = [];
-  const latestChapterNumber = item.chapter
-    ? chapterNumber(`${item.chapter.title} ${(item.chapter.chapterId ?? "").replace(/-/g, " ")}`)
-    : undefined;
-  if (latestChapterNumber != null) {
-    infoItems.push({ symbol: "book.fill", text: `Ch. ${latestChapterNumber}` });
-  }
   if (item.rating != null) infoItems.push({ symbol: "star.fill", text: item.rating.toString() });
+  if (item.genres.length > 0) {
+    infoItems.push({ symbol: "tag.fill", text: item.genres.slice(0, 2).join(", ") });
+  }
   return {
     type: "featuredCarouselItem",
     mangaId: item.mangaId,
     imageUrl: item.imageUrl,
     title: item.title,
-    supertitle: item.genres.join(", ") || undefined,
     summary: item.summary || undefined,
     infoItems:
       infoItems.length === 0
