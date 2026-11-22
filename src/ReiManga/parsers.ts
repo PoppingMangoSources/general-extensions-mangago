@@ -114,24 +114,15 @@ export const toFeaturedItem = (manga: ApiManga): DiscoverSectionItem => {
   };
 };
 
-// `detail` picks what the subtitle leads with, matching how the row is ranked.
 export const toSimpleItem = (
   manga: ApiManga,
-  detail: "chapter" | "reads" | "rating",
-  rank?: number,
+  detail: "chapter" | "rating",
 ): DiscoverSectionItem => {
   const rating = ratingFor(manga);
-  const lead =
-    detail === "reads"
-      ? [chapterLabel(manga), compactCount(manga.recent_reads ?? manga.view_count)]
-          .filter(Boolean)
-          .join(" • ")
-      : detail === "rating"
-        ? [rating ? `${rating.toFixed(1)} ★` : undefined, chapterLabel(manga)]
-            .filter(Boolean)
-            .join(" • ")
-        : chapterLabel(manga);
-  const subtitle = [rank !== undefined ? `#${rank}` : undefined, lead || undefined]
+  const subtitle = [
+    chapterLabel(manga),
+    detail === "rating" && rating ? `★ ${rating.toFixed(1)}` : undefined,
+  ]
     .filter(Boolean)
     .join(" • ");
 

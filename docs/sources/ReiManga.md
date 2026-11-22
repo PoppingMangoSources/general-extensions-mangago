@@ -74,3 +74,13 @@ chapter 3214333. Opening the ticketed external URL was blocked by automatic
 approval review because it may transmit an access token to that separate host.
 The external reader and native page loading remain unverified and unresolved.
 No tickets or nonces are stored in source or documentation.
+
+## Discover presentation
+
+Top Rated uses `Ch. N • ★ rating`, without a ranking number. Latest Updates keeps
+its simple carousel with chapter number and relative timestamp. The live
+`/api/manga/latest-updates` response provides `chapter_number`, `chapter_title`,
+`rating`, and `release_date`, but no chapter ID. The website’s MangaCard also links
+to the series, not a chapter. The owner chose to keep this row rather than add a
+chapter-list request for every card or fabricate chapter IDs for the native updates
+carousel. No Discover enrichment requests are added.

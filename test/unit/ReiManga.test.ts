@@ -14,6 +14,7 @@ import {
 
 const application = {
   getState: () => undefined,
+  decodeHTMLEntities: (value: string) => value,
   getDefaultUserAgent: async () => "ReiManga test browser",
   arrayBufferToUTF8String: (value: ArrayBuffer) => new TextDecoder().decode(value),
   scheduleRequest: async (_request: Request): Promise<[Response, ArrayBuffer]> => {
@@ -21,7 +22,7 @@ const application = {
   },
 };
 Object.defineProperty(globalThis, "Application", { configurable: true, value: application });
-const { parseChapterPages } = await import("../../src/ReiManga/parsers");
+const { parseChapterPages, toSimpleItem } = await import("../../src/ReiManga/parsers");
 const { ReiMangaInterceptor } = await import("../../src/ReiManga/network");
 const { ReiManga } = await import("../../src/ReiManga/main");
 
@@ -206,4 +207,23 @@ void test("reports the external reader handoff without treating it as an empty c
       ),
     /separate website reader/,
   );
+});
+
+void test("Top Rated shows chapter then rating without ranking numbers", () => {
+  const manga = {
+    id: 42,
+    title: "Example",
+    name_url: "example",
+    chapter_number: "0",
+    rating: "9.2",
+  };
+  const item = toSimpleItem(manga, "rating");
+  assert.ok(item.type === "simpleCarouselItem");
+  assert.equal(item.subtitle, "Ch. 0 • ★ 9.2");
+  const unrated = toSimpleItem({ ...manga, rating: undefined }, "rating");
+  assert.ok(unrated.type === "simpleCarouselItem");
+  assert.equal(unrated.subtitle, "Ch. 0");
+  const unnumbered = toSimpleItem({ ...manga, chapter_number: undefined }, "rating");
+  assert.ok(unnumbered.type === "simpleCarouselItem");
+  assert.equal(unnumbered.subtitle, "★ 9.2");
 });

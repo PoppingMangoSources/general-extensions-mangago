@@ -126,7 +126,7 @@ class ReiMangaExtension implements ExtensionImpl<typeof ReiMangaConfig> {
           `${getBaseUrl()}/api/manga?page=1&limit=${PAGE_SIZE}&sort=scored&order=desc`,
         );
         return {
-          items: (list.data ?? []).map((manga, index) => toSimpleItem(manga, "rating", index + 1)),
+          items: (list.data ?? []).map((manga) => toSimpleItem(manga, "rating")),
           metadata: undefined,
         };
       }
