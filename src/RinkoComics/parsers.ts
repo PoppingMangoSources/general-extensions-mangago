@@ -86,173 +86,141 @@ export const extractNonce = ($: CheerioAPI): string | undefined => {
   return match ? match[1] : undefined;
 };
 
-// Relative timestamps on homepage chapter entries, e.g. "2 weeks" or "5 hours".
 const parseRelativeDate = (text: string): Date | undefined => {
-  const match = text.trim().match(/(\d+)\s*(min|hour|day|week|month|year)/i);
+  const match = text
+    .trim()
+    .match(/^(\d+)\s*(m(?:in)?|h(?:our)?|d(?:ay)?|w(?:eek)?|mo(?:nth)?|y(?:ear)?)(?:s| ago)?$/i);
   if (!match) return undefined;
-  const unitMs: Record<string, number> = {
-    min: 60_000,
-    hour: 3_600_000,
-    day: 86_400_000,
-    week: 604_800_000,
-    month: 2_629_800_000,
-    year: 31_557_600_000,
+  const scale: Record<string, number> = {
+    m: 60_000,
+    h: 3_600_000,
+    d: 86_400_000,
+    w: 604_800_000,
+    mo: 2_629_800_000,
+    y: 31_557_600_000,
   };
-  return new Date(Date.now() - parseInt(match[1], 10) * unitMs[match[2].toLowerCase()]);
+  const unit = match[2].toLowerCase();
+  return new Date(Date.now() - Number(match[1]) * scale[unit.startsWith("mo") ? "mo" : unit[0]]);
 };
 
-// "Hot This Week": ranked cards with view and chapter counts.
-export const toHotItems = ($: CheerioAPI): DiscoverSectionItem[] => {
-  const items: DiscoverSectionItem[] = [];
-  for (const element of $(".popular-comics .comic-card-popular").toArray()) {
-    const card = $(element);
-    const href = (card.find("a.read-btn").first().attr("href") || "").trim();
-    const mangaId = parsePath(href);
-    const title = Application.decodeHTMLEntities(
-      card.find(".comic-title-popular").first().text().trim(),
-    );
-    if (!mangaId || !title) continue;
-
-    const rank = card.find(".comic-rank").first().text().trim();
-    const [views, chapters] = card
-      .find(".comic-stats .stat")
-      .toArray()
-      .map((stat) => $(stat).text().trim());
-    const genres = card
-      .find(".comic-genres-popular span")
-      .toArray()
-      .map((genre) => $(genre).text().trim())
-      .filter(Boolean);
-
-    const viewsInfo = views ? { symbol: "eye.fill", text: views } : undefined;
-    const chaptersInfo = chapters ? { symbol: "book.fill", text: `${chapters} Ch` } : undefined;
-    items.push({
-      type: "featuredCarouselItem",
-      mangaId,
-      title,
-      imageUrl: imageUrlFromElement(card.find(".comic-cover img").first()),
-      supertitle: rank ? `#${rank}` : undefined,
-      summary: genres.length > 0 ? genres.join(" · ") : undefined,
-      infoItems:
-        viewsInfo && chaptersInfo
-          ? [viewsInfo, chaptersInfo]
-          : viewsInfo
-            ? [viewsInfo]
-            : chaptersInfo
-              ? [chaptersInfo]
-              : undefined,
-      contentRating: ContentRating.EVERYONE,
+export const toHotItems = ($: CheerioAPI): DiscoverSectionItem[] =>
+  $("[data-cw-slider] [data-slide]")
+    .toArray()
+    .flatMap((el) => {
+      const card = $(el);
+      const mangaId = parsePath(
+        card.find("a[href*='/comic/'], a[href*='/novel/']").first().attr("href") ?? "",
+      );
+      const title = Application.decodeHTMLEntities(card.find("h2").first().text().trim());
+      const imageUrl = imageUrlFromElement(card.find("img").first());
+      if (!mangaId || !title || !imageUrl) return [];
+      const genres = card
+        .find(".chip")
+        .map((_, genre) => $(genre).text().trim())
+        .get();
+      return [
+        {
+          type: "featuredCarouselItem",
+          mangaId,
+          title,
+          imageUrl,
+          supertitle: genres.join(", ") || undefined,
+          summary: Application.decodeHTMLEntities(card.find("p").last().text().trim()) || undefined,
+          contentRating: ContentRating.EVERYONE,
+        },
+      ];
     });
-  }
-  return items;
-};
 
-// Prominent-carousel cards ("Editor's Choice" pinned cards and "Latest
-// Novels") share one item shape and differ only in selectors.
-const toProminentItems = (
-  $: CheerioAPI,
-  selectors: {
-    cardSelector: string;
-    // When unset, the card element itself is the link.
-    linkSelector?: string;
-    titleSelector: string;
-    imageSelector: string;
-  },
-): DiscoverSectionItem[] => {
-  const items: DiscoverSectionItem[] = [];
-  const seen = new Set<string>();
-  for (const element of $(selectors.cardSelector).toArray()) {
-    const card = $(element);
-    const link = selectors.linkSelector ? card.find(selectors.linkSelector).first() : card;
-    const mangaId = parsePath((link.attr("href") || "").trim());
-    const title = Application.decodeHTMLEntities(
-      card.find(selectors.titleSelector).first().text().trim(),
-    );
-    if (!mangaId || !title || seen.has(mangaId)) continue;
-    seen.add(mangaId);
-    items.push({
-      type: "prominentCarouselItem",
-      mangaId,
-      title,
-      imageUrl: imageUrlFromElement(card.find(selectors.imageSelector).first()),
-      subtitle: card.find(".chapter-badge").first().text().trim() || undefined,
-      contentRating: ContentRating.EVERYONE,
-    });
-  }
-  return items;
-};
-
-// "Editor's Choice": the site's pinned cards, with their chapter-count badge.
 export const toPinnedItems = ($: CheerioAPI): DiscoverSectionItem[] =>
-  toProminentItems($, {
-    cardSelector: "a.pinned-comic-card",
-    titleSelector: ".pinned-comic-title",
-    imageSelector: ".comic-thumbnail img",
-  });
-
-// "Latest Releases": update cards linking the newest readable chapter.
-export const toLatestItems = ($: CheerioAPI): DiscoverSectionItem[] => {
-  const items: DiscoverSectionItem[] = [];
-  for (const element of $(".latest-releases .comic-card").toArray()) {
-    const card = $(element);
-    const mangaId = parsePath((card.find("a.comic-card__cover").first().attr("href") || "").trim());
-    const title = Application.decodeHTMLEntities(
-      card.find(".comic-card__title").first().text().trim(),
-    );
-    if (!mangaId || !title) continue;
-
-    // Skip locked entries so update cards open a readable chapter.
-    const chapter = card
-      .find("a.chapter-item")
-      .toArray()
-      .map((entry) => $(entry))
-      .find((entry) => !isLocked(entry) && (entry.attr("href") || "").includes("/chapter/"));
-    if (!chapter) continue;
-
-    items.push({
-      type: "chapterUpdatesCarouselItem",
-      mangaId,
-      chapterId: parsePath(chapter.attr("href") || ""),
-      title,
-      imageUrl: imageUrlFromElement(card.find(".comic-card__cover img").first()),
-      subtitle: chapter.find("label").first().text().trim() || undefined,
-      publishDate: parseRelativeDate(chapter.find("span").first().text()),
-      contentRating: ContentRating.EVERYONE,
+  $("section[aria-labelledby='cw-week-m'] a")
+    .toArray()
+    .flatMap((el) => {
+      const card = $(el);
+      const mangaId = parsePath(card.attr("href") ?? "");
+      const title = Application.decodeHTMLEntities(card.find(".line-clamp-2").text().trim());
+      const imageUrl = imageUrlFromElement(card.find("img").first());
+      if (!mangaId || !title || !imageUrl) return [];
+      return [
+        {
+          type: "prominentCarouselItem",
+          mangaId,
+          title,
+          imageUrl,
+          contentRating: ContentRating.EVERYONE,
+        },
+      ];
     });
-  }
-  return items;
-};
 
-// "Latest Novels": novel cards with their chapter-count badge.
+export const toLatestItems = ($: CheerioAPI): DiscoverSectionItem[] =>
+  $("#cw-latest article")
+    .toArray()
+    .flatMap((el) => {
+      const card = $(el);
+      const link = card.find("a.line-clamp-2").first();
+      const mangaId = parsePath(link.attr("href") ?? "");
+      const title = Application.decodeHTMLEntities(link.text().trim());
+      const imageUrl = imageUrlFromElement(card.find("img").first());
+      const chapter = card
+        .find("a.chapter-item")
+        .toArray()
+        .map((node) => $(node))
+        .find((node) => !isLocked(node));
+      if (!mangaId || !title || !imageUrl || !chapter) return [];
+      return [
+        {
+          type: "chapterUpdatesCarouselItem",
+          mangaId,
+          title,
+          imageUrl,
+          chapterId: parsePath(chapter.attr("href") ?? ""),
+          subtitle: chapter.children("span").first().text().trim(),
+          publishDate: parseRelativeDate(chapter.children("span").last().text().trim()),
+          contentRating: ContentRating.EVERYONE,
+        },
+      ];
+    });
+
 export const toNovelItems = ($: CheerioAPI): DiscoverSectionItem[] =>
-  toProminentItems($, {
-    cardSelector: ".novels-section .novel-card",
-    linkSelector: "a.novel-card-link",
-    titleSelector: ".novel-title",
-    imageSelector: ".novel-cover img",
-  });
+  $("section[aria-labelledby='cw-novels'] a.group")
+    .toArray()
+    .flatMap((el) => {
+      const card = $(el);
+      const mangaId = parsePath(card.attr("href") ?? "");
+      const title = Application.decodeHTMLEntities(card.find(".line-clamp-2").text().trim());
+      const imageUrl = imageUrlFromElement(card.find("img").first());
+      if (!mangaId || !title || !imageUrl) return [];
+      return [
+        {
+          type: "simpleCarouselItem",
+          mangaId,
+          title,
+          imageUrl,
+          contentRating: ContentRating.EVERYONE,
+        },
+      ];
+    });
 
 export const parseComicCards = ($: CheerioAPI): ComicCard[] => {
   const cards: ComicCard[] = [];
   const seen = new Set<string>();
 
-  for (const element of $("article.ac-card").toArray()) {
+  for (const element of $("#cwBrowse ul > li").toArray()) {
     const card = $(element);
-    const link = card.find(".ac-title a").first();
+    const link = card.find("a").first();
     const href = (link.attr("href") || "").trim();
     if (!href) continue;
 
     const mangaId = parsePath(href);
     if (!mangaId || seen.has(mangaId)) continue;
 
-    const title = Application.decodeHTMLEntities(link.text().trim());
+    const title = Application.decodeHTMLEntities(link.find(".line-clamp-2").text().trim());
     if (!title) continue;
 
     seen.add(mangaId);
     cards.push({
       mangaId,
       title,
-      imageUrl: imageUrlFromElement(card.find(".ac-thumb img").first()),
+      imageUrl: imageUrlFromElement(card.find("img").first()),
     });
   }
 
@@ -260,19 +228,17 @@ export const parseComicCards = ($: CheerioAPI): ComicCard[] => {
 };
 
 export const hasNextPage = ($: CheerioAPI): boolean => {
-  return $(".ac-pagination a.next").length > 0;
+  return $("#cwBrowse a.next, #cwBrowse a[rel=next]").length > 0;
 };
 
 export const parseGenres = ($: CheerioAPI): Genre[] => {
   const genres: Genre[] = [];
   const seen = new Set<string>();
 
-  for (const element of $(".ac-filter-group.ac-genre input[name='genres[]']").toArray()) {
+  for (const element of $("#cwBrowse input[name='genres[]']").toArray()) {
     const input = $(element);
     const slug = (input.attr("value") || "").trim();
-    const name = Application.decodeHTMLEntities(
-      input.parent().find(".ac-option-text").first().text().trim(),
-    );
+    const name = Application.decodeHTMLEntities(input.parent().find("span").first().text().trim());
     if (!slug || !name || seen.has(slug)) continue;
     seen.add(slug);
     genres.push({ slug, name });
@@ -313,7 +279,9 @@ export const parseMangaDetails = ($: CheerioAPI, mangaId: string): SourceManga =
 
   const genreTags: Tag[] = [];
   const seenGenre = new Set<string>();
-  for (const el of $(".comic-genres .genres .genre").toArray()) {
+  for (const el of $(
+    "#main a[href*='/comics_genres/'], #main a[href*='/novel_genres/']",
+  ).toArray()) {
     const title = Application.decodeHTMLEntities($(el).text().trim());
     if (!title) continue;
     const id = title.toLowerCase().replace(/\s+/g, "-");
@@ -323,12 +291,17 @@ export const parseMangaDetails = ($: CheerioAPI, mangaId: string): SourceManga =
   }
 
   const synopsis = Application.decodeHTMLEntities(
-    $(".comic-synopsis").first().text().trim() ||
+    $("#cwSynopsis, .comic-synopsis").first().text().trim() ||
       $(".novel-synopsis").first().text().trim() ||
       $("meta[property=og:description]").first().attr("content") ||
       "",
   );
-  const status = parseStatus($(".comic-status span:last-child").first().text());
+  const status = parseStatus(
+    $("#main dt")
+      .filter((_, el) => $(el).text().trim() === "Status")
+      .next("dd")
+      .text(),
+  );
 
   return {
     mangaId,
@@ -405,12 +378,18 @@ export const parseChapterElements = (
       el.find(".chapter-number").first().text().trim() ||
         el.find(".ch-name").first().text().trim() ||
         el.find(".chapter-side-title").first().text().trim() ||
-        (el.attr("data-title") || "").trim() ||
-        el.find("label").first().text().trim(),
+        el.find("label").first().text().trim() ||
+        el.children("span").first().children("span").first().text().trim() ||
+        (el.attr("data-title") || "").trim(),
     );
     const chapNum = parseChapterNumber(name);
     let title = name.replace(/^chapter\s+\d+(?:\.\d+)?(?:\s*[-:]\s*)?/i, "").trim();
-    const dateText = el.find(".chapter-date").first().text().trim();
+    const dateText = (
+      el.find(".chapter-date").first().text() ||
+      el.children("span").first().children("span").last().text()
+    )
+      .split("·")[0]
+      .trim();
 
     // Locked chapters (e.g. on novel pages) may expose no URL at all; a
     // synthetic id keeps them listed while staying unreadable.
@@ -438,7 +417,7 @@ export const finalizeChapters = (chapters: Chapter[]): Chapter[] => {
   const total = chapters.length;
   return chapters.map((chapter, index) => ({
     ...chapter,
-    chapNum: chapter.chapNum || total - index,
+    chapNum: chapter.chapNum,
     sortingIndex: total - index,
   }));
 };
@@ -453,10 +432,12 @@ const toXhtml = (fragment: string): string => {
 export const parseChapterDetails = ($: CheerioAPI, chapter: Chapter): ChapterDetails => {
   const encoded = $("#cwPages").text().trim();
   if (encoded) {
+    const pages = decodePageUrls(encoded);
+    if (pages.length === 0) throw new Error("RinkoComics returned an empty page list.");
     return {
       id: chapter.chapterId,
       mangaId: chapter.sourceManga.mangaId,
-      pages: decodePageUrls(encoded),
+      pages,
     };
   }
   const pages: string[] = [];
@@ -474,10 +455,14 @@ export const parseChapterDetails = ($: CheerioAPI, chapter: Chapter): ChapterDet
   }
 
   // Novel chapters carry prose instead of images.
-  const prose = $("#textContent").first().html() ?? $(".novel-content").first().html();
+  const prose =
+    $("#cwNovelText, #textContent").first().html() ?? $(".novel-content").first().html();
   if (prose?.trim()) {
     const heading = $(".chapter-title-head").first().text().trim();
-    const body = (heading ? `<h2>${heading}</h2>\n` : "") + prose.replaceAll("&nbsp;", " ");
+    const body =
+      (heading
+        ? cheerio.load("<h2></h2>", null, false)("h2").text(heading).prop("outerHTML")
+        : "") + prose.replaceAll("&nbsp;", " ");
     return {
       id: chapter.chapterId,
       mangaId: chapter.sourceManga.mangaId,

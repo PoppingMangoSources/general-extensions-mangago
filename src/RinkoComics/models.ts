@@ -18,14 +18,15 @@ export const SECTIONS = {
   PINNED: "pinned",
   LATEST: "latest",
   NOVELS: "novels",
+  NOVEL_UPDATES: "novel-updates",
   GENRES: "genres",
 } as const;
 
 export const SORTING_OPTIONS = [
-  { id: "newest", label: "Newest First" },
-  { id: "oldest", label: "Oldest First" },
+  { id: "updated", label: "Latest Update" },
+  { id: "new", label: "Newest Series" },
+  { id: "views", label: "Most Viewed" },
   { id: "az", label: "A-Z" },
-  { id: "za", label: "Z-A" },
 ];
 
 export interface PageMetadata extends JSONObject {
@@ -33,6 +34,7 @@ export interface PageMetadata extends JSONObject {
 }
 
 export interface SearchMetadata extends JSONObject {
+  type?: string[];
   genres?: { [slug: string]: "included" | "excluded" };
 }
 

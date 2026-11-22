@@ -6,6 +6,7 @@ import {
   Form,
   LabelRow,
   Section,
+  SelectRow,
   ToggleRow,
   TriStateSelectRow,
   type SearchQuery,
@@ -40,15 +41,18 @@ export class RinkoComicsSettingsForm extends Form {
 
   async handleHideLockedChange(value: boolean): Promise<void> {
     Application.setState(value, HIDE_LOCKED_KEY);
+    Application.invalidateDiscoverSections();
   }
 }
 
 export class RinkoComicsAdvancedSearchForm extends AdvancedSearchForm {
+  private type: string[];
   private readonly genreOptions: Tag[];
   private genres: Record<string, "included" | "excluded">;
 
   constructor(searchQuery: SearchQuery<SearchMetadata>, genreSection: TagSection) {
     super();
+    this.type = searchQuery.metadata?.type ?? ["comic"];
     this.genreOptions = genreSection.tags;
     this.genres = { ...searchQuery.metadata?.genres };
   }
@@ -66,6 +70,23 @@ export class RinkoComicsAdvancedSearchForm extends AdvancedSearchForm {
     }
 
     return [
+      Section("contentType", [
+        SelectRow("type", {
+          title: "Type",
+          layout: "flow",
+          items: [
+            { id: "comic", title: "Comics" },
+            { id: "novel", title: "Novels" },
+          ],
+          value: this.type,
+          minItemCount: 1,
+          maxItemCount: 1,
+          onValueChange: Application.Selector(
+            this as RinkoComicsAdvancedSearchForm,
+            "handleTypeChange",
+          ),
+        }),
+      ]),
       Section("genres", [
         TriStateSelectRow("genres", {
           title: "Genres",
@@ -84,11 +105,18 @@ export class RinkoComicsAdvancedSearchForm extends AdvancedSearchForm {
     ];
   }
 
+  async handleTypeChange(value: string[]): Promise<void> {
+    this.type = value;
+  }
+
   async handleGenresChange(value: Record<string, "included" | "excluded">): Promise<void> {
     this.genres = value;
   }
 
   override getSearchQueryMetadata(): SearchMetadata {
-    return Object.keys(this.genres).length > 0 ? { genres: this.genres } : {};
+    return {
+      type: this.type,
+      ...(Object.keys(this.genres).length > 0 ? { genres: this.genres } : {}),
+    };
   }
 }

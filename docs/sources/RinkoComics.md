@@ -2,7 +2,7 @@
 title: RinkoComics
 type: subsystem
 created: 2026-11-12
-updated: 2026-11-12
+updated: 2026-11-21
 sources:
   - code: src/RinkoComics/
   - code: test/unit/RinkoComics.test.ts
@@ -32,3 +32,30 @@ No device reader test was available.
 
 The current Keiyoushi RinkoComics reader also only selects `img.chapter-image`;
 it does not establish support for the new canvas payload.
+
+## November 21 redesign
+
+Live home and browse responses now use `data-cw-slider`/`data-slide`,
+`section[aria-labelledby="cw-week-m"]`, `section[aria-labelledby="cw-novels"]`,
+`#cw-latest article`, and `#cwBrowse ul > li`. Home rows follow the requested
+Editor’s Choice, Featured This Week, Latest Releases (Comics), New Novels,
+Latest Releases (Novels), Genres order. The featured shelf does not provide
+chapter numbers; none are invented. Hero synopsis and genres need no detail requests.
+
+Comics Today is `/?show=today`; novels Today adds `rel=novels`. The novel tab
+currently says no chapters were released in the last 24 hours. Do not substitute
+All results. Both comic tabs currently return the same 24 series, including
+older chapter stamps; the source requests Today and preserves the response.
+Readable updates choose the first unlocked chapter. Date strings are now short
+forms such as `2h`, and chapter-list dates append a view count after `·`.
+
+Browse uses `q`, `sort` (`updated`, `new`, `views`, `az`) and `genres[]`.
+The new chapter list is `#cwChapters a.chapter-item`; older AJAX chapter rows
+remain supported. Saved comic, novel and chapter paths are unchanged.
+Novel prose is now `#cwNovelText`, serialized to XML-valid XHTML.
+
+Live verification: 8 hero cards, 4 featured titles, 6 new novels and 24 readable
+comic updates. The Princess Maid chapter 62 decoded to 18 page URLs. The
+Youngest Daughter of the Snake Family chapter 1 supplied prose. The default
+runner's newest chapter is paid and correctly refused; it is not a full pass.
+Device layout and rendering remain unverified.

@@ -84,14 +84,23 @@ class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsConfig> {
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
-      { id: SECTIONS.HOT, title: "Hot This Week", type: DiscoverSectionType.featured },
+      { id: SECTIONS.HOT, title: "Editor’s Choice", type: DiscoverSectionType.featured },
       {
         id: SECTIONS.PINNED,
-        title: "Editor's Choice",
+        title: "Featured This Week",
         type: DiscoverSectionType.prominentCarousel,
       },
-      { id: SECTIONS.LATEST, title: "Latest Releases", type: DiscoverSectionType.chapterUpdates },
-      { id: SECTIONS.NOVELS, title: "Latest Novels", type: DiscoverSectionType.prominentCarousel },
+      {
+        id: SECTIONS.LATEST,
+        title: "Latest Releases (Comics)",
+        type: DiscoverSectionType.chapterUpdates,
+      },
+      { id: SECTIONS.NOVELS, title: "New Novels", type: DiscoverSectionType.simpleCarousel },
+      {
+        id: SECTIONS.NOVEL_UPDATES,
+        title: "Latest Releases (Novels)",
+        type: DiscoverSectionType.chapterUpdates,
+      },
       { id: SECTIONS.GENRES, title: "Genres", type: DiscoverSectionType.genres },
     ];
   }
@@ -103,12 +112,19 @@ class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsConfig> {
     if (section.id === SECTIONS.GENRES) {
       return this.getGenresSection();
     }
-    const $ = await this.getHomePage();
+    const $ =
+      section.id === SECTIONS.LATEST || section.id === SECTIONS.NOVEL_UPDATES
+        ? await fetchCheerio({
+            url: `${DOMAIN}/?show=today${section.id === SECTIONS.NOVEL_UPDATES ? "&rel=novels" : ""}`,
+            method: "GET",
+          })
+        : await this.getHomePage();
     switch (section.id) {
       case SECTIONS.HOT:
         return { items: toHotItems($) };
       case SECTIONS.PINNED:
         return { items: toPinnedItems($) };
+      case SECTIONS.NOVEL_UPDATES:
       case SECTIONS.LATEST:
         return { items: toLatestItems($) };
       case SECTIONS.NOVELS:
@@ -159,8 +175,8 @@ class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsConfig> {
     if (pasted) return pasted;
 
     const page = metadata?.page ?? 1;
-    const builder = this.comicsUrl(page).setQueryItem("post_type", "comic");
-    if (titleQuery) builder.setQueryItem("s", titleQuery);
+    const builder = this.comicsUrl(page, query.metadata?.type?.[0] === "novel");
+    if (titleQuery) builder.setQueryItem("q", titleQuery);
 
     const includedGenres = Object.entries(query.metadata?.genres ?? {})
       .filter(([, state]) => state === "included")
@@ -293,8 +309,9 @@ class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsConfig> {
     }
   }
 
-  private comicsUrl(page: number): URL {
-    return new URL(DOMAIN).setPath(page <= 1 ? "/comic/" : `/comic/page/${page}/`);
+  private comicsUrl(page: number, novel = false): URL {
+    const type = novel ? "novel" : "comic";
+    return new URL(DOMAIN).setPath(page <= 1 ? `/${type}/` : `/${type}/page/${page}/`);
   }
 
   private mangaUrl(mangaId: string): string {
