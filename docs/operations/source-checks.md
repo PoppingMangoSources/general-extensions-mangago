@@ -2,7 +2,7 @@
 title: Source checks
 type: operation
 created: 2026-11-02
-updated: 2026-11-02
+updated: 2026-11-22
 sources:
   - code: scripts/check-sources.mjs
   - code: scripts/tests/check-sources.test.mjs
@@ -32,7 +32,12 @@ them: `SelectRow` `options` (11 sources), emoji (6), `setTimeout` (Mangago, Mang
 `metadata: undefined` ending paging appears in 20 merged sources, so only `undefined` values
 inside a `Metadata` object fail.
 
-## Our backlog (fails on the source when it is next changed)
+## Our backlog (a note, not a failure, while it is unchanged)
+
+Since 2026-11-22 a spaced `name` or a custom test file that the comparison base already had is a
+NOTE, so it never blocks an unrelated push to that source; changing either still fails. The owner
+keeps the display names (LuaComic stays "Lua Comic"; the id is the folder, so a rename would not
+need a migration, but the label is the owner's choice).
 
 - Generated test file replaced by custom cases: BunManga, Chikari, Cocomic, LikeManga, LuaComic,
   MangaHere, MangaHome (no test file at all), MVLEMPYR, Ranobes, RinkoComics, RokariComics,

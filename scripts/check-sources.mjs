@@ -249,15 +249,22 @@ const readVersion = (text) => text?.match(/\bversion:\s*["'`]([^"'`]+)["'`]/)?.[
 export function checkSource(root, name, { base } = {}) {
   const findings = [];
   const dir = path.join(root, "src", name);
-  const add = (rule, file, line, message) =>
+  const add = (rule, file, line, message, level = RULES[rule]) =>
     findings.push({
-      level: RULES[rule],
+      level,
       rule,
       source: name,
       file: file ? path.relative(root, file) : `src/${name}`,
       line,
       message,
     });
+  // A problem the base already had is backlog, not something this change introduced: it is
+  // reported as a note so it never blocks an unrelated push to the same source.
+  const atBase = (rel) => (base ? git(root, "show", `${base}:${rel}`) : undefined);
+  const inherited = (rel, same) => {
+    const previous = atBase(rel);
+    return previous !== undefined && same(previous);
+  };
 
   const configFile = path.join(dir, "pbconfig.ts");
   const config = fs.existsSync(configFile) ? fs.readFileSync(configFile, "utf8") : undefined;
@@ -326,6 +333,9 @@ export function checkSource(root, name, { base } = {}) {
         configFile,
         undefined,
         `name "${displayName}" has spaces: inkdex names have none and match the directory (celarye, #186)`,
+        inherited(`src/${name}/pbconfig.ts`, (prev) => prev.includes(`"${displayName}"`))
+          ? "N"
+          : "F",
       );
     }
     const capabilities = config.match(/\bcapabilities:\s*([^\n]*)/)?.[1];
@@ -380,6 +390,9 @@ export function checkSource(root, name, { base } = {}) {
         testFile,
         undefined,
         "test file must be the generated baseline: one registerDefaultTests(suite, Source, sourceInfo) call, no custom cases or seeded inputs",
+        inherited(`src/tests/${name}.ts`, (prev) => prev === fs.readFileSync(testFile, "utf8"))
+          ? "N"
+          : "F",
       );
     }
   }

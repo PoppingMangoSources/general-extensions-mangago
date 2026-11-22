@@ -264,6 +264,25 @@ void test("a changed source without a version bump fails against a base", () => 
   assert.ok(!checkSource(root, "Demo", { base: "HEAD" }).some((f) => f.rule === "version-bump"));
 });
 
+void test("a spaced name or custom test the base already had is a note, a new one fails", () => {
+  const root = makeRepo({
+    "src/Demo/pbconfig.ts": `${HEADER}export default { name: "De mo", version: "1.0.0-alpha.1", language: "en", icon: "icon.png" };\n`,
+  });
+  const run = (...args) => execFileSync("git", args, { cwd: root, stdio: "ignore" });
+  const testFile = path.join(root, "src/tests/Demo.ts");
+  fs.appendFileSync(testFile, 'suite.test("extra", async () => {});\n');
+  run("init", "-q");
+  run("-c", "user.name=t", "-c", "user.email=t@t", "add", ".");
+  run("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base");
+  const level = (rule) =>
+    checkSource(root, "Demo", { base: "HEAD" }).find((f) => f.rule === rule)?.level;
+  assert.equal(level("pbconfig-name"), "N");
+  assert.equal(level("test-file"), "N");
+  fs.appendFileSync(testFile, 'suite.test("another", async () => {});\n');
+  assert.equal(level("test-file"), "F", "a further custom case is new, so it fails");
+  assert.equal(checkSource(root, "Demo").find((f) => f.rule === "pbconfig-name")?.level, "F");
+});
+
 void test("an undefined value inside Metadata fails; ending paging with metadata undefined passes", () => {
   const form = (body) => withFile(`class F { getSearchQueryMetadata() { return { ${body} }; } }\n`);
   assert.ok(rules(form("status: this.status || undefined")).includes("metadata-undefined"));
