@@ -4,11 +4,14 @@
 import {
   CloudflareError,
   PaperbackInterceptor,
+  URL,
+  type JSONObject,
   type Request,
   type Response,
 } from "@paperback/types";
 
 import { getBaseUrl } from "./forms";
+import { READER_DOMAIN, type ReaderHandoff } from "./models";
 
 // One native lookup for the whole session instead of one per request.
 let userAgentPromise: Promise<string> | undefined;
@@ -17,33 +20,37 @@ const getUserAgent = (): Promise<string> =>
 
 const IMAGE_EXTENSION_REGEX = /\.(jpe?g|png|webp|gif|avif|bmp)(\?|#|$)/i;
 
-const pageRange = (url: string): { start: number; end: number } | undefined => {
-  const match = /#reimanga-range=(\d+)-(\d+)\.webp$/.exec(url);
+const pageRange = (url: string): { start: number; end: number; external: boolean } | undefined => {
+  const match = /#reimanga-(external-)?range=(\d+)-(\d+)\.webp$/.exec(url);
   if (!match) return undefined;
-  const start = Number(match[1]);
-  const end = Number(match[2]);
+  const start = Number(match[2]);
+  const end = Number(match[3]);
   if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || end - start < 11) {
     throw new Error("Invalid ReiManga page range");
   }
-  return { start, end };
+  return { start, end, external: Boolean(match[1]) };
 };
 
 export class ReiMangaInterceptor extends PaperbackInterceptor {
   override async interceptRequest(request: Request): Promise<Request> {
     const isImage = IMAGE_EXTENSION_REGEX.test(request.url);
     const range = pageRange(request.url);
+    const origin =
+      range?.external || request.url.endsWith("#reimanga-external-image.webp")
+        ? READER_DOMAIN
+        : getBaseUrl();
 
     return {
       ...request,
       headers: {
         ...request.headers,
-        referer: `${getBaseUrl()}/`,
+        referer: `${origin}/`,
         "user-agent": await getUserAgent(),
         "accept-language": "en-US,en;q=0.5",
         accept: isImage
           ? "image/avif,image/webp,image/apng,image/png,image/svg+xml,*/*;q=0.8"
           : (request.headers?.accept ?? "*/*"),
-        ...(range && { origin: getBaseUrl(), range: `bytes=${range.start}-${range.end}` }),
+        ...(range && { origin, range: `bytes=${range.start}-${range.end}` }),
       },
       // Without this the catalogue silently drops adult entries, so a search
       // that should match returns nothing rather than an age-gated result.
@@ -107,8 +114,9 @@ export class ReiMangaInterceptor extends PaperbackInterceptor {
   }
 }
 
-const request = async (url: string, headers?: Record<string, string>): Promise<string> => {
-  const [response, buffer] = await Application.scheduleRequest({ url, method: "GET", headers });
+const request = async (request: Request): Promise<string> => {
+  const [response, buffer] = await Application.scheduleRequest(request);
+  const url = request.url.split(/[?#]/)[0];
 
   if (response.status === 404) throw new Error(`Content not found: ${url}`);
   if (response.status < 200 || response.status >= 300) {
@@ -117,8 +125,16 @@ const request = async (url: string, headers?: Record<string, string>): Promise<s
   return Application.arrayBufferToUTF8String(buffer);
 };
 
-export const fetchJson = async <T>(url: string): Promise<T> => {
-  const body = await request(url, { accept: "application/json" });
+export const fetchJson = async <T>(url: string, payload?: JSONObject): Promise<T> => {
+  const body = await request({
+    url,
+    method: payload === undefined ? "GET" : "POST",
+    headers: {
+      accept: "application/json",
+      ...(payload === undefined ? {} : { "content-type": "application/json" }),
+    },
+    ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),
+  });
   try {
     return JSON.parse(body) as T;
   } catch (error: unknown) {
@@ -129,4 +145,28 @@ export const fetchJson = async <T>(url: string): Promise<T> => {
 // Chapter lists and reader pages live only in the route's server payload, and
 // this header asks for that payload instead of the rendered page.
 export const fetchFlight = (url: string): Promise<string> =>
-  request(url, { rsc: "1", accept: "text/x-component,*/*" });
+  request({ url, method: "GET", headers: { rsc: "1", accept: "text/x-component,*/*" } });
+
+export const fetchReaderPage = async (handoff: ReaderHandoff): Promise<string> => {
+  const ticket = await fetchJson<{ url?: string }>(`${getBaseUrl()}/api/reader/ticket`, {
+    chapterId: handoff.chapter.chapterId,
+    mangaId: handoff.chapter.mangaId,
+    nonce: handoff.readerNonce,
+    src: "reader",
+  });
+  const url = new URL(typeof ticket.url === "string" ? ticket.url : "");
+  if (
+    `${url.protocol}://${url.hostname}` !== READER_DOMAIN ||
+    url.username ||
+    url.password ||
+    url.port ||
+    url.path !== "/r" ||
+    url.fragment ||
+    typeof url.queryItems?.d !== "string" ||
+    !url.queryItems.d ||
+    Object.keys(url.queryItems).length !== 1
+  ) {
+    throw new Error("ReiManga returned an unsupported reader URL; reload the chapter");
+  }
+  return request({ url: url.toString(), method: "GET", headers: { accept: "text/html,*/*" } });
+};

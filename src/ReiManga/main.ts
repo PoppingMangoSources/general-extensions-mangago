@@ -35,10 +35,11 @@ import {
   type PageMetadata,
   type SearchMetadata,
 } from "./models";
-import { fetchFlight, fetchJson, ReiMangaInterceptor } from "./network";
+import { fetchFlight, fetchJson, fetchReaderPage, ReiMangaInterceptor } from "./network";
 import {
   numericIdFrom,
   parseChapterPages,
+  parseReaderHandoff,
   parseChapters,
   toFeaturedItem,
   toLatestItem,
@@ -283,6 +284,8 @@ class ReiMangaExtension implements ExtensionImpl<typeof ReiMangaConfig> {
     const body = await fetchFlight(
       `${getBaseUrl()}/manga/${chapter.sourceManga.mangaId}/${chapter.chapterId}`,
     );
+    const handoff = parseReaderHandoff(body, chapter);
+    if (handoff) return parseChapterPages(await fetchReaderPage(handoff), chapter, true);
     return parseChapterPages(body, chapter);
   }
 }

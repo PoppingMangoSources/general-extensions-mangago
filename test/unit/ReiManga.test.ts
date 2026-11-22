@@ -22,7 +22,8 @@ const application = {
   },
 };
 Object.defineProperty(globalThis, "Application", { configurable: true, value: application });
-const { parseChapterPages, toSimpleItem } = await import("../../src/ReiManga/parsers");
+const { parseChapterPages, parseReaderHandoff, toSimpleItem } =
+  await import("../../src/ReiManga/parsers");
 const { ReiMangaInterceptor } = await import("../../src/ReiManga/network");
 const { ReiManga } = await import("../../src/ReiManga/main");
 
@@ -192,20 +193,41 @@ void test("rejects blocked, mismatched and corrupt pack responses and propagates
   );
 });
 
-void test("reports the external reader handoff without treating it as an empty chapter", () => {
-  const payload = JSON.stringify({
-    chapter: { chapterId: 1986227 },
+void test("extracts validated handoffs from JSON and escaped Flight without inventing IDs", () => {
+  const handoff = {
+    chapter: { chapterId: 1986227, mangaId: 83231 },
     readerNonce: "fixture",
     handoffLevel: "members",
-  });
-  assert.throws(() => parseChapterPages(payload, chapter), /separate website reader/);
+  };
+  const payload = JSON.stringify(handoff);
+  assert.deepEqual(parseReaderHandoff(payload, chapter), handoff);
+  assert.deepEqual(
+    parseReaderHandoff(
+      `<script>self.__next_f.push([1,${JSON.stringify(payload)}])</script>`,
+      chapter,
+    ),
+    handoff,
+  );
+  assert.equal(
+    parseReaderHandoff(JSON.stringify({ ...handoff, handoffLevel: "off" }), chapter),
+    undefined,
+  );
+  assert.equal(parseReaderHandoff(JSON.stringify(manifest()), chapter), undefined);
+  assert.throws(
+    () => parseReaderHandoff(JSON.stringify({ ...handoff, readerNonce: "" }), chapter),
+    /nonce/,
+  );
   assert.throws(
     () =>
-      parseChapterPages(
-        `<script>self.__next_f.push([1,${JSON.stringify(payload)}])</script>`,
+      parseReaderHandoff(
+        JSON.stringify({ ...handoff, chapter: { chapterId: 1, mangaId: 83231 } }),
         chapter,
       ),
-    /separate website reader/,
+    /different chapter/,
+  );
+  assert.throws(
+    () => parseChapterPages(JSON.stringify({ ...manifest(), chapter: { id: 1 } }), chapter),
+    /different chapter/,
   );
 });
 
@@ -226,4 +248,147 @@ void test("Top Rated shows chapter then rating without ranking numbers", () => {
   const unnumbered = toSimpleItem({ ...manga, chapter_number: undefined }, "rating");
   assert.ok(unnumbered.type === "simpleCarouselItem");
   assert.equal(unnumbered.subtitle, "★ 9.2");
+});
+
+void test("reader follows the site-issued handoff without changing saved IDs", async (t) => {
+  const requests: Request[] = [];
+  t.mock.method(
+    application,
+    "scheduleRequest",
+    async (request: Request): Promise<[Response, ArrayBuffer]> => {
+      requests.push(request);
+      const value = request.url.endsWith("/api/reader/ticket")
+        ? { url: "https://inkonthemap.org/r?d=fixture-reader" }
+        : request.url.startsWith("https://inkonthemap.org/")
+          ? manifest()
+          : {
+              chapter: { chapterId: 1986227, mangaId: 83231 },
+              readerNonce: "fixture-nonce",
+              handoffLevel: "members",
+            };
+      return [
+        { ...response(200), url: request.url },
+        new TextEncoder().encode(JSON.stringify(value)).buffer,
+      ];
+    },
+  );
+  const details = await ReiManga.getChapterDetails(chapter);
+  assert.ok("pages" in details);
+  assert.deepEqual(
+    details.pages,
+    expectedPages.map((url) => url.replace("#reimanga-range=", "#reimanga-external-range=")),
+  );
+  assert.equal(details.id, chapter.chapterId);
+  assert.equal(details.mangaId, chapter.sourceManga.mangaId);
+  assert.deepEqual(
+    requests.map((request) => [request.method, request.url]),
+    [
+      ["GET", "https://reimanga.net/manga/hotaru-no-yomeiri-83231/1986227"],
+      ["POST", "https://reimanga.net/api/reader/ticket"],
+      ["GET", "https://inkonthemap.org/r?d=fixture-reader"],
+    ],
+  );
+  const body = requests[1].body;
+  assert.ok(typeof body === "string");
+  assert.deepEqual(JSON.parse(body), {
+    chapterId: 1986227,
+    mangaId: 83231,
+    nonce: "fixture-nonce",
+    src: "reader",
+  });
+});
+
+void test("handoff range and direct image requests use the reader origin while old pages retain theirs", async () => {
+  const interceptor = new ReiMangaInterceptor("test");
+  const external = expectedPages[1].replace("#reimanga-range=", "#reimanga-external-range=");
+  const request = await interceptor.interceptRequest({ url: external, method: "GET" });
+  assert.equal(request.headers?.referer, "https://inkonthemap.org/");
+  assert.equal(request.headers?.origin, "https://inkonthemap.org");
+  assert.equal(request.headers?.range, "bytes=36-71");
+  assert.deepEqual(
+    await interceptor.interceptResponse(
+      request,
+      response(206, { "content-range": "bytes 36-71/72" }),
+      blue,
+    ),
+    blue,
+  );
+  const details = parseChapterPages(
+    JSON.stringify({ images: [{ image_url: "https://cdn.example/page.webp" }] }),
+    chapter,
+    true,
+  );
+  assert.ok("pages" in details);
+  assert.equal(details.pages[0], "https://cdn.example/page.webp#reimanga-external-image.webp");
+  const direct = await interceptor.interceptRequest({ url: details.pages[0], method: "GET" });
+  assert.equal(direct.headers?.referer, "https://inkonthemap.org/");
+  const legacy = await interceptor.interceptRequest({ url: expectedPages[1], method: "GET" });
+  assert.equal(legacy.headers?.referer, "https://reimanga.net/");
+});
+
+void test("rejects unexpected reader destinations before sending the chapter ticket", async (t) => {
+  let destination = "";
+  const requests: Request[] = [];
+  t.mock.method(
+    application,
+    "scheduleRequest",
+    async (request: Request): Promise<[Response, ArrayBuffer]> => {
+      requests.push(request);
+      const value = request.url.endsWith("/api/reader/ticket")
+        ? { url: destination }
+        : {
+            chapter: { chapterId: 1986227, mangaId: 83231 },
+            readerNonce: "fixture",
+            handoffLevel: "members",
+          };
+      return [
+        { ...response(200), url: request.url },
+        new TextEncoder().encode(JSON.stringify(value)).buffer,
+      ];
+    },
+  );
+  for (destination of [
+    "https://unrelated.example/r?d=fixture",
+    "http://inkonthemap.org/r?d=fixture",
+    "https://user@inkonthemap.org/r?d=fixture",
+    "https://inkonthemap.org/r?d=fixture&extra=1",
+    "https://inkonthemap.org/r",
+  ]) {
+    requests.length = 0;
+    await assert.rejects(ReiManga.getChapterDetails(chapter), /unsupported reader URL/);
+    assert.equal(requests.length, 2);
+  }
+});
+
+void test("handoff errors propagate without caching a rejected ticket", async (t) => {
+  let failed = true;
+  const error = new CloudflareError({ url: "https://inkonthemap.org/r", method: "GET" });
+  const requests: Request[] = [];
+  t.mock.method(
+    application,
+    "scheduleRequest",
+    async (request: Request): Promise<[Response, ArrayBuffer]> => {
+      requests.push(request);
+      if (request.url.startsWith("https://inkonthemap.org/") && failed) throw error;
+      const value = request.url.endsWith("/api/reader/ticket")
+        ? { url: "https://inkonthemap.org/r?d=fixture" }
+        : request.url.startsWith("https://inkonthemap.org/")
+          ? manifest()
+          : {
+              chapter: { chapterId: 1986227, mangaId: 83231 },
+              readerNonce: "fixture",
+              handoffLevel: "members",
+            };
+      return [
+        { ...response(200), url: request.url },
+        new TextEncoder().encode(JSON.stringify(value)).buffer,
+      ];
+    },
+  );
+  await assert.rejects(ReiManga.getChapterDetails(chapter), (value) => value === error);
+  failed = false;
+  const details = await ReiManga.getChapterDetails(chapter);
+  assert.ok("pages" in details);
+  assert.equal(details.pages.length, 3);
+  assert.equal(requests.filter((request) => request.url.endsWith("/api/reader/ticket")).length, 2);
 });

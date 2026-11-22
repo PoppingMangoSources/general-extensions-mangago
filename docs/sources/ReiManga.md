@@ -2,11 +2,11 @@
 title: ReiManga
 type: subsystem
 created: 2026-11-12
-updated: 2026-11-21
+updated: 2026-11-22
 sources:
   - code: src/ReiManga/
   - ext: https://reimanga.net
-verified_at: pending
+verified_at: 2026-11-22
 ---
 
 ## Reader contract
@@ -59,21 +59,45 @@ invalid manifests, stable IDs, exact HTTP 206 ranges, HTTP 200 extraction,
 corrupt WebP responses and Cloudflare propagation. They use independently
 encoded WebP fixtures, not live tokens or account data.
 
-## November 21 reader handoff
+## November 22 reader handoff
 
 The current live chapter route no longer contains the packed manifest. It
 returns `chapter`, `readerNonce`, and `handoffLevel: "members"`. The site's
-current client mints a ticket through POST `/api/reader/ticket` and hands the
-reader to `inkonthemap.org`. This supersedes the older signed guard requests
-in the referenced change. The source keeps its old image/pack parser for
-compatible responses and reports the separate-reader requirement explicitly
-instead of claiming that the chapter has no pages.
+current client mints an anonymous public-chapter ticket through POST
+`/api/reader/ticket`, sending numeric `chapterId`, numeric `mangaId`, `nonce`, and
+`src: "reader"`. The response hands the reader to `https://inkonthemap.org/r?d=…`.
+The source validates that destination before requesting its HTML. This HTML
+contains the image-pack manifest previously found on ReiManga itself, so the
+existing parser and native byte-range interceptor can handle it. No WebView,
+account token, or per-page ticket request is needed for the verified page lists.
 
-A public ticket request succeeded for The Exiled Reincarnated Heavy Knight
-chapter 3214333. Opening the ticketed external URL was blocked by automatic
-approval review because it may transmit an access token to that separate host.
-The external reader and native page loading remain unverified and unresolved.
-No tickets or nonces are stored in source or documentation.
+Handoff chapter and manga IDs must match the requested saved IDs. External page
+fragments also identify the reader origin, allowing per-request Referer/Origin
+headers without mutable chapter state. Legacy ReiManga page fragments retain
+their original headers. Comparable patterns are merged inkdex Mangago's
+reader-specific headers, MangaPlus's image fragments, and our Toonkotsu's
+fragment-driven interceptor.
+
+Live source calls resolved these page lists through the complete GET chapter,
+POST ticket, GET external reader sequence:
+
+| Title                                                               | Chapter | Chapter ID | Pack pages |
+| ------------------------------------------------------------------- | ------- | ---------- | ---------- |
+| Awakening the Purple Thunder at the Beginning                       | 101     | 100148875  | 76         |
+| The Exiled Reincarnated Heavy Knight Is Unrivaled in Game Knowledge | 0       | 3214333    | 36         |
+
+The reported chapter 101 also displayed images in the public website reader in
+Chrome. Its client used 11 individual `img.reimanga.net/drive-storage/…` images
+rather than the 76 pack slices. This confirms website delivery, not native pack
+delivery. Direct pack downloads from this test server returned HTTP 403 even
+with the external reader's headers. The website's guarded fallback image API is
+not implemented by this change. Paperback device image loading remains
+unverified; do not report the page-list checks or browser rendering as a native
+reader pass. No tickets or nonces are stored in source or documentation.
+
+Offline tests additionally cover escaped handoffs, exact JSON ticket bodies,
+wrong IDs, missing nonces, unexpected ticket destinations, external page
+headers, legacy page headers, and retry after a propagated Cloudflare error.
 
 ## Discover presentation
 

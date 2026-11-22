@@ -13,7 +13,13 @@ import {
 } from "@paperback/types";
 
 import { getBaseUrl } from "./forms";
-import { ADULT_GENRES, type ApiManga, type FlightChapterList, type FlightImages } from "./models";
+import {
+  ADULT_GENRES,
+  type ApiManga,
+  type FlightChapterList,
+  type FlightImages,
+  type ReaderHandoff,
+} from "./models";
 
 // Paperback rejects ids containing characters outside this set.
 const SAFE_ID_REGEX = /[^a-zA-Z0-9._\-@()[\]%?#+=/&:]/g;
@@ -327,14 +333,32 @@ export const parseChapters = (body: string, sourceManga: SourceManga): Chapter[]
   return chapters;
 };
 
-export const parseChapterPages = (body: string, chapter: Chapter): ChapterDetails => {
-  const handoff = extractFlight<{ handoffLevel?: string }>(body, "handoffLevel");
-  if (handoff?.handoffLevel && handoff.handoffLevel !== "off") {
-    throw new Error(
-      "ReiManga moved this chapter to a separate website reader. Open the chapter on ReiManga to continue; this reader is not supported in the extension yet.",
-    );
+export const parseReaderHandoff = (body: string, chapter: Chapter): ReaderHandoff | undefined => {
+  const handoff = extractFlight<ReaderHandoff>(body, "handoffLevel");
+  if (!handoff?.handoffLevel || handoff.handoffLevel === "off") return undefined;
+  if (
+    !Number.isSafeInteger(handoff.chapter?.chapterId) ||
+    !Number.isSafeInteger(handoff.chapter?.mangaId) ||
+    String(handoff.chapter.chapterId) !== chapter.chapterId ||
+    String(handoff.chapter.mangaId) !== numericIdFrom(chapter.sourceManga.mangaId)
+  ) {
+    throw new Error("ReiManga returned a reader handoff for a different chapter");
   }
+  if (typeof handoff.readerNonce !== "string" || !handoff.readerNonce) {
+    throw new Error("ReiManga did not provide a reader ticket nonce; reload the chapter");
+  }
+  return handoff;
+};
+
+export const parseChapterPages = (
+  body: string,
+  chapter: Chapter,
+  external = false,
+): ChapterDetails => {
   const data = extractFlight<FlightImages>(body, "images");
+  if (data?.chapter?.id !== undefined && String(data.chapter.id) !== chapter.chapterId) {
+    throw new Error("ReiManga returned page data for a different chapter");
+  }
   let pages = (data?.images ?? [])
     .slice()
     .sort((left, right) => (left.page_number ?? 0) - (right.page_number ?? 0))
@@ -371,7 +395,9 @@ export const parseChapterPages = (body: string, chapter: Chapter): ChapterDetail
         // Distinct page cache keys carry ranges to the interceptor without changing the CDN path.
         pages.push(
           new URL(urls[segment])
-            .setFragment(`reimanga-range=${offset}-${offset + length - 1}.webp`)
+            .setFragment(
+              `reimanga-${external ? "external-" : ""}range=${offset}-${offset + length - 1}.webp`,
+            )
             .toString(),
         );
         offset += length;
@@ -381,6 +407,9 @@ export const parseChapterPages = (body: string, chapter: Chapter): ChapterDetail
 
   if (pages.length === 0 || pages.some((url) => !/^https?:\/\//i.test(url))) {
     throw new Error(`No pages found for chapter ${chapter.chapterId}`);
+  }
+  if (external && !data?.pack) {
+    pages = pages.map((url) => new URL(url).setFragment("reimanga-external-image.webp").toString());
   }
 
   return {

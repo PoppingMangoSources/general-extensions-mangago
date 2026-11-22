@@ -5,6 +5,7 @@ import type { JSONObject, SortingOption, Tag } from "@paperback/types";
 
 export const DOMAIN = "https://reimanga.net";
 export const API = `${DOMAIN}/api`;
+export const READER_DOMAIN = "https://inkonthemap.org";
 
 export const SECTIONS = {
   FEATURED: "featured",
@@ -139,9 +140,16 @@ export interface FlightImage {
 }
 
 export interface FlightImages {
+  chapter?: { id?: number };
   images?: FlightImage[];
   pack?: {
     index: { v: number; s: number[]; p: number[][] };
     urls: string[];
   };
+}
+
+export interface ReaderHandoff {
+  chapter: { chapterId: number; mangaId: number };
+  readerNonce: string;
+  handoffLevel: string;
 }
