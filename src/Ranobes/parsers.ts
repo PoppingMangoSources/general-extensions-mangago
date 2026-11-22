@@ -399,8 +399,8 @@ export const parseMangaDetails = ($: cheerio.CheerioAPI, mangaId: string): Sourc
       rating: Number.isFinite(rating) ? Math.min(1, Math.max(0, rating / 5)) : undefined,
       tagGroups: tagGroups.length ? tagGroups : undefined,
       additionalInfo: {
-        ...(language ? { language } : {}),
-        ...(views !== undefined ? { views: String(views) } : {}),
+        ...(language ? { Language: language } : {}),
+        ...(views !== undefined ? { Views: String(views) } : {}),
       },
       shareUrl: mangaId,
     },

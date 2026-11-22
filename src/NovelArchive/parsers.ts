@@ -221,7 +221,7 @@ export const parseMangaDetails = (novel: Novel, mangaId: string): SourceManga =>
     percentage === undefined
       ? undefined
       : {
-          rating: `${Math.round(percentage * 100)}%${
+          Rating: `${Math.round(percentage * 100)}%${
             novel.rating_count ? ` · ${novel.rating_count} ratings` : ""
           }`,
         };
