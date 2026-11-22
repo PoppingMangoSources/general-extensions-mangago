@@ -42,10 +42,12 @@ Editor’s Choice, Featured This Week, Latest Releases (Comics), New Novels,
 Latest Releases (Novels), Genres order. The featured shelf does not provide
 chapter numbers; none are invented. Hero synopsis and genres need no detail requests.
 
-Comics Today is `/?show=today`; novels Today adds `rel=novels`. The novel tab
-currently says no chapters were released in the last 24 hours. Do not substitute
-All results. Both comic tabs currently return the same 24 series, including
+Comics Today is `/?show=today`. Novel updates use the All tab at `/?rel=novels`,
+which currently supplies 24 series; the owner switched this from Today because
+Today can be empty. Both comic tabs currently return the same 24 series, including
 older chapter stamps; the source requests Today and preserves the response.
+Editor’s Choice shows its first three genres through the native `tag.fill` info item,
+matching MangaTown, with no duplicate genre supertitle or per-title requests.
 Readable updates choose the first unlocked chapter. Date strings are now short
 forms such as `2h`, and chapter-list dates append a view count after `·`.
 

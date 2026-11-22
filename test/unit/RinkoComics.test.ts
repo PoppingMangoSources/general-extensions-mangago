@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { ContentRating, type Chapter } from "@paperback/types";
+import { ContentRating, type Chapter, type Request, type Response } from "@paperback/types";
 import * as cheerio from "cheerio";
 import { decodeHTML } from "entities";
 
@@ -19,13 +19,16 @@ import {
   finalizeChapters,
 } from "../../src/RinkoComics/parsers";
 
-Object.defineProperty(globalThis, "Application", {
-  configurable: true,
-  value: {
-    decodeHTMLEntities: decodeHTML,
-    arrayBufferToUTF8String: (data: ArrayBuffer) => new TextDecoder().decode(data),
+const application = {
+  getState: () => undefined,
+  decodeHTMLEntities: decodeHTML,
+  arrayBufferToUTF8String: (data: ArrayBuffer) => new TextDecoder().decode(data),
+  scheduleRequest: async (_request: Request): Promise<[Response, ArrayBuffer]> => {
+    throw new Error("Unexpected network request");
   },
-});
+};
+Object.defineProperty(globalThis, "Application", { configurable: true, value: application });
+const { RinkoComics } = await import("../../src/RinkoComics/main");
 
 void test("current home selects one hero per slide and the first readable release", () => {
   const $ =
@@ -147,4 +150,43 @@ void test("rejects malformed lists and reports empty readers without inventing a
     () => parseChapterDetails(cheerio.load("<p>No reader</p>"), chapter),
     /no readable pages or text/,
   );
+});
+
+void test("hero genre tags keep the first three names without a duplicate supertitle", () => {
+  const $ =
+    cheerio.load(`<div data-cw-slider><div data-slide><h2>Example</h2><img src="/cover.webp"><a href="/comic/example/">Read</a>
+    <span class="chip">Adventure</span><span class="chip">Drama</span><span class="chip">Fantasy</span><span class="chip">Josei</span></div></div>`);
+  const [hero] = toHotItems($);
+  assert.ok(hero.type === "featuredCarouselItem");
+  assert.deepEqual(hero.infoItems, [{ symbol: "tag.fill", text: "Adventure, Drama, Fantasy" }]);
+  assert.equal(hero.supertitle, undefined);
+  $(".chip").remove();
+  const [plain] = toHotItems($);
+  assert.ok(plain.type === "featuredCarouselItem");
+  assert.equal(plain.infoItems, undefined);
+});
+
+void test("novel updates request All while comic updates still request Today", async (t) => {
+  const urls: string[] = [];
+  t.mock.method(
+    application,
+    "scheduleRequest",
+    async (request: Request): Promise<[Response, ArrayBuffer]> => {
+      urls.push(request.url);
+      return [
+        { url: request.url, status: 200, headers: {}, cookies: [] },
+        new TextEncoder().encode('<section id="cw-latest"></section>').buffer,
+      ];
+    },
+  );
+  const sections = await RinkoComics.getDiscoverSections();
+  for (const id of ["novel-updates", "latest"]) {
+    const section = sections.find((item) => item.id === id);
+    assert.ok(section);
+    await RinkoComics.getDiscoverSectionItems(section, undefined);
+  }
+  assert.deepEqual(urls, [
+    "https://rinkocomics.com/?rel=novels",
+    "https://rinkocomics.com/?show=today",
+  ]);
 });

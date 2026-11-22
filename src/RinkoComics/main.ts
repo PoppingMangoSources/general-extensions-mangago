@@ -115,7 +115,7 @@ class RinkoComicsExtension implements ExtensionImpl<typeof RinkoComicsConfig> {
     const $ =
       section.id === SECTIONS.LATEST || section.id === SECTIONS.NOVEL_UPDATES
         ? await fetchCheerio({
-            url: `${DOMAIN}/?show=today${section.id === SECTIONS.NOVEL_UPDATES ? "&rel=novels" : ""}`,
+            url: `${DOMAIN}/?${section.id === SECTIONS.NOVEL_UPDATES ? "rel=novels" : "show=today"}`,
             method: "GET",
           })
         : await this.getHomePage();

@@ -124,7 +124,9 @@ export const toHotItems = ($: CheerioAPI): DiscoverSectionItem[] =>
           mangaId,
           title,
           imageUrl,
-          supertitle: genres.join(", ") || undefined,
+          infoItems: genres.length
+            ? [{ symbol: "tag.fill", text: genres.slice(0, 3).join(", ") }]
+            : undefined,
           summary: Application.decodeHTMLEntities(card.find("p").last().text().trim()) || undefined,
           contentRating: ContentRating.EVERYONE,
         },
