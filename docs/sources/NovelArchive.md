@@ -2,13 +2,13 @@
 title: NovelArchive
 type: subsystem
 created: 2026-11-09
-updated: 2026-11-09
+updated: 2026-11-22
 sources:
   - code: src/NovelArchive/
   - code: test/unit/NovelArchive.test.ts
   - ext: https://novelarchive.st
   - ext: https://github.com/inkdex/general-extensions/pull/257
-verified_at: pending
+verified_at: 05b87816
 ---
 
 # NovelArchive
@@ -144,3 +144,8 @@ Opera was disconnected during the prior audit. Browser Use subsequently verified
 Trending, Editor's Choice and Recently Updated APIs, 30-item library paging and the inconsistent
 Two Worlds chapter IDs on 2026-11-09. Firecrawl and direct HTTP/API checks also supplied earlier
 live evidence. No user accounts or private data were used.
+
+## Title page details, 2026-11-22
+
+Since types alpha.95 the app shows `additionalInfo` to readers on the title page, so `Rating` (percentage and count)
+are Title Case labels with display values.

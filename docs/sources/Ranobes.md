@@ -2,12 +2,12 @@
 title: Ranobes
 type: subsystem
 created: 2026-11-05
-updated: 2026-11-07
+updated: 2026-11-22
 sources:
   - code: src/Ranobes/
   - code: test/unit/Ranobes.test.ts
   - ext: https://ranobes.net
-verified_at: pending
+verified_at: 05b87816
 ---
 
 # Ranobes
@@ -80,3 +80,8 @@ Search is opened, keeps them in memory for the source session, and uses the name
 exclude and clear states. The 1–5 star range uses `r.prate=<minimum>%3B<maximum>`. Vote count
 uses `f.pvotenum` and `t.pvotenum`. Reviews, score-only sorting, and the separate MTL Reader
 filter still need their request parameters confirmed.
+
+## Title page details, 2026-11-22
+
+Since types alpha.95 the app shows `additionalInfo` to readers on the title page, so `Language` and `Views`
+are Title Case labels with display values.
