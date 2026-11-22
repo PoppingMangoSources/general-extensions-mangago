@@ -2,7 +2,7 @@
 title: ReiManga
 type: subsystem
 created: 2026-11-12
-updated: 2026-11-12
+updated: 2026-11-21
 sources:
   - code: src/ReiManga/
   - ext: https://reimanga.net
@@ -58,3 +58,19 @@ Offline regression tests cover segment offsets, direct and fragmented readers,
 invalid manifests, stable IDs, exact HTTP 206 ranges, HTTP 200 extraction,
 corrupt WebP responses and Cloudflare propagation. They use independently
 encoded WebP fixtures, not live tokens or account data.
+
+## November 21 reader handoff
+
+The current live chapter route no longer contains the packed manifest. It
+returns `chapter`, `readerNonce`, and `handoffLevel: "members"`. The site's
+current client mints a ticket through POST `/api/reader/ticket` and hands the
+reader to `inkonthemap.org`. This supersedes the older signed guard requests
+in the referenced change. The source keeps its old image/pack parser for
+compatible responses and reports the separate-reader requirement explicitly
+instead of claiming that the chapter has no pages.
+
+A public ticket request succeeded for The Exiled Reincarnated Heavy Knight
+chapter 3214333. Opening the ticketed external URL was blocked by automatic
+approval review because it may transmit an access token to that separate host.
+The external reader and native page loading remain unverified and unresolved.
+No tickets or nonces are stored in source or documentation.

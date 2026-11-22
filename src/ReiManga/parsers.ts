@@ -337,6 +337,12 @@ export const parseChapters = (body: string, sourceManga: SourceManga): Chapter[]
 };
 
 export const parseChapterPages = (body: string, chapter: Chapter): ChapterDetails => {
+  const handoff = extractFlight<{ handoffLevel?: string }>(body, "handoffLevel");
+  if (handoff?.handoffLevel && handoff.handoffLevel !== "off") {
+    throw new Error(
+      "ReiManga moved this chapter to a separate website reader. Open the chapter on ReiManga to continue; this reader is not supported in the extension yet.",
+    );
+  }
   const data = extractFlight<FlightImages>(body, "images");
   let pages = (data?.images ?? [])
     .slice()

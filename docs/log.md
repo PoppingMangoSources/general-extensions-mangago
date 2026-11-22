@@ -67,3 +67,7 @@ NovelArchive naming clarification: use `parseNovelList` and `filterNovelList` fo
 - 2026-11-12: Completed the reader comparison across the 29-source catalogue.
   RokariComics and NovelCool preserve existing image URL escapes; fixed-input regressions
   cover encoded paths and signature values. See [reader audit](operations/reader-audit.md).
+
+- 2026-11-21: Updated Cocomic and RinkoComics for their redesigned pages and
+  requested Discover ordering. Recorded Today-tab behavior, novel XHTML, and
+  the unresolved ReiManga external-reader handoff.

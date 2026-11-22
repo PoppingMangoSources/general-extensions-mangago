@@ -190,3 +190,20 @@ void test("rejects blocked, mismatched and corrupt pack responses and propagates
     CloudflareError,
   );
 });
+
+void test("reports the external reader handoff without treating it as an empty chapter", () => {
+  const payload = JSON.stringify({
+    chapter: { chapterId: 1986227 },
+    readerNonce: "fixture",
+    handoffLevel: "members",
+  });
+  assert.throws(() => parseChapterPages(payload, chapter), /separate website reader/);
+  assert.throws(
+    () =>
+      parseChapterPages(
+        `<script>self.__next_f.push([1,${JSON.stringify(payload)}])</script>`,
+        chapter,
+      ),
+    /separate website reader/,
+  );
+});
