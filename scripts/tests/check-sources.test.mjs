@@ -300,6 +300,17 @@ void test("timers, object bodies, empty-string state, item casts and text codecs
     ).includes("object-body"),
   );
   assert.ok(notes('Application.setState("", KEY);\n').includes("empty-state"));
+  assert.ok(notes("const m = { additionalInfo: { views: v } };\n").includes("info-label"));
+  assert.ok(
+    notes("const m = { additionalInfo: { ...(l ? { language: l } : {}) } };\n").includes(
+      "info-label",
+    ),
+  );
+  assert.ok(
+    !notes(
+      'const m = { additionalInfo: { Views: v, Type: t.find(({ id }) => id === "a")?.title ?? "" } };\n',
+    ).includes("info-label"),
+  );
   assert.ok(notes("const i = x as DiscoverSectionItem;\n").includes("item-cast"));
   assert.ok(notes("const t = new TextDecoder().decode(b);\n").includes("text-codec"));
 });

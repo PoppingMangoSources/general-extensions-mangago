@@ -1,6 +1,6 @@
 # Popmango Paperback 0.9 sources
 
-Paperback **0.9** sources (`@paperback/types` and `@paperback/toolchain` `^1.0.0-alpha.94`),
+Paperback **0.9** sources (`@paperback/types` and `@paperback/toolchain` `^1.0.0-alpha.95`),
 developed on `0.9/test` and submitted one at a time to
 [inkdex/general-extensions](https://github.com/inkdex/general-extensions), whose maintainers
 review them. Write every source as if it were already that pull request: lean, plain, and in the
@@ -149,8 +149,11 @@ Read `references/platform.md` before touching any of these:
   `JSON.stringify(body)`.
 - Every id-typed field is charset-checked on the device; tests never check it.
 - `MangaInfo.rating` renders as a percentage of a 0..1 value.
-- The test runner skips a source with no test file, ignores Discover and settings, and exits 0 on
-  failure. Read its report (`scripts/check-tests.mjs`).
+- The test runner skips a source with no test file and ignores Discover and settings. Since
+  alpha.95 it exits non-zero on failure and marks Cloudflare failures; read its report
+  (`scripts/check-tests.mjs`).
+- `MangaInfo.additionalInfo` is shown to the reader on the title page (alpha.95): Title Case
+  labels and reader-facing values only, never internal state.
 
 ## 5. Workflow
 

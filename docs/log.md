@@ -71,3 +71,7 @@ NovelArchive naming clarification: use `parseNovelList` and `filterNovelList` fo
 - 2026-11-21: Updated Cocomic and RinkoComics for their redesigned pages and
   requested Discover ordering. Recorded Today-tab behavior, novel XHTML, and
   the unresolved ReiManga external-reader handoff.
+- 2026-11-22: Toolchain moved to 1.0.0-alpha.95. The test command now exits non-zero, can solve
+  Cloudflare through FlareSolverr and marks Cloudflare failures; additionalInfo is shown on the
+  title page, so NovelArchive and Ranobes use Title Case labels and a checker note
+  flags lowercase keys. src/tests/suite.ts was regenerated from the new template.
