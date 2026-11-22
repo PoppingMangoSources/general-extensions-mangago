@@ -1,8 +1,8 @@
 {
-  "buildTime": "2026-11-22T10:26:37.791Z",
+  "buildTime": "2026-11-22T13:27:12.255Z",
   "builtWith": {
-    "toolchain": "1.0.0-alpha.94",
-    "types": "1.0.0-alpha.94"
+    "toolchain": "1.0.0-alpha.95",
+    "types": "1.0.0-alpha.95"
   },
   "repository": {
     "name": "PoppingMango Sources",
@@ -312,7 +312,7 @@
     {
       "name": "NovelArchive",
       "description": "Extension that pulls content from novelarchive.st.",
-      "version": "1.0.0-alpha.62",
+      "version": "1.0.0-alpha.63",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
@@ -374,7 +374,7 @@
     {
       "name": "Ranobes",
       "description": "Extension that pulls light novels from ranobes.net.",
-      "version": "1.0.0-alpha.71",
+      "version": "1.0.0-alpha.72",
       "icon": "icon.png",
       "language": "en",
       "contentRating": "ADULT",
