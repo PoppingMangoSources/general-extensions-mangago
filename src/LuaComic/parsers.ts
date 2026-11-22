@@ -394,7 +394,7 @@ export const parseMangaDetails = (series: LuaSeries): SourceManga => {
 
   const views = series.total_views;
   const additionalInfo =
-    views == null || !Number.isFinite(views) ? undefined : { views: formatCount(views) };
+    views == null || !Number.isFinite(views) ? undefined : { Views: formatCount(views) };
 
   return {
     mangaId: encodeSlugId(series.series_slug),
