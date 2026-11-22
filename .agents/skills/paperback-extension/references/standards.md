@@ -143,6 +143,9 @@ src/tests/<Name>.ts   the generated baseline, unchanged [check]
   payload: true for Manhwa, Manhua, Webtoon or Long Strip, false otherwise. Never derive it from a
   title, genre tag or language, and do not fetch anything extra for it. A site with only "Comic"
   or only an origin country leaves it unset. **[platform]**
+- `additionalInfo` is a reader-facing table on the title page (types alpha.95): Title Case labels
+  (`Views`, `Year`), display values, nothing internal. Ids and routing data go in the id
+  (niclim). **[platform] [check, note]**
 - Pass images through untouched; GIFs animate.
 
 ## 7. Ids

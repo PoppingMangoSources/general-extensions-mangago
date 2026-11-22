@@ -83,6 +83,7 @@ export const RULES = {
   "empty-image-url": "F",
   "object-body": "N",
   "empty-state": "N",
+  "info-label": "N",
   "item-cast": "N",
   "safe-id-regex": "F",
   // Deprecated in the types, yet niclimcy's own MangaFire (October 2026) still passes `options`
@@ -561,6 +562,26 @@ export function checkSource(root, name, { base } = {}) {
         at(m.index),
         "the bridge encodes object bodies and turns 0 into false: send JSON.stringify(body)",
       );
+    }
+    // additionalInfo is shown on the title page (types alpha.95), keyed by its labels.
+    for (const m of matches(code, /\badditionalInfo\s*[:=][^{;]*\{/)) {
+      let depth = 0;
+      let end = m.index + m[0].length - 1;
+      for (; end < code.length; end++) {
+        if (code[end] === "{") depth++;
+        else if (code[end] === "}" && --depth === 0) break;
+      }
+      const span = code.slice(m.index + m[0].length - 1, end + 1);
+      // Skip `({ id }) =>` parameters and `${value}` interpolations.
+      const label = /(?<![($])\{\s*([a-z]\w*)\s*(?=[:,}])|,\s*([a-z]\w*)\s*(?=:)/.exec(span);
+      if (label) {
+        add(
+          "info-label",
+          file,
+          at(m.index),
+          `additionalInfo key "${label[1] ?? label[2]}" is shown to readers: use a Title Case label`,
+        );
+      }
     }
     for (const m of matches(text, /\bsetState\(\s*["'`]{2}\s*,/)) {
       add(

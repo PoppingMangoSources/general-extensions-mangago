@@ -2,10 +2,13 @@
 
 What the toolchain, the test runner and the app actually do, read line by line from
 `Paperback-iOS/paperback-toolchain` branch `0.9` (packages `types`, `toolchain`,
-`runtime-polyfills`, all `1.0.0-alpha.94`, published under the `alpha` tag; npm `latest` still
-points at alpha.64, so install with `^1.0.0-alpha.94`) and from device findings. alpha.93 reworked
+`runtime-polyfills`, all `1.0.0-alpha.95`, published under the `alpha` tag; npm `latest` still
+points at alpha.64, so install with `^1.0.0-alpha.95`) and from device findings. alpha.93 reworked
 the managed-collection API, added `MangaInfo.isWebtoon` and fixed `=` inside URL query values and
-test-VM cookie values; alpha.94 only updated dependencies. Tags: **[src]** read in the toolchain source, **[device]**
+test-VM cookie values; alpha.94 only updated dependencies. alpha.95 made `paperback-cli test` exit
+non-zero on failure, added FlareSolverr and Cloudflare handling to the default suite, fixed
+request-interceptor chaining in the test VM, displays `additionalInfo` on the title page, and
+added `MangaInfo.extras`, `MenuRow` and `isDisabled` on form rows. Tags: **[src]** read in the toolchain source, **[device]**
 probed on a phone (kodama's notes unless named), **[merged]** used by a merged inkdex source.
 Re-check a line against `node_modules/@paperback/*` before building on it.
 
@@ -14,12 +17,12 @@ JavaScriptCore behind a Swift bridge. Anything only the bridge validates passes 
 
 ## Toolchain commands [src]
 
-| Command                                                                           | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `paperback-cli bundle [--folder f] [--debug] [--tests]`                           | Every `src/<dir>` holding both `pbconfig.ts` and `main.ts` becomes `bundles/<f>/<dir>/index.js` (rolldown, one minified IIFE named `source`, target es2020, every import inlined), plus `info.json` (the pbconfig default export with `id = <dir>`) and a copy of `static/`. Then `versioning.json` (`buildTime`, `builtWith.{toolchain,types}`, `repository.{name,description}` from `package.json`, `sources`) and `index.html`. `--debug` keeps it unminified with inline sourcemaps. |
-| `paperback-cli serve [--port] [--watch]`                                          | Bundles (no folder, no tests, minified) and serves `./bundles` over HTTP with CORS, printing LAN addresses; `--watch` rebuilds 500 ms after a change in `src`. It does not run our homepage theme.                                                                                                                                                                                                                                                                                       |
-| `paperback-cli test [Name] [--generate] [--overwrite] [--output f] [--noConsole]` | Bundles `src/tests/<Name>.ts`, runs it in a VM, writes the report. Takes at most one name ("Too many arguments" otherwise, alpha.94): loop for several. Exits 0 even when tests fail, and silently skips a source with no test file: read the report with `scripts/check-tests.mjs`.                                                                                                                                                                                                     |
-| `paperback-cli logcat --ip <phone> [--port 27015]`                                | Streams the app's logs over gRPC (`PaperbackLogger.streamLogs`).                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Command                                                                           | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `paperback-cli bundle [--folder f] [--debug] [--tests]`                           | Every `src/<dir>` holding both `pbconfig.ts` and `main.ts` becomes `bundles/<f>/<dir>/index.js` (rolldown, one minified IIFE named `source`, target es2020, every import inlined), plus `info.json` (the pbconfig default export with `id = <dir>`) and a copy of `static/`. Then `versioning.json` (`buildTime`, `builtWith.{toolchain,types}`, `repository.{name,description}` from `package.json`, `sources`) and `index.html`. `--debug` keeps it unminified with inline sourcemaps.                                                               |
+| `paperback-cli serve [--port] [--watch]`                                          | Bundles (no folder, no tests, minified) and serves `./bundles` over HTTP with CORS, printing LAN addresses; `--watch` rebuilds 500 ms after a change in `src`. It does not run our homepage theme.                                                                                                                                                                                                                                                                                                                                                     |
+| `paperback-cli test [Name] [--generate] [--overwrite] [--output f] [--noConsole]` | Bundles `src/tests/<Name>.ts`, runs it in a VM, writes the report. Takes at most one name ("Too many arguments" otherwise): loop for several. Since alpha.95 it exits non-zero when a test fails; `--ignoreErrors` exits 0 anyway, `--ignoreCloudflareErrors` ignores failures marked `(cloudflare)`, and `--flaresolverr <uri>` (e.g. `http://localhost:8191/v1`) solves a challenge and hands the cookies to `cloudflareBypassCompleted`. It still skips a source with no test file without failing: read the report with `scripts/check-tests.mjs`. |
+| `paperback-cli logcat --ip <phone> [--port 27015]`                                | Streams the app's logs over gRPC (`PaperbackLogger.streamLogs`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 `engines.node` is `>=24`. A `PDTSourceTester` gRPC service (install and test a source on the
 device) is defined but no command uses it yet. The homepage's capability badges never render
@@ -37,7 +40,7 @@ the published folder (`/0.9/test/`) are part of every install link.
 | `crypto.subtle`                    | Node's complete WebCrypto                                                                                                                                                                                                                  | Swift bridge [src `types/polyfills/Crypto.ts`]: `digest`; `generateKey`/`importKey` (raw, jwk)/`exportKey`; `encrypt`/`decrypt` **AES-GCM and AES-CBC only**; `sign`/`verify` HMAC; `deriveBits`/`deriveKey` HKDF, PBKDF2. No AES-CTR, AES-KW, RSA or EC; `wrapKey` rejects. `getRandomValues` up to 65,536 bytes; `randomUUID` |
 | Timers                             | absent from the VM too                                                                                                                                                                                                                     | `Application.sleep(seconds)` (seconds, not ms)                                                                                                                                                                                                                                                                                  |
 | `Application`                      | `runtime-polyfills`: state in memory; `executeInWebView` throws "Not Implemented"; `filterAdultTitles`/`filterMatureTitles`/`isResourceLimited` false; user agent a random mobile one; `decodeHTMLEntities` is `entities.decodeHTMLStrict` | the real app                                                                                                                                                                                                                                                                                                                    |
-| Request interceptors               | **bug**: each receives the original request (`finalRequest = await interceptor(request)`), so only the last registered one's changes survive                                                                                               | chained                                                                                                                                                                                                                                                                                                                         |
+| Request interceptors               | chained since alpha.95; before that each received the original request, so only the last registered one's changes survived                                                                                                                 | chained                                                                                                                                                                                                                                                                                                                         |
 | Response interceptors              | chained, reverse registration order                                                                                                                                                                                                        | chained, reverse order                                                                                                                                                                                                                                                                                                          |
 | Redirects                          | Node `fetch` follows them; `setRedirectHandler` is a no-op                                                                                                                                                                                 | interceptors run on the first request only, so re-apply headers in `setRedirectHandler` [merged: Mangago]; kodama reports 3xx returned unfollowed: handle both                                                                                                                                                                  |
 | Object request body                | sent as `FormData`                                                                                                                                                                                                                         | encoded by Swift; numeric `0` becomes `false` [device]. Send `JSON.stringify(body)`                                                                                                                                                                                                                                             |
@@ -56,8 +59,12 @@ empty; `getSearchResults({ title: "" }, undefined, firstSort)` has items; `getMa
 first result (always, whatever the capabilities); `getChapters` not empty; `getChapterDetails` on
 `chapters[0]` returns something. So: **an empty search must return results**, the newest chapter
 must open (a locked first chapter fails the test), and page lists, Discover, settings, forms and
-images are never checked. `--generate` writes `suite.ts` (if missing) and `<Name>.ts` without the
-license header; the repository formatter rewrites it.
+images are never checked. `--generate` writes `suite.ts` (if missing, or with `--overwrite`) and
+`<Name>.ts` without the license header; the repository formatter rewrites it. Since alpha.95 every
+step runs through `runRequest`: a `CloudflareError` is retried through FlareSolverr when
+`--flaresolverr` is given and the source implements `cloudflareBypassCompleted`, and once one step
+hits Cloudflare the later failures are marked `(cloudflare)`. Our `src/tests/suite.ts` is that
+template run through oxfmt with an eslint header; regenerate it when the template changes.
 
 ## `Application` [src `types/src/impl/Application.ts`]
 
@@ -126,8 +133,10 @@ license header; the repository formatter rewrites it.
   `formDidCancel`. Populate rows from the network in `formDidAppear`, then `reloadForm()`.
 - Rows: `LabelRow` (`style`: warning, error, success, tinted; `onSelect`), `InputRow`
   (`isSecureEntry`), `StepperRow`, `ToggleRow`, `SelectRow` (`items` + `layout`; `options`
-  deprecated), `TriStateSelectRow` (`maximum`), `ButtonRow`, `WebViewRow` (sign-in, returns
-  cookies), `NavigationRow`, `OAuthButtonRow` (token, code, PKCE), `DeferredItem`. Sections:
+  deprecated), `TriStateSelectRow` (`maximum`), `ButtonRow`, `MenuRow` (alpha.95: a pull-down of
+  `items`; `value` checks one and shows its title, leave it out for plain actions; `onSelect`), `WebViewRow` (sign-in, returns
+  cookies), `NavigationRow`, `OAuthButtonRow` (token, code, PKCE), `DeferredItem`. Every row takes `isDisabled` (alpha.95:
+  shown dimmed and unresponsive) beside `isHidden`. Sections:
   `Section`, `FlowSection`, `EditSection` (add, delete, reorder), `SelectSection`,
   `TriStateSelectSection`. `FormConfirmationError(onConfirmation, message)` asks before an action.
 
@@ -138,7 +147,13 @@ license header; the repository formatter rewrites it.
   vertically with no page padding unless the reader set those on the title; default false),
   `status`, `artist`, `author`, `bannerUrl`, `rating`
   (rendered as a percentage of 0..1: a ten-point 9.22 showed as 922% [device]), `tagGroups`,
-  `artworkUrls`, `additionalInfo`, `shareUrl`. No language: that is `Chapter.langCode` (an IETF
+  `artworkUrls`, `additionalInfo` (alpha.95: shown to the reader as a two-column list on the title
+  page, sorted by key, so keys are Title Case labels and values are reader-facing text, never
+  internal state), `extras` (alpha.95: sections shown when the description is expanded: a
+  `relation` section of other titles from this extension `{ id: mangaId, imageUrl, title,
+  subtitle? }`, or a `staff` section of people `{ id, staff, character? }` where tapping fills the
+  advanced-search input row whose id equals the section's `id`, else searches the item's `id` as a
+  title), `shareUrl`. No language: that is `Chapter.langCode` (an IETF
   code, never a flag; niclim on #246).
 - `Chapter`: `chapterId`, `sourceManga`, `langCode`, `chapNum`, `title?`, `version?`, `volume?`,
   `additionalInfo?`, `publishDate?`, `creationDate?`, `sortingIndex?`. On the device: an unset
@@ -191,7 +206,7 @@ return `{ changeId, reason }` for the ones that failed and throw only when none 
 `move` into one takes it out of the others. `getManagedLibraryCollections`,
 `commitManagedCollectionChanges`, `getSourceMangaInManagedCollection`, `PartialLibraryItem`,
 `LibraryItemSourceLinkProposal` and `ManagedCollectionChangeset` are gone **[check]**.
-`0.9/test` runs alpha.94; `0.9/stable` stays on alpha.92 because inkdex's MangaDex
+`0.9/test` runs alpha.95; `0.9/stable` stays on alpha.92 because inkdex's MangaDex
 (`implementations/managed-collection/`) still implements the old three methods and fails `tsc`
 on alpha.93+. Move stable once inkdex migrates MangaDex; never patch their source on our stable.
 

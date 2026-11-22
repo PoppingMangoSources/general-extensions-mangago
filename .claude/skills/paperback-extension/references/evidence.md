@@ -66,8 +66,9 @@ the same commit as the fix, and change the rule if the comment contradicts it.
 
 ## Verified in code or on a device
 
-- The published `paperback-cli test` exits 0 when tests fail and skips a source with no test file
-  (`dist/src/commands/test/index.mjs`); `scripts/check-tests.mjs` covers it.
+- `paperback-cli test` exited 0 when tests failed until alpha.95 (celarye, toolchain #36), and
+  still skips a source with no test file (`dist/src/commands/test/index.mjs`);
+  `scripts/check-tests.mjs` covers both.
 - Tests need Node 24 (`engines`): under Node 22 a source fails to load with
   `Float16Array is not defined` and the run reports 0 failures.
 - The test VM gives Node's full WebCrypto; the app's bridge has no AES-CTR. Toonkotsu decrypts in

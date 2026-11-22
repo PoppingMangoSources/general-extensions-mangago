@@ -33,6 +33,45 @@
   cookie handoff, chapter refresh, cover URLs, and novel reader images.
 - 2026-11-05: Restored Ranobes to one request per second after the iPhone log showed
   verification interrupting the faster chapter crawl.
+- 2026-11-07: Ranobes opens the challenged host's homepage for browser verification,
+  following MangaFire and Kitty's XNovel. Native completion remains unverified.
+- 2026-11-07: ValirScans recognizes the current reader props with `kind` before `chapter`,
+  fixing missing chapter data while preserving the reader's access flags.
+- 2026-11-07: MangaHere uses the verified mobile roll reader, upgrades HTTP image URLs,
+  and waits through the SDK when retrying dropped connections.
+- 2026-11-07: Added the Most Popular heading and subtitle above ValirScans' featured carousel.
 - 2026-11-07: Toolchain moved to 1.0.0-alpha.94. platform.md records the alpha.93 managed-collection
   rework, `MangaInfo.isWebtoon`, and the URL and test-VM cookie `=` fixes; seven sources set
   `isWebtoon` from their site's own type field.
+- 2026-11-08: ValirScans' top carousel now uses the site's Trending catalogue and keeps that
+  sort through View More pagination, with a Trending heading and subtitle.
+- 2026-11-08: MangaHome and MangaTown upgrade scraped and saved HTTP URLs to HTTPS,
+  including MangaHome's legacy reader output, after iOS transport security failures.
+
+- 2026-11-09: YaoiMe alpha.11 aligns live language/filter values, adds tri-state tags and full ranking lists, preserves real/unnumbered chapter metadata, adds optional deduplication, resolves pasted links and retries rejected memos. See [YaoiMe](sources/YaoiMe.md).
+
+## 2026-11-09: NovelArchive audit
+
+Documented the current API, native and mirror IDs, genre/default filtering, reader traps and verified source audit in [NovelArchive](sources/NovelArchive.md).
+
+NovelArchive naming clarification: use `parseNovelList` and `filterNovelList` for the novels-only catalog; retain SDK method names and framework-required form classes.
+
+- 2026-11-12: ReiManga alpha.5 reads packed WebP manifests and extracts image byte ranges.
+  Five live chapter payloads parsed; CDN HTTP 403 and native reader verification remain
+  documented in [ReiManga](sources/ReiManga.md).
+
+- 2026-11-12: RinkoComics decodes canvas page lists, RokariComics skips the repeated
+  chapter-list lookup for integer chapters, and VyManga refreshes expiring outbound links.
+  Recorded the ValirScans device 404 that could not be reproduced and the corresponding
+  Mana reader checks. Device rendering remains unverified.
+- 2026-11-12: Completed the reader comparison across the 29-source catalogue.
+  RokariComics and NovelCool preserve existing image URL escapes; fixed-input regressions
+  cover encoded paths and signature values. See [reader audit](operations/reader-audit.md).
+
+- 2026-11-21: Updated Cocomic and RinkoComics for their redesigned pages and
+  requested Discover ordering. Recorded Today-tab behavior, novel XHTML, and
+  the unresolved ReiManga external-reader handoff.
+- 2026-11-22: Toolchain moved to 1.0.0-alpha.95. The test command now exits non-zero, can solve
+  Cloudflare through FlareSolverr and marks Cloudflare failures; additionalInfo is shown on the
+  title page, so NovelArchive and Ranobes use Title Case labels and a checker note
+  flags lowercase keys. src/tests/suite.ts was regenerated from the new template.

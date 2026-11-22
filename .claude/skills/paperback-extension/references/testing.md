@@ -40,8 +40,10 @@ npm run test:check -- <Name>
 
 - Node 24 is required. Under Node 22 a source dies with `Float16Array is not defined` and the run
   still prints "Failed: 0".
-- `paperback-cli test` exits 0 on failure and skips a source without a test file;
-  `check-tests.mjs` fails on both.
+- `paperback-cli test` skips a source without a test file and, before alpha.95, exited 0 on
+  failure; `check-tests.mjs` fails on both. alpha.95 exits non-zero itself, takes
+  `--ignoreCloudflareErrors` for runs from blocked networks, and `--flaresolverr <uri>` to solve a
+  challenge through a local FlareSolverr (it needs `cloudflareBypassCompleted`).
 - The default suite: initialise, sorting options, empty-title search, details of the first
   result, chapters, details of `chapters[0]`. It never checks pages, images, Discover, settings or
   forms, and its request interceptors do not chain.
