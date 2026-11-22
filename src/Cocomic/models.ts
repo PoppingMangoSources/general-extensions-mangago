@@ -1,16 +1,17 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* Copyright © 2026 Inkdex */
+
 import type { ContentRating, JSONObject, SortingOption, Tag } from "@paperback/types";
 
 export const DOMAIN = "https://cocomic.co";
 
 export const SECTIONS = {
-  TOP_RATED: "top_rated",
-  ONLY_COCOMIC: "only_cocomic",
-  NEW_RELEASES: "new_releases",
+  TRENDING: "trending",
+  TRENDING_NOW: "trending_now",
   LATEST_UPDATES: "latest_updates",
-  TODAYS_OFFICIAL: "todays_official",
-  YAOI: "yaoi",
-  MANHWA: "manhwa",
-  SMUT: "smut",
+  POPULAR: "popular",
+  NEW_RELEASES: "new_releases",
+  GENRES: "genres",
 } as const;
 
 export const SORT_OPTIONS: SortingOption[] = [
@@ -71,7 +72,7 @@ export interface SearchRequest {
 }
 
 export interface ListingChapter {
-  chapterId: string;
+  chapterId?: string;
   title: string;
   publishDate?: Date;
 }
@@ -84,6 +85,7 @@ export interface MangaListItem {
   genres: string[];
   chapter?: ListingChapter;
   alternativeTitle?: string;
+  summary?: string;
   status?: string;
   rating?: number;
 }

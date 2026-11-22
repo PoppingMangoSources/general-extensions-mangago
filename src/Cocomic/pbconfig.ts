@@ -1,9 +1,12 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* Copyright © 2026 Inkdex */
+
 import { ContentRating, SourceIntents, type ExtensionInfo } from "@paperback/types";
 
 export default {
   name: "Cocomic",
   description: "Extension that pulls content from cocomic.co.",
-  version: "1.0.0-alpha.4",
+  version: "1.0.0-alpha.5",
   icon: "icon.png",
   language: "en",
   contentRating: ContentRating.ADULT,

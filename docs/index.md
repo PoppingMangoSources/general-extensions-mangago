@@ -31,6 +31,8 @@ this wiki's own rules are in [AGENTS.md](AGENTS.md).
 - [XCOMIC](sources/XCOMIC.md): edition merging, server deduplication and complete chapter lists.
 - [YaoiMe](sources/YaoiMe.md): live filters, complete ranking lists, chapter variants and reader keys.
 
+- [Cocomic](sources/Cocomic.md): redesigned home, details and reader.
+
 ## operations
 
 - [source-checks](operations/source-checks.md): the offline checker, its calibration, and the backlog.

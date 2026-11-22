@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* Copyright © 2026 Inkdex */
+
 import {
   BasicRateLimiter,
   CloudflareError,
@@ -30,10 +33,8 @@ import {
 } from "./models";
 import {
   CocomicInterceptor,
-  fetchBrowsePage,
   fetchChapterList,
   fetchHomePage,
-  fetchLatestPage,
   fetchMangaPage,
   fetchReaderPage,
   fetchSearchPage,
@@ -44,6 +45,7 @@ import {
   parseChapters,
   parseGenreTags,
   parseHomepageRail,
+  parseTrending,
   parseMangaDetails,
   parseMangaId,
   parseMangaList,
@@ -53,11 +55,6 @@ import {
   toSimpleItem,
 } from "./parsers";
 import type CocomicConfig from "./pbconfig";
-
-const includedValues = (value: SearchMetadata["genres"]): string[] =>
-  Object.entries(value ?? {})
-    .filter(([, state]) => state === "included")
-    .map(([id]) => id);
 
 class CocomicExtension implements ExtensionImpl<typeof CocomicConfig> {
   private rateLimiter = new BasicRateLimiter("rateLimiter", {
@@ -97,96 +94,76 @@ class CocomicExtension implements ExtensionImpl<typeof CocomicConfig> {
 
   async getDiscoverSections(): Promise<DiscoverSection[]> {
     return [
-      { id: SECTIONS.TOP_RATED, title: "Top Rated", type: DiscoverSectionType.featured },
+      { id: SECTIONS.TRENDING, title: "Trending", type: DiscoverSectionType.featured },
       {
-        id: SECTIONS.ONLY_COCOMIC,
-        title: "Only Cocomic",
-        type: DiscoverSectionType.simpleCarousel,
-      },
-      {
-        id: SECTIONS.NEW_RELEASES,
-        title: "New Releases",
-        type: DiscoverSectionType.simpleCarousel,
+        id: SECTIONS.TRENDING_NOW,
+        title: "Trending Now",
+        type: DiscoverSectionType.prominentCarousel,
       },
       {
         id: SECTIONS.LATEST_UPDATES,
         title: "Latest Updates",
         type: DiscoverSectionType.chapterUpdates,
       },
+      { id: SECTIONS.POPULAR, title: "Popular Manga", type: DiscoverSectionType.simpleCarousel },
       {
-        id: SECTIONS.TODAYS_OFFICIAL,
-        title: "Today's Official",
+        id: SECTIONS.NEW_RELEASES,
+        title: "New Releases",
         type: DiscoverSectionType.simpleCarousel,
       },
-      { id: SECTIONS.YAOI, title: "Yaoi", type: DiscoverSectionType.simpleCarousel },
-      { id: SECTIONS.MANHWA, title: "Manhwa", type: DiscoverSectionType.simpleCarousel },
-      { id: SECTIONS.SMUT, title: "Smut", type: DiscoverSectionType.simpleCarousel },
+      { id: SECTIONS.GENRES, title: "Genres", type: DiscoverSectionType.genres },
     ];
   }
 
   async getDiscoverSectionItems(
     section: DiscoverSection,
-    metadata: PageMetadata | undefined,
+    _metadata: PageMetadata | undefined,
   ): Promise<PagedResults<DiscoverSectionItem>> {
-    switch (section.id) {
-      case SECTIONS.TOP_RATED:
-        return this.getTopRated(metadata);
-      case SECTIONS.ONLY_COCOMIC:
-        return this.getHomepageRail("Only Cocomic");
-      case SECTIONS.NEW_RELEASES:
-        return this.getHomepageRail("New Releases");
-      case SECTIONS.LATEST_UPDATES:
-        return this.getLatestUpdates(metadata);
-      case SECTIONS.TODAYS_OFFICIAL:
-        return this.getHomepageRail("Today's Official");
-      case SECTIONS.YAOI:
-        return this.getHomepageRail("Yaoi");
-      case SECTIONS.MANHWA:
-        return this.getHomepageRail("Manhwa");
-      case SECTIONS.SMUT:
-        return this.getHomepageRail("Smut");
-      default:
-        return { items: [] };
+    if (section.id === SECTIONS.GENRES) {
+      return {
+        items: (await this.getGenres()).map((genre) => ({
+          type: "genresCarouselItem",
+          name: genre.title,
+          searchQuery: {
+            title: "",
+            metadata: { genres: { [genre.id]: "included" } } satisfies SearchMetadata,
+          },
+        })),
+      };
     }
+    const document = await this.getHomePage();
+    if (section.id === SECTIONS.TRENDING)
+      return { items: parseTrending(document).map(toFeaturedItem) };
+    const items = parseHomepageRail(document, section.title);
+    if (section.id === SECTIONS.LATEST_UPDATES) {
+      return {
+        items: items.flatMap((item) => {
+          const update = toChapterUpdateItem(item);
+          return update ? [update] : [];
+        }),
+      };
+    }
+    return {
+      items: items.map((item) => ({
+        ...toSimpleItem(item),
+        type: section.id === SECTIONS.TRENDING_NOW ? "prominentCarouselItem" : "simpleCarouselItem",
+      })),
+    };
   }
 
   private getHomePage(): ReturnType<typeof fetchHomePage> {
-    return (this.homePromise ??= fetchHomePage());
+    return (this.homePromise ??= fetchHomePage().finally(() => {
+      this.homePromise = undefined;
+    }));
   }
 
   private getGenres(): Promise<Tag[]> {
-    return (this.genresPromise ??= fetchSearchPage(1, {}).then(parseGenreTags));
-  }
-
-  private async getTopRated(
-    metadata: PageMetadata | undefined,
-  ): Promise<PagedResults<DiscoverSectionItem>> {
-    const page = metadata?.page ?? 1;
-    const document = await fetchBrowsePage(page, "rating");
-    return {
-      items: parseMangaList(document).map(toFeaturedItem),
-      metadata: hasNextPage(document) ? { page: page + 1 } : undefined,
-    };
-  }
-
-  private async getHomepageRail(title: string): Promise<PagedResults<DiscoverSectionItem>> {
-    return {
-      items: parseHomepageRail(await this.getHomePage(), title).map(toSimpleItem),
-    };
-  }
-
-  private async getLatestUpdates(
-    metadata: PageMetadata | undefined,
-  ): Promise<PagedResults<DiscoverSectionItem>> {
-    const page = metadata?.page ?? 1;
-    const document = await fetchLatestPage(page);
-    return {
-      items: parseMangaList(document).flatMap((item) => {
-        const mapped = toChapterUpdateItem(item);
-        return mapped ? [mapped] : [];
-      }),
-      metadata: hasNextPage(document) ? { page: page + 1 } : undefined,
-    };
+    return (this.genresPromise ??= fetchSearchPage(1, {})
+      .then(parseGenreTags)
+      .catch((error: unknown) => {
+        this.genresPromise = undefined;
+        throw error;
+      }));
   }
 
   async getSortingOptions(_query: SearchQuery<SearchMetadata>): Promise<SortingOption[]> {
@@ -209,7 +186,9 @@ class CocomicExtension implements ExtensionImpl<typeof CocomicConfig> {
     const request: SearchRequest = {
       title: (query.title ?? "").trim() || undefined,
       sortBy: sortingOption?.id ?? SORT_OPTIONS[0].id,
-      genres: includedValues(searchMetadata.genres),
+      genres: Object.entries(searchMetadata.genres ?? {})
+        .filter(([, state]) => state === "included")
+        .map(([id]) => id),
       genreMatch: searchMetadata.genreMatch?.[0] === "and" ? "and" : "or",
       author: searchMetadata.author?.trim() || undefined,
       artist: searchMetadata.artist?.trim() || undefined,
@@ -268,6 +247,8 @@ class CocomicExtension implements ExtensionImpl<typeof CocomicConfig> {
   }
 
   async getChapterDetails(chapter: Chapter): Promise<ChapterDetails> {
+    if (chapter.chapterId.endsWith("#lock"))
+      throw new Error("This chapter is paid or locked. Unlock it on Cocomic before reading.");
     return parseChapterDetails(
       await fetchReaderPage(chapter.sourceManga.mangaId, chapter.chapterId),
       chapter,

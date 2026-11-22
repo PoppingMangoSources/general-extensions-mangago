@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* Copyright © 2026 Inkdex */
+
 import {
   CloudflareError,
   PaperbackInterceptor,
@@ -85,12 +88,6 @@ const postText = async (url: string, referer: string): Promise<string> => {
 const fetchDocument = async (url: string): Promise<cheerio.CheerioAPI> =>
   cheerio.load(await fetchText(url));
 
-export const buildBrowseUrl = (page: number, sortBy: string): string => {
-  const url = new URL(page > 1 ? `${DOMAIN}/manga/page/${page}/` : `${DOMAIN}/manga/`);
-  if (sortBy !== "relevance") url.setQueryItem("m_orderby", sortBy);
-  return url.toString();
-};
-
 export const buildSearchUrl = (page: number, request: SearchRequest): string => {
   const url = new URL(page > 1 ? `${DOMAIN}/page/${page}/` : `${DOMAIN}/`)
     .setQueryItem("s", request.title ?? "")
@@ -110,16 +107,10 @@ export const buildSearchUrl = (page: number, request: SearchRequest): string => 
 
 export const fetchHomePage = (): Promise<cheerio.CheerioAPI> => fetchDocument(`${DOMAIN}/`);
 
-export const fetchBrowsePage = (page: number, sortBy: string): Promise<cheerio.CheerioAPI> =>
-  fetchDocument(buildBrowseUrl(page, sortBy));
-
 export const fetchSearchPage = (
   page: number,
   request: SearchRequest,
 ): Promise<cheerio.CheerioAPI> => fetchDocument(buildSearchUrl(page, request));
-
-export const fetchLatestPage = (page: number): Promise<cheerio.CheerioAPI> =>
-  fetchDocument(page > 1 ? `${DOMAIN}/new/page/${page}/` : `${DOMAIN}/new/`);
 
 export const fetchMangaPage = (mangaId: string): Promise<cheerio.CheerioAPI> =>
   fetchDocument(new URL(DOMAIN).addPathComponent("manga").addPathComponent(mangaId).toString());
