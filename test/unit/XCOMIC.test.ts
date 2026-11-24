@@ -7,13 +7,17 @@ import { registerHooks, stripTypeScriptTypes } from "node:module";
 import test, { type TestContext } from "node:test";
 
 import {
+  CloudflareError,
   ContentRating,
   DiscoverSectionType,
+  SelectForm,
   type Request,
+  type Response,
   type SourceManga,
 } from "@paperback/types";
 
 import {
+  MIRRORS,
   STATE_KEYS,
   type ChapterData,
   type ComicData,
@@ -40,6 +44,9 @@ Object.defineProperty(globalThis, "Application", {
 });
 const { XCOMIC } = await import("../../src/XCOMIC/main");
 const {
+  getBaseUrl,
+  getSelectedBaseUrl,
+  setBaseUrl,
   getMergeEditions,
   getDeduplicateChapters,
   getCollapseSameNameGroups,
@@ -56,6 +63,7 @@ const {
   toSearchResultItem,
   toRankedDiscoverItems,
 } = await import("../../src/XCOMIC/parsers");
+const { fetchChapterPages, XComicInterceptor } = await import("../../src/XCOMIC/network");
 Reflect.deleteProperty(globalThis, "Application");
 
 const manga: SourceManga = {
@@ -93,6 +101,8 @@ const mockApi = (
         state[key] = value;
       },
       invalidateDiscoverSections: () => {},
+      Selector: () => "fixture-selector",
+      getDefaultUserAgent: async () => "fixture-user-agent",
       decodeHTMLEntities: (text: string) => text,
       arrayBufferToUTF8String: (data: ArrayBuffer) => Buffer.from(data).toString(),
       scheduleRequest: async (request: Request) => {
@@ -115,6 +125,153 @@ const mockApi = (
   });
   return { requests, state, stateReads };
 };
+
+const mockMirrors = (t: TestContext, reply: (request: Request) => number | Error | "challenge") => {
+  const result = mockApi(t, () => ({
+    get_chapterNode: { data: { imageUrls: ["https://images.test/page.webp"] } },
+  }));
+  const interceptor = new XComicInterceptor("fixture");
+  const schedule = Application.scheduleRequest;
+  const sent: Request[] = [];
+  t.mock.method(Application, "scheduleRequest", async (request: Request) => {
+    const finalRequest = await interceptor.interceptRequest(request);
+    sent.push(finalRequest);
+    const action = reply(finalRequest);
+    if (action instanceof Error) throw action;
+    const [response, buffer]: [Response, ArrayBuffer] =
+      action === 200
+        ? await schedule(finalRequest)
+        : [
+            {
+              url: finalRequest.url,
+              status: action === "challenge" ? 403 : action,
+              cookies: [],
+              headers: action === "challenge" ? { "cf-mitigated": "challenge" } : {},
+            },
+            new ArrayBuffer(0),
+          ];
+    return [response, await interceptor.interceptResponse(finalRequest, response, buffer)];
+  });
+  return { ...result, sent };
+};
+
+void test("XCOMIC retires old mirror settings without changing a supported preference", async (t) => {
+  assert.deepEqual(
+    MIRRORS.map((mirror) => mirror.id),
+    ["https://xcomic.me", "https://comik.to"],
+  );
+  for (const retired of ["https://xcomic.net", "https://yona.to"]) {
+    for (const [preferred, active, expected] of [
+      [retired, retired, "https://xcomic.me"],
+      ["https://comik.to", retired, "https://comik.to"],
+      [retired, "https://comik.to", "https://comik.to"],
+    ]) {
+      await t.test(`${preferred}, ${active}`, async (t) => {
+        const { state, sent } = mockMirrors(t, () => 200);
+        state[STATE_KEYS.BASE_URL] = preferred;
+        state[STATE_KEYS.ACTIVE_BASE_URL] = active;
+        assert.equal(getBaseUrl(), expected);
+        const form = await XCOMIC.getSettingsForm();
+        assert.ok(form instanceof XComicSettingsForm);
+        const row = form.getSections().find((section) => section.id === "mirror")?.items[0];
+        assert.ok(row && "form" in row && row.form instanceof SelectForm);
+        assert.ok("items" in row.form.params);
+        assert.deepEqual(row.form.params.items, MIRRORS);
+        assert.deepEqual(row.form.params.value, [getSelectedBaseUrl()]);
+        await fetchChapterPages("fixture");
+        assert.equal(sent[0].url, `${expected}/query/`);
+      });
+    }
+  }
+});
+
+void test("XCOMIC retries failed mirror requests with the same POST body and remembers success", async (t) => {
+  for (const failure of [400, 502, new Error("The network connection was lost")]) {
+    await t.test(String(failure), async (t) => {
+      const { sent } = mockMirrors(t, (request) =>
+        request.url.startsWith("https://comik.to/") ? failure : 200,
+      );
+      setBaseUrl("https://comik.to");
+      const result = await fetchChapterPages("fixture");
+      assert.deepEqual(result.get_chapterNode?.data?.imageUrls, ["https://images.test/page.webp"]);
+      assert.deepEqual(
+        sent.map((request) => request.url),
+        ["https://comik.to/query/", "https://xcomic.me/query/"],
+      );
+      assert.equal(sent[0].body, sent[1].body);
+      for (const request of sent) {
+        assert.equal(request.method, "POST");
+        assert.ok(typeof request.body === "string");
+        assert.equal(request.headers?.["content-type"], "application/json");
+        assert.equal(request.headers?.referer, request.url.replace("query/", ""));
+        assert.equal(request.headers?.origin, request.url.replace("/query/", ""));
+        assert.equal(request.headers?.["user-agent"], "fixture-user-agent");
+      }
+      assert.equal(getBaseUrl(), "https://xcomic.me");
+      assert.equal(getSelectedBaseUrl(), "https://comik.to");
+      await fetchChapterPages("fixture");
+      assert.equal(sent.length, 3);
+      assert.equal(sent[2].url, "https://xcomic.me/query/");
+      setBaseUrl("https://comik.to");
+      assert.equal(getBaseUrl(), "https://comik.to");
+    });
+  }
+});
+
+void test("XCOMIC preserves definitive HTTP errors and exhausts each supported mirror once", async (t) => {
+  for (const status of [400, 404, 401]) {
+    await t.test(String(status), async (t) => {
+      const { sent } = mockMirrors(t, () => status);
+      const expected =
+        status === 400
+          ? ["https://xcomic.me/query/", "https://comik.to/query/"]
+          : ["https://xcomic.me/query/"];
+      await assert.rejects(fetchChapterPages("fixture"), {
+        message: `Request failed with status ${status}: ${expected.at(-1)}`,
+      });
+      assert.deepEqual(
+        sent.map((request) => request.url),
+        expected,
+      );
+    });
+  }
+});
+
+void test("XCOMIC propagates Cloudflare challenges without trying another mirror", async (t) => {
+  const { sent } = mockMirrors(t, () => "challenge");
+  await assert.rejects(fetchChapterPages("fixture"), (error) => error instanceof CloudflareError);
+  assert.equal(sent.length, 1);
+  assert.equal(getBaseUrl(), "https://xcomic.me");
+});
+
+void test("XCOMIC accepts pasted links only from supported catalogue hosts", async (t) => {
+  const { requests } = mockApi(t, () => ({
+    get_comicNode: {
+      data: {
+        id: "fixture",
+        name: "A Work",
+        urlCover: "https://images.test/cover.webp",
+        translatedLanguage: "en",
+      },
+    },
+  }));
+  for (const host of ["xcomic.me", "comik.to", "www.comik.to"]) {
+    requests.length = 0;
+    const result = await XCOMIC.getSearchResults(
+      { title: `https://${host}/comic/fixture` },
+      undefined,
+    );
+    assert.equal(result.items[0]?.mangaId, "fixture");
+    assert.equal(requests.length, 1);
+    assert.match(requests[0].query, /get_comicNode/);
+  }
+  for (const host of ["xcomic.net", "yona.to"]) {
+    requests.length = 0;
+    await XCOMIC.getSearchResults({ title: `https://${host}/comic/fixture` }, undefined);
+    assert.ok(requests.length > 0);
+    assert.ok(requests.every((request) => !request.query.includes("get_comicNode")));
+  }
+});
 
 void test("XCOMIC enables merging for everyone and preserves unique-list pagination when disabled", async (t) => {
   const { requests, state } = mockApi(t, (_query, variables) => ({

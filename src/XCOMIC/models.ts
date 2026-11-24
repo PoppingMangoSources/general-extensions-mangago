@@ -11,8 +11,6 @@ import {
 
 export const MIRRORS: Tag[] = [
   { id: "https://xcomic.me", title: "xcomic.me" },
-  { id: "https://xcomic.net", title: "xcomic.net" },
-  { id: "https://yona.to", title: "yona.to" },
   { id: "https://comik.to", title: "comik.to" },
 ];
 export const DOMAIN = MIRRORS[0].id;

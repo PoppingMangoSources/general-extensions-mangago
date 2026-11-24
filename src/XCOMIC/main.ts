@@ -399,7 +399,7 @@ class XComicExtension implements ExtensionImpl<typeof XComicConfig> {
     metadata?: SearchMetadata,
   ): Promise<PagedResults<SearchResultItem> | undefined> {
     const match =
-      /^https?:\/\/(?:www\.)?(?:xcomic\.(?:me|net)|yona\.to|comik\.to)\/(source|comic|title)\/([a-zA-Z0-9]+)/i.exec(
+      /^https?:\/\/(?:www\.)?(?:xcomic\.me|comik\.to)\/(source|comic|title)\/([a-zA-Z0-9]+)/i.exec(
         title,
       );
     if (!match?.[1] || !match[2]) return undefined;

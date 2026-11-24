@@ -43,7 +43,8 @@ import {
 } from "./models";
 
 const MIRROR_IDS = MIRRORS.map((mirror) => mirror.id);
-const RETRYABLE_STATUS = new Set([403, 408, 500, 502, 503, 504, 521, 522, 523, 524]);
+// Redirects can turn a query POST into a bodiless GET, which the site rejects with 400.
+const RETRYABLE_STATUS = new Set([400, 403, 408, 500, 502, 503, 504, 521, 522, 523, 524]);
 
 const mirrorOrigin = (url: string): string | undefined => {
   try {

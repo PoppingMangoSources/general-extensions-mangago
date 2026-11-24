@@ -199,7 +199,7 @@ export class XComicSettingsForm extends Form {
         {
           id: "mirror",
           footer:
-            "All four domains share the same catalog. Requests automatically try another mirror " +
+            "Both domains share the same catalog. Requests automatically try another mirror " +
             "when the selected site is unavailable.",
         },
         [

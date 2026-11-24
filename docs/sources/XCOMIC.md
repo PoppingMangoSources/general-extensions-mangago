@@ -2,7 +2,7 @@
 title: XCOMIC
 type: subsystem
 created: 2026-11-03
-updated: 2026-11-10
+updated: 2026-11-23
 sources:
   - code: src/XCOMIC/models.ts
   - code: src/XCOMIC/network.ts
@@ -12,7 +12,7 @@ sources:
   - ext: https://github.com/Aidoku-Community/sources/tree/main/sources/multi.xcomic
   - ext: https://github.com/keiyoushi/extensions-source/tree/main/src/all/xcomic
   - ext: https://github.com/PoppingMangoSources/popmango-extensions-mana/tree/main/src/XCOMIC
-verified_at: 9d2f1133
+verified_at: 2026-11-23
 ---
 
 # XCOMIC
@@ -144,3 +144,47 @@ With Merge editions off, search subtitles use `Group name • 172 Ch`. The count
 `chaps_normal` total from the listing, including zero; missing groups or totals are omitted.
 Merged-search and Discover subtitles retain their previous formatting. No per-card detail
 requests are added. Native settings persistence and reader rendering still need a device check.
+
+## Mirror failover, 2026-11-23
+
+`1.0.0-alpha.85` supports only `https://xcomic.me` and `https://comik.to`.
+Live homepage requests confirmed HTTP 200 on both. The retired `xcomic.net` and
+`yona.to` hosts returned HTTP 301 to `https://comik.to/`. They are removed from
+the selector, retry candidates and pasted-URL matcher. Existing saved preferred
+and last-working hosts are checked against the supported list: an invalid
+preference uses `xcomic.me`; an invalid last-working host uses the supported
+preference. A supported last-working host remains usable. Manga and chapter IDs
+are unchanged.
+
+The reported query failure was HTTP 400, which the previous retry set excluded.
+A redirect can change a POST into a GET without its JSON body. Keep the retry
+loop in the request helper, sending each attempt through
+`Application.scheduleRequest` with the same serialized body. On a retryable
+status or transport failure, try each supported host once and remember a
+successful host for later requests. Preserve the user's separate preferred
+mirror. HTTP 404 and other definitive client errors stop; explicit
+`CloudflareError` values propagate immediately rather than treating a challenge
+as a dead mirror. When all hosts fail, the last error reaches the app.
+
+Compared the two supplied Paperback 0.8 changes (`d0ba0ee`, `9be8505`) and merged
+inkdex `0.9/stable` at `ee1cdab`. AllManga's bootstrap is the closest ordered
+mirror-request example; Mangago applies headers according to the requested
+reader host. The 0.9 alpha.95 SDK returns `[Response, ArrayBuffer]`, chains
+interceptors, and has no request-level automatic mirror retry option. Its
+redirect callback is for HTTP redirects, not retrying HTTP 400 or transport
+failures. No 0.8 request-manager compatibility layer is needed here.
+
+The new regressions failed on the previous code for retired hosts, pasted links
+and HTTP 400, then passed after the fix. All 33 XCOMIC unit tests passed,
+including restored settings, the native selector, identical POST bodies,
+per-host headers, remembered success, transport failures, exhausted mirrors,
+404/401 stopping and Cloudflare propagation. The six default SDK live checks
+passed under Node 24.22.3 with types/toolchain alpha.95.
+
+The separately reported image `/_f/31/Lm/Ek4mL.webp` downloaded from `xcomic.me`
+as HTTP 200 and a valid 600×800 WebP. This does not reproduce or prove a fix for
+the screenshot's native `NSURLErrorDomain -1005` connection loss. Covers and
+reader images are downloaded by the app, outside the source's catalogue fetch
+loop; the SDK exposes no transport-error interceptor for those downloads.
+Native image rendering, settings retention after upgrading, and device failover
+remain unverified.
